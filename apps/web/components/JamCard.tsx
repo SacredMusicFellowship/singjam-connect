@@ -42,15 +42,9 @@ function locationView(jam: JamCardData) {
 }
 
 /**
- * The venue map. Lifted out of this card so JamView can place it, because on a
- * ticketed event it belongs beside the ticket column rather than above it — it
- * used to sit between the description and the tickets, which put a 260px
- * iframe between reading about the event and being able to buy.
- *
- * Everywhere else it keeps its original spot and size, directly below the
- * description: an event with nothing to buy has no purchase path for it to
- * block, so there is nothing to fix. The caller sizes it, since the column
- * beside the tickets is a different shape from the full-width slot.
+ * The venue map. Lifted out of this card so JamView can render it at the very
+ * bottom of the event page, below everything else, on every jam type. The
+ * New/Edit jam previews still show it inside the card.
  */
 export function JamMap({ jam, className = "h-[260px]" }: { jam: JamCardData; className?: string }) {
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
@@ -134,6 +128,7 @@ export default function JamCard({
   actions,
   sellsTickets = false,
   ticketPanelFollows = false,
+  showMap = true,
 }: {
   jam: JamCardData;
   actions?: ReactNode;
@@ -145,11 +140,16 @@ export default function JamCard({
    */
   sellsTickets?: boolean;
   /**
-   * A ticket panel renders directly after this card, so the description and
-   * the map both move out to sit around it. Everything else keeps them here,
-   * inside the card, on the card's own spacing.
+   * A ticket panel renders directly after this card, so the description moves
+   * out to sit below it. Everything else keeps it here, inside the card, on the
+   * card's own spacing.
    */
   ticketPanelFollows?: boolean;
+  /**
+   * False on the event page, which renders the map itself at the very bottom
+   * on every jam type. The New/Edit jam previews keep it inside the card.
+   */
+  showMap?: boolean;
 }) {
   const isOfficial = jam.visibility === "official";
   const tags = [...jam.genres, ...jam.themes];
@@ -318,15 +318,10 @@ export default function JamCard({
           </div>
         )}
 
-        {/* On a ticketed event both of these move out: the description goes
-            below the ticket panel and the map goes beside it. JamView places
-            them. */}
-        {!ticketPanelFollows && (
-          <>
-            <JamDescription jam={jam} />
-            <JamMap jam={jam} />
-          </>
-        )}
+        {/* On a ticketed event the description moves out to sit below the
+            ticket panel, and JamView places it. */}
+        {!ticketPanelFollows && <JamDescription jam={jam} />}
+        {showMap && <JamMap jam={jam} />}
       </div>
     </div>
   );
