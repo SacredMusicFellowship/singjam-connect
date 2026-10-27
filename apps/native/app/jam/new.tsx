@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useAddressTimezone } from '@/lib/useAddressTimezone';
-import { zonedInputToIso, pickersToZonedInput, zoneAbbreviation } from '@singjam/core';
+import { zonedInputToIso, pickersToZonedInput, zoneAbbreviation, resolvePlaceAddress } from '@singjam/core';
 
 const PLACES_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 
@@ -111,7 +111,16 @@ function LocationModal({
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
-                onPress={() => { onSelect(item.description, item.neighborhood); onClose(); }}
+                onPress={async () => {
+                  onClose();
+                  const address = await resolvePlaceAddress({
+                    placeId: item.placeId,
+                    mainText: item.neighborhood,
+                    fallback: item.description,
+                    apiKey: PLACES_KEY,
+                  });
+                  onSelect(address, item.neighborhood);
+                }}
                 className="px-4 py-3 border-b border-zinc-100"
               >
                 <Text className="text-zinc-900" numberOfLines={2}>📍 {item.description}</Text>

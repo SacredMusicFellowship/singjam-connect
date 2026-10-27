@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
-import { googleMapsUrl } from "@singjam/core";
+import { dropUsCountry, dropVenueRepeatedInTitle, googleMapsUrl } from "@singjam/core";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
 
 export type JamCardData = {
@@ -163,8 +163,8 @@ export default function JamCard({
       {/* Hero image */}
       {jam.image_url && (
         <div
-          className="relative mb-6 overflow-hidden rounded-2xl bg-black"
-          style={{ height: 320, "--focal-point": jam.image_focal_point ?? "50% 50%" } as CSSProperties}
+          className="relative mb-4 h-48 overflow-hidden rounded-2xl bg-black sm:mb-6 sm:h-80"
+          style={{ "--focal-point": jam.image_focal_point ?? "50% 50%" } as CSSProperties}
         >
           <Image
             src={jam.image_url}
@@ -177,14 +177,12 @@ export default function JamCard({
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
+        {/* An official event's title, image and venue already say it is
+            SingJam's, so it gets no "Official SingJam event" label or "Hosted by
+            SingJam" line. */}
         <div>
-          {isOfficial && (
-            <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-amber-500">
-              Official SingJam event
-            </p>
-          )}
           {jam.visibility === "community" && (
             <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-sky-500">
               Public jam
@@ -198,11 +196,7 @@ export default function JamCard({
           <h1 className="text-2xl font-bold text-zinc-900 leading-tight">
             {jam.name ?? (isOfficial ? "SingJam event" : "Community jam")}
           </h1>
-          {isOfficial ? (
-            <p className="mt-1 text-sm text-zinc-500">
-              Hosted by <span className="font-medium text-zinc-700">SingJam</span>
-            </p>
-          ) : jam.host && (
+          {!isOfficial && jam.host && (
             <p className="mt-1 text-sm text-zinc-500">
               Hosted by{" "}
               {jam.hostUsername ? (
@@ -220,17 +214,11 @@ export default function JamCard({
         {/* Date / time / location strip */}
         <div className="rounded-2xl border border-zinc-200 bg-white divide-y divide-zinc-100">
           {jam.starts_at && (
-            <div className="flex items-start gap-4 px-5 py-4">
-              <div className="shrink-0 w-10 text-center">
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                  <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "short" }} />
-                </div>
-                <div className="text-2xl font-bold text-zinc-900 leading-none">
-                  <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ day: "numeric" }} />
-                </div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                  <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ month: "short" }} />
-                </div>
+            <div className="flex items-start gap-4 px-5 py-3 sm:py-4">
+              <div className="shrink-0 w-10 flex justify-center pt-0.5">
+                <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-zinc-800">
@@ -245,7 +233,7 @@ export default function JamCard({
           )}
 
           {(jam.neighborhood || jam.full_address) && (
-            <div className="flex items-start gap-4 px-5 py-4">
+            <div className="flex items-start gap-4 px-5 py-3 sm:py-4">
               <div className="shrink-0 w-10 flex justify-center pt-0.5">
                 <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -259,7 +247,7 @@ export default function JamCard({
                     to the neighbourhood, not the street. Null for a TBD venue,
                     which falls back to plain text. */}
                 <LocationText query={mapsUrl}>
-                  {showFullAddress ? jam.full_address : jam.neighborhood}
+                  {dropUsCountry(showFullAddress ? dropVenueRepeatedInTitle(jam.full_address!, jam.name) : jam.neighborhood ?? "")}
                 </LocationText>
                 {!showFullAddress && !isOfficial && jam.neighborhood !== "TBD" && (
                   <p className="text-xs text-zinc-400 mt-0.5">Full address shown after RSVP</p>
@@ -269,7 +257,7 @@ export default function JamCard({
           )}
 
           {jam.capacity != null && (
-            <div className="flex items-start gap-4 px-5 py-4">
+            <div className="flex items-start gap-4 px-5 py-3 sm:py-4">
               <div className="shrink-0 w-10 flex justify-center pt-0.5">
                 <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />

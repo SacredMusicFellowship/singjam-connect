@@ -256,7 +256,7 @@ export default function TicketPurchasePanel({
             key={t.id}
             // Dimmed when it can't be bought, so the tiers that can be read as
             // the live ones at a glance.
-            className={`flex items-center justify-between gap-3 rounded-xl border border-zinc-200 p-3 ${
+            className={`flex items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3 py-2 sm:py-3 ${
               t.on_sale ? "" : "opacity-60"
             }`}
           >

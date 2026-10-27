@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { deriveNeighborhood } from "@singjam/core";
+import { deriveNeighborhood, resolvePlaceAddress } from "@singjam/core";
 
 type Suggestion = {
   placePrediction: {
@@ -80,17 +80,27 @@ export default function LocationAutocomplete({
     }, 300);
   }
 
-  function select(s: Suggestion) {
-    const { mainText, secondaryText } = s.placePrediction.structuredFormat;
-    const fullAddress = secondaryText
+  async function select(s: Suggestion) {
+    const { placeId, structuredFormat } = s.placePrediction;
+    const { mainText, secondaryText } = structuredFormat;
+    const suggested = secondaryText
       ? `${mainText.text}, ${secondaryText.text}`
       : mainText.text;
     const neighborhood = deriveNeighborhood(mainText.text, secondaryText?.text, citiesOnly);
 
-    setInputValue(fullAddress);
-    onChange({ fullAddress, neighborhood, confirmed: true });
+    setInputValue(suggested);
     setSuggestions([]);
     setOpen(false);
+
+    // A city pick (the profile form) needs no street address.
+    const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
+    const fullAddress =
+      citiesOnly || !key
+        ? suggested
+        : await resolvePlaceAddress({ placeId, mainText: mainText.text, fallback: suggested, apiKey: key });
+
+    setInputValue(fullAddress);
+    onChange({ fullAddress, neighborhood, confirmed: true });
   }
 
   return (
