@@ -111,7 +111,6 @@ export default async function TicketPaymentPage({
       lines={state.lines}
       discountCents={state.discountCents}
       eventName={jam?.name ?? null}
-      backHref={backToEvent}
     />
   );
 }

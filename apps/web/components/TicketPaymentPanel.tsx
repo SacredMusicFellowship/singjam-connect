@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 import { CheckoutElementsProvider } from "@stripe/react-stripe-js/checkout";
 import type { PaymentLine } from "@/lib/ticketPaymentState";
@@ -20,12 +19,10 @@ const money = (cents: number, currency: string) =>
  * tables, so the rows always add up to the amount on the button — Stripe holds
  * both the promotion-code discount and the processing-fee line.
  *
- * TicketCheckoutForm is left exactly as it was: it owns the "Back to tickets"
- * affordances and the confirm button, and it is the last thing between a buyer
- * and their money, so it gets a navigating callback rather than an edit. Going
- * back is safe now in a way it was not before — the selection is already
- * reserved server-side under this order, so returning reloads the same held
- * order instead of minting a second one.
+ * There is no "Back to tickets" link: buyers use the browser or phone back
+ * button. That is safe — the selection is already reserved server-side under
+ * this order, so returning reloads the same held order instead of minting a
+ * second one.
  */
 export default function TicketPaymentPanel({
   clientSecret,
@@ -34,7 +31,6 @@ export default function TicketPaymentPanel({
   lines,
   discountCents,
   eventName,
-  backHref,
 }: {
   clientSecret: string;
   amountCents: number;
@@ -42,12 +38,9 @@ export default function TicketPaymentPanel({
   lines: PaymentLine[];
   discountCents: number;
   eventName: string | null;
-  backHref: string;
 }) {
-  const router = useRouter();
-
   return (
-    <div className="mx-auto max-w-sm space-y-4">
+    <div className="mx-auto max-w-sm space-y-3">
       <div>
         <h1 className="text-lg font-semibold leading-tight text-zinc-900">Checkout</h1>
         {eventName && <p className="mt-0.5 text-sm text-zinc-500">{eventName}</p>}
@@ -56,10 +49,10 @@ export default function TicketPaymentPanel({
       {/* Rendered only when the line items came back — never a summary that
           disagrees with the total, or an empty box where one should be. */}
       {lines.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+        <div className="rounded-xl border border-zinc-200 bg-white px-4 py-1.5 text-sm">
           <ul className="divide-y divide-zinc-100">
             {lines.map((line, i) => (
-              <li key={`${line.label}-${i}`} className="flex items-baseline justify-between gap-3 py-2">
+              <li key={`${line.label}-${i}`} className="flex items-baseline justify-between gap-3 py-1.5">
                 <span className="min-w-0 text-zinc-700">
                   {line.label}
                   {line.quantity > 1 && (
@@ -73,13 +66,13 @@ export default function TicketPaymentPanel({
             ))}
 
             {discountCents > 0 && (
-              <li className="flex items-baseline justify-between gap-3 py-2 text-green-700">
+              <li className="flex items-baseline justify-between gap-3 py-1.5 text-green-700">
                 <span>Discount</span>
                 <span className="shrink-0 tabular-nums">−{money(discountCents, currency)}</span>
               </li>
             )}
 
-            <li className="flex items-baseline justify-between gap-3 py-2 font-semibold text-zinc-900">
+            <li className="flex items-baseline justify-between gap-3 py-1.5 font-semibold text-zinc-900">
               <span>Total</span>
               <span className="shrink-0 tabular-nums">{money(amountCents, currency)}</span>
             </li>
@@ -88,12 +81,8 @@ export default function TicketPaymentPanel({
       )}
 
       <CheckoutElementsProvider stripe={stripePromise} options={{ clientSecret }}>
-        <TicketCheckoutForm onBack={() => router.push(backHref)} />
+        <TicketCheckoutForm />
       </CheckoutElementsProvider>
-
-      <p className="text-xs text-zinc-400">
-        Your tickets are held while you pay. Payments are processed by Stripe.
-      </p>
     </div>
   );
 }
