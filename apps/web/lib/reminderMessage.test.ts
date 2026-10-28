@@ -10,7 +10,7 @@ const values = {
   songMenuUrl: "https://singjam.org/set/set-1",
 };
 
-const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#39;/g, "'");
+const text = (html: string) => html.split(/<[^>]*>/).join("").replace(/&#39;/g, "'");
 
 describe("renderReminderMessage", () => {
   it("renders Sherri's wording with the event's details", () => {
