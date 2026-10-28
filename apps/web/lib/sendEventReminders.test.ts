@@ -14,24 +14,34 @@ const EVENT = {
   full_address: "The Starry Plough Pub, 3101 Shattuck Ave., Berkeley, CA 94705, USA",
   neighborhood: "Berkeley, CA",
   host_user_id: "host-1",
+  visibility: "official",
 };
 
 // Friday 30 Oct 2026, 8 AM PDT (UTC-7).
 const FRIDAY_8AM = new Date("2026-10-30T15:00:00Z");
 
-function makeAdmin({ jams = [EVENT], claimError = null as any, rsvps = [] as any[], savedMessage = null as string | null } = {}) {
+function makeAdmin({
+  jams = [EVENT] as any[],
+  claimError = null as any,
+  rsvps = [] as any[],
+  invites = [] as any[],
+  savedMessage = null as string | null,
+  eventMessage = null as string | null,
+} = {}) {
   const insert = vi.fn().mockResolvedValue({ error: claimError });
   const deleteEq2 = vi.fn().mockResolvedValue({ error: null });
   const del = vi.fn(() => ({ eq: () => ({ eq: deleteEq2 }) }));
   const jamsChain: any = {};
   for (const m of ["select", "eq", "gte"]) jamsChain[m] = vi.fn(() => jamsChain);
   jamsChain.lte = vi.fn().mockResolvedValue({ data: jams, error: null });
+  jamsChain.maybeSingle = vi.fn().mockResolvedValue({ data: { reminder_message: eventMessage }, error: null });
 
   const admin = {
     from: vi.fn((table: string) => {
       if (table === "jams") return jamsChain;
       if (table === "jam_reminders_sent") return { insert, delete: del };
       if (table === "jam_rsvps") return { select: () => ({ eq: () => ({ eq: async () => ({ data: rsvps }) }) }) };
+      if (table === "jam_invites") return { select: () => ({ eq: () => ({ eq: async () => ({ data: invites }) }) }) };
       if (table === "app_settings")
         return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: savedMessage ? { value: savedMessage } : null }) }) }) };
       if (table === "sets")
@@ -111,10 +121,10 @@ describe("sendEventReminders", () => {
     expect(resend.batch.send.mock.calls[0][0][0].subject).toBe("Today: SingJam at the Starry Plough");
   });
 
-  it("only looks at official events", async () => {
+  it("looks at every jam, not only official events", async () => {
     const { admin, jamsChain } = makeAdmin({ jams: [] });
     await sendEventReminders(admin, makeResend() as any, FRIDAY_8AM);
-    expect(jamsChain.eq).toHaveBeenCalledWith("visibility", "official");
+    expect(jamsChain.eq).not.toHaveBeenCalledWith("visibility", "official");
   });
 
   it("emails members and guest ticket buyers once each", async () => {
@@ -150,6 +160,32 @@ describe("sendEventReminders", () => {
     expect(guestEmail.html).toContain("Hey Gina, see you Sunday!");
   });
 
+  it("uses the event's own message over the saved one", async () => {
+    const { admin } = makeAdmin({ savedMessage: "Shared {name}", eventMessage: "Just this event, {name} <b>!</b>" });
+    const resend = makeResend();
+    await sendEventReminders(admin, resend as any, FRIDAY_8AM);
+    const guestEmail = resend.batch.send.mock.calls[0][0].find((p: any) => p.to === "guest@example.com");
+    expect(guestEmail.html).toContain("Just this event, Gina &lt;b&gt;!&lt;/b&gt;");
+    expect(guestEmail.html).not.toContain("Shared");
+  });
+
+  it("falls back to the saved message when the event's is blank", async () => {
+    const { admin } = makeAdmin({ savedMessage: "Shared {name}", eventMessage: "   " });
+    const resend = makeResend();
+    await sendEventReminders(admin, resend as any, FRIDAY_8AM);
+    const guestEmail = resend.batch.send.mock.calls[0][0].find((p: any) => p.to === "guest@example.com");
+    expect(guestEmail.html).toContain("Shared Gina");
+  });
+
+  it("still sends when the event's message can't be read (before migration 170)", async () => {
+    const { admin, jamsChain } = makeAdmin({ savedMessage: "Shared {name}" });
+    jamsChain.maybeSingle.mockResolvedValue({ data: null, error: { message: 'column "reminder_message" does not exist' } });
+    const resend = makeResend();
+    await sendEventReminders(admin, resend as any, FRIDAY_8AM);
+    const guestEmail = resend.batch.send.mock.calls[0][0].find((p: any) => p.to === "guest@example.com");
+    expect(guestEmail.html).toContain("Shared Gina");
+  });
+
   it("sends nothing when the claim can't be written", async () => {
     const { admin } = makeAdmin({ claimError: { code: "23505" } });
     const resend = makeResend();
@@ -167,5 +203,42 @@ describe("sendEventReminders", () => {
     const { admin, insert } = makeAdmin();
     await sendEventReminders(admin, makeResend() as any, new Date("2026-10-29T16:00:00Z"));
     expect(insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendEventReminders — community and private jams", () => {
+  const JAM = { ...EVENT, id: "jam-2", name: "Friday <Folk> Jam", visibility: "community" };
+
+  it("sends both reminders on the same schedule as official events", async () => {
+    const { admin, insert } = makeAdmin({ jams: [JAM] });
+    await sendEventReminders(admin, makeResend() as any, FRIDAY_8AM);
+    expect(insert).toHaveBeenCalledWith({ jam_id: "jam-2", reminder_type: "48h" });
+    const day = makeAdmin({ jams: [JAM] });
+    await sendEventReminders(day.admin, makeResend() as any, new Date("2026-11-01T18:00:00Z"));
+    expect(day.insert).toHaveBeenCalledWith({ jam_id: "jam-2", reminder_type: "5h" });
+  });
+
+  it("uses the jam's name and 'the song menu', never the official message", async () => {
+    const { admin } = makeAdmin({ jams: [JAM], savedMessage: "Official {name}", eventMessage: "Event {name}" });
+    const resend = makeResend();
+    await sendEventReminders(admin, resend as any, FRIDAY_8AM);
+    const html = resend.batch.send.mock.calls[0][0][0].html;
+    expect(html).toContain("We&#39;ll see you at Friday &lt;Folk&gt; Jam this Sunday, November 1 at 2:30 PM");
+    expect(html).toContain("You can add songs to the song menu");
+    expect(html).not.toContain("Official");
+    expect(html).not.toContain("Event Host");
+  });
+
+  it("emails the host, people going and pending invitees, but not ticket buyers", async () => {
+    const { admin } = makeAdmin({
+      jams: [JAM],
+      rsvps: [{ user_id: "member-1" }],
+      invites: [{ invited_user_id: "invitee-1" }, { invited_user_id: null }],
+    });
+    const resend = makeResend();
+    await sendEventReminders(admin, resend as any, FRIDAY_8AM);
+    const to = resend.batch.send.mock.calls[0][0].map((p: any) => p.to).sort();
+    expect(to).toEqual(["host-1@example.com", "invitee-1@example.com", "member-1@example.com"]);
+    expect(mockGuests).not.toHaveBeenCalled();
   });
 });

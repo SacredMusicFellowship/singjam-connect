@@ -3,10 +3,16 @@ import type { Resend } from "resend";
 import { dropUsCountry } from "@singjam/core";
 import { eventReminderHtml } from "../emails/event-reminder";
 import { guestTicketBuyers } from "./jamGuestBuyers";
-import { loadReminderMessage, renderReminderMessage } from "./reminderMessage";
+import {
+  JAM_REMINDER_MESSAGE,
+  loadEventReminderMessage,
+  loadReminderMessage,
+  renderReminderMessage,
+} from "./reminderMessage";
 
-// Official SingJam events get their own reminders, in place of the day-before
-// one every other jam gets from sendJamReminders.
+// Every jam gets two reminders: two days before and on the day. Official
+// SingJam events use Sherri's message (editable in admin settings, or per
+// event); community and private jams use the same words with the jam's name.
 export type EventReminderType = "48h" | "5h";
 
 const FROM_ADDRESS = "SingJam <hello@singjam.org>";
@@ -20,6 +26,7 @@ type EventJam = {
   full_address: string | null;
   neighborhood: string | null;
   host_user_id: string | null;
+  visibility: string;
 };
 
 const localDate = (date: Date, tz: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: tz }).format(date);
@@ -63,15 +70,23 @@ const SUBJECTS: Record<EventReminderType, (jamName: string, day: string) => stri
   "5h": (jamName) => `Today: ${jamName}`,
 };
 
+// The host and everyone going, plus guest ticket buyers for an official event
+// (who have no account) or people with a pending invite for any other jam.
 async function recipientsFor(admin: SupabaseClient, jam: EventJam) {
-  const [{ data: rsvps }, guests] = await Promise.all([
+  const official = jam.visibility === "official";
+  const [{ data: rsvps }, guests, { data: invites }] = await Promise.all([
     admin.from("jam_rsvps").select("user_id").eq("jam_id", jam.id).eq("status", "attending"),
-    guestTicketBuyers(admin, jam.id),
+    official ? guestTicketBuyers(admin, jam.id) : Promise.resolve(new Map<string, string | null>()),
+    official
+      ? Promise.resolve({ data: [] as { invited_user_id: string | null }[] })
+      : admin.from("jam_invites").select("invited_user_id").eq("jam_id", jam.id).eq("status", "pending"),
   ]);
 
   const userIds = new Set<string>();
   if (jam.host_user_id) userIds.add(jam.host_user_id);
   for (const r of rsvps ?? []) if (r.user_id) userIds.add(r.user_id);
+  // Link invites have no invited_user_id until someone claims them.
+  for (const i of invites ?? []) if (i.invited_user_id) userIds.add(i.invited_user_id);
 
   const members = await Promise.all(
     [...userIds].map(async (id) => {
@@ -99,8 +114,7 @@ export async function sendEventReminders(admin: SupabaseClient, resend: Resend, 
   // late-evening start); anything further out has nothing due yet.
   const { data: jams, error } = await admin
     .from("jams")
-    .select("id, name, starts_at, timezone, full_address, neighborhood, host_user_id")
-    .eq("visibility", "official")
+    .select("id, name, starts_at, timezone, full_address, neighborhood, host_user_id, visibility")
     .gte("starts_at", now.toISOString())
     .lte("starts_at", new Date(now.getTime() + 72 * 60 * 60 * 1000).toISOString());
   if (error) {
@@ -125,7 +139,11 @@ export async function sendEventReminders(admin: SupabaseClient, resend: Resend, 
         if (claimError) continue;
         claimed = true;
 
-        const template = (message ??= await loadReminderMessage(admin));
+        // An official event's own message if it has one, else the shared one.
+        const official = jam.visibility === "official";
+        const template = official
+          ? (await loadEventReminderMessage(admin, jam.id)) ?? (message ??= await loadReminderMessage(admin))
+          : JAM_REMINDER_MESSAGE;
         const recipients = await recipientsFor(admin, jam);
         const jamName = jam.name ?? "SingJam";
         const jamUrl = `${SITE_URL}/jam/${jam.id}`;
@@ -154,6 +172,7 @@ export async function sendEventReminders(admin: SupabaseClient, resend: Resend, 
               time,
               location: address ? dropUsCountry(address) : null,
               songMenuUrl,
+              ...(official ? {} : { jamName: jam.name ?? "the jam" }),
             }),
           }),
         }));

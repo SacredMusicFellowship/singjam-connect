@@ -3,18 +3,9 @@
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { ACSyncStatus } from "@/app/api/admin/ac-sync/route";
-import { REMINDER_MESSAGE_MAX_LENGTH, renderReminderMessage } from "@/lib/reminderMessage";
+import { REMINDER_MESSAGE_MAX_LENGTH, REMINDER_PREVIEW_VALUES, renderReminderMessage } from "@/lib/reminderMessage";
 
 // Stand-in details for the message preview.
-const PREVIEW_VALUES = {
-  name: "Sam",
-  day: "Sunday",
-  date: "November 1",
-  time: "2:30 PM",
-  location: "The Starry Plough Pub, 3101 Shattuck Ave., Berkeley, CA 94705",
-  songMenuUrl: "#",
-};
-
 type Flag = { key: string; label: string; description: string };
 
 const FLAGS: Flag[] = [
@@ -252,7 +243,7 @@ export default function AdminSettingsPage() {
             />
             <div className="rounded-xl border border-zinc-200 bg-white p-4">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Preview</p>
-              <div dangerouslySetInnerHTML={{ __html: renderReminderMessage(reminderMessage, PREVIEW_VALUES) }} />
+              <div dangerouslySetInnerHTML={{ __html: renderReminderMessage(reminderMessage, REMINDER_PREVIEW_VALUES) }} />
             </div>
             <div className="flex items-center gap-2">
               <button
