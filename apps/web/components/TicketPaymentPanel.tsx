@@ -2,8 +2,10 @@
 
 import { loadStripe } from "@stripe/stripe-js";
 import { CheckoutElementsProvider } from "@stripe/react-stripe-js/checkout";
+import { Elements } from "@stripe/react-stripe-js";
 import type { PaymentLine } from "@/lib/ticketPaymentState";
 import TicketCheckoutForm from "./TicketCheckoutForm";
+import TicketPreviewForm from "./TicketPreviewForm";
 
 // Loaded once at module scope, not per render — re-calling loadStripe on every
 // render refetches Stripe.js and drops the mounted Element.
@@ -31,13 +33,16 @@ export default function TicketPaymentPanel({
   lines,
   discountCents,
   eventName,
+  preview,
 }: {
-  clientSecret: string;
+  // Null only for the `next dev` preview, which has no Checkout Session.
+  clientSecret: string | null;
   amountCents: number;
   currency: string;
   lines: PaymentLine[];
   discountCents: number;
   eventName: string | null;
+  preview?: { completeUrl: string; paymentMethodConfiguration: string | null; excludedPaymentMethodTypes: string[] };
 }) {
   return (
     <div className="mx-auto max-w-sm space-y-3">
@@ -80,9 +85,26 @@ export default function TicketPaymentPanel({
         </div>
       )}
 
-      <CheckoutElementsProvider stripe={stripePromise} options={{ clientSecret }}>
-        <TicketCheckoutForm />
-      </CheckoutElementsProvider>
+      {clientSecret ? (
+        <CheckoutElementsProvider stripe={stripePromise} options={{ clientSecret }}>
+          <TicketCheckoutForm />
+        </CheckoutElementsProvider>
+      ) : (
+        <Elements
+          stripe={stripePromise}
+          options={{
+            mode: "payment",
+            amount: amountCents,
+            currency,
+            ...(preview?.paymentMethodConfiguration
+              ? { paymentMethodConfiguration: preview.paymentMethodConfiguration }
+              : {}),
+            excludedPaymentMethodTypes: preview?.excludedPaymentMethodTypes ?? [],
+          }}
+        >
+          <TicketPreviewForm totalLabel={money(amountCents, currency)} completeUrl={preview?.completeUrl ?? ""} />
+        </Elements>
+      )}
     </div>
   );
 }

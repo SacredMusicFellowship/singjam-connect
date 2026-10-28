@@ -5,6 +5,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { resolvePromoCode } from "@/lib/promoCode";
 import { coverageFeeCents } from "@/lib/ticketFees";
 import { fulfilPendingOrder } from "@/lib/ticketFulfilment";
+import { ticketingBlocked } from "@/lib/devSafety";
+import { buildCheckoutPreview, previewUrl } from "@/lib/ticketCheckoutPreview";
 import {
   stripe,
   SITE_URL,
@@ -88,6 +90,16 @@ export async function POST(
   // the free RSVP flow in ../rsvp/route.ts.
   if (jam.visibility !== "official") {
     return NextResponse.json({ error: "This event does not sell tickets" }, { status: 400 });
+  }
+
+  // `next dev` stops here, before the reservation, and walks the rest of the flow
+  // as a preview built from the selection: the payment page for a charged order,
+  // straight to the confirmation for a free one, as the real flow does.
+  if (ticketingBlocked(`ticket checkout for jam ${jamId}`)) {
+    const preview = await buildCheckoutPreview(admin, jamId, jam.name ?? null, items, promoCode, coverFees);
+    if ("error" in preview) return NextResponse.json({ error: preview.error }, { status: 400 });
+    const step = preview.amountCents === 0 ? "complete" : "pay";
+    return NextResponse.json({ preview_url: previewUrl(jamId, step, items, promoCode, coverFees) });
   }
 
   // Reserve stock first. Doing this before creating the Stripe session is what

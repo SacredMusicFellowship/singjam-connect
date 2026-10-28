@@ -55,7 +55,7 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
 
   const jamName = jam?.name ?? "the jam";
 
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: email,
     subject: `Your ticket${(tickets ?? []).length === 1 ? "" : "s"} for ${jamName}`,
@@ -80,6 +80,9 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
       setUrl: linkedSet ? `${SITE_URL}/set/${linkedSet.id}` : null,
     }),
   });
+  // Thrown, not `return false`: false means "no address", which the sweeper
+  // gives up on, while a failed send must stay in the retry queue.
+  if (error) throw new Error(error.message ?? "Resend send error");
 
   return true;
 }

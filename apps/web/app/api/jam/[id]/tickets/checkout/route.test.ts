@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const {
   mockGetUser, mockBearerGetUser, mockAdminFrom, mockRpc, mockSessionsCreate,
@@ -40,7 +40,7 @@ import { POST } from "./route";
 
 function chain(result: any) {
   const c: any = {};
-  for (const m of ["select", "eq", "ilike", "update", "insert", "order", "limit"]) {
+  for (const m of ["select", "eq", "in", "ilike", "update", "insert", "order", "limit"]) {
     c[m] = vi.fn().mockReturnValue(c);
   }
   c.single = vi.fn().mockResolvedValue(result);
@@ -99,8 +99,61 @@ beforeEach(() => {
   mockAdminFrom.mockReset();
   mockRpc.mockReset();
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("POST /api/jam/[id]/tickets/checkout", () => {
+  it("previews the payment page under next dev, with no order, hold or Stripe session", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ALLOW_DEV_SIDE_EFFECTS", "");
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Winter Sing", visibility: "official" } }))
+      .mockReturnValueOnce(chain({ data: [{ id: TYPE_ID, name: "General", price_cents: 1500, currency: "usd" }] }));
+
+    const res = await POST(makeReq({ items: [{ ticket_type_id: TYPE_ID, quantity: 2 }], cover_fees: true }), params);
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).preview_url).toBe(`/jam/${JAM_ID}/tickets/pay?preview=${TYPE_ID}%3A2&cover=1`);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+    expect(mockFulfil).not.toHaveBeenCalled();
+  });
+
+  it("sends a free order under next dev straight to the confirmation preview, reserving nothing", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ALLOW_DEV_SIDE_EFFECTS", "");
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Winter Sing", visibility: "official" } }))
+      .mockReturnValueOnce(chain({ data: [{ id: TYPE_ID, name: "General", price_cents: 1500, currency: "usd" }] }));
+    mockResolvePromo.mockResolvedValue({
+      valid: true, code: "COMP100", label: "100% off", promoCodeId: "pc-free",
+      promotionCodeId: "promo_free", discountCents: 1500, totalCents: 0,
+    });
+
+    const res = await POST(makeReq({ ...ONE_TICKET, promo_code: "COMP100" }), params);
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).preview_url).toBe(`/jam/${JAM_ID}/tickets/complete?preview=${TYPE_ID}%3A1&promo=COMP100`);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockFulfil).not.toHaveBeenCalled();
+  });
+
+  it("never reserves under next dev, even with ALLOW_DEV_SIDE_EFFECTS=true", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ALLOW_DEV_SIDE_EFFECTS", "true");
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Winter Sing", visibility: "official" } }))
+      .mockReturnValueOnce(chain({ data: [{ id: TYPE_ID, name: "General", price_cents: 1500, currency: "usd" }] }));
+
+    const res = await POST(makeReq(ONE_TICKET), params);
+
+    expect((await res.json()).preview_url).toMatch(/\/tickets\/pay\?/);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+  });
+
   it("rejects an anonymous buyer with no email, rather than 401ing them", async () => {
     // Guest checkout is allowed, so the gate is a usable email, not an account.
     mockGetUser.mockResolvedValue({ data: { user: null } });

@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
 import { fulfilPendingOrder } from "@/lib/ticketFulfilment";
+import { ticketingBlocked } from "@/lib/devSafety";
 
 // Fulfilment happens here, never in the browser's return_url handler — the
 // buyer can close the tab before it runs, and a client callback can be forged.
@@ -20,6 +21,12 @@ export async function POST(req: Request) {
     event = stripe().webhooks.constructEvent(raw, signature, process.env.STRIPE_WEBHOOK_SECRET!);
   } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  // A `stripe listen` forward reaching next dev must not fulfil, expire or
+  // refund production orders. 200 so the CLI doesn't keep redelivering.
+  if (ticketingBlocked(`Stripe webhook ${event.type}`)) {
+    return NextResponse.json({ received: true, blocked: true });
   }
 
   const admin = supabaseAdmin();

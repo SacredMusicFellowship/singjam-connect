@@ -10,6 +10,7 @@ import { jamCancelledHtml } from "@/emails/jam-cancelled";
 import { jamUpdatedHtml } from "@/emails/jam-updated";
 import { buildIcs } from "@/lib/ics";
 import { isValidTimeZone } from "@singjam/core";
+import { devRefusesVisibility, DEV_PRIVATE_JAMS_MESSAGE } from "@/lib/devSafety";
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,7 +27,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   const { data: currentJam } = await admin
     .from("jams")
-    .select("host_user_id, name, starts_at, ends_at, neighborhood, full_address, timezone")
+    .select("host_user_id, name, starts_at, ends_at, neighborhood, full_address, timezone, visibility")
     .eq("id", id)
     .maybeSingle();
 
@@ -44,6 +45,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // The client converts the typed times using the venue's zone (from /api/timezone),
   // so store that same zone; anything unusable keeps the event's existing one.
   const timezone = isValidTimeZone(body.timezone) ? body.timezone : currentJam.timezone;
+
+  if (devRefusesVisibility(currentJam.visibility, visibility)) {
+    return NextResponse.json({ error: DEV_PRIVATE_JAMS_MESSAGE }, { status: 403 });
+  }
 
   const { error: updateError } = await admin.from("jams").update({
     name, starts_at, ends_at, neighborhood, full_address, notes, visibility,

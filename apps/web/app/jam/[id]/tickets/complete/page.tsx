@@ -5,6 +5,9 @@ import { stripe } from "@/lib/stripe";
 import { resolveTicketOutcome, type OutcomeSession } from "@/lib/ticketOutcome";
 import TicketConfirmationPoller from "@/components/TicketConfirmationPoller";
 import { findSetWithSongs } from "@/lib/setWithSongs";
+import { inNextDev } from "@/lib/devSafety";
+import { buildCheckoutPreview, parsePreviewItems } from "@/lib/ticketCheckoutPreview";
+import { redirect } from "next/navigation";
 
 // Where Stripe returns the buyer after payment. This page only *reports* status —
 // it never fulfils. Fulfilment is the webhook's job, because the buyer can close
@@ -18,10 +21,10 @@ export default async function TicketsCompletePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ session_id?: string; order_id?: string }>;
+  searchParams: Promise<{ session_id?: string; order_id?: string; preview?: string; promo?: string; cover?: string }>;
 }) {
   const { id: jamId } = await params;
-  const { session_id, order_id } = await searchParams;
+  const { session_id, order_id, preview, promo, cover } = await searchParams;
 
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
@@ -39,9 +42,31 @@ export default async function TicketsCompletePage({
   // session, so it comes back by order id instead. Both identifiers are v4
   // uuids or Stripe's own opaque ids — unguessable, which is what the guest
   // access rule below leans on.
+  // `next dev` only: the end of the previewed flow, standing in a paid order
+  // built from the selection. Nothing was reserved, charged or emailed.
+  const previewItems = preview && inNextDev() ? parsePreviewItems(preview) : null;
+  const summary = previewItems
+    ? await buildCheckoutPreview(admin, jamId, jam?.name ?? null, previewItems, promo ?? "", cover === "1")
+    : null;
+  if (summary && "error" in summary) redirect(`/jam/${jamId}`);
+  const previewOrder =
+    summary && !("error" in summary)
+      ? {
+          id: "preview",
+          status: "paid",
+          amount_cents: summary.amountCents,
+          currency: summary.currency,
+          buyer_user_id: user?.id ?? null,
+          buyer_email: null,
+          stripe_checkout_session_id: null,
+        }
+      : null;
+
   const columns =
     "id, status, amount_cents, currency, buyer_user_id, buyer_email, stripe_checkout_session_id";
-  const { data: order } = session_id
+  const { data: order } = previewOrder
+    ? { data: previewOrder }
+    : session_id
     ? await admin.from("ticket_orders").select(columns).eq("stripe_checkout_session_id", session_id).maybeSingle()
     : order_id
     ? await admin.from("ticket_orders").select(columns).eq("id", order_id).maybeSingle()
@@ -69,7 +94,9 @@ export default async function TicketsCompletePage({
   }
   const outcome = resolveTicketOutcome(mine, session);
 
-  const ticketCount = mine
+  const ticketCount = previewItems
+    ? previewItems.reduce((n, i) => n + i.quantity, 0)
+    : mine
     ? (await admin.from("tickets").select("id", { count: "exact", head: true }).eq("order_id", mine.id)).count ?? 0
     : 0;
 
@@ -80,6 +107,11 @@ export default async function TicketsCompletePage({
 
   return (
     <div className="mx-auto max-w-md space-y-4 py-8">
+      {previewOrder && (
+        <p className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900">
+          Preview — no ticket was reserved, nothing was charged or emailed.
+        </p>
+      )}
       {outcome.kind === "paid" && mine ? (
         <>
           <h1 className="text-xl font-semibold text-zinc-900">

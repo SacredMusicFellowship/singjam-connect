@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { stripeDevFetch } from "./devSafety";
 
 let client: Stripe | null = null;
 
@@ -20,7 +21,13 @@ export function stripe(): Stripe {
     // version to the installed package release, and overriding it desynchronises
     // the TypeScript types from the wire format. Match the webhook endpoint's
     // version to the SDK instead of pinning here.
-    client = new Stripe(key);
+    client = new Stripe(
+      key,
+      // Under `next dev` only, so production keeps stripe-node's default transport.
+      process.env.NODE_ENV === "development"
+        ? { httpClient: Stripe.createFetchHttpClient(stripeDevFetch) }
+        : undefined,
+    );
   }
   return client;
 }

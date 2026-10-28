@@ -182,6 +182,11 @@ export default function TicketPurchasePanel({
         .then((j) => setTypes(j.ticket_types ?? []));
       return;
     }
+    // Local dev only: a preview of the next step, with no order behind it.
+    if (json.preview_url) {
+      window.location.href = json.preview_url;
+      return;
+    }
     // A fully-discounted order is already fulfilled server-side — there is no
     // payment step to show, so go straight to the confirmation.
     if (json.free) {
