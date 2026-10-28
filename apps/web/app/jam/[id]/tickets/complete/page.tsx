@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { resolveTicketOutcome, type OutcomeSession } from "@/lib/ticketOutcome";
 import TicketConfirmationPoller from "@/components/TicketConfirmationPoller";
+import { findSetWithSongs } from "@/lib/setWithSongs";
 
 // Where Stripe returns the buyer after payment. This page only *reports* status —
 // it never fulfils. Fulfilment is the webhook's job, because the buyer can close
@@ -30,12 +31,9 @@ export default async function TicketsCompletePage({
 
   // The set is the reason to come back before the day, so link it directly
   // rather than making people find it on the event page. Readable by anyone,
-  // so guests get the link too — adding to it is what needs an account.
-  const { data: linkedSet } = await admin
-    .from("sets")
-    .select("id")
-    .eq("jam_id", jamId)
-    .maybeSingle();
+  // so guests get the link too — adding to it is what needs an account. Only
+  // once it has songs: an empty set is nothing to see yet.
+  const linkedSet = await findSetWithSongs(admin, jamId);
 
   // A charged order is found by its Stripe session; a comped one never had a
   // session, so it comes back by order id instead. Both identifiers are v4
