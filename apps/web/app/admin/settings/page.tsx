@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { ACSyncStatus } from "@/app/api/admin/ac-sync/route";
+import { REMINDER_MESSAGE_MAX_LENGTH, renderReminderMessage } from "@/lib/reminderMessage";
+
+// Stand-in details for the message preview.
+const PREVIEW_VALUES = {
+  name: "Sam",
+  day: "Sunday",
+  date: "November 1",
+  time: "2:30 PM",
+  location: "The Starry Plough Pub, 3101 Shattuck Ave., Berkeley, CA 94705",
+  songMenuUrl: "#",
+};
 
 type Flag = { key: string; label: string; description: string };
 
@@ -33,6 +44,11 @@ export default function AdminSettingsPage() {
   const [reminderSending, setReminderSending] = useState(false);
   const [reminderResult, setReminderResult] = useState<number | null>(null);
 
+  const [reminderMessage, setReminderMessage] = useState<string | null>(null);
+  const [defaultReminderMessage, setDefaultReminderMessage] = useState("");
+  const [messageSaving, setMessageSaving] = useState(false);
+  const [messageStatus, setMessageStatus] = useState<string | null>(null);
+
   const [revalidating, setRevalidating] = useState(false);
   const [revalidated, setRevalidated] = useState(false);
 
@@ -45,8 +61,33 @@ export default function AdminSettingsPage() {
         for (const row of (data ?? []) as any[]) map[row.key] = row.enabled;
         setValues(map);
       });
+    fetch("/api/admin/reminder-message")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setReminderMessage(data.message);
+        setDefaultReminderMessage(data.defaultMessage);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function saveReminderMessage(message: string) {
+    setMessageSaving(true);
+    setMessageStatus(null);
+    const res = await fetch("/api/admin/reminder-message", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setReminderMessage(data.message);
+      setMessageStatus("Saved. The next reminders will use this message.");
+    } else {
+      setMessageStatus(data.error ?? "Could not save the message.");
+    }
+    setMessageSaving(false);
+  }
 
   async function toggle(key: string, enabled: boolean) {
     setSaving(key);
@@ -165,7 +206,10 @@ export default function AdminSettingsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold">Jam reminders</h2>
-            <p className="text-sm text-zinc-400 mt-0.5">Sends 8 AM reminder emails for jams happening tomorrow. Runs automatically every hour.</p>
+            <p className="text-sm text-zinc-400 mt-0.5">
+              Runs automatically every hour. Jams get an 8 AM reminder the day before; official SingJam
+              events instead get one at 8 AM two days before and one five hours before the start.
+            </p>
           </div>
           <button
             onClick={sendReminders}
@@ -179,6 +223,55 @@ export default function AdminSettingsPage() {
           <p className="text-sm text-zinc-500">
             {reminderResult === 0 ? "No eligible jams found." : `Sent ${reminderResult} reminder email${reminderResult === 1 ? "" : "s"}.`}
           </p>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold">Event reminder message</h2>
+          <p className="text-sm text-zinc-400 mt-0.5">
+            The text of both reminder emails for official SingJam events. These are filled in for each
+            email: <code>{"{name}"}</code>, <code>{"{day}"}</code>, <code>{"{date}"}</code>,{" "}
+            <code>{"{time}"}</code>, <code>{"{location}"}</code>, and <code>{"{song_menu}"}</code> (a link
+            reading &ldquo;here&rdquo; to the event&apos;s set list). Leave a blank line between paragraphs.
+          </p>
+        </div>
+        {reminderMessage === null ? (
+          <div className="h-32 animate-pulse rounded-xl bg-zinc-100" />
+        ) : (
+          <>
+            <textarea
+              value={reminderMessage}
+              onChange={(e) => {
+                setReminderMessage(e.target.value);
+                setMessageStatus(null);
+              }}
+              rows={6}
+              maxLength={REMINDER_MESSAGE_MAX_LENGTH}
+              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            />
+            <div className="rounded-xl border border-zinc-200 bg-white p-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Preview</p>
+              <div dangerouslySetInnerHTML={{ __html: renderReminderMessage(reminderMessage, PREVIEW_VALUES) }} />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => saveReminderMessage(reminderMessage)}
+                disabled={messageSaving}
+                className="text-sm px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {messageSaving ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={() => saveReminderMessage(defaultReminderMessage)}
+                disabled={messageSaving || reminderMessage === defaultReminderMessage}
+                className="text-sm px-3 py-1.5 rounded-lg border border-zinc-300 text-zinc-700 font-medium hover:bg-zinc-50 disabled:opacity-50"
+              >
+                Reset to default
+              </button>
+            </div>
+            {messageStatus && <p className="text-sm text-zinc-500">{messageStatus}</p>}
+          </>
         )}
       </div>
 

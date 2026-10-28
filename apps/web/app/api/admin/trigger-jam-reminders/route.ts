@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
 import { resend } from "@/lib/resend";
 import { sendJamReminders } from "@/lib/sendJamReminders";
+import { sendEventReminders } from "@/lib/sendEventReminders";
 
 export async function POST() {
   const auth = await requireAdmin();
@@ -10,6 +11,6 @@ export async function POST() {
 
   const admin = supabaseAdmin();
 
-  const sent = await sendJamReminders(admin, resend);
+  const sent = (await sendJamReminders(admin, resend)) + (await sendEventReminders(admin, resend));
   return NextResponse.json({ sent });
 }

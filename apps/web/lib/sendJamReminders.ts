@@ -54,7 +54,7 @@ export async function sendJamReminders(admin: SupabaseClient, resend: Resend): P
 
   let jamsQuery = admin
     .from("jams")
-    .select("id, name, starts_at, timezone, full_address, neighborhood, host_user_id")
+    .select("id, name, starts_at, timezone, full_address, neighborhood, host_user_id, visibility")
     .gte("starts_at", windowStart)
     .lte("starts_at", windowEnd);
 
@@ -69,7 +69,9 @@ export async function sendJamReminders(admin: SupabaseClient, resend: Resend): P
     throw error;
   }
 
-  const eligibleJams = (jams ?? []).filter((jam) => isEligible(now, jam));
+  // Official SingJam events get their own two reminders (sendEventReminders)
+  // instead of this one.
+  const eligibleJams = (jams ?? []).filter((jam) => jam.visibility !== "official" && isEligible(now, jam));
 
   if (eligibleJams.length === 0) return 0;
 

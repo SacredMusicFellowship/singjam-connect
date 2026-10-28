@@ -111,6 +111,14 @@ afterEach(() => {
 });
 
 describe("sendJamReminders", () => {
+  it("leaves official events to sendEventReminders", async () => {
+    const admin = makeAdmin({ jams: [{ ...BASE_JAM, visibility: "official" }] });
+    const resend = makeResend();
+
+    expect(await sendJamReminders(admin, resend)).toBe(0);
+    expect(resend.batch.send).not.toHaveBeenCalled();
+  });
+
   it("returns 0 and sends nothing when no jams are in the window", async () => {
     const admin = makeAdmin({ jams: [] });
     const resend = makeResend();
