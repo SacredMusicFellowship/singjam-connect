@@ -316,6 +316,35 @@ describe("POST /api/jam/[id]/tickets/checkout", () => {
     expect(mockSessionsCreate.mock.calls[0][0].discounts).toEqual([{ promotion_code: "promo_123" }]);
   });
 
+  it("records which promo code a charged order used", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    happyPathDb();
+    mockAdminFrom.mockReturnValueOnce(chain({ error: null })); // promo_code_id update
+    mockResolvePromo.mockResolvedValue({
+      valid: true, code: "EARLYBIRD", label: "10% off", promoCodeId: "pc-1",
+      promotionCodeId: "promo_123", discountCents: 300, totalCents: 2700,
+    });
+    mockSessionsCreate.mockResolvedValue({ id: "cs_1", client_secret: "cs_secret" });
+
+    expect((await POST(makeReq({ ...ONE_TICKET, promo_code: "EARLYBIRD" }), params)).status).toBe(200);
+    expect(mockAdminFrom.mock.results[TRAILING + 1].value.update).toHaveBeenCalledWith({ promo_code_id: "pc-1" });
+  });
+
+  it("still starts checkout when the promo code can't be recorded", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    happyPathDb();
+    mockAdminFrom.mockReturnValueOnce(chain({ error: { message: "column does not exist" } }));
+    mockResolvePromo.mockResolvedValue({
+      valid: true, code: "EARLYBIRD", label: "10% off", promoCodeId: "pc-1",
+      promotionCodeId: "promo_123", discountCents: 300, totalCents: 2700,
+    });
+    mockSessionsCreate.mockResolvedValue({ id: "cs_1", client_secret: "cs_secret" });
+
+    const res = await POST(makeReq({ ...ONE_TICKET, promo_code: "EARLYBIRD" }), params);
+    expect(res.status).toBe(200);
+    expect((await res.json()).client_secret).toBe("cs_secret");
+  });
+
   it("refuses a code not registered for this event and releases the stock", async () => {
     // Codes are account-wide in Stripe, so this is what stops one event's
     // discount being redeemed on another event's checkout.
@@ -348,7 +377,7 @@ describe("POST /api/jam/[id]/tickets/checkout", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
     happyPathDb();
     mockResolvePromo.mockResolvedValue({
-      valid: true, code: "COMP100", label: "100% off",
+      valid: true, code: "COMP100", label: "100% off", promoCodeId: "pc-free",
       promotionCodeId: "promo_free", discountCents: 3000, totalCents: 0,
     });
     mockFulfil.mockResolvedValue({ id: ORDER_ID });
@@ -362,6 +391,8 @@ describe("POST /api/jam/[id]/tickets/checkout", () => {
     expect(mockSessionsCreate).not.toHaveBeenCalled();
     // Fulfilled through the same path a charged order takes, recording $0.
     expect(mockFulfil).toHaveBeenCalledWith(expect.anything(), ORDER_ID, { amountCents: 0 });
+    // Stripe never sees this use, so the order carries the code for the count.
+    expect(mockAdminFrom.mock.results[TRAILING].value.update).toHaveBeenCalledWith({ promo_code_id: "pc-free" });
   });
 
   it("releases the stock if a free order can no longer be fulfilled", async () => {

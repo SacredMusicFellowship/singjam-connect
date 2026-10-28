@@ -90,6 +90,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
+  // What each buyer paid is an order total, so every ticket row carries its
+  // order's total and how many tickets that order covered.
+  const ticketsPerOrder = new Map<string, number>();
+  for (const t of tickets) {
+    const id = t.ticket_orders!.id;
+    ticketsPerOrder.set(id, (ticketsPerOrder.get(id) ?? 0) + 1);
+  }
+
   const guests = tickets.map((t) => {
     const o = t.ticket_orders!;
     const name =
@@ -106,6 +114,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       checked_in_at: t.checked_in_at,
       order_id: o.id,
       paid_at: o.paid_at,
+      order_amount_cents: o.amount_cents,
+      order_tickets: ticketsPerOrder.get(o.id) ?? 1,
+      currency: o.currency,
     };
   });
 

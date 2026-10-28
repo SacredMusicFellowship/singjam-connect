@@ -12,11 +12,24 @@ export type GuestCsvRow = {
   is_member: boolean;
   checked_in_at: string | null;
   paid_at: string | null;
+  order_amount_cents: number;
+  order_tickets: number;
+  currency: string;
 };
 
 // UTC and ISO on purpose. A locale string in a spreadsheet is ambiguous about
 // which timezone it meant, and it does not sort.
-const HEADERS = ["Name", "Email", "Tier", "Door code", "Ticket", "Checked in (UTC)", "Paid (UTC)"];
+const HEADERS = [
+  "Name",
+  "Email",
+  "Tier",
+  "Door code",
+  "Ticket",
+  "Checked in (UTC)",
+  "Paid (UTC)",
+  "Order total",
+  "Tickets in order",
+];
 
 // Names and email addresses here are typed in by anonymous ticket buyers, so a
 // cell starting with =, +, - or @ is run as a formula the moment the file opens
@@ -38,6 +51,9 @@ export function guestListToCsv(guests: GuestCsvRow[]): string {
       cell(g.is_member ? "Member" : "Guest"),
       cell(g.checked_in_at),
       cell(g.paid_at),
+      // A plain number with the currency, so it sums in a spreadsheet.
+      cell(`${(g.order_amount_cents / 100).toFixed(2)} ${g.currency.toUpperCase()}`),
+      cell(String(g.order_tickets)),
     ].join(",")
   );
 

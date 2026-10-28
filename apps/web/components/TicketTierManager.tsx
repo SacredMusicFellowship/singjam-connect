@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { isoToZonedInput, zonedInputToIso, zoneAbbreviation } from "@singjam/core";
 import { guestListToCsv, guestListFilename } from "@/lib/guestListCsv";
+import { promoUses } from "@/lib/promoUses";
 
 type Tier = {
   id: string;
@@ -51,7 +52,16 @@ type Guest = {
   checked_in_at: string | null;
   // Returned by the orders route all along; the type just never said so.
   paid_at: string | null;
+  order_amount_cents: number;
+  order_tickets: number;
+  currency: string;
 };
+
+// What the buyer paid for the order this ticket is part of.
+function paidLabel(g: Guest) {
+  const amount = money(g.order_amount_cents, g.currency);
+  return g.order_tickets > 1 ? `${amount} for ${g.order_tickets} tickets` : amount;
+}
 
 type PromoCode = { id: string; code: string; label: string; redeemed: number | null };
 
@@ -596,8 +606,7 @@ export default function TicketTierManager({
             <div className="min-w-0">
               <p className="truncate font-mono text-sm font-medium tracking-wider text-zinc-900">{p.code}</p>
               <p className="text-xs text-zinc-500">
-                {p.label}
-                {p.redeemed !== null ? ` · used ${p.redeemed}\u00d7` : ""}
+                {p.label} · <span className="font-medium text-zinc-700">{promoUses(p.redeemed)}</span>
               </p>
             </div>
             <button
@@ -724,6 +733,8 @@ export default function TicketTierManager({
                       <span className="font-mono tracking-wider text-zinc-700">{g.code}</span>
                       <span className="text-zinc-300"> · </span>
                       {g.tier}
+                      <span className="text-zinc-300"> · </span>
+                      {paidLabel(g)}
                       {g.checked_in_at && (
                         <>
                           <span className="text-zinc-300"> · </span>
@@ -744,6 +755,7 @@ export default function TicketTierManager({
                     <th className="py-2 pr-3 font-medium">Name</th>
                     <th className="py-2 pr-3 font-medium">Tier</th>
                     <th className="py-2 pr-3 font-medium">Code</th>
+                    <th className="py-2 pr-3 font-medium">Paid</th>
                     <th className="py-2 font-medium text-right">Door</th>
                   </tr>
                 </thead>
@@ -761,6 +773,7 @@ export default function TicketTierManager({
                       </td>
                       <td className="py-2 pr-3 text-zinc-600">{g.tier}</td>
                       <td className="py-2 pr-3 font-mono text-xs tracking-wider text-zinc-500">{g.code}</td>
+                      <td className="py-2 pr-3 text-zinc-600">{paidLabel(g)}</td>
                       <td className="py-2 text-right">
                         <CheckInButton guest={g} onToggle={toggleCheckIn} />
                       </td>

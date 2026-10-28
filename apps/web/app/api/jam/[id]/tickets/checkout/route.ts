@@ -142,6 +142,7 @@ export async function POST(
   // built-in code field, so the code is resolved here and attached to the
   // session; allow_promotion_codes only applies to Stripe-rendered checkout.
   let discounts: { promotion_code: string }[] | undefined;
+  let promoCodeId: string | null = null;
   let totalCents = order!.amount_cents;
   if (promoCode) {
     // Shared with the preview so the two can't disagree — and because the free
@@ -158,6 +159,7 @@ export async function POST(
       return NextResponse.json({ error: resolved.reason }, { status: 400 });
     }
     discounts = [{ promotion_code: resolved.promotionCodeId }];
+    promoCodeId = resolved.promoCodeId;
     totalCents = resolved.totalCents;
   }
 
@@ -174,6 +176,7 @@ export async function POST(
   // isn't a payment, so it skips the processor entirely and is fulfilled here,
   // through the same code the webhook uses for a charged order.
   if (totalCents === 0) {
+    if (promoCodeId) await recordPromoCode(admin, order!.id, promoCodeId);
     const paid = await fulfilPendingOrder(admin, order!.id, { amountCents: 0 });
     if (!paid) {
       await releaseHold(admin, order!.id);
@@ -274,6 +277,7 @@ export async function POST(
       .from("ticket_orders")
       .update({ stripe_checkout_session_id: session.id, updated_at: new Date().toISOString() })
       .eq("id", order!.id);
+    if (promoCodeId) await recordPromoCode(admin, order!.id, promoCodeId);
 
     return NextResponse.json({
       order_id: order!.id,
@@ -289,5 +293,18 @@ export async function POST(
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", order!.id);
     return NextResponse.json({ error: "Could not start checkout" }, { status: 502 });
+  }
+}
+
+// Which code the order used, so the ticket manager can count uses Stripe never
+// sees (a code that makes the order free). Its own write, and never fatal: the
+// count is bookkeeping, and checkout must not fail over it — including before
+// migration 169 adds the column.
+async function recordPromoCode(admin: ReturnType<typeof supabaseAdmin>, orderId: string, promoCodeId: string) {
+  try {
+    const { error } = await admin.from("ticket_orders").update({ promo_code_id: promoCodeId }).eq("id", orderId);
+    if (error) console.error("[tickets] could not record the promo code on the order", error);
+  } catch (e) {
+    console.error("[tickets] could not record the promo code on the order", e);
   }
 }

@@ -9,17 +9,25 @@ const guest = (over: Partial<GuestCsvRow> = {}): GuestCsvRow => ({
   is_member: false,
   checked_in_at: null,
   paid_at: "2026-09-08T19:00:00.000Z",
+  order_amount_cents: 1500,
+  order_tickets: 1,
+  currency: "usd",
   ...over,
 });
 
 const lines = (csv: string) => csv.replace(/^﻿/, "").trimEnd().split("\r\n");
 
 describe("guestListToCsv", () => {
+  it("includes what the buyer paid for the order and how many tickets it covered", () => {
+    const row = lines(guestListToCsv([guest({ order_amount_cents: 3000, order_tickets: 2 })]))[1];
+    expect(row.endsWith('"30.00 USD","2"')).toBe(true);
+  });
+
   it("writes a header row and one row per guest", () => {
     const rows = lines(guestListToCsv([guest(), guest({ name: "Chen Wei" })]));
     expect(rows).toHaveLength(3);
     expect(rows[0]).toBe(
-      '"Name","Email","Tier","Door code","Ticket","Checked in (UTC)","Paid (UTC)"'
+      '"Name","Email","Tier","Door code","Ticket","Checked in (UTC)","Paid (UTC)","Order total","Tickets in order"'
     );
     expect(rows[1]).toContain('"Ada Lovelace"');
     expect(rows[2]).toContain('"Chen Wei"');
