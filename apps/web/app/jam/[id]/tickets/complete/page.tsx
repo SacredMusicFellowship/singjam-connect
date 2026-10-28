@@ -9,6 +9,17 @@ import { inNextDev } from "@/lib/devSafety";
 import { buildCheckoutPreview, parsePreviewItems } from "@/lib/ticketCheckoutPreview";
 import { redirect } from "next/navigation";
 
+// `next dev` only: each state of this page, by link, without a real order.
+const SHOW_STATES = ["paid", "pending", "failed", "refunded", "missing"] as const;
+type ShowState = (typeof SHOW_STATES)[number];
+const SHOW_LABELS: Record<ShowState, string> = {
+  paid: "paid",
+  pending: "confirming",
+  failed: "didn't complete",
+  refunded: "refunded",
+  missing: "not found",
+};
+
 // Where Stripe returns the buyer after payment. This page only *reports* status —
 // it never fulfils. Fulfilment is the webhook's job, because the buyer can close
 // the tab before this renders and a client-side callback can't be trusted.
@@ -21,10 +32,20 @@ export default async function TicketsCompletePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ session_id?: string; order_id?: string; preview?: string; promo?: string; cover?: string }>;
+  searchParams: Promise<{
+    session_id?: string;
+    order_id?: string;
+    preview?: string;
+    promo?: string;
+    cover?: string;
+    show?: string;
+    set?: string;
+  }>;
 }) {
   const { id: jamId } = await params;
-  const { session_id, order_id, preview, promo, cover } = await searchParams;
+  const { session_id, order_id, preview, promo, cover, show, set } = await searchParams;
+  const dev = inNextDev();
+  const showState = dev && (SHOW_STATES as readonly string[]).includes(show ?? "") ? (show as ShowState) : null;
 
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
@@ -36,7 +57,11 @@ export default async function TicketsCompletePage({
   // rather than making people find it on the event page. Readable by anyone,
   // so guests get the link too — adding to it is what needs an account. Only
   // once it has songs: an empty set is nothing to see yet.
-  const linkedSet = await findSetWithSongs(admin, jamId);
+  const realSet = await findSetWithSongs(admin, jamId);
+  // In dev, set=none / set=some shows the page without or with the set-list
+  // button whatever this event's set holds; "some" links to the event page
+  // when there's no real set to link to.
+  const linkedSet = !dev || !set ? realSet : set === "none" ? null : realSet ?? { id: "" };
 
   // A charged order is found by its Stripe session; a comped one never had a
   // session, so it comes back by order id instead. Both identifiers are v4
@@ -44,7 +69,7 @@ export default async function TicketsCompletePage({
   // access rule below leans on.
   // `next dev` only: the end of the previewed flow, standing in a paid order
   // built from the selection. Nothing was reserved, charged or emailed.
-  const previewItems = preview && inNextDev() ? parsePreviewItems(preview) : null;
+  const previewItems = preview && dev ? parsePreviewItems(preview) : null;
   const summary = previewItems
     ? await buildCheckoutPreview(admin, jamId, jam?.name ?? null, previewItems, promo ?? "", cover === "1")
     : null;
@@ -60,12 +85,24 @@ export default async function TicketsCompletePage({
           buyer_email: null,
           stripe_checkout_session_id: null,
         }
+      : showState && showState !== "missing"
+      ? {
+          id: "preview",
+          status: showState,
+          amount_cents: 1500,
+          currency: "usd",
+          buyer_user_id: user?.id ?? null,
+          buyer_email: null,
+          stripe_checkout_session_id: null,
+        }
       : null;
 
   const columns =
     "id, status, amount_cents, currency, buyer_user_id, buyer_email, stripe_checkout_session_id";
   const { data: order } = previewOrder
     ? { data: previewOrder }
+    : showState
+    ? { data: null }
     : session_id
     ? await admin.from("ticket_orders").select(columns).eq("stripe_checkout_session_id", session_id).maybeSingle()
     : order_id
@@ -96,6 +133,8 @@ export default async function TicketsCompletePage({
 
   const ticketCount = previewItems
     ? previewItems.reduce((n, i) => n + i.quantity, 0)
+    : showState
+    ? 1
     : mine
     ? (await admin.from("tickets").select("id", { count: "exact", head: true }).eq("order_id", mine.id)).count ?? 0
     : 0;
@@ -107,7 +146,7 @@ export default async function TicketsCompletePage({
 
   return (
     <div className="mx-auto max-w-md space-y-4 py-8">
-      {previewOrder && (
+      {(previewOrder || showState) && (
         <p className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900">
           Preview — no ticket was reserved, nothing was charged or emailed.
         </p>
@@ -178,7 +217,7 @@ export default async function TicketsCompletePage({
       <div className="flex flex-wrap gap-2">
         {outcome.kind === "paid" && linkedSet && (
           <Link
-            href={`/set/${linkedSet.id}`}
+            href={linkedSet.id ? `/set/${linkedSet.id}` : `/jam/${jamId}`}
             className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             See what we&apos;re singing
@@ -195,6 +234,36 @@ export default async function TicketsCompletePage({
           Back to {jamName}
         </Link>
       </div>
+
+      {dev && (
+        <div className="space-y-1 pt-4 text-xs text-amber-700">
+          <p>
+            Local dev, preview this page:{" "}
+            {SHOW_STATES.map((s, i) => (
+              <span key={s}>
+                {i > 0 && " · "}
+                <Link href={`/jam/${jamId}/tickets/complete?show=${s}${set ? `&set=${set}` : ""}`} className="underline">
+                  {SHOW_LABELS[s]}
+                </Link>
+              </span>
+            ))}
+          </p>
+          <p>
+            Set-list button:{" "}
+            <Link href={`/jam/${jamId}/tickets/complete?show=${showState ?? "paid"}&set=some`} className="underline">
+              with songs
+            </Link>
+            {" · "}
+            <Link href={`/jam/${jamId}/tickets/complete?show=${showState ?? "paid"}&set=none`} className="underline">
+              no songs
+            </Link>
+            {" · "}
+            <Link href={`/jam/${jamId}/tickets/complete?show=${showState ?? "paid"}`} className="underline">
+              this event&apos;s real set
+            </Link>
+          </p>
+        </div>
+      )}
     </div>
   );
 }

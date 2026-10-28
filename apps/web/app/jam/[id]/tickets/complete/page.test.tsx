@@ -64,4 +64,31 @@ describe("ticket confirmation preview", () => {
     expect(page).not.toContain("Preview");
     expect(page).toContain("Order not found");
   });
+
+  it.each([
+    ["paid", "You're in!"],
+    ["pending", "Confirming your payment…"],
+    ["failed", "Payment didn't complete"],
+    ["refunded", "This order was refunded"],
+    ["missing", "Order not found"],
+  ])("shows the %s state by link under next dev, labelled and without writing", async (show, heading) => {
+    vi.stubEnv("NODE_ENV", "development");
+    const page = text(await render({ show }));
+    expect(page).toContain("Preview — no ticket was reserved, nothing was charged or emailed.");
+    expect(page).toContain(heading);
+    expect(writes).toEqual([]);
+  });
+
+  it("shows or hides the set-list button on request", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    expect(text(await render({ show: "paid", set: "none" }))).not.toContain("See what we're singing");
+    expect(text(await render({ show: "paid", set: "some" }))).toContain("See what we're singing");
+  });
+
+  it("ignores show= outside next dev", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const page = text(await render({ show: "paid" }));
+    expect(page).not.toContain("Preview");
+    expect(page).toContain("Order not found");
+  });
 });

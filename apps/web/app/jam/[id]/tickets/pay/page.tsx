@@ -64,6 +64,10 @@ export default async function TicketPaymentPage({
           <Link href={`/jam/${jamId}/tickets/pay?show=expired`} className="underline">
             see the expired-hold screen
           </Link>
+          {" · "}
+          <Link href={`/jam/${jamId}/tickets/complete?show=paid`} className="underline">
+            see the confirmation page states
+          </Link>
         </p>
       </>
     );
