@@ -14,6 +14,7 @@ export type GuestCsvRow = {
   paid_at: string | null;
   order_amount_cents: number;
   order_tickets: number;
+  order_position: number;
   currency: string;
 };
 
@@ -29,6 +30,7 @@ const HEADERS = [
   "Paid (UTC)",
   "Order total",
   "Tickets in order",
+  "Ticket in order",
 ];
 
 // Names and email addresses here are typed in by anonymous ticket buyers, so a
@@ -51,9 +53,16 @@ export function guestListToCsv(guests: GuestCsvRow[]): string {
       cell(g.is_member ? "Member" : "Guest"),
       cell(g.checked_in_at),
       cell(g.paid_at),
-      // A plain number with the currency, so it sums in a spreadsheet.
-      cell(`${(g.order_amount_cents / 100).toFixed(2)} ${g.currency.toUpperCase()}`),
+      // A plain number with the currency, so it sums in a spreadsheet — and on
+      // the order's first ticket only, or summing the column counts a
+      // two-ticket order's total twice.
+      cell(
+        g.order_position > 1
+          ? ""
+          : `${(g.order_amount_cents / 100).toFixed(2)} ${g.currency.toUpperCase()}`
+      ),
       cell(String(g.order_tickets)),
+      cell(`${g.order_position} of ${g.order_tickets}`),
     ].join(",")
   );
 
