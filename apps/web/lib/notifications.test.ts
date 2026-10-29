@@ -39,6 +39,17 @@ afterEach(() => {
 });
 
 describe("createNotification", () => {
+  it("sends nothing under next dev", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    try {
+      await createNotification(NOTIF);
+      expect(mockAdminFrom).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("inserts the notification row", async () => {
     const insertChain = chain({});
     mockAdminFrom.mockReturnValueOnce(insertChain).mockReturnValueOnce(chain({ data: [] }));

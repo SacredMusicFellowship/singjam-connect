@@ -1,7 +1,8 @@
 // `next dev` runs with the real Resend, Stripe and ActiveCampaign keys in
 // .env.local, so clicking around locally could email real people or create real
 // orders. Those paths check this first; database writes and uploads are left
-// alone on purpose. Only `next dev` sets NODE_ENV=development — production
+// alone on purpose, except notifications, which land in real people's inboxes
+// and on their phones. Only `next dev` sets NODE_ENV=development — production
 // builds, deploy previews and Vitest never do. Set ALLOW_DEV_SIDE_EFFECTS=true
 // to opt back in.
 export function devGuardOn(): boolean {
