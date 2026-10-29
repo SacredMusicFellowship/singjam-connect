@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useAddressTimezone } from '@/lib/useAddressTimezone';
-import { zonedInputToIso, pickersToZonedInput, zoneAbbreviation, resolvePlaceAddress } from '@singjam/core';
+import { JAM_IMAGE_TYPE_ERROR, isJamImageType, zonedInputToIso, pickersToZonedInput, zoneAbbreviation, resolvePlaceAddress } from '@singjam/core';
 
 const PLACES_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 
@@ -337,7 +337,13 @@ export default function NewJamScreen() {
       aspect: [16, 9],
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]) setCoverAsset(result.assets[0]);
+    const asset = result.canceled ? null : result.assets[0];
+    if (!asset) return;
+    if (!isJamImageType(asset.mimeType, asset.fileName ?? asset.uri)) {
+      Alert.alert('Unsupported image', JAM_IMAGE_TYPE_ERROR);
+      return;
+    }
+    setCoverAsset(asset);
   }
 
   const selectedGenreNames = selectedGenres.map(id => genres.find(g => g.id === id)?.name).filter(Boolean).join(', ');

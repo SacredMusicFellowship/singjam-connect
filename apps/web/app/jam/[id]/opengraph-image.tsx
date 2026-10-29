@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import sizeOf from "image-size";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { BrandMark, getBrandOgImageOptions } from "@/lib/og-image";
 
@@ -22,20 +23,44 @@ export default async function Image({ params }: { params: { id: string } }) {
   const imageUrl = (data as any)?.image_url ?? null;
 
   if (imageUrl) {
-    return new ImageResponse(
-      (
-        <div style={{ width: 1200, height: 630, display: "flex" }}>
-          <img
-            src={imageUrl}
-            width={1200}
-            height={630}
-            style={{ width: 1200, height: 630, objectFit: "cover", objectPosition: "50% 0%" }}
-          />
-        </div>
-      ),
-      size,
-    );
+    const photo = await topCroppedPhoto(imageUrl);
+    if (photo) return new ImageResponse(photo, size);
   }
 
   return new ImageResponse(<BrandMark />, await getBrandOgImageOptions(size));
+}
+
+const SUPPORTED_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg" };
+
+// Cover the card with the photo, anchored to its top. Event posters put the
+// name at the top, and Satori ignores objectPosition — it always crops from the
+// centre — so the photo is scaled and placed by hand from its real dimensions.
+// Satori only draws PNG and JPEG; anything else (WebP uploads) rendered as a
+// blank white card, so those get the logo instead.
+async function topCroppedPhoto(url: string) {
+  const res = await fetch(url).catch(() => null);
+  if (!res?.ok) return null;
+  const bytes = Buffer.from(await res.arrayBuffer());
+  let dims: { width?: number; height?: number; type?: string };
+  try {
+    dims = sizeOf(bytes);
+  } catch {
+    return null;
+  }
+  if (!dims.width || !dims.height || !SUPPORTED_TYPES[dims.type ?? ""]) return null;
+
+  const scale = Math.max(size.width / dims.width, size.height / dims.height);
+  const width = Math.ceil(dims.width * scale);
+  const height = Math.ceil(dims.height * scale);
+
+  return (
+    <div style={{ width: size.width, height: size.height, display: "flex", position: "relative", overflow: "hidden" }}>
+      <img
+        src={`data:${SUPPORTED_TYPES[dims.type!]};base64,${bytes.toString("base64")}`}
+        width={width}
+        height={height}
+        style={{ position: "absolute", top: 0, left: Math.round((size.width - width) / 2), width, height }}
+      />
+    </div>
+  );
 }

@@ -8,6 +8,7 @@ export * from './utils/formatVenueAddress';
 export * from './utils/generateSlug';
 export * from './utils/googleMapsUrl';
 export * from './utils/jamEditRights';
+export * from './utils/jamImageTypes';
 export * from './utils/jamTicketState';
 export * from './utils/mergeSuggestionsById';
 export * from './utils/normalizeSearch';
