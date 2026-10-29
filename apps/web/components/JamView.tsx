@@ -43,6 +43,8 @@ export type JamViewData = {
   isCoHost: boolean;
   hasFullAccess: boolean;
   canManage: boolean;
+  /** Edit, copy and cancel — narrower than canManage, which co-hosts also get. */
+  canEdit: boolean;
   showRsvp: boolean;
   canInvite: boolean;
   invitesEnabled: boolean;
@@ -72,6 +74,7 @@ export default function JamView({
     isHost,
     isCoHost,
     canManage,
+    canEdit,
     showRsvp,
     canInvite,
     invitesEnabled,
@@ -182,7 +185,7 @@ export default function JamView({
         />
       )}
       {canManage && <JamInviteList jamId={jamId} invites={inviteList} />}
-      {canManage && <JamHostActions jamId={jamId} isHost={isHost} isOfficial={isOfficial} attendingCount={attendingCount + guestBuyerCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
+      {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={attendingCount + guestBuyerCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
     </>
   );
 

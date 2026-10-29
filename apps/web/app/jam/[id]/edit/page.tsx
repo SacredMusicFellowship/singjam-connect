@@ -1,7 +1,7 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { canManageJam } from "@/lib/jamAuthz";
+import { canEditJamById } from "@/lib/jamAuthz";
 import EditJamForm from "@/components/EditJamForm";
 
 export default async function EditJamPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,9 +23,8 @@ export default async function EditJamPage({ params }: { params: Promise<{ id: st
 
   const jam = jamRes.data;
   if (!jam) notFound();
-  // Official events belong to the org, so anyone who can host one can run any
-  // of them — not only whoever created it. See lib/jamAuthz.ts.
-  if (!(await canManageJam(supabaseAdmin(), id, user.id))) notFound();
+  // The host, or for an official event anyone who can host one. See lib/jamAuthz.ts.
+  if (!(await canEditJamById(supabaseAdmin(), id, user.id))) notFound();
 
   const selectedGenreIds = ((genresRes.data ?? []) as any[]).map((r) => r.genre_id as string);
   const selectedThemeIds = ((themesRes.data ?? []) as any[]).map((r) => r.theme_id as string);

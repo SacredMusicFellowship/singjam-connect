@@ -7,6 +7,7 @@ export * from './utils/formatJamTime';
 export * from './utils/formatVenueAddress';
 export * from './utils/generateSlug';
 export * from './utils/googleMapsUrl';
+export * from './utils/jamEditRights';
 export * from './utils/jamTicketState';
 export * from './utils/mergeSuggestionsById';
 export * from './utils/normalizeSearch';

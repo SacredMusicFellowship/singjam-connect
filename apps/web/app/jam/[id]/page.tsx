@@ -3,7 +3,7 @@ import { cache } from "react";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { claimJamInvite } from "@/lib/claimJamInvite";
-import { canManageJam } from "@/lib/jamAuthz";
+import { canManageJam, canEditJamById } from "@/lib/jamAuthz";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
 import { formatJamDate } from "@/lib/formatJamTime";
 import JamView, { type InviteEntry } from "@/components/JamView";
@@ -117,7 +117,9 @@ export default async function JamPage({
   // Distinct from isHost: someone who can host official events may run any of
   // them without being this one's host. isHost stays literal — it drives the
   // co-host controls and whether the RSVP button is offered.
-  const canManage = userId ? await canManageJam(supabaseAdmin(), id, userId) : false;
+  const [canManage, canEdit] = userId
+    ? await Promise.all([canManageJam(supabaseAdmin(), id, userId), canEditJamById(supabaseAdmin(), id, userId)])
+    : [false, false];
   const hasFullAccess = isOfficial || isAttending || canManage;
   const showRsvp = !isOfficial && !!userId && !pendingInvite && !isHost;
   const canInvite = !!userId && !isOfficial && (canManage || (isAttending && jam.guests_can_invite));
@@ -204,6 +206,7 @@ export default async function JamPage({
         isCoHost,
         hasFullAccess,
         canManage,
+        canEdit,
         showRsvp,
         canInvite,
         invitesEnabled,

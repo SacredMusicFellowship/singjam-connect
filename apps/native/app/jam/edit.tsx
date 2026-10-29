@@ -241,6 +241,7 @@ export default function EditJamScreen() {
 
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [coverAsset, setCoverAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [imageRemoved, setImageRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -311,6 +312,27 @@ export default function EditJamScreen() {
     if (!locationTbd && !fullAddress) { setError('Add a location or mark it as TBD.'); return; }
 
     setSaving(true);
+
+    // The image goes through the save below too: a direct write to jams is
+    // limited by RLS to the creator, so it silently did nothing for an official
+    // host editing someone else's event. Undefined leaves the stored image alone.
+    let imageUrl: string | null | undefined = imageRemoved ? null : undefined;
+    if (coverAsset) {
+      const ext = coverAsset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const path = `${id}.${ext}`;
+      const response = await fetch(coverAsset.uri);
+      const blob = await response.blob();
+      const { error: uploadError } = await supabase.storage
+        .from('jam-images')
+        .upload(path, blob, { contentType: coverAsset.mimeType ?? 'image/jpeg', upsert: true });
+      if (uploadError) {
+        setError(`Image upload failed: ${uploadError.message}`);
+        setSaving(false);
+        return;
+      }
+      imageUrl = supabase.storage.from('jam-images').getPublicUrl(path).data.publicUrl;
+    }
+
     // Saved through the web API (as web's EditJamForm does) so attendees are
     // notified of a time or location change and the rules live in one place.
     const { data: { session } } = await supabase.auth.getSession();
@@ -333,6 +355,7 @@ export default function EditJamScreen() {
         timezone,
         genre_ids: selectedGenres,
         theme_ids: selectedThemes,
+        image_url: imageUrl,
       }),
     });
 
@@ -341,20 +364,6 @@ export default function EditJamScreen() {
       setError(body?.error ?? 'Something went wrong saving this jam.');
       setSaving(false);
       return;
-    }
-
-    if (coverAsset) {
-      const ext = coverAsset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-      const path = `${id}.${ext}`;
-      const response = await fetch(coverAsset.uri);
-      const blob = await response.blob();
-      const { error: uploadError } = await supabase.storage
-        .from('jam-images')
-        .upload(path, blob, { contentType: coverAsset.mimeType ?? 'image/jpeg', upsert: true });
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from('jam-images').getPublicUrl(path);
-        await supabase.from('jams').update({ image_url: publicUrl }).eq('id', id);
-      }
     }
 
     setSaving(false);
@@ -401,10 +410,10 @@ export default function EditJamScreen() {
     if (!result.canceled && result.assets[0]) setCoverAsset(result.assets[0]);
   }
 
-  async function removeCoverImage() {
-    await supabase.from('jams').update({ image_url: null }).eq('id', id);
+  function removeCoverImage() {
     setExistingImageUrl(null);
     setCoverAsset(null);
+    setImageRemoved(true);
   }
 
   const selectedGenreNames = selectedGenres.map(gid => genres.find(g => g.id === gid)?.name).filter(Boolean).join(', ');

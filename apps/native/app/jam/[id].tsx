@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { dropUsCountry, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl } from '@singjam/core';
+import { canEditJam, dropUsCountry, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -321,6 +321,7 @@ export default function JamDetailScreen() {
   // Kept so an optimistic RSVP can put you in the attendee list straight away
   // instead of waiting for a reload to learn your own name and avatar.
   const [me, setMe] = useState<Omit<Attendee, 'status'> | null>(null);
+  const [canHostOfficial, setCanHostOfficial] = useState(false);
   const [jamSets, setJamSets] = useState<JamSet[]>([]);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -365,7 +366,7 @@ export default function JamDetailScreen() {
         .eq('jam_id', id)
         .limit(10),
       user
-        ? supabase.from('profiles').select('display_name, username, avatar_url').eq('id', user.id).single()
+        ? supabase.from('profiles').select('display_name, username, avatar_url, can_host_official').eq('id', user.id).single()
         : Promise.resolve({ data: null }),
     ]);
 
@@ -430,6 +431,7 @@ export default function JamDetailScreen() {
         username: p?.username ?? null,
         avatar_url: p?.avatar_url ?? null,
       });
+      setCanHostOfficial(p?.can_host_official === true);
     }
     setMyInviteStatus(inviteResult.data?.status ?? null);
     setJamSets((setsResult.data ?? []).map((s: any) => ({ id: s.id, name: s.name })));
@@ -567,6 +569,7 @@ export default function JamDetailScreen() {
   }
 
   const isHosting = jam.host_id === myUserId;
+  const canEdit = !!myUserId && canEditJam({ host_user_id: jam.host_id, visibility: jam.visibility }, { id: myUserId, can_host_official: canHostOfficial });
   const isFull = jam.capacity !== null && attendees.length >= jam.capacity;
   const timeStr = formatJamTime(jam.starts_at, jam.timezone);
   const isPast = jam.starts_at ? new Date(jam.starts_at) < new Date() : false;
@@ -592,7 +595,7 @@ export default function JamDetailScreen() {
         options={{
           title: jam.name ?? 'Jam',
           headerTintColor: '#d97706',
-          headerRight: isHosting ? () => (
+          headerRight: canEdit ? () => (
             <View className="flex-row gap-4">
               <TouchableOpacity onPress={handleDuplicate} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="copy-outline" size={20} color="#71717a" />

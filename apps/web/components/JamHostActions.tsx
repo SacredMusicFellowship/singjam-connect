@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import JamMessageAttendeesModal from "@/components/JamMessageAttendeesModal";
 
-export default function JamHostActions({ jamId, isHost, isOfficial, attendingCount, pendingInviteCount }: { jamId: string; isHost: boolean; isOfficial: boolean; attendingCount: number; pendingInviteCount: number }) {
+export default function JamHostActions({ jamId, canEdit, isOfficial, attendingCount, pendingInviteCount }: { jamId: string; canEdit: boolean; isOfficial: boolean; attendingCount: number; pendingInviteCount: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -43,7 +43,7 @@ export default function JamHostActions({ jamId, isHost, isOfficial, attendingCou
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">Manage jam</h2>
-          {isHost && (
+          {canEdit && (
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => { setOpen((o) => !o); setConfirming(false); }}
