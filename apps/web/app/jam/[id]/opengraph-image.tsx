@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import sizeOf from "image-size";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { resolveJamId } from "@/lib/jamRef";
 import { BrandMark, getBrandOgImageOptions } from "@/lib/og-image";
 
 export const alt = "Jam on SingJam";
@@ -13,12 +14,10 @@ export default async function Image({ params }: { params: { id: string } }) {
   // behind the logo fallback. Read as admin: the photo it points at already
   // lives in the public jam-images bucket, so the jam id is the only secret
   // involved and the sharer is handing that out with the link.
-  const supabase = supabaseAdmin();
-  const { data } = await supabase
-    .from("jams")
-    .select("image_url")
-    .eq("id", params.id)
-    .maybeSingle();
+  const id = await resolveJamId(params.id);
+  const { data } = id
+    ? await supabaseAdmin().from("jams").select("image_url").eq("id", id).maybeSingle()
+    : { data: null };
 
   const imageUrl = (data as any)?.image_url ?? null;
 

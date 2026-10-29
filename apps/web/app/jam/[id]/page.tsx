@@ -6,7 +6,9 @@ import { claimJamInvite } from "@/lib/claimJamInvite";
 import { canManageJam, canEditJamById } from "@/lib/jamAuthz";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
 import { formatJamDate } from "@/lib/formatJamTime";
+import { resolveJamId } from "@/lib/jamRef";
 import JamView, { type InviteEntry } from "@/components/JamView";
+import ShortJamUrl from "@/components/ShortJamUrl";
 import { jamSeatsTaken } from "@singjam/core";
 import { type JamCardData } from "@/components/JamCard";
 
@@ -17,7 +19,7 @@ const getJam = cache(async (id: string) => {
   const admin = supabaseAdmin();
   const { data } = await admin
     .from("jams")
-    .select("id, name, visibility, starts_at, ends_at, timezone, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, capacity, host_user_id, guests_can_invite, profiles(display_name, last_name, username)")
+    .select("id, short_code, name, visibility, starts_at, ends_at, timezone, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, capacity, host_user_id, guests_can_invite, profiles(display_name, last_name, username)")
     .eq("id", id)
     .maybeSingle();
   return data as any;
@@ -30,8 +32,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  const jam = await getJam(id);
+  const id = await resolveJamId((await params).id);
+  const jam = id ? await getJam(id) : null;
   if (!jam) return { title: "Jam" };
   const name = jam.name ?? "Jam";
   // Official events are the org's, so a shared link credits SingJam rather
@@ -48,7 +50,8 @@ export async function generateMetadata({
   return {
     title: name,
     description,
-    openGraph: { title: name, description },
+    alternates: { canonical: `/jam/${jam.short_code}` },
+    openGraph: { title: name, description, url: `/jam/${jam.short_code}` },
   };
 }
 
@@ -59,8 +62,9 @@ export default async function JamPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }) {
-  const { id } = await params;
+  const id = await resolveJamId((await params).id);
   const { invite } = await searchParams;
+  if (!id) return <p className="text-sm text-zinc-500">Jam not found.</p>;
 
   const supabase = await getServerSupabase();
   const admin = supabaseAdmin();
@@ -197,6 +201,8 @@ export default async function JamPage({
   // refreshes the page rather than reporting back, so without the key the view
   // kept its pre-accept status and offered the new attendee an RSVP button.
   return (
+    <>
+    <ShortJamUrl jamId={id} shortCode={jam.short_code} />
     <JamView
       key={rsvpStatus ?? "none"}
       jamId={id}
@@ -224,5 +230,6 @@ export default async function JamPage({
         alreadyInvitedIds,
       }}
     />
+    </>
   );
 }
