@@ -28,8 +28,11 @@ export async function resolvePlaceAddress({
     });
     if (!res.ok) return fallback;
     const json = await res.json();
-    const formatted: unknown = json?.formattedAddress;
-    if (typeof formatted !== "string" || !formatted.trim()) return fallback;
+    const raw: unknown = json?.formattedAddress;
+    if (typeof raw !== "string" || !raw.trim()) return fallback;
+    // Parks and other places without a street number of their own come back
+    // with a Plus Code in front ("VPG6+FR4, 1300 Rose St, …").
+    const formatted = raw.replace(/^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}(\s[^,]*)?,\s*/i, "");
     return formatted.toLowerCase().startsWith(mainText.toLowerCase()) ? formatted : `${mainText}, ${formatted}`;
   } catch {
     return fallback;

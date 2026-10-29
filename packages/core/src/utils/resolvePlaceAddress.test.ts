@@ -26,6 +26,13 @@ describe('resolvePlaceAddress', () => {
     );
   });
 
+  it('drops a leading Plus Code', async () => {
+    const fetchImpl = respond({ formattedAddress: 'VPG6+FR4, 1300 Rose St, Berkeley, CA 94702, USA' });
+    expect(await resolvePlaceAddress({ ...base, mainText: 'Cedar Rose Park', fetchImpl })).toBe(
+      'Cedar Rose Park, 1300 Rose St, Berkeley, CA 94702, USA'
+    );
+  });
+
   it('asks only for the formatted address', async () => {
     const fetchImpl = respond({ formattedAddress: 'x' });
     await resolvePlaceAddress({ ...base, fetchImpl });
