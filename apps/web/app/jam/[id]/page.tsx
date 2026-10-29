@@ -7,6 +7,7 @@ import { canManageJam, canEditJamById } from "@/lib/jamAuthz";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
 import { formatJamDate } from "@/lib/formatJamTime";
 import JamView, { type InviteEntry } from "@/components/JamView";
+import { jamSeatsTaken } from "@singjam/core";
 import { type JamCardData } from "@/components/JamCard";
 
 // Private jams are unlisted, not access-controlled (migration 160): holding
@@ -71,11 +72,10 @@ export default async function JamPage({
 
   // Jam-scoped reads go through the admin client for the same reason getJam
   // does: the link is the credential. The per-user reads below stay RLS-scoped.
-  const [jam, genresRes, themesRes, countRes, flagRes, tierRes] = await Promise.all([
+  const [jam, genresRes, themesRes, flagRes, tierRes] = await Promise.all([
     getJam(id),
     admin.from("jam_genres").select("genres(name)").eq("jam_id", id),
     admin.from("jam_themes").select("themes(name)").eq("jam_id", id),
-    admin.from("jam_rsvps").select("id", { count: "exact", head: true }).eq("jam_id", id).eq("status", "attending"),
     supabase.from("feature_flags").select("enabled").eq("key", "jam_invites").maybeSingle(),
     // Only whether tiers exist, not their availability — the purchase panel
     // reads that itself. The layout needs the answer on the server: the panel
@@ -89,10 +89,17 @@ export default async function JamPage({
   const userId = user?.id ?? null;
   const genres = ((genresRes.data ?? []) as any[]).map((g: any) => g.genres?.name).filter(Boolean) as string[];
   const themes = ((themesRes.data ?? []) as any[]).map((t: any) => t.themes?.name).filter(Boolean) as string[];
-  const attendingCount = countRes.count ?? 0;
   const invitesEnabled = flagRes.data?.enabled ?? true;
 
-  const [rsvpRes, inviteRes, cohostRes] = await Promise.all([
+  // Excludes the host, whose seat jamSeatsTaken adds back exactly once — a
+  // host with a stray RSVP row of their own must not be counted twice.
+  const [countRes, rsvpRes, inviteRes, cohostRes] = await Promise.all([
+    admin
+      .from("jam_rsvps")
+      .select("id", { count: "exact", head: true })
+      .eq("jam_id", id)
+      .eq("status", "attending")
+      .neq("user_id", jam.host_user_id),
     userId
       ? supabase.from("jam_rsvps").select("status, waitlist_position").eq("jam_id", id).eq("user_id", userId).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -103,6 +110,8 @@ export default async function JamPage({
       ? supabase.from("jam_cohosts").select("user_id").eq("jam_id", id).eq("user_id", userId).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
+
+  const attendingCount = countRes.count ?? 0;
 
   const hostLabel = [jam.profiles?.display_name, jam.profiles?.last_name].filter(Boolean).join(" ") || jam.profiles?.username || null;
   const hostUsername = jam.profiles?.username ?? null;
@@ -198,6 +207,7 @@ export default async function JamPage({
         rsvpStatus,
         waitlistPosition,
         attendingCount,
+        seatsTaken: jamSeatsTaken(jam, attendingCount),
         guestBuyerCount,
         pendingInvite,
         isOfficial,

@@ -33,6 +33,8 @@ export type JamViewData = {
   rsvpStatus: "attending" | "waitlist" | "cancelled" | null;
   waitlistPosition: number | null;
   attendingCount: number;
+  /** Who counts against capacity: the attending RSVPs plus the host's own seat. */
+  seatsTaken: number;
   /** Ticket buyers without an account; only computed for those who can manage. */
   guestBuyerCount: number;
   pendingInvite: boolean;
@@ -67,6 +69,7 @@ export default function JamView({
     userId,
     waitlistPosition,
     attendingCount,
+    seatsTaken,
     guestBuyerCount,
     pendingInvite,
     isOfficial,
@@ -140,7 +143,7 @@ export default function JamView({
               jamId={jamId}
               initialStatus={rsvpStatus}
               initialWaitlistPosition={waitlistPosition}
-              attendingCount={attendingCount}
+              attendingCount={seatsTaken}
               capacity={jam.capacity}
               onStatusChange={(newStatus) => {
                 setRsvpStatus(newStatus);

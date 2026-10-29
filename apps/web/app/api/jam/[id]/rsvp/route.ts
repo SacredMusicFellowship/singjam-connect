@@ -22,7 +22,7 @@ export async function POST(
 
   const admin = supabaseAdmin();
 
-  const { data: jam } = await admin.from("jams").select(`${RSVP_JAM_COLUMNS}, visibility`).eq("id", jamId).single();
+  const { data: jam } = await admin.from("jams").select(RSVP_JAM_COLUMNS).eq("id", jamId).single();
   if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
   if (jam.visibility === "official") return NextResponse.json({ error: "Official events use external ticketing" }, { status: 400 });
 
