@@ -126,8 +126,10 @@ function LocationText({ query, children }: { query: string | null; children: Rea
 /**
  * The event image for the ticketed layout's left column. On wide screens it is
  * shown whole at its own shape, since event images are often flyers carrying
- * the date, address and prices that the banner crop cut off. Phones keep the
- * letterboxed banner so the tickets stay near the top.
+ * the date, address and prices that the banner crop cut off. On phones it fills
+ * a fixed-height box, cropped around the host's focal point, so the tickets
+ * stay near the top: a portrait flyer loses its bottom (the small print the
+ * page repeats as text anyway), a wide photo its sides.
  */
 export function JamPoster({ jam }: { jam: JamCardData }) {
   if (!jam.image_url) return null;
@@ -137,7 +139,8 @@ export function JamPoster({ jam }: { jam: JamCardData }) {
       alt={jam.name ?? "Event"}
       width={800}
       height={800}
-      className="h-48 w-full rounded-2xl bg-black object-contain sm:h-80 md:h-auto md:bg-transparent"
+      className="h-64 w-full rounded-2xl object-cover object-[var(--focal-point)] sm:h-80 md:h-auto md:object-contain"
+      style={{ "--focal-point": jam.image_focal_point ?? "50% 50%" } as CSSProperties}
       sizes="(min-width: 768px) 360px, 100vw"
       priority
     />
