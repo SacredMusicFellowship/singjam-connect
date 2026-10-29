@@ -21,7 +21,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/jamAuthz", () => ({ canManageJam: mockCanManage }));
 
-import { GET, POST, PATCH, DELETE } from "./route";
+import { GET, POST, PATCH, PUT, DELETE } from "./route";
 
 function chain(result: any) {
   const c: any = {};
@@ -56,6 +56,9 @@ beforeEach(() => {
   // consume different numbers of chains than they used to — a leftover would
   // silently become the next test's first lookup.
   mockAdminFrom.mockReset();
+  // Anything not queued reads as "no row" — e.g. the GET's jams lookup for an
+  // event with no total ticket limit.
+  mockAdminFrom.mockReturnValue(chain({ data: null }));
   mockCanManage.mockResolvedValue(true);
 });
 
@@ -120,6 +123,116 @@ describe("GET /api/jam/[id]/tickets/types", () => {
 
     const json = await (await GET(req("GET"), params)).json();
     expect(json.ticket_types[0]).toMatchObject({ closed: true, on_sale: false });
+  });
+
+  it("reports no event limit when none is set", async () => {
+    mockServerFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID } }));
+    mockAdminFrom.mockReturnValueOnce(chain({ data: [] }));
+    const json = await (await GET(req("GET"), params)).json();
+    expect(json.ticket_limit).toBeNull();
+  });
+
+  describe("with a total ticket limit", () => {
+    const tiers = [
+      { id: "advance", name: "Advance", price_cents: 1500, currency: "usd", quantity: null,
+        sales_start_at: null, sales_end_at: null, sort_order: 0, description: null },
+      { id: "supporter", name: "Supporter", price_cents: 3600, currency: "usd", quantity: 10,
+        sales_start_at: null, sales_end_at: null, sort_order: 1, description: null },
+    ];
+    // Advance: 50 against stock (45 paid). Supporter: 8 against stock (8 paid).
+    const counts: Record<string, { counted: number; paid: number }> = {
+      advance: { counted: 50, paid: 45 },
+      supporter: { counted: 8, paid: 8 },
+    };
+
+    function setupLimit(limit: number) {
+      mockServerFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID } }));
+      mockAdminFrom
+        .mockReturnValueOnce(chain({ data: tiers }))
+        .mockReturnValueOnce(chain({ data: { ticket_limit: limit } }));
+      mockRpc.mockImplementation((fn: string, { type_id }: { type_id: string }) =>
+        Promise.resolve({
+          data: fn === "ticket_type_paid_count" ? counts[type_id].paid : counts[type_id].counted,
+        })
+      );
+    }
+
+    it("totals the tiers and bounds each tier by what the event has left", async () => {
+      setupLimit(60);
+      const json = await (await GET(req("GET"), params)).json();
+      // 58 of 60 taken across both tiers.
+      expect(json.ticket_limit).toEqual({ quantity: 60, sold: 53, held: 5, remaining: 2 });
+      // Uncapped Advance gets the event's 2; Supporter's own 2 is no tighter.
+      expect(json.ticket_types[0]).toMatchObject({ remaining: 2, on_sale: true });
+      expect(json.ticket_types[1]).toMatchObject({ remaining: 2, on_sale: true });
+    });
+
+    it("keeps a tier's own cap when it is tighter than the event's", async () => {
+      setupLimit(100);
+      const json = await (await GET(req("GET"), params)).json();
+      expect(json.ticket_types[0].remaining).toBe(42);
+      expect(json.ticket_types[1].remaining).toBe(2);
+    });
+
+    it("takes every tier off sale once the event total is reached", async () => {
+      setupLimit(58);
+      const json = await (await GET(req("GET"), params)).json();
+      expect(json.ticket_limit.remaining).toBe(0);
+      for (const t of json.ticket_types) expect(t).toMatchObject({ remaining: 0, on_sale: false });
+    });
+  });
+});
+
+describe("PUT /api/jam/[id]/tickets/types (event ticket limit)", () => {
+  it("rejects an unauthenticated caller", async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: null } });
+    const res = await PUT(req("PUT", { ticket_limit: 100 }), params);
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses someone who cannot manage the event", async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: STRANGER } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID } }));
+    mockCanManage.mockResolvedValueOnce(false);
+    const res = await PUT(req("PUT", { ticket_limit: 100 }), params);
+    expect(res.status).toBe(403);
+  });
+
+  it.each([0, -5, 2.5, "100"])("rejects %p", async (value) => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: HOST } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID } }));
+    const res = await PUT(req("PUT", { ticket_limit: value }), params);
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses to set the total below tickets already sold or held", async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: HOST } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID } }));
+    mockRpc.mockResolvedValueOnce({ data: 40 });
+    const res = await PUT(req("PUT", { ticket_limit: 30 }), params);
+    expect(res.status).toBe(409);
+    expect(mockRpc).toHaveBeenCalledWith("jam_ticket_sold_count", { jam_id_param: JAM_ID });
+  });
+
+  it("sets the total", async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: HOST } } });
+    const update = chain({ error: null });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID } })).mockReturnValueOnce(update);
+    mockRpc.mockResolvedValueOnce({ data: 40 });
+    const res = await PUT(req("PUT", { ticket_limit: 40 }), params);
+    expect(res.status).toBe(200);
+    expect(update.update).toHaveBeenCalledWith({ ticket_limit: 40 });
+    expect(update.eq).toHaveBeenCalledWith("id", JAM_ID);
+  });
+
+  it("removes the total with null, without checking sales", async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: HOST } } });
+    const update = chain({ error: null });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID } })).mockReturnValueOnce(update);
+    const res = await PUT(req("PUT", { ticket_limit: null }), params);
+    expect(res.status).toBe(200);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(update.update).toHaveBeenCalledWith({ ticket_limit: null });
   });
 });
 
