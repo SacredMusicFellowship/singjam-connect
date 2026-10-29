@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { loadStripe } from "@stripe/stripe-js";
 import { CheckoutElementsProvider } from "@stripe/react-stripe-js/checkout";
 import { Elements } from "@stripe/react-stripe-js";
@@ -105,6 +106,17 @@ export default function TicketPaymentPanel({
           <TicketPreviewForm totalLabel={money(amountCents, currency)} completeUrl={preview?.completeUrl ?? ""} />
         </Elements>
       )}
+
+      {/* Stripe's own badge, unmodified, as their brand terms require
+          (stripe.com/newsroom/brand-assets). Deliberately not a link: nothing
+          on this page should take a buyer away mid-payment. */}
+      <Image
+        src="/powered-by-stripe.svg"
+        alt="Powered by Stripe"
+        width={120}
+        height={27}
+        className="mx-auto pt-1"
+      />
     </div>
   );
 }
