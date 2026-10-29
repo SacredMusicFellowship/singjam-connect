@@ -11,7 +11,6 @@ import { jamUpdatedHtml } from "@/emails/jam-updated";
 import { buildIcs } from "@/lib/ics";
 import { isValidTimeZone } from "@singjam/core";
 import { devRefusesVisibility, DEV_PRIVATE_JAMS_MESSAGE } from "@/lib/devSafety";
-import { REMINDER_MESSAGE_MAX_LENGTH } from "@/lib/reminderMessage";
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -69,27 +68,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     theme_ids?.length > 0 ? admin.from("jam_themes").insert(theme_ids.map((theme_id: string) => ({ jam_id: id, theme_id }))) : Promise.resolve(),
   ]);
 
-  // Its own write, so the rest of the edit still saves before migration 170
-  // adds the column. Sent only for official events; absent leaves it as stored.
-  let saved: { ok: true; warning?: string } = { ok: true };
-  if ("reminder_message" in body) {
-    const message =
-      typeof body.reminder_message === "string"
-        ? body.reminder_message.trim().slice(0, REMINDER_MESSAGE_MAX_LENGTH) || null
-        : null;
-    const { error } = await admin.from("jams").update({ reminder_message: message }).eq("id", id);
-    if (error) {
-      console.error("[jam] could not save the reminder message", error);
-      saved = { ok: true, warning: "Your changes were saved, but the reminder message couldn't be. Try again later." };
-    }
-  }
-
   // Postgres returns "+00:00" while clients send toISOString()'s ".000Z", so compare instants, not strings.
   const sameInstant = (a: string | null, b: string | null) => (a && b ? Date.parse(a) === Date.parse(b) : a === b);
   const timeChanged = !sameInstant(currentJam.starts_at, starts_at) || !sameInstant(currentJam.ends_at, ends_at);
   const locationChanged = currentJam.neighborhood !== neighborhood || currentJam.full_address !== full_address;
 
-  if (!timeChanged && !locationChanged) return NextResponse.json(saved);
+  if (!timeChanged && !locationChanged) return NextResponse.json({ ok: true });
 
   const [{ data: rsvps }, { data: invites }] = await Promise.all([
     admin.from("jam_rsvps").select("user_id").eq("jam_id", id).in("status", ["attending", "waitlist"]),
@@ -151,7 +135,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     })),
   ]);
 
-  return NextResponse.json(saved);
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {

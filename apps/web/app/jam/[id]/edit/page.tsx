@@ -3,7 +3,6 @@ import { notFound, redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canManageJam } from "@/lib/jamAuthz";
 import EditJamForm from "@/components/EditJamForm";
-import { loadEventReminderMessage } from "@/lib/reminderMessage";
 
 export default async function EditJamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,16 +27,13 @@ export default async function EditJamPage({ params }: { params: Promise<{ id: st
   // of them — not only whoever created it. See lib/jamAuthz.ts.
   if (!(await canManageJam(supabaseAdmin(), id, user.id))) notFound();
 
-  // Read on its own so the page still loads before migration 170 adds the column.
-  const reminderMessage = await loadEventReminderMessage(supabaseAdmin(), id);
-
   const selectedGenreIds = ((genresRes.data ?? []) as any[]).map((r) => r.genre_id as string);
   const selectedThemeIds = ((themesRes.data ?? []) as any[]).map((r) => r.theme_id as string);
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Edit jam</h1>
-      <EditJamForm jam={{ ...(jam as any), reminder_message: reminderMessage }} selectedGenreIds={selectedGenreIds} selectedThemeIds={selectedThemeIds} />
+      <EditJamForm jam={jam as any} selectedGenreIds={selectedGenreIds} selectedThemeIds={selectedThemeIds} />
     </div>
   );
 }

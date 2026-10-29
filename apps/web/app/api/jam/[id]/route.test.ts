@@ -119,39 +119,6 @@ describe("PUT /api/jam/[id] under next dev", () => {
   });
 });
 
-describe("PUT /api/jam/[id] reminder message", () => {
-  it("saves an official event's message in its own write, trimmed", async () => {
-    const res = await put({ visibility: "official", reminder_message: "  See you soon {name}  " });
-    expect(res.status).toBe(200);
-    expect(mockJamUpdate.mock.calls[0][0]).not.toHaveProperty("reminder_message");
-    expect(mockJamUpdate.mock.calls[1][0]).toEqual({ reminder_message: "See you soon {name}" });
-  });
-
-  it("clears it when blank, so the event uses the shared message", async () => {
-    await put({ visibility: "official", reminder_message: "   " });
-    expect(mockJamUpdate.mock.calls[1][0]).toEqual({ reminder_message: null });
-  });
-
-  it("leaves it alone when the form doesn't send one", async () => {
-    await put({ visibility: "community" });
-    expect(mockJamUpdate).toHaveBeenCalledTimes(1);
-  });
-
-  it("still saves the rest of the edit when the message can't be stored", async () => {
-    // In call order: the jam lookup, the main update, clearing genres and
-    // themes, then the message update, which fails.
-    mockFrom
-      .mockImplementationOnce(() => chain({ data: storedJam }))
-      .mockImplementationOnce(() => chain({ data: storedJam }, mockJamUpdate))
-      .mockImplementationOnce(() => chain({ data: [] }))
-      .mockImplementationOnce(() => chain({ data: [] }))
-      .mockImplementationOnce(() => chain({ data: null, error: { message: "no column" } }, mockJamUpdate));
-    const res = await put({ visibility: "official", reminder_message: "Hi" });
-    expect(res.status).toBe(200);
-    expect((await res.json()).warning).toMatch(/reminder message couldn't be/);
-  });
-});
-
 describe("PUT /api/jam/[id]", () => {
   it("does not email attendees when the time is re-saved in a different ISO format", async () => {
     const res = await put({});

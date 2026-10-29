@@ -10,7 +10,6 @@ import FocalPointPicker from "./FocalPointPicker";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
 import { isoToZonedInput, zonedInputToIso } from "@singjam/core";
-import ReminderMessageField from "./ReminderMessageField";
 
 type LookupItem = { id: string; name: string };
 
@@ -24,7 +23,6 @@ type JamData = {
   full_address: string | null;
   notes: string | null;
   tickets_url: string | null;
-  reminder_message: string | null;
   image_url: string | null;
   image_focal_point: string | null;
   capacity: number | null;
@@ -68,7 +66,6 @@ export default function EditJamForm({
   const [guestsCanInvite, setGuestsCanInvite] = useState(jam.guests_can_invite ?? false);
   const [name, setName] = useState(jam.name ?? "");
   const [ticketsUrl, setTicketsUrl] = useState(jam.tickets_url ?? "");
-  const [reminderMessage, setReminderMessage] = useState(jam.reminder_message ?? "");
   const [initialTimezone] = useState(() => jam.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [date, setDate] = useState(isoToZonedInput(jam.starts_at, initialTimezone).slice(0, 10));
   const [startTime, setStartTime] = useState(isoToZonedInput(jam.starts_at, initialTimezone).slice(11));
@@ -183,8 +180,6 @@ export default function EditJamForm({
         visibility,
         guests_can_invite: guestsCanInvite,
         tickets_url: isOfficial && ticketsUrl ? ticketsUrl : null,
-        // Only official events have one; leaving it out keeps whatever is stored.
-        ...(isOfficial ? { reminder_message: reminderMessage.trim() || null } : {}),
         image_url: imageUrl,
         image_focal_point: newFocalPoint,
         capacity: capacity ? parseInt(capacity, 10) : null,
@@ -198,13 +193,6 @@ export default function EditJamForm({
       const err = await res.json().catch(() => ({}));
       setBusy(false);
       setStatus((err as any).error ?? "Something went wrong.");
-      return;
-    }
-
-    const { warning } = await res.json().catch(() => ({}));
-    if (warning) {
-      setBusy(false);
-      setStatus(warning);
       return;
     }
 
@@ -411,8 +399,6 @@ export default function EditJamForm({
           <input className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm" type="url" value={ticketsUrl} onChange={(e) => setTicketsUrl(e.target.value)} placeholder="https://humanitix.com/…" />
         </div>
       )}
-
-      {isOfficial && <ReminderMessageField value={reminderMessage} onChange={setReminderMessage} />}
 
       {errors.length > 0 && (
         <ul className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 space-y-1">

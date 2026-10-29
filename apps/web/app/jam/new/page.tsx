@@ -2,8 +2,6 @@ import { redirect } from "next/navigation";
 import { getSessionServer, supabaseServer } from "@/lib/supabase/server";
 import NewJamForm, { type NewJamInitialData } from "@/components/NewJamForm";
 import { devGuardOn } from "@/lib/devSafety";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { loadEventReminderMessage } from "@/lib/reminderMessage";
 
 export default async function NewJamPage({ searchParams }: { searchParams: Promise<{ copy?: string }> }) {
   const session = await getSessionServer();
@@ -43,7 +41,6 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
         capacity: jam.capacity ? String(jam.capacity) : "",
         guestsCanInvite: jam.guests_can_invite ?? false,
         ticketsUrl: jam.tickets_url ?? "",
-        reminderMessage: (await loadEventReminderMessage(supabaseAdmin(), copy)) ?? "",
         imageUrl: jam.image_url ?? null,
         imageFocalPoint: jam.image_focal_point ?? "50% 50%",
         selectedGenreIds: ((genresRes.data ?? []) as any[]).map((r) => r.genre_id as string),

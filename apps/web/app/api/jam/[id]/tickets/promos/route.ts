@@ -43,7 +43,7 @@ async function authorize(req: Request, jamId: string): Promise<Auth> {
 }
 
 // Paid orders this code made free. Zero if it can't be counted — including
-// before migration 169 adds ticket_orders.promo_code_id.
+// before migration 166 adds ticket_orders.promo_code_id.
 async function freeRedemptions(admin: ReturnType<typeof supabaseAdmin>, promoCodeId: string): Promise<number> {
   const { count, error } = await admin
     .from("ticket_orders")

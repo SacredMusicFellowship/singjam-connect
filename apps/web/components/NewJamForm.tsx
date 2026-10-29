@@ -11,7 +11,6 @@ import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
 import { zonedInputToIso } from "@singjam/core";
 import { visibilityForNewJam } from "@/lib/devSafety";
-import ReminderMessageField from "./ReminderMessageField";
 
 type LookupItem = { id: string; name: string };
 
@@ -25,7 +24,6 @@ export type NewJamInitialData = {
   capacity: string;
   guestsCanInvite: boolean;
   ticketsUrl: string;
-  reminderMessage: string;
   imageUrl: string | null;
   imageFocalPoint: string;
   selectedGenreIds: string[];
@@ -71,7 +69,6 @@ export default function NewJamForm({
   const [guestsCanInvite, setGuestsCanInvite] = useState(initialData?.guestsCanInvite ?? false);
   const [name, setName] = useState(initialData?.name ?? "");
   const [ticketsUrl, setTicketsUrl] = useState(initialData?.ticketsUrl ?? "");
-  const [reminderMessage, setReminderMessage] = useState(initialData?.reminderMessage ?? "");
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState(initialData?.startTime ?? "");
   const [endTime, setEndTime] = useState(initialData?.endTime ?? "");
@@ -197,17 +194,6 @@ export default function NewJamForm({
         : Promise.resolve(),
       selectedThemes.length > 0
         ? supabase.from("jam_themes").insert(selectedThemes.map((theme_id) => ({ jam_id: jamId, theme_id })))
-        : Promise.resolve(),
-      // Its own write, after the insert, so the jam is still created before
-      // migration 170 adds the column; the message can then be added on Edit.
-      visibilityForNewJam(visibility, privateOnly) === "official" && reminderMessage.trim()
-        ? supabase
-            .from("jams")
-            .update({ reminder_message: reminderMessage.trim() })
-            .eq("id", jamId)
-            .then(({ error }) => {
-              if (error) console.error("Could not save the reminder message", error);
-            })
         : Promise.resolve(),
     ]);
 
@@ -480,8 +466,6 @@ export default function NewJamForm({
           />
         </div>
       )}
-
-      {isOfficial && <ReminderMessageField value={reminderMessage} onChange={setReminderMessage} />}
 
       {errors.length > 0 && (
         <ul className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 space-y-1">

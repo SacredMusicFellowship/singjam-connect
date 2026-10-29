@@ -311,7 +311,7 @@ export async function POST(
 // Which code the order used, so the ticket manager can count uses Stripe never
 // sees (a code that makes the order free). Its own write, and never fatal: the
 // count is bookkeeping, and checkout must not fail over it — including before
-// migration 169 adds the column.
+// migration 166 adds the column.
 async function recordPromoCode(admin: ReturnType<typeof supabaseAdmin>, orderId: string, promoCodeId: string) {
   try {
     const { error } = await admin.from("ticket_orders").update({ promo_code_id: promoCodeId }).eq("id", orderId);

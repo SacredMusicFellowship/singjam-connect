@@ -1,8 +1,7 @@
 import { schedule } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
-import { sendEventReminders } from "../../lib/sendEventReminders";
-// The shared client, so reminders carry the same reply-to as every other email.
-import { resend } from "../../lib/resend";
+import { Resend } from "resend";
+import { sendJamReminders } from "../../lib/sendJamReminders";
 
 export const handler = schedule("0 * * * *", async () => {
   const admin = createClient(
@@ -10,12 +9,14 @@ export const handler = schedule("0 * * * *", async () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
+  const resend = new Resend(process.env.RESEND_API_KEY);
 
   try {
-    await sendEventReminders(admin, resend);
+    await sendJamReminders(admin, resend);
   } catch (err) {
     console.error("send-jam-reminders:", err);
     return { statusCode: 500 };
   }
+
   return { statusCode: 200 };
 });
