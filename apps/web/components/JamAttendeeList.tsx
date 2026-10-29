@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { attendeeSummaryLine } from "@singjam/core";
+import { attendeeSummaryParts } from "@singjam/core";
 import { SINGING_LABEL, voiceBadgeClass } from "@/lib/singingVoice";
 
 type GuestAttendee = { name: string; extra: number };
@@ -296,8 +296,8 @@ const SUMMARY_AVATARS = 6;
 
 /**
  * The compact "who's going" for the ticketed event page's side column, after
- * Luma: overlapping avatars, a couple of names and a count, and a link down to
- * the full list. Fetches on its own rather than sharing the list's state so
+ * Luma: overlapping avatars, a couple of names and a count, the count linking
+ * down to the full list. Fetches on its own rather than sharing the list's state so
  * either can render without the other; the rules live in loadAttendees.
  */
 export function JamAttendeeSummary({ jamId, hostId }: { jamId: string; hostId: string | null }) {
@@ -324,6 +324,8 @@ export function JamAttendeeSummary({ jamId, hostId }: { jamId: string; hostId: s
     ...guests.map((g, i) => ({ key: `guest-${i}`, name: g.name, avatarUrl: null })),
   ];
 
+  const summary = attendeeSummaryParts(people.map((p) => p.name), totalGoing);
+
   return (
     <div>
       <h2 className="border-b border-zinc-200 pb-2 text-sm font-semibold text-zinc-700">
@@ -343,12 +345,19 @@ export function JamAttendeeSummary({ jamId, hostId }: { jamId: string; hostId: s
           </span>
         ))}
       </div>
+      {/* "14 others" doubles as the way down to the full list — in the text's
+          own colour, so it doesn't compete with the amber Buy button. */}
       <p className="mt-2 text-sm text-zinc-600">
-        {attendeeSummaryLine(people.map((p) => p.name), totalGoing)}
+        {summary.named}
+        {summary.others && (
+          <>
+            {" and "}
+            <a href="#whos-going" className="hover:underline">
+              {summary.others}
+            </a>
+          </>
+        )}
       </p>
-      <a href="#whos-going" className="mt-1 inline-block text-sm font-medium text-amber-600 hover:underline">
-        See everyone
-      </a>
     </div>
   );
 }
