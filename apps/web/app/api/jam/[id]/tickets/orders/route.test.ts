@@ -134,6 +134,26 @@ describe("GET /api/jam/[id]/tickets/orders", () => {
     expect(byTicket.t3).toMatchObject({ order_tickets: 1 });
   });
 
+  it("numbers each ticket within its order and keeps an order's tickets together", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: HOST } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { host_user_id: HOST } }));
+    // Same buyer name on two orders: each order's tickets must stay adjacent.
+    mockFetchAllRows.mockResolvedValue([
+      ticket({ id: "t1", order_id: "o2" }),
+      ticket({ id: "t2", order_id: "o1" }),
+      ticket({ id: "t3", order_id: "o2" }),
+      ticket({ id: "t4", order_id: "o1" }),
+    ]);
+
+    const json = await (await GET(req(), params)).json();
+    expect(json.guests.map((g: any) => [g.ticket_id, g.order_position, g.order_tickets])).toEqual([
+      ["t2", 1, 2],
+      ["t4", 2, 2],
+      ["t1", 1, 2],
+      ["t3", 2, 2],
+    ]);
+  });
+
   it("labels guests and resolves member names from their profile", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: HOST } } });
     mockAdminFrom

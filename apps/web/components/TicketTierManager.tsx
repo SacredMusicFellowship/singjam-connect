@@ -54,13 +54,26 @@ type Guest = {
   paid_at: string | null;
   order_amount_cents: number;
   order_tickets: number;
+  order_position: number;
   currency: string;
 };
 
-// What the buyer paid for the order this ticket is part of.
+// What the buyer paid for the order this ticket is part of — on the order's
+// first ticket only, so a two-ticket order doesn't read as two purchases.
 function paidLabel(g: Guest) {
+  if (g.order_position > 1) return "";
   const amount = money(g.order_amount_cents, g.currency);
   return g.order_tickets > 1 ? `${amount} for ${g.order_tickets} tickets` : amount;
+}
+
+// "ticket 2 of 2" beside a name that would otherwise appear twice.
+function OrderPosition({ guest }: { guest: Guest }) {
+  if (guest.order_tickets < 2) return null;
+  return (
+    <span className="shrink-0 text-xs text-zinc-400">
+      ticket {guest.order_position} of {guest.order_tickets}
+    </span>
+  );
 }
 
 type PromoCode = { id: string; code: string; label: string; redeemed: number | null };
@@ -727,14 +740,19 @@ export default function TicketTierManager({
                           guest
                         </span>
                       )}
+                      <OrderPosition guest={g} />
                     </div>
                     {g.email && <p className="truncate text-xs text-zinc-400">{g.email}</p>}
                     <p className="mt-1 truncate text-xs text-zinc-500">
                       <span className="font-mono tracking-wider text-zinc-700">{g.code}</span>
                       <span className="text-zinc-300"> · </span>
                       {g.tier}
-                      <span className="text-zinc-300"> · </span>
-                      {paidLabel(g)}
+                      {paidLabel(g) && (
+                        <>
+                          <span className="text-zinc-300"> · </span>
+                          {paidLabel(g)}
+                        </>
+                      )}
                       {g.checked_in_at && (
                         <>
                           <span className="text-zinc-300"> · </span>
@@ -767,6 +785,11 @@ export default function TicketTierManager({
                         {!g.is_member && (
                           <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
                             guest
+                          </span>
+                        )}
+                        {g.order_tickets > 1 && (
+                          <span className="ml-2">
+                            <OrderPosition guest={g} />
                           </span>
                         )}
                         {g.email && <p className="text-xs text-zinc-400">{g.email}</p>}
