@@ -6,7 +6,7 @@ import {
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchAllRows, summarizeTicketTiers, type JamTicketTier } from '@singjam/core';
+import { canEditJam, fetchAllRows, summarizeTicketTiers, type JamTicketTier } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import { readCache, writeCache } from '@/lib/cache';
@@ -83,6 +83,7 @@ function SkeletonCard() {
 export default function JamsScreen() {
   const [sections, setSections] = useState<Section[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [canHostOfficial, setCanHostOfficial] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
@@ -97,7 +98,7 @@ export default function JamsScreen() {
     const windowStart = new Date();
     windowStart.setDate(windowStart.getDate() - 90);
 
-    const [jamsResult, rsvpsResult, invitesResult] = await Promise.all([
+    const [jamsResult, rsvpsResult, invitesResult, profileResult] = await Promise.all([
       fetchAllRows<any>((from, to) =>
         supabase
           .from('jams')
@@ -125,7 +126,11 @@ export default function JamsScreen() {
       user
         ? supabase.from('jam_invites').select('jam_id, status').eq('invited_user_id', user.id)
         : Promise.resolve({ data: null }),
+      user
+        ? supabase.from('profiles').select('can_host_official').eq('id', user.id).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
+    setCanHostOfficial((profileResult.data as any)?.can_host_official === true);
 
     const rsvpMap = new Map(
       (rsvpsResult.data ?? []).map((r: any) => [r.jam_id, r])
@@ -279,6 +284,7 @@ export default function JamsScreen() {
             <JamCard
               jam={item}
               myId={userId}
+              canEdit={!!userId && canEditJam({ host_user_id: item.host_id, visibility: item.visibility }, { id: userId, can_host_official: canHostOfficial })}
               onPress={() => router.push({ pathname: '/jam/[id]', params: { id: item.id } })}
               onManage={(e) => openJamMenu(item, e)}
             />

@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { fetchAllRows, jamTicketCta, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
+import { canEditJam, fetchAllRows, jamTicketCta, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -13,6 +13,7 @@ type JamsData = {
   userId: string | null;
   invitesEnabled: boolean;
   isAdmin: boolean;
+  canHostOfficial: boolean;
   allJams: any[];
   rsvpByJam: Map<string, any>;
   inviteByJam: Map<string, any>;
@@ -28,6 +29,7 @@ type JamsCache = {
   uid: string | null;
   invitesEnabled: boolean;
   isAdmin: boolean;
+  canHostOfficial: boolean;
   allJams: any[];
   rsvpByJam: [string, any][];
   inviteByJam: [string, any][];
@@ -51,7 +53,7 @@ function RsvpBadge({ status, waitlistPosition }: { status: RsvpStatus; waitlistP
   return null;
 }
 
-function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSummary, rsvp, isInvited, isHosting, onDeleted }: {
+function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSummary, rsvp, isInvited, isHosting, canEdit, onDeleted }: {
   jam: any;
   tags: string[];
   hostLabel?: string | null;
@@ -61,6 +63,8 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
   rsvp?: { status: RsvpStatus; waitlist_position?: number | null } | null;
   isInvited?: boolean;
   isHosting?: boolean;
+  /** Shows the Edit / Copy / Cancel menu — see canEditJam in @singjam/core. */
+  canEdit?: boolean;
   onDeleted?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -77,7 +81,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
     : null;
 
   useEffect(() => {
-    if (!isHosting) return;
+    if (!canEdit) return;
     function onClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
@@ -85,7 +89,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [isHosting]);
+  }, [canEdit]);
 
   async function deleteJam() {
     setDeleting(true);
@@ -200,7 +204,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
 
   const wrapped = cardBody;
 
-  if (!isHosting) return wrapped;
+  if (!canEdit) return wrapped;
 
   return (
     <div className="relative">
@@ -283,6 +287,7 @@ export default function JamsContent() {
         userId: c.uid,
         invitesEnabled: c.invitesEnabled,
         isAdmin: c.isAdmin,
+        canHostOfficial: c.canHostOfficial ?? false,
         allJams: c.allJams,
         rsvpByJam: new Map(c.rsvpByJam),
         inviteByJam: new Map(c.inviteByJam),
@@ -308,7 +313,7 @@ export default function JamsContent() {
     const [flagRes, adminRes, jamsRes, rsvpsRes, invitesRes] = await Promise.all([
       supabase.from("feature_flags").select("enabled").eq("key", "jam_invites").maybeSingle(),
       userId
-        ? supabase.from("profiles").select("role").eq("id", userId).single()
+        ? supabase.from("profiles").select("role, can_host_official").eq("id", userId).single()
         : Promise.resolve({ data: null }),
       fetchAllRows<any>((from, to) =>
         supabase
@@ -356,6 +361,7 @@ export default function JamsContent() {
 
     const invitesEnabled = flagRes.data?.enabled ?? true;
     const isAdmin = (adminRes.data as any)?.role === "admin";
+    const canHostOfficial = (adminRes.data as any)?.can_host_official === true;
 
     // Ticket state is only shown on upcoming official events, so the summary
     // call is scoped to those — one round trip for the section, not per tier.
@@ -372,6 +378,7 @@ export default function JamsContent() {
       userId,
       invitesEnabled,
       isAdmin,
+      canHostOfficial,
       allJams,
       rsvpByJam,
       inviteByJam,
@@ -386,6 +393,7 @@ export default function JamsContent() {
         uid: userId,
         invitesEnabled,
         isAdmin,
+        canHostOfficial,
         allJams,
         rsvpByJam: Array.from(rsvpByJam.entries()),
         inviteByJam: Array.from(inviteByJam.entries()),
@@ -429,7 +437,7 @@ export default function JamsContent() {
     );
   }
 
-  const { userId, invitesEnabled, isAdmin, allJams, rsvpByJam, inviteByJam, genresByJam, themesByJam, profileById, ticketSummaryByJam } = data;
+  const { userId, invitesEnabled, isAdmin, canHostOfficial, allJams, rsvpByJam, inviteByJam, genresByJam, themesByJam, profileById, ticketSummaryByJam } = data;
 
   function cardProps(jam: any, opts: { isOfficial?: boolean; isHosting?: boolean } = {}) {
     return {
@@ -440,6 +448,7 @@ export default function JamsContent() {
       isOfficial: opts.isOfficial ?? false,
       ticketSummary: ticketSummaryByJam.get(jam.id) ?? null,
       isHosting: opts.isHosting ?? (!!userId && jam.host_user_id === userId),
+      canEdit: canEditJam(jam, userId ? { id: userId, can_host_official: canHostOfficial } : null),
       rsvp: (rsvpByJam.get(jam.id) as any) ?? null,
       isInvited: (inviteByJam.get(jam.id) as any)?.status === "pending",
     };
@@ -532,7 +541,7 @@ export default function JamsContent() {
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Upcoming SingJam events</h2>
           <div className="grid grid-cols-1 gap-3">
-            {upcomingOfficialJams.map((jam) => <JamListCard key={jam.id} {...cardProps(jam, { isOfficial: true })} />)}
+            {upcomingOfficialJams.map((jam) => <JamListCard key={jam.id} {...cardProps(jam, { isOfficial: true })} onDeleted={fetchData} />)}
           </div>
         </section>
       )}
