@@ -190,8 +190,8 @@ export default function JamView({
     // Two columns from md up, after Luma: the image (shown whole) and a compact
     // who's going on the left; title, date and place, tickets and description
     // on the right. Everything after that runs full width below both, with the
-    // map last. The summary is desktop-only, since on a phone the full list is
-    // a scroll away.
+    // host's admin tools last, under the map. The summary is desktop-only, since
+    // on a phone the full list is a scroll away.
     return (
       <div className="space-y-4">
         {inviteResponse}
@@ -207,9 +207,9 @@ export default function JamView({
           {card}
         </div>
         {setList}
-        {hostTools}
         {attendees}
         <JamMap jam={jamCardData} />
+        {hostTools}
       </div>
     );
   }
