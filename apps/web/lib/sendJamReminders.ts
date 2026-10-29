@@ -2,7 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Resend } from "resend";
 import { jamReminderHtml } from "../emails/jam-reminder";
 
-const FROM_ADDRESS = "SingJam <hello@singjam.org>";
+// Sent from the events inbox like other event logistics (see lib/resend.ts). The
+// Netlify function passes a plain Resend client, so the shared reply-to is not
+// applied here; sending from events@ means replies land there anyway.
+const FROM_ADDRESS = "SingJam <events@singjam.org>";
 
 function localDateStr(date: Date, tz: string): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: tz }).format(date);

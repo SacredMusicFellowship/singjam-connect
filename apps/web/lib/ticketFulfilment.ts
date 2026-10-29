@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { markAttending } from "@/lib/jamAttendance";
 import { SITE_URL } from "@/lib/stripe";
-import { resend, FROM_ADDRESS } from "@/lib/resend";
+import { resend, EVENTS_FROM_ADDRESS } from "@/lib/resend";
 import { ticketConfirmationHtml } from "@/emails/ticket-confirmation";
 import { syncContact } from "@/lib/activecampaign";
 import { findEventSet } from "@/lib/eventSet";
@@ -50,13 +50,13 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
   ]);
 
   // The set is the reason to come back before the day, so the email leads with
-  // it once it has songs — same rule and order as the confirmation page.
+  // it whenever the event has one — same rule and order as the confirmation page.
   const linkedSet = await findEventSet(admin, order.jam_id);
 
   const jamName = jam?.name ?? "the jam";
 
   const { error } = await resend.emails.send({
-    from: FROM_ADDRESS,
+    from: EVENTS_FROM_ADDRESS,
     to: email,
     subject: `Your ticket${(tickets ?? []).length === 1 ? "" : "s"} for ${jamName}`,
     html: ticketConfirmationHtml({

@@ -5,6 +5,11 @@ const client = new Resend(process.env.RESEND_API_KEY);
 
 export const FROM_ADDRESS = "SingJam <hello@singjam.org>";
 
+// Event logistics — ticket confirmations, host messages to attendees, event
+// reminders — come from the events inbox itself, so the address a buyer sees
+// is the one they'll reply to and hear back from.
+export const EVENTS_FROM_ADDRESS = "SingJam <events@singjam.org>";
+
 // Replies go to a monitored inbox, not to the sending address. hello@ is a
 // send-only identity, and someone answering a ticket confirmation or a jam
 // invite is almost always asking the events team something.

@@ -22,6 +22,7 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/lib/resend", () => ({
   resend: { emails: { send: mockSend } },
   FROM_ADDRESS: "test@singjam.org",
+  EVENTS_FROM_ADDRESS: "events-test@singjam.org",
 }));
 vi.mock("@/emails/ticket-confirmation", () => ({
   ticketConfirmationHtml: vi.fn(() => "<html>"),

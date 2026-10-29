@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canManageJam } from "@/lib/jamAuthz";
-import { FROM_ADDRESS } from "@/lib/resend";
+import { EVENTS_FROM_ADDRESS } from "@/lib/resend";
 import { sendBulkEmail } from "@/lib/sendBulkEmail";
 import { jamHostMessageHtml } from "@/emails/jam-host-message";
 import { isJamCohost } from "@/lib/jamCohosts";
@@ -110,7 +110,7 @@ export async function POST(
 
   const { sent, failed } = await sendBulkEmail(
     Array.from(recipientMap.entries()).map(([email, name]) => ({
-      from: FROM_ADDRESS,
+      from: EVENTS_FROM_ADDRESS,
       to: email,
       subject: `[${jamName}] ${subject}`,
       html: jamHostMessageHtml({ recipientName: name, hostName, jamName, jamUrl, subject, body: message }),
