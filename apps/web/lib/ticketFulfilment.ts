@@ -4,7 +4,7 @@ import { SITE_URL } from "@/lib/stripe";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { ticketConfirmationHtml } from "@/emails/ticket-confirmation";
 import { syncContact } from "@/lib/activecampaign";
-import { findSetWithSongs } from "@/lib/setWithSongs";
+import { findEventSet } from "@/lib/eventSet";
 
 // Turning a pending order into a real ticket: mark it paid, send the ticket,
 // seat the buyer. Two callers reach this — the Stripe webhook for anything that
@@ -51,7 +51,7 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
 
   // The set is the reason to come back before the day, so the email leads with
   // it once it has songs — same rule and order as the confirmation page.
-  const linkedSet = await findSetWithSongs(admin, order.jam_id);
+  const linkedSet = await findEventSet(admin, order.jam_id);
 
   const jamName = jam?.name ?? "the jam";
 

@@ -21,7 +21,7 @@ vi.mock("@/lib/supabase/server", () => ({
   supabaseServer: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
 }));
 vi.mock("@/lib/stripe", () => ({ stripe: () => ({ checkout: { sessions: { retrieve: mockRetrieve } } }) }));
-vi.mock("@/lib/setWithSongs", () => ({ findSetWithSongs: async () => ({ id: "set-1" }) }));
+vi.mock("@/lib/eventSet", () => ({ findEventSet: async () => ({ id: "set-1" }) }));
 vi.mock("@/lib/promoCode", () => ({ resolvePromoCode: vi.fn() }));
 vi.mock("@/components/TicketConfirmationPoller", () => ({ default: () => null }));
 vi.mock("next/link", () => ({ default: (p: any) => p.children }));
@@ -53,7 +53,7 @@ describe("ticket confirmation preview", () => {
     expect(page).toContain("Preview — no ticket was reserved, nothing was charged or emailed.");
     expect(page).toContain("You're in!");
     expect(page).toContain("2 tickets");
-    expect(page).toContain("See what we're singing");
+    expect(page).toContain("View set list");
     expect(writes).toEqual([]);
     expect(mockRetrieve).not.toHaveBeenCalled();
   });
@@ -81,8 +81,8 @@ describe("ticket confirmation preview", () => {
 
   it("shows or hides the set-list button on request", async () => {
     vi.stubEnv("NODE_ENV", "development");
-    expect(text(await render({ show: "paid", set: "none" }))).not.toContain("See what we're singing");
-    expect(text(await render({ show: "paid", set: "some" }))).toContain("See what we're singing");
+    expect(text(await render({ show: "paid", set: "none" }))).not.toContain("View set list");
+    expect(text(await render({ show: "paid", set: "some" }))).toContain("View set list");
   });
 
   it("ignores show= outside next dev", async () => {

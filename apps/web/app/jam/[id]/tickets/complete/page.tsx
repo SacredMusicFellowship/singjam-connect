@@ -4,7 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { resolveTicketOutcome, type OutcomeSession } from "@/lib/ticketOutcome";
 import TicketConfirmationPoller from "@/components/TicketConfirmationPoller";
-import { findSetWithSongs } from "@/lib/setWithSongs";
+import { findEventSet } from "@/lib/eventSet";
 import { inNextDev } from "@/lib/devSafety";
 import { buildCheckoutPreview, parsePreviewItems } from "@/lib/ticketCheckoutPreview";
 import { redirect } from "next/navigation";
@@ -55,9 +55,9 @@ export default async function TicketsCompletePage({
 
   // The set is the reason to come back before the day, so link it directly
   // rather than making people find it on the event page. Readable by anyone,
-  // so guests get the link too — adding to it is what needs an account. Only
-  // once it has songs: an empty set is nothing to see yet.
-  const realSet = await findSetWithSongs(admin, jamId);
+  // so guests get the link too — adding to it is what needs an account. Shown
+  // whenever the event has a set, even before songs are added.
+  const realSet = await findEventSet(admin, jamId);
   // In dev, set=none / set=some shows the page without or with the set-list
   // button whatever this event's set holds; "some" links to the event page
   // when there's no real set to link to.
@@ -220,7 +220,7 @@ export default async function TicketsCompletePage({
             href={linkedSet.id ? `/set/${linkedSet.id}` : `/jam/${jamId}`}
             className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
-            See what we&apos;re singing
+            View set list
           </Link>
         )}
         <Link
@@ -251,11 +251,11 @@ export default async function TicketsCompletePage({
           <p>
             Set-list button:{" "}
             <Link href={`/jam/${jamId}/tickets/complete?show=${showState ?? "paid"}&set=some`} className="underline">
-              with songs
+              with a set
             </Link>
             {" · "}
             <Link href={`/jam/${jamId}/tickets/complete?show=${showState ?? "paid"}&set=none`} className="underline">
-              no songs
+              no set
             </Link>
             {" · "}
             <Link href={`/jam/${jamId}/tickets/complete?show=${showState ?? "paid"}`} className="underline">

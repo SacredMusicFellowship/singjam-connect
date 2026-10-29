@@ -189,7 +189,7 @@ export function ticketConfirmationHtml({
     ${setUrl ? `
     <a href="${setUrl}"
        style="display:inline-block;margin-right:8px;background-color:#f59e0b;color:#fff;font-weight:600;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none">
-      See what we're singing
+      View set list
     </a>` : ""}
     <a href="${jamUrl}"
        style="display:inline-block;${setUrl

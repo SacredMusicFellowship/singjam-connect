@@ -417,7 +417,7 @@ export default function TicketPurchasePanel({
           <button
             type="button"
             onClick={() => setShowPromo(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-xs font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-[0.85rem] font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
           >
             <span aria-hidden="true">＋</span> Promo Code
           </button>
