@@ -1,6 +1,6 @@
 /**
  * The line under the avatars in an event's compact who's-going summary:
- * "Ben Kramarz, Jake Wilk and 14 others". `total` counts heads, not names —
+ * "Ada Lovelace, Chen Wei and 14 others". `total` counts heads, not names —
  * guests and the extra seats a buyer paid for are in it — so "others" agrees
  * with the full list's total.
  */
