@@ -24,8 +24,9 @@ const money = (cents: number, currency: string) =>
 
 // Every tier row and the button live in one narrow column rather than the
 // page's full 896px: a full-width Buy button reads as a banner, not a button.
-// Full width on a phone, a fixed 384px from sm up.
-const COLUMN = "w-full sm:w-96 sm:shrink-0";
+// Full width on a phone, capped at 384px from sm, and from md the event page's
+// right-hand column is already that narrow, so it fills it.
+const COLUMN = "w-full sm:max-w-sm md:max-w-none";
 
 
 // Buyers can't take the whole allocation in one order by accident, and it keeps
@@ -182,6 +183,11 @@ export default function TicketPurchasePanel({
         .then((j) => setTypes(j.ticket_types ?? []));
       return;
     }
+    // Local dev only: a preview of the next step, with no order behind it.
+    if (json.preview_url) {
+      window.location.href = json.preview_url;
+      return;
+    }
     // A fully-discounted order is already fulfilled server-side — there is no
     // payment step to show, so go straight to the confirmation.
     if (json.free) {
@@ -256,7 +262,7 @@ export default function TicketPurchasePanel({
             key={t.id}
             // Dimmed when it can't be bought, so the tiers that can be read as
             // the live ones at a glance.
-            className={`flex items-center justify-between gap-3 rounded-xl border border-zinc-200 p-3 ${
+            className={`flex items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3 py-2 sm:py-3 ${
               t.on_sale ? "" : "opacity-60"
             }`}
           >
@@ -411,9 +417,9 @@ export default function TicketPurchasePanel({
           <button
             type="button"
             onClick={() => setShowPromo(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-xs font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-[0.85rem] font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
           >
-            <span aria-hidden="true">＋</span> Add a promo code
+            <span aria-hidden="true">＋</span> Promo Code
           </button>
         )
       )}

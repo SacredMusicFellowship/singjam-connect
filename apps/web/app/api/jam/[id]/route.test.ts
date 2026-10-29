@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const { mockGetUser, mockBearerGetUser, mockEmailSend, mockFrom, mockGetUserById, mockCanManage, mockNotify, mockJamUpdate } = vi.hoisted(() => ({
   mockBearerGetUser: vi.fn(),
@@ -44,6 +44,7 @@ const storedJam = {
   neighborhood: "Berkeley, CA",
   full_address: "The Starry Plough Pub, Shattuck Avenue, Berkeley, CA, USA",
   timezone: "America/Los_Angeles",
+  visibility: "official",
 };
 
 function chain(result: { data: unknown; error?: unknown }, onUpdate?: (row: unknown) => void) {
@@ -81,6 +82,40 @@ beforeEach(() => {
     if (table === "jam_rsvps") return chain({ data: [{ user_id: "attendee-1" }] });
     if (table === "profiles") return chain({ data: [{ id: "attendee-1", display_name: "Alice" }] });
     return chain({ data: [] });
+  });
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe("PUT /api/jam/[id] under next dev", () => {
+  beforeEach(() => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ALLOW_DEV_SIDE_EFFECTS", "");
+  });
+
+  it("keeps an existing public jam's visibility when it is re-saved unchanged", async () => {
+    const res = await put({ visibility: "official" });
+    expect(res.status).toBe(200);
+    expect(mockJamUpdate.mock.calls[0][0]).toMatchObject({ visibility: "official" });
+  });
+
+  it("refuses to make a jam public", async () => {
+    const res = await put({ visibility: "community" });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("Local dev: jams can only be made private");
+    expect(mockJamUpdate).not.toHaveBeenCalled();
+  });
+
+  it("lets a jam be made private", async () => {
+    const res = await put({ visibility: "private" });
+    expect(res.status).toBe(200);
+    expect(mockJamUpdate.mock.calls[0][0]).toMatchObject({ visibility: "private" });
+  });
+
+  it("allows any change when ALLOW_DEV_SIDE_EFFECTS=true", async () => {
+    vi.stubEnv("ALLOW_DEV_SIDE_EFFECTS", "true");
+    const res = await put({ visibility: "community" });
+    expect(res.status).toBe(200);
   });
 });
 

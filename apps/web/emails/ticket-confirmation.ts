@@ -1,3 +1,4 @@
+import { dropUsCountry, dropVenueRepeatedInTitle } from "@singjam/core";
 import { formatJamTime } from "../lib/formatJamTime";
 
 // Door staff look guests up by name or by this code, so it has to be short
@@ -92,6 +93,11 @@ export function ticketConfirmationHtml({
 
   const plural = tickets.length === 1 ? "ticket" : "tickets";
 
+  // A member who buys a ticket is made an editor of the event's set list
+  // (markAttending), so they can add songs straight away. Their invitation
+  // carries the set-list link, which then stands in for the plain button below.
+  const memberSongInvite = !isGuest && !!setUrl;
+
   // Tier prices are face value. The processing fee and any promotion code live
   // outside them, so the rows will not always sum to what was charged — and an
   // emailed receipt a buyer cannot add up is worse than no breakdown at all.
@@ -112,7 +118,7 @@ export function ticketConfirmationHtml({
 <body style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#18181b;padding:32px 16px">
   <h1 style="font-size:22px;font-weight:700;margin-bottom:8px">You're in! 🎉 We can't wait to sing with you.</h1>
   <p style="font-size:15px;line-height:1.6;color:#52525b">
-    ${greeting} You're coming to <strong>${jamName}</strong> —
+    ${greeting} you're coming to <strong>${jamName}</strong> —
     <strong>${money(amountCents, currency)}</strong> confirmed. Show this email at the door, or
     just give your name.
   </p>
@@ -147,7 +153,7 @@ export function ticketConfirmationHtml({
   <div style="margin-top:12px;padding:16px;background:#f4f4f5;border-radius:10px">
     <p style="font-size:13px;font-weight:600;color:#71717a;margin:0 0 4px">Where</p>
     <a href="https://maps.google.com/?q=${encodeURIComponent(address)}"
-       style="font-size:15px;font-weight:500;color:#18181b;margin:0;text-decoration:underline">${address}</a>
+       style="font-size:15px;font-weight:500;color:#18181b;margin:0;text-decoration:underline">${dropUsCountry(dropVenueRepeatedInTitle(address, jamName))}</a>
   </div>` : ""}
 
   ${cal ? `
@@ -185,11 +191,24 @@ export function ticketConfirmationHtml({
     </p>
   </div>` : ""}
 
+  ${memberSongInvite ? `
+  <div style="margin-top:24px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px">
+    <p style="font-size:14px;font-weight:600;color:#18181b;margin:0 0 6px">Help choose songs for this SingJam 🎶</p>
+    <p style="font-size:13px;color:#52525b;margin:0 0 12px">
+      You're on the set list for this one. Add the songs you'd love to sing, and see what
+      everyone else has picked.
+    </p>
+    <a href="${setUrl}"
+       style="display:inline-block;background-color:#f59e0b;color:#fff;font-weight:600;font-size:13px;padding:8px 16px;border-radius:8px;text-decoration:none">
+      View set list
+    </a>
+  </div>` : ""}
+
   <div style="margin-top:24px">
-    ${setUrl ? `
+    ${setUrl && !memberSongInvite ? `
     <a href="${setUrl}"
        style="display:inline-block;margin-right:8px;background-color:#f59e0b;color:#fff;font-weight:600;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none">
-      See what we're singing
+      View set list
     </a>` : ""}
     <a href="${jamUrl}"
        style="display:inline-block;${setUrl

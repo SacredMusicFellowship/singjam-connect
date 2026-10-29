@@ -6,6 +6,7 @@ import TopNav from "@/components/TopNav";
 import BottomNav from "@/components/BottomNav";
 import MobileHeaderProfile from "@/components/MobileHeaderProfile";
 import ProfileProvider from "@/components/ProfileProvider";
+import { devGuardOn } from "@/lib/devSafety";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -43,6 +44,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           scroll reset, and browser scroll anchoring re-scrolls toward the
           footer (song pages landed scrolled-down on mobile) */}
       <body className="min-h-screen bg-slate-50 [overflow-anchor:none]">
+        {devGuardOn() && (
+          <div className="bg-amber-200 px-4 py-1 text-center text-xs font-medium text-amber-900">
+            Local dev: emails and payments are disabled
+          </div>
+        )}
         <ProfileProvider>
         <header className="sticky top-0 z-10 bg-slate-900">
           <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">

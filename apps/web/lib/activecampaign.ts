@@ -1,4 +1,5 @@
 import { resend, FROM_ADDRESS } from "@/lib/resend";
+import { sideEffectsBlocked } from "@/lib/devSafety";
 
 const AC_API_URL = process.env.AC_API_URL;
 const AC_API_KEY = process.env.AC_API_KEY;
@@ -109,6 +110,8 @@ export async function syncContact(
   { tag = true }: { tag?: boolean } = {}
 ): Promise<string[]> {
   if (!AC_API_URL || !AC_API_KEY) return [];
+  // Treated like an unconfigured key, so callers don't record a sync failure.
+  if (sideEffectsBlocked(`ActiveCampaign sync for ${email}`)) return [];
 
   const fieldValues: { field: string; value: string }[] = [];
 
@@ -209,6 +212,7 @@ export async function syncContact(
 // emails with no matching contact — treated as already-deleted, not a failure.
 export async function deleteContact(email: string): Promise<boolean> {
   if (!AC_API_URL || !AC_API_KEY) return true;
+  if (sideEffectsBlocked(`ActiveCampaign delete for ${email}`)) return true;
 
   const found = await acFetch(`/contacts?email=${encodeURIComponent(email)}`, { method: "GET" });
   const contactId: string | undefined = found?.contacts?.[0]?.id;

@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { markAttending } from "@/lib/jamAttendance";
 import { SITE_URL } from "@/lib/stripe";
-import { resend, FROM_ADDRESS } from "@/lib/resend";
+import { resend, EVENTS_FROM_ADDRESS } from "@/lib/resend";
 import { ticketConfirmationHtml } from "@/emails/ticket-confirmation";
 import { syncContact } from "@/lib/activecampaign";
+import { findEventSet } from "@/lib/eventSet";
 
 // Turning a pending order into a real ticket: mark it paid, send the ticket,
 // seat the buyer. Two callers reach this — the Stripe webhook for anything that
@@ -49,17 +50,13 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
   ]);
 
   // The set is the reason to come back before the day, so the email leads with
-  // it when the event has one — same order as the confirmation page.
-  const { data: linkedSet } = await admin
-    .from("sets")
-    .select("id")
-    .eq("jam_id", order.jam_id)
-    .maybeSingle();
+  // it whenever the event has one — same rule and order as the confirmation page.
+  const linkedSet = await findEventSet(admin, order.jam_id);
 
   const jamName = jam?.name ?? "the jam";
 
-  await resend.emails.send({
-    from: FROM_ADDRESS,
+  const { error } = await resend.emails.send({
+    from: EVENTS_FROM_ADDRESS,
     to: email,
     subject: `Your ticket${(tickets ?? []).length === 1 ? "" : "s"} for ${jamName}`,
     html: ticketConfirmationHtml({
@@ -83,6 +80,9 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
       setUrl: linkedSet ? `${SITE_URL}/set/${linkedSet.id}` : null,
     }),
   });
+  // Thrown, not `return false`: false means "no address", which the sweeper
+  // gives up on, while a failed send must stay in the retry queue.
+  if (error) throw new Error(error.message ?? "Resend send error");
 
   return true;
 }

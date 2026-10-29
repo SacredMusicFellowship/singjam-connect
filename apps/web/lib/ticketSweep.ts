@@ -80,12 +80,14 @@ async function alertUndelivered(admin: SupabaseClient, failures: FailedTicketDel
   if (!hasNewOrder && Date.now() - lastAlertAt < ALERT_COOLDOWN_MS) return false;
 
   const now = new Date().toISOString();
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: ALERT_TO,
     subject: `Action required: ${failures.length} paid ticket${failures.length === 1 ? "" : "s"} not delivered`,
     html: ticketDeliveryFailedEmailHtml(failures),
   });
+  // Unsent means unrecorded, so the next sweep tries the alert again.
+  if (error) return false;
   await admin.from("system_flags").upsert({
     key: ALERT_FLAG,
     value: JSON.stringify({ at: now, ids: failures.map((f) => f.orderId) }),

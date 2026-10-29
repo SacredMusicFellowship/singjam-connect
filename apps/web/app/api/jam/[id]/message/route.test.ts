@@ -23,6 +23,7 @@ vi.mock("@/lib/resend", () => ({
     },
   },
   FROM_ADDRESS: "SingJam <hello@singjam.org>",
+  EVENTS_FROM_ADDRESS: "SingJam <events@singjam.org>",
 }));
 
 vi.mock("@supabase/supabase-js", () => ({

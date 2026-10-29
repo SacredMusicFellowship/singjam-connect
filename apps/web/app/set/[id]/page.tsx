@@ -5,6 +5,7 @@ import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
 import SetDetail from "@/components/SetDetail";
 import SetRequestAccess from "@/components/SetRequestAccess";
 import SetJoinPrompt from "@/components/SetJoinPrompt";
+import SetGuestPrompt from "@/components/SetGuestPrompt";
 
 function supabaseAdmin() {
   return createClient(
@@ -223,6 +224,7 @@ export default async function SetPage({
         songKnowledge={songKnowledge}
         canAccessJam={canAccessJam}
       />
+      {!user && <SetGuestPrompt setId={set.id} forEvent={!!set.jam_id} />}
     </Suspense>
   );
 }

@@ -10,6 +10,7 @@ import FocalPointPicker from "./FocalPointPicker";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
 import { zonedInputToIso } from "@singjam/core";
+import { visibilityForNewJam } from "@/lib/devSafety";
 
 type LookupItem = { id: string; name: string };
 
@@ -42,13 +43,21 @@ function Label({ text, required, optional }: { text: string; required?: boolean;
   );
 }
 
-export default function NewJamForm({ initialData }: { initialData?: NewJamInitialData | null }) {
+export default function NewJamForm({
+  initialData,
+  privateOnly = false,
+}: {
+  initialData?: NewJamInitialData | null;
+  privateOnly?: boolean;
+}) {
   const supabase = supabaseBrowser();
   const router = useRouter();
 
   const [canPostOfficial, setCanPostOfficial] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
-  const [visibility, setVisibility] = useState<"community" | "private" | "official">(initialData?.visibility ?? "community");
+  const [visibility, setVisibility] = useState<"community" | "private" | "official">(
+    visibilityForNewJam(initialData?.visibility ?? "community", privateOnly)
+  );
   const [previewing, setPreviewing] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -162,7 +171,7 @@ export default function NewJamForm({ initialData }: { initialData?: NewJamInitia
       neighborhood: locationTbd ? "TBD" : (location.neighborhood || location.fullAddress || null),
       full_address: locationTbd ? null : (location.fullAddress || null),
       notes: description || null,
-      visibility,
+      visibility: visibilityForNewJam(visibility, privateOnly),
       guests_can_invite: (visibility === "private" || visibility === "community") ? guestsCanInvite : false,
       tickets_url: visibility === "official" && ticketsUrl ? ticketsUrl : null,
       image_url: imageUrl,
@@ -274,9 +283,10 @@ export default function NewJamForm({ initialData }: { initialData?: NewJamInitia
       {/* Visibility */}
       <div>
         <Label text="Who can see this?" />
+        {privateOnly && <p className="mt-1 text-xs text-amber-700">Local dev: new jams are always private</p>}
         <div className="mt-1.5 flex flex-col gap-2">
           <label className="flex items-start gap-3 cursor-pointer">
-            <input type="radio" name="visibility" value="community" checked={visibility === "community"} onChange={() => setVisibility("community")} className="mt-0.5" />
+            <input type="radio" name="visibility" value="community" checked={visibility === "community"} onChange={() => setVisibility("community")} disabled={privateOnly} className="mt-0.5" />
             <div>
               <span className="text-sm font-medium">Community jam</span>
               <p className="text-xs text-zinc-500">Visible to all SingJam members</p>
@@ -291,7 +301,7 @@ export default function NewJamForm({ initialData }: { initialData?: NewJamInitia
           </label>
           {canPostOfficial && (
             <label className="flex items-start gap-3 cursor-pointer">
-              <input type="radio" name="visibility" value="official" checked={visibility === "official"} onChange={() => setVisibility("official")} className="mt-0.5" />
+              <input type="radio" name="visibility" value="official" checked={visibility === "official"} onChange={() => setVisibility("official")} disabled={privateOnly} className="mt-0.5" />
               <div>
                 <span className="text-sm font-medium text-amber-600">Official SingJam event</span>
                 <p className="text-xs text-zinc-500">Public — visible to anyone on the site</p>

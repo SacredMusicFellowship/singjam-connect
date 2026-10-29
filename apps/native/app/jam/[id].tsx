@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { formatJamTime, googleMapsUrl } from '@singjam/core';
+import { dropUsCountry, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -636,11 +636,9 @@ export default function JamDetailScreen() {
         <View className="px-4 pt-5 pb-2">
           <Text className="text-2xl font-bold text-zinc-900 mb-1">{jam.name ?? 'Jam Session'}</Text>
           <View className="flex-row flex-wrap gap-2">
-            {jam.visibility === 'official' ? (
-              <View className="bg-amber-100 rounded-full px-3 py-0.5">
-                <Text className="text-amber-700 text-xs font-semibold">Official SingJam Event</Text>
-              </View>
-            ) : jam.visibility === 'community' ? (
+            {/* No "Official SingJam Event" badge or "Hosted by SingJam" row on an
+                official event: the title and image already say so. Mirrors web. */}
+            {jam.visibility === 'community' ? (
               <View className="bg-zinc-100 rounded-full px-3 py-0.5">
                 <Text className="text-zinc-500 text-xs font-medium">Community</Text>
               </View>
@@ -670,10 +668,10 @@ export default function JamDetailScreen() {
                 query={hasFullAccess ? jam.full_address ?? jam.neighborhood : jam.neighborhood}
               >
                 {jam.neighborhood ? (
-                  <Text className="text-zinc-700 font-medium">{jam.neighborhood}</Text>
+                  <Text className="text-zinc-700 font-medium">{dropUsCountry(jam.neighborhood)}</Text>
                 ) : null}
                 {jam.full_address && hasFullAccess ? (
-                  <Text className="text-zinc-400 text-sm mt-0.5">{jam.full_address}</Text>
+                  <Text className="text-zinc-400 text-sm mt-0.5">{dropUsCountry(dropVenueRepeatedInTitle(jam.full_address, jam.name))}</Text>
                 ) : jam.full_address && !hasFullAccess ? (
                   <Text className="text-zinc-400 text-sm mt-0.5 italic">Full address shown after RSVP</Text>
                 ) : null}
@@ -682,15 +680,9 @@ export default function JamDetailScreen() {
           ) : null}
 
           {/* Official events belong to SingJam, so whoever created the row is
-              never credited personally — mirrors web's JamCard. Shown to the
-              creator too, unlike the personal case below. */}
-          {jam.visibility === 'official' ? (
-            <InfoRow icon="🎤">
-              <Text className="text-zinc-700">
-                Hosted by <Text className="font-medium">SingJam</Text>
-              </Text>
-            </InfoRow>
-          ) : !isHosting && (jam.host_display_name || jam.host_username) ? (
+              never credited personally, and there is no "Hosted by SingJam" row
+              either — mirrors web's JamCard. */}
+          {jam.visibility !== 'official' && !isHosting && (jam.host_display_name || jam.host_username) ? (
             <InfoRow icon="🎤">
               <Text className="text-zinc-700">
                 Hosted by{' '}

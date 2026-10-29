@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
-import { stripe } from "@/lib/stripe";
+import { stripe, TICKET_PM_CONFIG, EXCLUDED_PAYMENT_METHODS } from "@/lib/stripe";
+import { inNextDev } from "@/lib/devSafety";
+import { buildCheckoutPreview, parsePreviewItems, previewUrl } from "@/lib/ticketCheckoutPreview";
 import { resolveTicketPaymentState, type PaymentSession } from "@/lib/ticketPaymentState";
 import TicketPaymentPanel from "@/components/TicketPaymentPanel";
 
@@ -25,12 +27,51 @@ export default async function TicketPaymentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ order_id?: string }>;
+  searchParams: Promise<{ order_id?: string; preview?: string; promo?: string; cover?: string; show?: string }>;
 }) {
   const { id: jamId } = await params;
-  const { order_id } = await searchParams;
+  const { order_id, preview, promo, cover, show } = await searchParams;
 
   const backToEvent = `/jam/${jamId}`;
+
+  // `next dev` never holds tickets, so it can't reach this screen the real way.
+  if (show === "expired" && inNextDev()) return <HoldExpired backToEvent={backToEvent} />;
+
+  // `next dev` only: the checkout route sends Buy here with the selection rather
+  // than an order, because it doesn't reserve anything locally.
+  if (preview && inNextDev()) {
+    const { data: jam } = await supabaseAdmin().from("jams").select("name").eq("id", jamId).maybeSingle();
+    const items = parsePreviewItems(preview);
+    const summary = await buildCheckoutPreview(supabaseAdmin(), jamId, jam?.name ?? null, items, promo ?? "", cover === "1");
+    if ("error" in summary) redirect(backToEvent);
+    return (
+      <>
+        <TicketPaymentPanel
+          clientSecret={null}
+          amountCents={summary.amountCents}
+          currency={summary.currency}
+          lines={summary.lines}
+          discountCents={summary.discountCents}
+          eventName={jam?.name ?? null}
+          preview={{
+            completeUrl: previewUrl(jamId, "complete", items, promo ?? "", cover === "1"),
+            paymentMethodConfiguration: TICKET_PM_CONFIG,
+            excludedPaymentMethodTypes: [...EXCLUDED_PAYMENT_METHODS],
+          }}
+        />
+        <p className="mx-auto mt-6 max-w-sm text-xs text-amber-700">
+          Local dev:{" "}
+          <Link href={`/jam/${jamId}/tickets/pay?show=expired`} className="underline">
+            see the expired-hold screen
+          </Link>
+          {" · "}
+          <Link href={`/jam/${jamId}/tickets/complete?show=paid`} className="underline">
+            see the confirmation page states
+          </Link>
+        </p>
+      </>
+    );
+  }
   if (!order_id) redirect(backToEvent);
 
   const supabase = await supabaseServer();
@@ -85,23 +126,7 @@ export default async function TicketPaymentPage({
     redirect(`/jam/${jamId}/tickets/complete?order_id=${mine.id}`);
   }
 
-  if (state.kind === "expired") {
-    return (
-      <div className="mx-auto max-w-sm space-y-3">
-        <h1 className="text-xl font-semibold text-zinc-900">This hold expired</h1>
-        <p className="text-sm text-zinc-600">
-          Tickets are only held for a short while, so yours went back on sale. Nothing was
-          charged — pick them again and you&apos;ll be straight back here.
-        </p>
-        <Link
-          href={backToEvent}
-          className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
-        >
-          Back to tickets
-        </Link>
-      </div>
-    );
-  }
+  if (state.kind === "expired") return <HoldExpired backToEvent={backToEvent} />;
 
   return (
     <TicketPaymentPanel
@@ -111,7 +136,24 @@ export default async function TicketPaymentPage({
       lines={state.lines}
       discountCents={state.discountCents}
       eventName={jam?.name ?? null}
-      backHref={backToEvent}
     />
+  );
+}
+
+function HoldExpired({ backToEvent }: { backToEvent: string }) {
+  return (
+    <div className="mx-auto max-w-sm space-y-3">
+      <h1 className="text-xl font-semibold text-zinc-900">This hold expired</h1>
+      <p className="text-sm text-zinc-600">
+        Tickets are only held for a short while, so yours went back on sale. Nothing was
+        charged — pick them again and you&apos;ll be straight back here.
+      </p>
+      <Link
+        href={backToEvent}
+        className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+      >
+        Back to tickets
+      </Link>
+    </div>
   );
 }

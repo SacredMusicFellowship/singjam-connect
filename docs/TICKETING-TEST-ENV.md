@@ -87,8 +87,8 @@ only — the door list with emails and codes stays host-gated at
 
 **As a guest** (private window, don't sign in)
 Pick tickets → name and email appear inline, no sign-in wall → optionally
-"Have a promo code?" → `SINGJAMTEST` → Buy → **click "Card" in the accordion**,
-it starts collapsed → pay → completion page, plus an email with a 6-character
+"＋ Promo Code" → `SINGJAMTEST` → Buy → the card form is open straight away
+→ pay → completion page, plus an email with a 6-character
 door code. The completion page should now also offer **Create an account**, and
 name the address to use.
 

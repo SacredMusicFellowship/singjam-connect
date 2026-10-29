@@ -42,6 +42,18 @@ async function authorize(req: Request, jamId: string): Promise<Auth> {
   return { ok: true, user, admin };
 }
 
+// Paid orders this code made free. Zero if it can't be counted — including
+// before migration 166 adds ticket_orders.promo_code_id.
+async function freeRedemptions(admin: ReturnType<typeof supabaseAdmin>, promoCodeId: string): Promise<number> {
+  const { count, error } = await admin
+    .from("ticket_orders")
+    .select("id", { count: "exact", head: true })
+    .eq("promo_code_id", promoCodeId)
+    .eq("status", "paid")
+    .eq("amount_cents", 0);
+  return error ? 0 : count ?? 0;
+}
+
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: jamId } = await params;
   const auth = await authorize(req, jamId);
@@ -53,17 +65,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     .eq("jam_id", jamId)
     .order("created_at", { ascending: false });
 
-  // Redemption counts live in Stripe, so read them from there rather than
-  // duplicating a counter we'd have to keep in step.
+  // Stripe counts the uses it charged. An order the code made free never
+  // reaches Stripe (checkout fulfils it directly), so those are counted from
+  // our own orders and added — the two never overlap.
   const codes = await Promise.all(
     (rows ?? []).map(async (r) => {
+      const free = await freeRedemptions(auth.admin, r.id);
       let redeemed: number | null = null;
       try {
         const p = await stripe().promotionCodes.retrieve(r.stripe_promotion_code_id);
-        redeemed = p.times_redeemed ?? 0;
+        redeemed = (p.times_redeemed ?? 0) + free;
       } catch {
         // A code deleted directly in the Dashboard shouldn't break the page.
-        redeemed = null;
+        redeemed = free > 0 ? free : null;
       }
       return { id: r.id, code: r.code, label: r.label, redeemed };
     })

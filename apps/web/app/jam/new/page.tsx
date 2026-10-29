@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionServer, supabaseServer } from "@/lib/supabase/server";
 import NewJamForm, { type NewJamInitialData } from "@/components/NewJamForm";
+import { devGuardOn } from "@/lib/devSafety";
 
 export default async function NewJamPage({ searchParams }: { searchParams: Promise<{ copy?: string }> }) {
   const session = await getSessionServer();
@@ -55,7 +56,7 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{initialData ? "Copy jam" : "Post a jam"}</h1>
       <p className="text-sm text-zinc-600">Casual. Address hidden until accepted.</p>
-      <NewJamForm initialData={initialData} />
+      <NewJamForm initialData={initialData} privateOnly={devGuardOn()} />
     </div>
   );
 }
