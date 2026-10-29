@@ -123,11 +123,32 @@ function LocationText({ query, children }: { query: string | null; children: Rea
   );
 }
 
+/**
+ * The event image for the ticketed layout's left column. On wide screens it is
+ * shown whole at its own shape, since event images are often flyers carrying
+ * the date, address and prices that the banner crop cut off. Phones keep the
+ * letterboxed banner so the tickets stay near the top.
+ */
+export function JamPoster({ jam }: { jam: JamCardData }) {
+  if (!jam.image_url) return null;
+  return (
+    <Image
+      src={jam.image_url}
+      alt={jam.name ?? "Event"}
+      width={800}
+      height={800}
+      className="h-48 w-full rounded-2xl bg-black object-contain sm:h-80 md:h-auto md:bg-transparent"
+      sizes="(min-width: 768px) 360px, 100vw"
+      priority
+    />
+  );
+}
+
 export default function JamCard({
   jam,
   actions,
   sellsTickets = false,
-  ticketPanelFollows = false,
+  ticketPanel,
   showMap = true,
 }: {
   jam: JamCardData;
@@ -140,11 +161,12 @@ export default function JamCard({
    */
   sellsTickets?: boolean;
   /**
-   * A ticket panel renders directly after this card, so the description moves
-   * out to sit below it. Everything else keeps it here, inside the card, on the
-   * card's own spacing.
+   * The ticket purchase panel. Its presence switches the card to the ticketed
+   * layout: no hero image (JamView puts JamPoster in a column of its own), the
+   * date and place as plain rows rather than a boxed strip, and the panel
+   * directly under them, so it is the one boxed thing above the description.
    */
-  ticketPanelFollows?: boolean;
+  ticketPanel?: ReactNode;
   /**
    * False on the event page, which renders the map itself at the very bottom
    * on every jam type. The New/Edit jam previews keep it inside the card.
@@ -158,10 +180,72 @@ export default function JamCard({
   const mapsUrl = googleMapsUrl(mapQuery);
   const showCalendar = !!jam.starts_at && !sellsTickets;
 
+  const boxed = !ticketPanel;
+  const row = boxed ? "flex items-start gap-4 px-5 py-3 sm:py-4" : "flex items-start gap-3";
+  const iconBox = boxed ? "shrink-0 w-10 flex justify-center pt-0.5" : "shrink-0 pt-0.5";
+
+  const detailStrip = (
+    <div className={boxed ? "rounded-2xl border border-zinc-200 bg-white divide-y divide-zinc-100" : "space-y-3"}>
+      {jam.starts_at && (
+        <div className={row}>
+          <div className={iconBox}>
+            <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-800">
+              <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "long", month: "long", day: "numeric", year: "numeric" }} />
+            </p>
+            <p className="text-sm text-zinc-500">
+              <FormattedTime iso={jam.starts_at} timezone={jam.timezone} />
+              {jam.ends_at && <> – <FormattedTime iso={jam.ends_at} timezone={jam.timezone} /></>}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {(jam.neighborhood || jam.full_address) && (
+        <div className={row}>
+          <div className={iconBox}>
+            <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            {/* The location links out to Maps. Pointed at the same mapQuery
+                the embed uses, so the link and the map can never disagree —
+                and so a jam that only reveals its address after RSVP links
+                to the neighbourhood, not the street. Null for a TBD venue,
+                which falls back to plain text. */}
+            <LocationText query={mapsUrl}>
+              {dropUsCountry(showFullAddress ? dropVenueRepeatedInTitle(jam.full_address!, jam.name) : jam.neighborhood ?? "")}
+            </LocationText>
+            {!showFullAddress && !isOfficial && jam.neighborhood !== "TBD" && (
+              <p className="text-xs text-zinc-400 mt-0.5">Full address shown after RSVP</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {jam.capacity != null && (
+        <div className={row}>
+          <div className={iconBox}>
+            <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-zinc-800">{jam.capacity} spots</p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div>
       {/* Hero image */}
-      {jam.image_url && (
+      {jam.image_url && !ticketPanel && (
         <div
           className="relative mb-4 h-48 overflow-hidden rounded-2xl bg-black sm:mb-6 sm:h-80"
           style={{ "--focal-point": jam.image_focal_point ?? "50% 50%" } as CSSProperties}
@@ -212,61 +296,8 @@ export default function JamCard({
         </div>
 
         {/* Date / time / location strip */}
-        <div className="rounded-2xl border border-zinc-200 bg-white divide-y divide-zinc-100">
-          {jam.starts_at && (
-            <div className="flex items-start gap-4 px-5 py-3 sm:py-4">
-              <div className="shrink-0 w-10 flex justify-center pt-0.5">
-                <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-zinc-800">
-                  <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "long", month: "long", day: "numeric", year: "numeric" }} />
-                </p>
-                <p className="text-sm text-zinc-500">
-                  <FormattedTime iso={jam.starts_at} timezone={jam.timezone} />
-                  {jam.ends_at && <> – <FormattedTime iso={jam.ends_at} timezone={jam.timezone} /></>}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {(jam.neighborhood || jam.full_address) && (
-            <div className="flex items-start gap-4 px-5 py-3 sm:py-4">
-              <div className="shrink-0 w-10 flex justify-center pt-0.5">
-                <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                {/* The location links out to Maps. Pointed at the same mapQuery
-                    the embed uses, so the link and the map can never disagree —
-                    and so a jam that only reveals its address after RSVP links
-                    to the neighbourhood, not the street. Null for a TBD venue,
-                    which falls back to plain text. */}
-                <LocationText query={mapsUrl}>
-                  {dropUsCountry(showFullAddress ? dropVenueRepeatedInTitle(jam.full_address!, jam.name) : jam.neighborhood ?? "")}
-                </LocationText>
-                {!showFullAddress && !isOfficial && jam.neighborhood !== "TBD" && (
-                  <p className="text-xs text-zinc-400 mt-0.5">Full address shown after RSVP</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {jam.capacity != null && (
-            <div className="flex items-start gap-4 px-5 py-3 sm:py-4">
-              <div className="shrink-0 w-10 flex justify-center pt-0.5">
-                <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium text-zinc-800">{jam.capacity} spots</p>
-            </div>
-          )}
-        </div>
+        {detailStrip}
+        {ticketPanel}
 
         {/* Tags */}
         {tags.length > 0 && (
@@ -306,9 +337,7 @@ export default function JamCard({
           </div>
         )}
 
-        {/* On a ticketed event the description moves out to sit below the
-            ticket panel, and JamView places it. */}
-        {!ticketPanelFollows && <JamDescription jam={jam} />}
+        <JamDescription jam={jam} />
         {showMap && <JamMap jam={jam} />}
       </div>
     </div>
