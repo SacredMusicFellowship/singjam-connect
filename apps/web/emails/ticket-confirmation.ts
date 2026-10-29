@@ -1,3 +1,4 @@
+import { dropUsCountry, dropVenueRepeatedInTitle } from "@singjam/core";
 import { formatJamTime } from "../lib/formatJamTime";
 
 // Door staff look guests up by name or by this code, so it has to be short
@@ -117,7 +118,7 @@ export function ticketConfirmationHtml({
 <body style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#18181b;padding:32px 16px">
   <h1 style="font-size:22px;font-weight:700;margin-bottom:8px">You're in! 🎉 We can't wait to sing with you.</h1>
   <p style="font-size:15px;line-height:1.6;color:#52525b">
-    ${greeting} You're coming to <strong>${jamName}</strong> —
+    ${greeting} you're coming to <strong>${jamName}</strong> —
     <strong>${money(amountCents, currency)}</strong> confirmed. Show this email at the door, or
     just give your name.
   </p>
@@ -152,7 +153,7 @@ export function ticketConfirmationHtml({
   <div style="margin-top:12px;padding:16px;background:#f4f4f5;border-radius:10px">
     <p style="font-size:13px;font-weight:600;color:#71717a;margin:0 0 4px">Where</p>
     <a href="https://maps.google.com/?q=${encodeURIComponent(address)}"
-       style="font-size:15px;font-weight:500;color:#18181b;margin:0;text-decoration:underline">${address}</a>
+       style="font-size:15px;font-weight:500;color:#18181b;margin:0;text-decoration:underline">${dropUsCountry(dropVenueRepeatedInTitle(address, jamName))}</a>
   </div>` : ""}
 
   ${cal ? `

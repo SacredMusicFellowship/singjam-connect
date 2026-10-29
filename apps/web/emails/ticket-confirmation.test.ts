@@ -148,6 +148,18 @@ describe("ticketConfirmationHtml", () => {
     expect(asGuest).toContain("View set list");
   });
 
+  it("greets by name and carries on in lower case", () => {
+    const html = ticketConfirmationHtml({ ...base, name: "Ada", tickets: [ticket("Advance", 1500)], amountCents: 1500 });
+    expect(html).toContain("Hi Ada, you're coming to");
+  });
+
+  it("shows the address without a venue the title already names or a trailing USA, but maps the full one", () => {
+    const address = "The Starry Plough Pub, 3101 Shattuck Ave., Berkeley, CA 94705, USA";
+    const html = ticketConfirmationHtml({ ...base, address, tickets: [ticket("Advance", 1500)], amountCents: 1500 });
+    expect(html).toContain(">3101 Shattuck Ave., Berkeley, CA 94705</a>");
+    expect(html).toContain(`?q=${encodeURIComponent(address)}`);
+  });
+
   it("derives a short door code from the ticket token", () => {
     expect(ticketCode("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")).toBe("AAAAAA");
   });

@@ -144,6 +144,8 @@ export default async function TicketsCompletePage({
 
   const jamName = jam?.name ?? "the jam";
 
+  const memberSongInvite = outcome.kind === "paid" && !!mine && !isGuestOrder && !!linkedSet;
+
   return (
     <div className="mx-auto max-w-md space-y-4 py-8">
       {(previewOrder || showState) && (
@@ -214,8 +216,28 @@ export default async function TicketsCompletePage({
         </div>
       )}
 
+      {/* A member who bought is already an editor of the set (markAttending),
+          so they're invited to add songs; the invitation carries the set-list
+          link, which then stands in for the plain button below. Same as the
+          confirmation email. */}
+      {memberSongInvite && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-zinc-900">Help choose songs for this SingJam 🎶</h2>
+          <p className="text-sm text-zinc-600">
+            You&apos;re on the set list for this one. Add the songs you&apos;d love to sing, and see
+            what everyone else has picked.
+          </p>
+          <Link
+            href={linkedSet!.id ? `/set/${linkedSet!.id}` : `/jam/${jamId}`}
+            className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+          >
+            View set list
+          </Link>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        {outcome.kind === "paid" && linkedSet && (
+        {outcome.kind === "paid" && linkedSet && !memberSongInvite && (
           <Link
             href={linkedSet.id ? `/set/${linkedSet.id}` : `/jam/${jamId}`}
             className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
