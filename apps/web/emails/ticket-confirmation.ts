@@ -92,6 +92,11 @@ export function ticketConfirmationHtml({
 
   const plural = tickets.length === 1 ? "ticket" : "tickets";
 
+  // A member who buys a ticket is made an editor of the event's set list
+  // (markAttending), so they can add songs straight away. Their invitation
+  // carries the set-list link, which then stands in for the plain button below.
+  const memberSongInvite = !isGuest && !!setUrl;
+
   // Tier prices are face value. The processing fee and any promotion code live
   // outside them, so the rows will not always sum to what was charged — and an
   // emailed receipt a buyer cannot add up is worse than no breakdown at all.
@@ -185,8 +190,21 @@ export function ticketConfirmationHtml({
     </p>
   </div>` : ""}
 
+  ${memberSongInvite ? `
+  <div style="margin-top:24px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px">
+    <p style="font-size:14px;font-weight:600;color:#18181b;margin:0 0 6px">Help choose songs for this SingJam 🎶</p>
+    <p style="font-size:13px;color:#52525b;margin:0 0 12px">
+      You're on the set list for this one. Add the songs you'd love to sing, and see what
+      everyone else has picked.
+    </p>
+    <a href="${setUrl}"
+       style="display:inline-block;background-color:#f59e0b;color:#fff;font-weight:600;font-size:13px;padding:8px 16px;border-radius:8px;text-decoration:none">
+      View set list
+    </a>
+  </div>` : ""}
+
   <div style="margin-top:24px">
-    ${setUrl ? `
+    ${setUrl && !memberSongInvite ? `
     <a href="${setUrl}"
        style="display:inline-block;margin-right:8px;background-color:#f59e0b;color:#fff;font-weight:600;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none">
       View set list

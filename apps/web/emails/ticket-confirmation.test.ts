@@ -104,8 +104,48 @@ describe("ticketConfirmationHtml", () => {
       isGuest: false,
       signUpUrl: "https://singjam.org/auth",
     });
-    expect(asGuest).toContain("Help choose songs for this SingJam");
+    expect(asGuest).toContain("Create an account");
+    expect(asMember).not.toContain("Create an account");
+  });
+
+  it("invites a member to add songs, linking the set list once", () => {
+    const setUrl = "https://singjam.org/set/set-1";
+    const asMember = ticketConfirmationHtml({
+      ...base,
+      tickets: [ticket("Advance", 1500)],
+      amountCents: 1500,
+      isGuest: false,
+      setUrl,
+    });
+    expect(asMember).toContain("Help choose songs for this SingJam");
+    expect(asMember).toContain("Add the songs you'd love to sing");
+    expect(asMember.split(`href="${setUrl}"`)).toHaveLength(2);
+  });
+
+  it("gives a member no song invitation when the event has no set list", () => {
+    const asMember = ticketConfirmationHtml({
+      ...base,
+      tickets: [ticket("Advance", 1500)],
+      amountCents: 1500,
+      isGuest: false,
+      setUrl: null,
+    });
     expect(asMember).not.toContain("Help choose songs for this SingJam");
+  });
+
+  it("keeps a guest's set-list button alongside the sign-up block", () => {
+    const setUrl = "https://singjam.org/set/set-1";
+    const asGuest = ticketConfirmationHtml({
+      ...base,
+      tickets: [ticket("Advance", 1500)],
+      amountCents: 1500,
+      isGuest: true,
+      signUpUrl: "https://singjam.org/auth",
+      setUrl,
+    });
+    expect(asGuest).toContain("Create an account");
+    expect(asGuest.split(`href="${setUrl}"`)).toHaveLength(2);
+    expect(asGuest).toContain("View set list");
   });
 
   it("derives a short door code from the ticket token", () => {
