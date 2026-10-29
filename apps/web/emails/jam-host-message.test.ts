@@ -21,14 +21,26 @@ describe("jamHostMessageHtml", () => {
     expect(html).toContain("Thursday Night Jam");
   });
 
-  it("greets recipient by name when provided", () => {
-    const html = jamHostMessageHtml({ ...base, recipientName: "Alice" });
-    expect(html).toContain("Hi Alice,");
+  it("adds no greeting of its own, so the host's message opens the email", () => {
+    const html = jamHostMessageHtml(base);
+    expect(html).not.toMatch(/>\s*Hi[ ,]/);
+    expect(html).toContain("Hey everyone, parking is tight on Thursday.");
   });
 
-  it("uses generic greeting when recipient name is omitted", () => {
-    const html = jamHostMessageHtml({ ...base, recipientName: null });
-    expect(html).toContain("Hi,");
+  it("escapes what the host typed, so it can't add links or markup", () => {
+    const html = jamHostMessageHtml({
+      ...base,
+      hostName: "Eve <b>",
+      jamName: "Jam & Jelly",
+      subject: '<a href="https://evil.example">Pay here</a>',
+      body: '<script>alert(1)</script>\n<img src=x onerror="x">',
+    });
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain('<a href="https://evil.example">');
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;<br>&lt;img");
+    expect(html).toContain("Eve &lt;b&gt;");
+    expect(html).toContain("Jam &amp; Jelly");
   });
 
   it("converts newlines in body to <br>", () => {

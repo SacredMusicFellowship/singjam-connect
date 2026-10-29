@@ -109,11 +109,11 @@ export async function POST(
   }
 
   const { sent, failed } = await sendBulkEmail(
-    Array.from(recipientMap.entries()).map(([email, name]) => ({
+    Array.from(recipientMap.keys()).map((email) => ({
       from: EVENTS_FROM_ADDRESS,
       to: email,
       subject: `[${jamName}] ${subject}`,
-      html: jamHostMessageHtml({ recipientName: name, hostName, jamName, jamUrl, subject, body: message }),
+      html: jamHostMessageHtml({ hostName, jamName, jamUrl, subject, body: message }),
     }))
   );
 
