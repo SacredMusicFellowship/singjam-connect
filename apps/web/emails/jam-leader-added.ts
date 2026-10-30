@@ -14,6 +14,7 @@ export function jamLeaderAddedHtml({
   qrToken,
   setUrl,
   signUpUrl,
+  hasOwnTicket = false,
 }: {
   jamName: string;
   jamUrl: string;
@@ -24,6 +25,8 @@ export function jamLeaderAddedHtml({
   setUrl?: string | null;
   /** Only for a leader without an account. */
   signUpUrl?: string | null;
+  /** They already got a ticket themselves, so no leader ticket was issued. */
+  hasOwnTicket?: boolean;
 }) {
   const dateStr = formatJamTime(startsAt, timezone);
 
@@ -32,7 +35,9 @@ export function jamLeaderAddedHtml({
 <body style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#18181b;padding:32px 16px">
   <h1 style="font-size:22px;font-weight:700;margin-bottom:8px">You're leading at ${jamName} 🎶</h1>
   <p style="font-size:15px;line-height:1.6;color:#52525b">
-    Thank you for bringing the music — your ticket is on us. Show this email at the door, or just give your name.
+    ${hasOwnTicket
+      ? "Thank you for bringing the music! You already have a ticket, so bring that one to the door, or just give your name."
+      : "Thank you for bringing the music — your ticket is on us. Show this email at the door, or just give your name."}
   </p>
 
   ${qrToken ? `

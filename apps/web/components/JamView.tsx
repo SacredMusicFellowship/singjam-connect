@@ -62,7 +62,7 @@ export type JamViewData = {
   /** Music leaders listed publicly, marked in Who's going (official events only). */
   leaders: PublicJamLeader[];
   /** Set when the viewer is one of this event's leaders. */
-  myLeader: { userId: string; token: string } | null;
+  myLeader: { userId: string; token: string; hasLeaderTicket: boolean } | null;
   /** The full leader list with emails, for whoever can manage the event. */
   managedLeaders: ManagedJamLeader[] | null;
 };
@@ -152,6 +152,7 @@ export default function JamView({
             eventPath={jamPath({ id: jamId, short_code: shortCode })}
             isSignedIn={!!userId}
             timezone={jamCardData.timezone}
+            isLeader={!!myLeader}
           />
         ) : undefined
       }

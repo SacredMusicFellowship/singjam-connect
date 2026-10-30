@@ -191,7 +191,7 @@ export default function JamAttendeeList({
   /** Members leading the music who are listed publicly. */
   leaderIds?: string[];
   /** Set when the viewer leads this event: their row carries their controls. */
-  myLeader?: { userId: string; token: string } | null;
+  myLeader?: { userId: string; token: string; hasLeaderTicket: boolean } | null;
 }) {
   const [data, setData] = useState<AttendeeData | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -254,6 +254,7 @@ export default function JamAttendeeList({
                 isMyLeaderRow && myLeader && (
                   <LeaderSpotControls
                     token={myLeader.token}
+                    hasLeaderTicket={myLeader.hasLeaderTicket}
                     onWithdrawn={() => {
                       loadAttendees(supabase, jamId, hostId).then(setData);
                       router.refresh();

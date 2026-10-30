@@ -16,7 +16,7 @@ vi.mock("@/lib/eventSet", () => ({ findEventSet: mockFindSet }));
 vi.mock("@/lib/devSafety", () => ({ sideEffectsBlocked: () => false }));
 vi.mock("@/lib/stripe", () => ({ SITE_URL: "https://singjam.org" }));
 
-import { addJamLeader, publicLeaders, removeJamLeader, type JamLeaderRow } from "./jamLeaders";
+import { addJamLeader, publicLeaders, removeJamLeader, reseatLeaderAfterRefund, type JamLeaderRow } from "./jamLeaders";
 
 // Per-table queues, so a test reads as "what each table returns" rather than
 // depending on the exact order the helper happens to query them in.
@@ -96,14 +96,14 @@ describe("addJamLeader", () => {
       jams: [{ data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria", last_name: "Lopez", username: "maria" } }, { data: [] }],
       jam_leaders: [{ data: null }, { data: LEADER_ROW }],
-      ticket_orders: [{ data: { id: "order-1" } }, { error: null }],
+      ticket_orders: [{ data: [] }, { data: { id: "order-1" } }, { error: null }],
       tickets: [{ data: { qr_token: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } }],
     });
 
     const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", userId: "member-1" });
 
     expect(res).toMatchObject({ ok: true, emailed: true });
-    expect(calls.ticket_orders[0].insert).toHaveBeenCalledWith(
+    expect(calls.ticket_orders[1].insert).toHaveBeenCalledWith(
       expect.objectContaining({ source: "leader", status: "paid", amount_cents: 0, buyer_user_id: "member-1" })
     );
     // No tier: that is what keeps a leader out of every stock limit.
@@ -118,8 +118,26 @@ describe("addJamLeader", () => {
     expect(html).toContain("AAAAAA");
     expect(html).not.toContain("added you");
     // Stamped, so the receipt sweeper never sends a "$0.00 paid" email on top.
-    expect(calls.ticket_orders[1].update).toHaveBeenCalledWith({ ticket_email_sent_at: expect.any(String) });
+    expect(calls.ticket_orders[2].update).toHaveBeenCalledWith({ ticket_email_sent_at: expect.any(String) });
     expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ userId: "member-1", type: "jam_leader_added" }));
+  });
+
+  it("issues no second ticket to someone who already bought one, and tells the host what they paid", async () => {
+    const bought = { data: [{ buyer_user_id: "member-1", buyer_email: null, amount_cents: 1500 }] };
+    const { admin, calls } = adminWith({
+      jams: [{ data: OFFICIAL }],
+      profiles: [{ data: { display_name: "Maria" } }, { data: [] }],
+      jam_leaders: [{ data: null }, { data: { ...LEADER_ROW, order_id: null } }],
+      ticket_orders: [bought, bought],
+    });
+
+    const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", userId: "member-1" });
+
+    expect(res).toMatchObject({ ok: true, leader: { own_ticket_cents: 1500 } });
+    expect(calls.tickets).toBeUndefined();
+    expect(calls.ticket_orders.every((c: any) => c.insert.mock.calls.length === 0)).toBe(true);
+    expect(calls.jam_leaders[1].insert).toHaveBeenCalledWith(expect.objectContaining({ order_id: null }));
+    expect(mockSend.mock.calls[0][0].html).toContain("You already have a ticket");
   });
 
   it("adds a typed-in email as the member who owns it", async () => {
@@ -128,14 +146,14 @@ describe("addJamLeader", () => {
       jams: [{ data: OFFICIAL }, { data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria" } }, { data: null }, { data: [] }],
       jam_leaders: [{ data: null }, { data: LEADER_ROW }],
-      ticket_orders: [{ data: { id: "order-1" } }],
+      ticket_orders: [{ data: [] }, { data: { id: "order-1" } }],
       tickets: [{ data: { qr_token: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } }],
     });
 
     const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", name: "Maria", email: "maria@example.com" });
 
     expect(res.ok).toBe(true);
-    expect(calls.ticket_orders[0].insert).toHaveBeenCalledWith(expect.objectContaining({ buyer_user_id: "member-1", buyer_email: null }));
+    expect(calls.ticket_orders[1].insert).toHaveBeenCalledWith(expect.objectContaining({ buyer_user_id: "member-1", buyer_email: null }));
   });
 
   it("gives someone without an account a ticket by email and a sign-up link", async () => {
@@ -144,14 +162,14 @@ describe("addJamLeader", () => {
       jams: [{ data: OFFICIAL }],
       profiles: [{ data: { display_name: "Ben" } }],
       jam_leaders: [{ data: null }, { data: guestRow }],
-      ticket_orders: [{ data: { id: "order-1" } }],
+      ticket_orders: [{ data: [] }, { data: { id: "order-1" } }],
       tickets: [{ data: { qr_token: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } }],
     });
 
     const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", name: "Sam Guest", email: "Sam@Example.com" });
 
     expect(res).toMatchObject({ ok: true, leader: { name: "Sam Guest", user_id: null } });
-    expect(calls.ticket_orders[0].insert).toHaveBeenCalledWith(
+    expect(calls.ticket_orders[1].insert).toHaveBeenCalledWith(
       expect.objectContaining({ buyer_user_id: null, buyer_email: "sam@example.com", buyer_name: "Sam Guest" })
     );
     expect(mockMarkAttending).not.toHaveBeenCalled();
@@ -175,12 +193,12 @@ describe("addJamLeader", () => {
       jams: [{ data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria" } }],
       jam_leaders: [{ data: null }, { data: null, error: { code: "23505", message: "duplicate" } }],
-      ticket_orders: [{ data: { id: "order-1" } }],
+      ticket_orders: [{ data: [] }, { data: { id: "order-1" } }],
       tickets: [{ data: { qr_token: "x" } }],
     });
     const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", userId: "member-1" });
     expect(res).toMatchObject({ ok: false, status: 409 });
-    expect(calls.ticket_orders[1].update).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled" }));
+    expect(calls.ticket_orders[2].update).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled" }));
   });
 
   it("still adds the leader when the email fails, and says so", async () => {
@@ -189,7 +207,7 @@ describe("addJamLeader", () => {
       jams: [{ data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria" } }, { data: null }, { data: [] }],
       jam_leaders: [{ data: null }, { data: LEADER_ROW }],
-      ticket_orders: [{ data: { id: "order-1" } }],
+      ticket_orders: [{ data: [] }, { data: { id: "order-1" } }],
       tickets: [{ data: { qr_token: "x" } }],
     });
     const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", userId: "member-1" });
@@ -225,9 +243,38 @@ describe("removeJamLeader", () => {
 describe("publicLeaders", () => {
   it("leaves out hidden leaders and never exposes an email", () => {
     const out = publicLeaders([
-      { id: "a", user_id: null, name: "Sam", username: null, avatar_url: null, email: "sam@example.com", show_publicly: true },
-      { id: "b", user_id: "u", name: "Shy", username: "shy", avatar_url: null, email: null, show_publicly: false },
+      { id: "a", user_id: null, name: "Sam", username: null, avatar_url: null, email: "sam@example.com", show_publicly: true, own_ticket_cents: null },
+      { id: "b", user_id: "u", name: "Shy", username: "shy", avatar_url: null, email: null, show_publicly: false, own_ticket_cents: null },
     ]);
     expect(out).toEqual([{ id: "a", user_id: null, name: "Sam", username: null, avatar_url: null }]);
+  });
+});
+
+describe("reseatLeaderAfterRefund", () => {
+  const REFUNDED = { jam_id: "jam-1", buyer_user_id: "member-1", buyer_email: null };
+
+  it("leaves a refund alone when the buyer isn't leading", async () => {
+    const { admin } = adminWith({ jam_leaders: [{ data: [] }] });
+    expect(await reseatLeaderAfterRefund(admin, REFUNDED)).toBe(false);
+  });
+
+  it("gives a leader whose own ticket was refunded a leader ticket, and keeps them seated", async () => {
+    const { admin, calls } = adminWith({
+      jam_leaders: [{ data: [{ ...LEADER_ROW, order_id: null }] }, { error: null }],
+      ticket_orders: [{ data: [] }, { data: { id: "order-2" } }],
+      tickets: [{ data: { qr_token: "q" } }],
+    });
+    expect(await reseatLeaderAfterRefund(admin, REFUNDED)).toBe(true);
+    expect(calls.ticket_orders[1].insert).toHaveBeenCalledWith(expect.objectContaining({ source: "leader", buyer_user_id: "member-1" }));
+    expect(calls.jam_leaders[1].update).toHaveBeenCalledWith({ order_id: "order-2" });
+  });
+
+  it("issues nothing when they still hold another ticket they bought", async () => {
+    const { admin, calls } = adminWith({
+      jam_leaders: [{ data: [{ ...LEADER_ROW, order_id: null }] }],
+      ticket_orders: [{ data: [{ buyer_user_id: "member-1", buyer_email: null, amount_cents: 1500 }] }],
+    });
+    expect(await reseatLeaderAfterRefund(admin, REFUNDED)).toBe(true);
+    expect(calls.ticket_orders).toHaveLength(1);
   });
 });

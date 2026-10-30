@@ -22,7 +22,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   return NextResponse.json({
     leaders: publicLeaders(leaders),
     // Only the leader themselves gets their token: it is what steps them down.
-    me: mine ? { token: mine.token } : null,
+    me: mine ? { token: mine.token, has_leader_ticket: !!mine.order_id } : null,
     ...(canManage ? { managed: leaders } : {}),
   });
 }

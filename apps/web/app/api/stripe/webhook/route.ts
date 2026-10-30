@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
 import { fulfilPendingOrder } from "@/lib/ticketFulfilment";
+import { reseatLeaderAfterRefund } from "@/lib/jamLeaders";
 import { ticketingBlocked } from "@/lib/devSafety";
 
 // Fulfilment happens here, never in the browser's return_url handler — the
@@ -88,11 +89,13 @@ export async function POST(req: Request) {
         .update({ status: "refunded", updated_at: now })
         .eq("stripe_payment_intent_id", intentId)
         .eq("status", "paid")
-        .select("id, jam_id, buyer_user_id")
+        .select("id, jam_id, buyer_user_id, buyer_email")
         .maybeSingle();
 
+      const stillLeading = order ? await reseatLeaderAfterRefund(admin, order) : false;
+
       // Guest orders never created an attendance row, so there is none to cancel.
-      if (order?.buyer_user_id) {
+      if (order?.buyer_user_id && !stillLeading) {
         await admin
           .from("jam_rsvps")
           .update({ status: "cancelled", waitlist_position: null })

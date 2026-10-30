@@ -5,6 +5,9 @@ import Image from "next/image";
 import SearchInput from "@/components/SearchInput";
 import type { ManagedJamLeader } from "@/lib/jamLeaders";
 
+const formatCents = (cents: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+
 type UserResult = {
   id: string;
   username: string | null;
@@ -14,8 +17,8 @@ type UserResult = {
 };
 
 // The host's side of music leaders. Adding someone confirms them — they have
-// already said yes — so they are emailed a comp ticket straight away and can
-// step down from that email if plans change.
+// already said yes — so they are emailed straight away, with a free ticket
+// unless they already got one, and can step down from the event page.
 export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: string; initialLeaders: ManagedJamLeader[] }) {
   const [leaders, setLeaders] = useState(initialLeaders);
   const [query, setQuery] = useState("");
@@ -63,10 +66,13 @@ export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: str
     setResults([]);
     setName("");
     setEmail("");
+    const l: ManagedJamLeader = body.leader;
     setFeedback(
-      body.emailed
-        ? { msg: `${body.leader.name} is leading — we've emailed their ticket.`, ok: true }
-        : { msg: `${body.leader.name} is leading, but their email didn't send. Let them know directly.`, ok: false }
+      !body.emailed
+        ? { msg: `${l.name} is leading, but their email didn't send. Let them know directly.`, ok: false }
+        : l.own_ticket_cents !== null
+          ? { msg: `${l.name} is leading — they already have a ticket, so we didn't issue another.`, ok: true }
+          : { msg: `${l.name} is leading — we've emailed their ticket.`, ok: true }
     );
   }
 
@@ -93,8 +99,8 @@ export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: str
       <div>
         <h2 className="text-base font-semibold">Music leaders</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          For people who&apos;ve already said yes. They&apos;re emailed a free ticket and shown on the event page, and
-          can step down from that email.
+          For people who&apos;ve already said yes. They&apos;re emailed a free ticket (unless they already have one),
+          marked as leading in Who&apos;s going, and can step down from the event page.
         </p>
       </div>
 
@@ -107,6 +113,13 @@ export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: str
                 <p className="truncate text-xs text-zinc-400">
                   {l.username ? `@${l.username}` : l.email}
                 </p>
+                {l.own_ticket_cents !== null && (
+                  <p className="text-xs text-amber-700">
+                    {l.own_ticket_cents > 0
+                      ? `Paid ${formatCents(l.own_ticket_cents)} for their own ticket — refund it in Stripe to comp them`
+                      : "Has their own ticket"}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => remove(l)}

@@ -52,7 +52,7 @@ describe("GET /api/jam/[id]/leaders", () => {
     mockUser.mockResolvedValue({ id: "member-1" });
     mockCanManage.mockResolvedValue(false);
     const body = await (await GET(req("GET"), params)).json();
-    expect(body.me).toEqual({ token: "tok" });
+    expect(body.me).toEqual({ token: "tok", has_leader_ticket: false });
   });
 
   it("never gives one leader's token to another viewer", async () => {

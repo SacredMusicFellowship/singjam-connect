@@ -37,7 +37,12 @@ export type PublicJamLeader = {
 };
 
 /** What the host sees when managing leaders. */
-export type ManagedJamLeader = PublicJamLeader & { email: string | null; show_publicly: boolean };
+export type ManagedJamLeader = PublicJamLeader & {
+  email: string | null;
+  show_publicly: boolean;
+  /** What they paid for a ticket of their own, when that is their seat instead of a leader ticket. */
+  own_ticket_cents: number | null;
+};
 
 const LEADER_COLUMNS = "id, jam_id, user_id, name, email, show_publicly, token, order_id, added_by, created_at";
 
@@ -63,6 +68,30 @@ export async function leaderByToken(admin: SupabaseClient, token: string): Promi
   return (data as JamLeaderRow) ?? null;
 }
 
+type PurchaseRow = { buyer_user_id: string | null; buyer_email: string | null; amount_cents: number };
+
+// Paid orders bought for this event, the leader ticket aside. These are what
+// someone who got their own ticket before (or after) being asked to lead
+// comes in on.
+async function purchasedOrders(admin: SupabaseClient, jamId: string): Promise<PurchaseRow[]> {
+  const { data } = await admin
+    .from("ticket_orders")
+    .select("buyer_user_id, buyer_email, amount_cents")
+    .eq("jam_id", jamId)
+    .eq("source", "purchase")
+    .eq("status", "paid");
+  return (data ?? []) as PurchaseRow[];
+}
+
+function ownTicketCents(orders: PurchaseRow[], who: { userId: string | null; email: string | null }): number | null {
+  const mine = orders.filter((o) =>
+    who.userId
+      ? o.buyer_user_id === who.userId
+      : !o.buyer_user_id && !!who.email && o.buyer_email?.toLowerCase() === who.email.toLowerCase()
+  );
+  return mine.length ? mine.reduce((sum, o) => sum + o.amount_cents, 0) : null;
+}
+
 // Members are shown by their profile name, so a rename carries through; guests
 // by the name the host typed.
 export async function describeLeaders(admin: SupabaseClient, rows: JamLeaderRow[]): Promise<ManagedJamLeader[]> {
@@ -75,6 +104,8 @@ export async function describeLeaders(admin: SupabaseClient, rows: JamLeaderRow[
       .in("id", ids);
     for (const p of data ?? []) profiles.set((p as any).id, p);
   }
+  const selfTicketed = rows.filter((r) => !r.order_id);
+  const orders = selfTicketed.length ? await purchasedOrders(admin, selfTicketed[0].jam_id) : [];
   return rows.map((r) => {
     const p = r.user_id ? profiles.get(r.user_id) : null;
     return {
@@ -85,8 +116,48 @@ export async function describeLeaders(admin: SupabaseClient, rows: JamLeaderRow[
       avatar_url: p?.avatar_url ?? null,
       email: r.email,
       show_publicly: r.show_publicly,
+      own_ticket_cents: r.order_id ? null : ownTicketCents(orders, { userId: r.user_id, email: r.email }),
     };
   });
+}
+
+// A leader's free ticket: an order of its own, so it never reads as a sale, and
+// no tier, which keeps it outside every stock limit.
+async function issueLeaderTicket(
+  admin: SupabaseClient,
+  jamId: string,
+  who: { userId: string | null; name: string | null; email: string | null },
+): Promise<{ orderId: string; qrToken: string | null } | null> {
+  const now = new Date().toISOString();
+  const { data: order } = await admin
+    .from("ticket_orders")
+    .insert({
+      jam_id: jamId,
+      buyer_user_id: who.userId,
+      buyer_email: who.userId ? null : who.email,
+      buyer_name: who.userId ? null : who.name,
+      source: "leader",
+      status: "paid",
+      amount_cents: 0,
+      expires_at: now,
+      paid_at: now,
+    })
+    .select("id")
+    .single();
+  if (!order) return null;
+
+  const { data: ticket } = await admin
+    .from("tickets")
+    .insert({
+      order_id: order.id,
+      jam_id: jamId,
+      holder_user_id: who.userId,
+      holder_name: who.userId ? null : who.name,
+      holder_email: who.userId ? null : who.email,
+    })
+    .select("qr_token")
+    .single();
+  return { orderId: order.id, qrToken: ticket?.qr_token ?? null };
 }
 
 export function publicLeaders(leaders: ManagedJamLeader[]): PublicJamLeader[] {
@@ -140,36 +211,17 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
     : await admin.from("jam_leaders").select("id").eq("jam_id", jam.id).is("user_id", null).ilike("email", email!).maybeSingle();
   if (existing.data) return { ok: false, status: 409, error: "Already leading this event" };
 
+  // Someone who already got a ticket comes in on that one. A second, free one
+  // would count them twice in Who's going; whether to refund what they paid is
+  // the host's call.
+  const ownCents = ownTicketCents(await purchasedOrders(admin, jam.id), { userId, email });
+  let comp: { orderId: string; qrToken: string | null } | null = null;
+  if (ownCents === null) {
+    comp = await issueLeaderTicket(admin, jam.id, { userId, name, email });
+    if (!comp) return { ok: false, status: 500, error: "Could not create ticket" };
+  }
+
   const now = new Date().toISOString();
-  const { data: order, error: orderError } = await admin
-    .from("ticket_orders")
-    .insert({
-      jam_id: jam.id,
-      buyer_user_id: userId,
-      buyer_email: userId ? null : email,
-      buyer_name: userId ? null : name,
-      source: "leader",
-      status: "paid",
-      amount_cents: 0,
-      expires_at: now,
-      paid_at: now,
-    })
-    .select("id")
-    .single();
-  if (orderError || !order) return { ok: false, status: 500, error: orderError?.message ?? "Could not create ticket" };
-
-  const { data: ticket } = await admin
-    .from("tickets")
-    .insert({
-      order_id: order.id,
-      jam_id: jam.id,
-      holder_user_id: userId,
-      holder_name: userId ? null : name,
-      holder_email: userId ? null : email,
-    })
-    .select("qr_token")
-    .single();
-
   const { data: row, error: leaderError } = await admin
     .from("jam_leaders")
     .insert({
@@ -177,14 +229,14 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
       user_id: userId,
       name: userId ? null : name,
       email: userId ? null : email,
-      order_id: order.id,
+      order_id: comp?.orderId ?? null,
       added_by: input.addedBy,
     })
     .select(LEADER_COLUMNS)
     .single();
   if (leaderError || !row) {
     // A concurrent add of the same person lost the race to the unique index.
-    await admin.from("ticket_orders").update({ status: "cancelled", updated_at: now }).eq("id", order.id);
+    if (comp) await admin.from("ticket_orders").update({ status: "cancelled", updated_at: now }).eq("id", comp.orderId);
     return leaderError?.code === "23505"
       ? { ok: false, status: 409, error: "Already leading this event" }
       : { ok: false, status: 500, error: leaderError?.message ?? "Could not add leader" };
@@ -207,14 +259,17 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
           startsAt: jam.starts_at,
           timezone: jam.timezone,
           address: jam.full_address ?? jam.neighborhood ?? null,
-          qrToken: ticket?.qr_token ?? null,
+          qrToken: comp?.qrToken ?? null,
+          hasOwnTicket: !comp,
           setUrl: linkedSet ? `${SITE_URL}${setPath(linkedSet)}` : null,
           signUpUrl: userId ? null : `${SITE_URL}/auth?next=${jamPath(jam)}`,
         }),
       });
       if (error) throw new Error(error.message ?? "Resend send error");
       emailed = true;
-      await admin.from("ticket_orders").update({ ticket_email_sent_at: new Date().toISOString() }).eq("id", order.id);
+      if (comp) {
+        await admin.from("ticket_orders").update({ ticket_email_sent_at: new Date().toISOString() }).eq("id", comp.orderId);
+      }
     } catch (e) {
       console.error("leader email failed", row.id, e);
     }
@@ -225,7 +280,9 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
       userId,
       type: "jam_leader_added",
       title: `You're leading at ${jam.name ?? "an event"}`,
-      body: "Your ticket is on us. Can't make it? You can step down from the event page.",
+      body: comp
+        ? "Your ticket is on us. Can't make it? You can step down from the event page."
+        : "Thank you! Can't make it? You can step down from the event page.",
       link: jamPath(jam),
     });
   }
@@ -283,4 +340,36 @@ export async function removeJamLeader(
       link: jamPath(jam),
     });
   }
+}
+
+// A full refund voids an order and normally gives up the buyer's seat. When the
+// buyer is leading on the ticket they bought — typically refunded because the
+// host decided to comp them — they get a leader ticket instead and stay seated.
+// Returns whether they are still leading, so the caller keeps their RSVP.
+export async function reseatLeaderAfterRefund(
+  admin: SupabaseClient,
+  order: { jam_id: string; buyer_user_id: string | null; buyer_email: string | null },
+): Promise<boolean> {
+  const rows = await jamLeaderRows(admin, order.jam_id);
+  const leader = rows.find((r) =>
+    order.buyer_user_id
+      ? r.user_id === order.buyer_user_id
+      : !r.user_id && !!order.buyer_email && r.email?.toLowerCase() === order.buyer_email.toLowerCase()
+  );
+  if (!leader) return false;
+  if (leader.order_id) return true;
+
+  const stillHasOne = ownTicketCents(await purchasedOrders(admin, order.jam_id), {
+    userId: leader.user_id,
+    email: leader.email,
+  });
+  if (stillHasOne !== null) return true;
+
+  const comp = await issueLeaderTicket(admin, order.jam_id, {
+    userId: leader.user_id,
+    name: leader.name,
+    email: leader.email,
+  });
+  if (comp) await admin.from("jam_leaders").update({ order_id: comp.orderId }).eq("id", leader.id);
+  return true;
 }

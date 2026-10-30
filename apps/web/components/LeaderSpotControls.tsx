@@ -3,7 +3,16 @@
 import { useState } from "react";
 
 // A leader stepping down from their row in Who's going.
-export default function LeaderSpotControls({ token, onWithdrawn }: { token: string; onWithdrawn: () => void }) {
+export default function LeaderSpotControls({
+  token,
+  hasLeaderTicket,
+  onWithdrawn,
+}: {
+  token: string;
+  /** False when they came in on a ticket they bought, which stepping down leaves alone. */
+  hasLeaderTicket: boolean;
+  onWithdrawn: () => void;
+}) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +36,11 @@ export default function LeaderSpotControls({ token, onWithdrawn }: { token: stri
   if (confirming) {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-zinc-700">Step down as a leader? Your ticket will be released and we&apos;ll let the host know.</p>
+        <p className="text-sm text-zinc-700">
+          {hasLeaderTicket
+            ? "Step down as a leader? Your ticket will be released and we'll let the host know."
+            : "Step down as a leader? We'll let the host know. The ticket you bought still stands."}
+        </p>
         <div className="flex gap-2">
           <button
             onClick={() => setConfirming(false)}

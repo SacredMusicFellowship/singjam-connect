@@ -35,7 +35,7 @@ type GuestAttendee = { name: string; extra: number };
 // Music leaders on an official event, served by the web API: jam_leaders is
 // service_role-only because each row carries the leader's email and token.
 type JamLeader = { id: string; user_id: string | null; name: string; username: string | null; avatar_url: string | null };
-type MyLeaderSpot = { token: string };
+type MyLeaderSpot = { token: string; has_leader_ticket: boolean };
 
 type JamDetail = {
   id: string;
@@ -525,7 +525,10 @@ export default function JamDetailScreen() {
   }
 
   function handleLeaderWithdraw() {
-    Alert.alert('Step down as a leader?', "Your ticket will be released and we'll let the host know.", [
+    const detail = myLeader?.has_leader_ticket
+      ? "Your ticket will be released and we'll let the host know."
+      : "We'll let the host know. The ticket you bought still stands.";
+    Alert.alert('Step down as a leader?', detail, [
       {
         text: 'Step down',
         style: 'destructive',
