@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockGetUser, mockBearerGetUser, mockEmailSend, mockFrom, mockGetUserById, mockCanManage, mockNotify, mockJamUpdate } = vi.hoisted(() => ({
+const { mockGetUser, mockBearerGetUser, mockEmailSend, mockFrom, mockGetUserById, mockCanEdit, mockNotify, mockJamUpdate, mockJamDelete } = vi.hoisted(() => ({
   mockBearerGetUser: vi.fn(),
+  mockJamDelete: vi.fn(),
   mockJamUpdate: vi.fn(),
-  mockCanManage: vi.fn(),
+  mockCanEdit: vi.fn(),
   mockGetUser: vi.fn(),
   mockEmailSend: vi.fn().mockResolvedValue({ id: "email-id" }),
   mockFrom: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock("@/lib/supabase/bearer", () => ({
 }));
 
 vi.mock("@/lib/resend", () => ({
-  resend: { emails: { send: mockEmailSend } },
+  resend: { emails: { send: mockEmailSend }, batch: { send: mockEmailSend } },
   FROM_ADDRESS: "SingJam <hello@singjam.org>",
 }));
 
@@ -31,10 +32,10 @@ vi.mock("@supabase/supabase-js", () => ({
   })),
 }));
 
-vi.mock("@/lib/jamAuthz", () => ({ canManageJam: mockCanManage }));
+vi.mock("@/lib/jamAuthz", () => ({ canEditJamById: mockCanEdit }));
 vi.mock("@/lib/notifications", () => ({ createNotification: mockNotify }));
 
-import { PUT } from "./route";
+import { PUT, DELETE } from "./route";
 
 const storedJam = {
   host_user_id: "host-id",
@@ -47,10 +48,11 @@ const storedJam = {
   visibility: "official",
 };
 
-function chain(result: { data: unknown; error?: unknown }, onUpdate?: (row: unknown) => void) {
+function chain(result: { data: unknown; error?: unknown }, onUpdate?: (row: unknown) => void, onDelete?: () => void) {
   const resolved = { error: null, ...result };
   const c: any = {
-    select: () => c, eq: () => c, in: () => c, delete: () => c, insert: () => c,
+    select: () => c, eq: () => c, in: () => c, insert: () => c,
+    delete: () => { onDelete?.(); return c; },
     update: (row: unknown) => { onUpdate?.(row); return c; },
     maybeSingle: () => Promise.resolve(resolved),
     then: (res: any, rej: any) => Promise.resolve(resolved).then(res, rej),
@@ -74,11 +76,11 @@ function put(overrides: Record<string, unknown>, headers: Record<string, string>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockCanManage.mockResolvedValue(true);
+  mockCanEdit.mockResolvedValue(true);
   mockGetUser.mockResolvedValue({ data: { user: { id: "host-id" } } });
   mockGetUserById.mockResolvedValue({ data: { user: { email: "alice@example.com" } } });
   mockFrom.mockImplementation((table: string) => {
-    if (table === "jams") return chain({ data: storedJam }, mockJamUpdate);
+    if (table === "jams") return chain({ data: storedJam }, mockJamUpdate, mockJamDelete);
     if (table === "jam_rsvps") return chain({ data: [{ user_id: "attendee-1" }] });
     if (table === "profiles") return chain({ data: [{ id: "attendee-1", display_name: "Alice" }] });
     return chain({ data: [] });
@@ -165,5 +167,76 @@ describe("PUT /api/jam/[id]", () => {
     for (const [row] of mockJamUpdate.mock.calls) {
       expect(row).toEqual(expect.objectContaining({ timezone: "America/Los_Angeles" }));
     }
+  });
+});
+
+describe("edit rights", () => {
+  it("refuses a PUT from someone who cannot edit the jam, such as a co-host", async () => {
+    mockCanEdit.mockResolvedValue(false);
+    const res = await put({});
+    expect(res.status).toBe(403);
+    expect(mockJamUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a DELETE from someone who cannot edit the jam", async () => {
+    mockCanEdit.mockResolvedValue(false);
+    const res = await DELETE(new Request("http://localhost/api/jam/jam-1", { method: "DELETE" }), { params });
+    expect(res.status).toBe(403);
+    expect(mockJamDelete).not.toHaveBeenCalled();
+    expect(mockEmailSend).not.toHaveBeenCalled();
+  });
+
+  it("deletes through the admin client so an official host who did not create the event can cancel it", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "official-host" } } });
+    const res = await DELETE(new Request("http://localhost/api/jam/jam-1", { method: "DELETE" }), { params });
+    expect(res.status).toBe(200);
+    expect(mockJamDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not tell attendees an event was cancelled when the delete fails", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "jams") {
+        const c = chain({ data: storedJam });
+        c.delete = () => chain({ data: null, error: { message: "boom" } });
+        return c;
+      }
+      return chain({ data: [] });
+    });
+    const res = await DELETE(new Request("http://localhost/api/jam/jam-1", { method: "DELETE" }), { params });
+    expect(res.status).toBe(500);
+    expect(mockNotify).not.toHaveBeenCalled();
+    expect(mockEmailSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("publishing an official event", () => {
+  const community = { ...storedJam, visibility: "community" };
+
+  function withProfile(profile: unknown) {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "jams") return chain({ data: community }, mockJamUpdate);
+      if (table === "profiles") return chain({ data: profile });
+      return chain({ data: [] });
+    });
+  }
+
+  it("refuses a member turning their own jam official, which the admin client would otherwise let past the trigger", async () => {
+    withProfile({ role: "member", can_host_official: false });
+    const res = await put({ visibility: "official" });
+    expect(res.status).toBe(403);
+    expect(mockJamUpdate).not.toHaveBeenCalled();
+  });
+
+  it("lets an official host make their jam official", async () => {
+    withProfile({ role: "member", can_host_official: true });
+    const res = await put({ visibility: "official" });
+    expect(res.status).toBe(200);
+    expect(mockJamUpdate).toHaveBeenCalled();
+  });
+
+  it("lets an admin make a jam official", async () => {
+    withProfile({ role: "admin", can_host_official: false });
+    const res = await put({ visibility: "official" });
+    expect(res.status).toBe(200);
   });
 });

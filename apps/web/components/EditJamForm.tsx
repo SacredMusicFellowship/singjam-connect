@@ -9,7 +9,7 @@ import JamCard from "./JamCard";
 import FocalPointPicker from "./FocalPointPicker";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
-import { isoToZonedInput, zonedInputToIso } from "@singjam/core";
+import { JAM_IMAGE_TYPE_ERROR, JAM_IMAGE_TYPES, isJamImageType, isoToZonedInput, zonedInputToIso } from "@singjam/core";
 
 type LookupItem = { id: string; name: string };
 
@@ -83,6 +83,7 @@ export default function EditJamForm({
   // Image state — start with existing image
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(jam.image_url);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [focalPoint, setFocalPoint] = useState(jam.image_focal_point ?? "50% 50%");
   const [removeImage, setRemoveImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +112,12 @@ export default function EditJamForm({
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
+    if (file && !isJamImageType(file.type, file.name)) {
+      setImageError(JAM_IMAGE_TYPE_ERROR);
+      e.target.value = "";
+      return;
+    }
+    setImageError(null);
     setImageFile(file);
     setImagePreview(file ? URL.createObjectURL(file) : null);
     setFocalPoint("50% 50%");
@@ -389,7 +396,8 @@ export default function EditJamForm({
               Click to upload a cover image
             </button>
           )}
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+          <input ref={fileInputRef} type="file" accept={JAM_IMAGE_TYPES.join(",")} className="hidden" onChange={handleImageChange} />
+          {imageError && <p className="mt-1 text-sm text-red-600">{imageError}</p>}
         </div>
       </div>
 

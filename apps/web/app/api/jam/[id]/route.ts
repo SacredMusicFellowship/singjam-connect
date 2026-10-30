@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { canManageJam } from "@/lib/jamAuthz";
+import { canEditJamById } from "@/lib/jamAuthz";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { createNotification } from "@/lib/notifications";
@@ -32,9 +32,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     .maybeSingle();
 
   if (!currentJam) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  // Official events belong to the org, so anyone who can host one can run any
-  // of them — not only whoever created it. See lib/jamAuthz.ts.
-  if (!(await canManageJam(admin, id, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // The host, or for an official event anyone who can host one. Co-hosts help
+  // run a jam but cannot change or cancel it. See lib/jamAuthz.ts.
+  if (!(await canEditJamById(admin, id, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const {
@@ -48,6 +48,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   if (devRefusesVisibility(currentJam.visibility, visibility)) {
     return NextResponse.json({ error: DEV_PRIVATE_JAMS_MESSAGE }, { status: 403 });
+  }
+
+  // The admin client skips the trigger that guards publishing official events
+  // (migration 156 lets service_role through), so apply the same rule here.
+  if (visibility === "official" && currentJam.visibility !== "official") {
+    const { data: profile } = await admin.from("profiles").select("role, can_host_official").eq("id", user.id).maybeSingle();
+    if ((profile as any)?.role !== "admin" && !(profile as any)?.can_host_official) {
+      return NextResponse.json({ error: "Only official hosts can make an event official" }, { status: 403 });
+    }
   }
 
   const { error: updateError } = await admin.from("jams").update({
@@ -140,16 +149,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  let supabase = await supabaseServer();
+  const supabase = await supabaseServer();
   let user = (await supabase.auth.getUser()).data.user ?? null;
   if (!user) {
     // Native app authenticates with a bearer token instead of cookies
     const bearer = req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (bearer) {
-      const bearerClient = supabaseFromBearer(bearer);
-      user = (await bearerClient.auth.getUser()).data.user ?? null;
-      if (user) supabase = bearerClient as typeof supabase;
-    }
+    if (bearer) user = (await supabaseFromBearer(bearer).auth.getUser()).data.user ?? null;
   }
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -162,9 +167,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     .maybeSingle();
 
   if (!jam) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  // Official events belong to the org, so anyone who can host one can run any
-  // of them — not only whoever created it. See lib/jamAuthz.ts.
-  if (!(await canManageJam(admin, id, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // The host, or for an official event anyone who can host one. Co-hosts help
+  // run a jam but cannot change or cancel it. See lib/jamAuthz.ts.
+  if (!(await canEditJamById(admin, id, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Fetch all attendees and waitlisted users before deleting
   const { data: rsvps } = await admin
@@ -175,7 +180,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const attendeeIds = (rsvps ?? []).map((r: any) => r.user_id).filter((uid: string) => uid !== user.id);
 
-  await supabase.from("jams").delete().eq("id", id);
+  // Through the admin client: RLS only lets the creator delete, so an official
+  // host's cancel would otherwise remove nothing yet still email everyone.
+  const { error: deleteError } = await admin.from("jams").delete().eq("id", id);
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
 
   // Notify attendees + host in parallel — fire and forget errors
   const allNotifyIds = [...attendeeIds, user.id];

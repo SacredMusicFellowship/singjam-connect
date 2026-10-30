@@ -98,6 +98,8 @@ export default function TicketPurchasePanel({
   timezone?: string | null;
 }) {
   const [types, setTypes] = useState<TicketType[] | null>(null);
+  // What the whole event has left under its total limit; null when it has none.
+  const [eventRemaining, setEventRemaining] = useState<number | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +127,9 @@ export default function TicketPurchasePanel({
     fetch(`/api/jam/${jamId}/tickets/types`)
       .then((r) => r.json())
       .then((j) => {
-        if (!cancelled) setTypes(j.ticket_types ?? []);
+        if (cancelled) return;
+        setTypes(j.ticket_types ?? []);
+        setEventRemaining(j.ticket_limit?.remaining ?? null);
       })
       .catch(() => {
         if (!cancelled) setTypes([]);
@@ -180,7 +184,10 @@ export default function TicketPurchasePanel({
       // Stock moved under us, so refresh what's actually left.
       fetch(`/api/jam/${jamId}/tickets/types`)
         .then((r) => r.json())
-        .then((j) => setTypes(j.ticket_types ?? []));
+        .then((j) => {
+          setTypes(j.ticket_types ?? []);
+          setEventRemaining(j.ticket_limit?.remaining ?? null);
+        });
       return;
     }
     // Local dev only: a preview of the next step, with no order behind it.
@@ -255,7 +262,11 @@ export default function TicketPurchasePanel({
       <h3 className="text-sm font-semibold tracking-wide text-zinc-700">Tickets</h3>
 
       {types.map((t) => {
-        const max = Math.min(MAX_PER_TIER, t.remaining ?? MAX_PER_TIER);
+        // The event's total is shared across tiers, so what this tier can add
+        // is whatever the other tiers' selections haven't already claimed.
+        const sharedLeft =
+          eventRemaining === null ? Infinity : eventRemaining - (count - (qty[t.id] ?? 0));
+        const max = Math.min(MAX_PER_TIER, t.remaining ?? MAX_PER_TIER, sharedLeft);
         const note = availability(t, timezone);
         return (
           <div

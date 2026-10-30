@@ -42,6 +42,9 @@ function draftFromTier(t: Tier, zone: string): TierDraft {
   };
 }
 
+/** The event-wide cap across every tier (jams.ticket_limit). */
+type TicketLimit = { quantity: number; sold: number; held: number; remaining: number };
+
 type Guest = {
   ticket_id: string;
   code: string;
@@ -263,6 +266,8 @@ export default function TicketTierManager({
   const zone = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const [tiers, setTiers] = useState<Tier[] | null>(null);
+  const [ticketLimit, setTicketLimit] = useState<TicketLimit | null>(null);
+  const [limitDraft, setLimitDraft] = useState("");
   const [guests, setGuests] = useState<Guest[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -286,6 +291,8 @@ export default function TicketTierManager({
       fetch(`/api/jam/${jamId}/tickets/promos`).then((r) => r.json()),
     ]);
     setTiers(tRes.ticket_types ?? []);
+    setTicketLimit(tRes.ticket_limit ?? null);
+    setLimitDraft(tRes.ticket_limit ? String(tRes.ticket_limit.quantity) : "");
     setGuests(oRes.guests ?? []);
     setSummary(oRes.summary ?? null);
     setPromos(pRes.promo_codes ?? []);
@@ -295,7 +302,7 @@ export default function TicketTierManager({
     load();
   }, [load]);
 
-  async function send(method: "POST" | "PATCH" | "DELETE", body?: unknown, qs = "") {
+  async function send(method: "POST" | "PATCH" | "PUT" | "DELETE", body?: unknown, qs = "") {
     setError(null);
     setBusy(true);
     const res = await fetch(`/api/jam/${jamId}/tickets/types${qs}`, {
@@ -348,6 +355,11 @@ export default function TicketTierManager({
     if (!editingId) return;
     const ok = await send("PATCH", { id: editingId, ...tierFields(editDraft) });
     if (ok) setEditingId(null);
+  }
+
+  async function saveLimit(e: React.FormEvent) {
+    e.preventDefault();
+    await send("PUT", { ticket_limit: limitDraft.trim() === "" ? null : Number(limitDraft) });
   }
 
   async function addPromo(e: React.FormEvent) {
@@ -488,6 +500,36 @@ export default function TicketTierManager({
           timezone, not yours. Leave one blank for no limit; an end time runs through the end of
           that minute.
         </p>
+
+        <form onSubmit={saveLimit} className="space-y-2 rounded-xl border border-zinc-200 p-3">
+          <label htmlFor="ticket-limit" className="block text-xs font-medium text-zinc-600">
+            Total tickets for the event
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="ticket-limit"
+              value={limitDraft}
+              onChange={(e) => setLimitDraft(e.target.value)}
+              placeholder="Blank = no total limit"
+              inputMode="numeric"
+              className={`${INPUT_CLASS} min-w-0 flex-1`}
+            />
+            <button
+              type="submit"
+              disabled={busy || limitDraft.trim() === (ticketLimit ? String(ticketLimit.quantity) : "")}
+              className="shrink-0 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+            >
+              Save
+            </button>
+          </div>
+          <p className="text-xs text-zinc-500">
+            {ticketLimit
+              ? `${ticketLimit.sold} sold${ticketLimit.held > 0 ? ` · ${ticketLimit.held} held` : ""} of ${
+                  ticketLimit.quantity
+                } · ${ticketLimit.remaining === 0 ? "sold out" : `${ticketLimit.remaining} left`}`
+              : "Shared by every tier. A tier's own quantity still applies inside it."}
+          </p>
+        </form>
 
         {tiers.length === 0 && (
           <p className="text-sm text-zinc-500">

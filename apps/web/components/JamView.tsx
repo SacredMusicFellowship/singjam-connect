@@ -33,6 +33,8 @@ export type JamViewData = {
   rsvpStatus: "attending" | "waitlist" | "cancelled" | null;
   waitlistPosition: number | null;
   attendingCount: number;
+  /** Who counts against capacity: the attending RSVPs plus the host's own seat. */
+  seatsTaken: number;
   /** Ticket buyers without an account; only computed for those who can manage. */
   guestBuyerCount: number;
   pendingInvite: boolean;
@@ -43,6 +45,8 @@ export type JamViewData = {
   isCoHost: boolean;
   hasFullAccess: boolean;
   canManage: boolean;
+  /** Edit, copy and cancel — narrower than canManage, which co-hosts also get. */
+  canEdit: boolean;
   showRsvp: boolean;
   canInvite: boolean;
   invitesEnabled: boolean;
@@ -65,6 +69,7 @@ export default function JamView({
     userId,
     waitlistPosition,
     attendingCount,
+    seatsTaken,
     guestBuyerCount,
     pendingInvite,
     isOfficial,
@@ -72,6 +77,7 @@ export default function JamView({
     isHost,
     isCoHost,
     canManage,
+    canEdit,
     showRsvp,
     canInvite,
     invitesEnabled,
@@ -137,7 +143,7 @@ export default function JamView({
               jamId={jamId}
               initialStatus={rsvpStatus}
               initialWaitlistPosition={waitlistPosition}
-              attendingCount={attendingCount}
+              attendingCount={seatsTaken}
               capacity={jam.capacity}
               onStatusChange={(newStatus) => {
                 setRsvpStatus(newStatus);
@@ -182,7 +188,7 @@ export default function JamView({
         />
       )}
       {canManage && <JamInviteList jamId={jamId} invites={inviteList} />}
-      {canManage && <JamHostActions jamId={jamId} isHost={isHost} isOfficial={isOfficial} attendingCount={attendingCount + guestBuyerCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
+      {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={attendingCount + guestBuyerCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
     </>
   );
 

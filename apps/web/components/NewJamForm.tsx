@@ -9,7 +9,7 @@ import JamCard from "./JamCard";
 import FocalPointPicker from "./FocalPointPicker";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
-import { zonedInputToIso } from "@singjam/core";
+import { JAM_IMAGE_TYPE_ERROR, JAM_IMAGE_TYPES, isJamImageType, zonedInputToIso } from "@singjam/core";
 import { visibilityForNewJam } from "@/lib/devSafety";
 
 type LookupItem = { id: string; name: string };
@@ -83,6 +83,7 @@ export default function NewJamForm({
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl ?? null);
   const [copiedImageUrl, setCopiedImageUrl] = useState<string | null>(initialData?.imageUrl ?? null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [focalPoint, setFocalPoint] = useState(initialData?.imageFocalPoint ?? "50% 50%");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,6 +111,12 @@ export default function NewJamForm({
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
+    if (file && !isJamImageType(file.type, file.name)) {
+      setImageError(JAM_IMAGE_TYPE_ERROR);
+      e.target.value = "";
+      return;
+    }
+    setImageError(null);
     setImageFile(file);
     setImagePreview(file ? URL.createObjectURL(file) : null);
     setCopiedImageUrl(null);
@@ -450,7 +457,8 @@ export default function NewJamForm({
               Click to upload a cover image
             </button>
           )}
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+          <input ref={fileInputRef} type="file" accept={JAM_IMAGE_TYPES.join(",")} className="hidden" onChange={handleImageChange} />
+          {imageError && <p className="mt-1 text-sm text-red-600">{imageError}</p>}
         </div>
       </div>
 

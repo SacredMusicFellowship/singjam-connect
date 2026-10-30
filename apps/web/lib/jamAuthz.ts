@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { canEditJam } from "@singjam/core";
 import { isJamCohost } from "@/lib/jamCohosts";
 
 // Who may run a jam.
@@ -38,4 +39,20 @@ export async function canManageJam(
   }
 
   return false;
+}
+
+// Who may edit or cancel a jam — narrower than canManageJam, because co-hosts
+// share the running of a jam without being able to change or cancel it.
+// The rule itself lives in @singjam/core so native shows the same controls.
+export async function canEditJamById(
+  admin: SupabaseClient,
+  jamId: string,
+  userId: string,
+): Promise<boolean> {
+  const [{ data: jam }, { data: profile }] = await Promise.all([
+    admin.from("jams").select("host_user_id, visibility").eq("id", jamId).maybeSingle(),
+    admin.from("profiles").select("can_host_official").eq("id", userId).maybeSingle(),
+  ]);
+  if (!jam) return false;
+  return canEditJam(jam, { id: userId, can_host_official: (profile as any)?.can_host_official });
 }

@@ -3,10 +3,13 @@ import { cache } from "react";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { claimJamInvite } from "@/lib/claimJamInvite";
-import { canManageJam } from "@/lib/jamAuthz";
+import { canManageJam, canEditJamById } from "@/lib/jamAuthz";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
 import { formatJamDate } from "@/lib/formatJamTime";
+import { resolveJamId } from "@/lib/jamRef";
 import JamView, { type InviteEntry } from "@/components/JamView";
+import ShortJamUrl from "@/components/ShortJamUrl";
+import { jamSeatsTaken } from "@singjam/core";
 import { type JamCardData } from "@/components/JamCard";
 
 // Private jams are unlisted, not access-controlled (migration 160): holding
@@ -16,7 +19,7 @@ const getJam = cache(async (id: string) => {
   const admin = supabaseAdmin();
   const { data } = await admin
     .from("jams")
-    .select("id, name, visibility, starts_at, ends_at, timezone, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, capacity, host_user_id, guests_can_invite, profiles(display_name, last_name, username)")
+    .select("id, short_code, name, visibility, starts_at, ends_at, timezone, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, capacity, host_user_id, guests_can_invite, profiles(display_name, last_name, username)")
     .eq("id", id)
     .maybeSingle();
   return data as any;
@@ -29,8 +32,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  const jam = await getJam(id);
+  const id = await resolveJamId((await params).id);
+  const jam = id ? await getJam(id) : null;
   if (!jam) return { title: "Jam" };
   const name = jam.name ?? "Jam";
   // Official events are the org's, so a shared link credits SingJam rather
@@ -47,7 +50,8 @@ export async function generateMetadata({
   return {
     title: name,
     description,
-    openGraph: { title: name, description },
+    alternates: { canonical: `/jam/${jam.short_code}` },
+    openGraph: { title: name, description, url: `/jam/${jam.short_code}` },
   };
 }
 
@@ -58,8 +62,9 @@ export default async function JamPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }) {
-  const { id } = await params;
+  const id = await resolveJamId((await params).id);
   const { invite } = await searchParams;
+  if (!id) return <p className="text-sm text-zinc-500">Jam not found.</p>;
 
   const supabase = await getServerSupabase();
   const admin = supabaseAdmin();
@@ -71,11 +76,10 @@ export default async function JamPage({
 
   // Jam-scoped reads go through the admin client for the same reason getJam
   // does: the link is the credential. The per-user reads below stay RLS-scoped.
-  const [jam, genresRes, themesRes, countRes, flagRes, tierRes] = await Promise.all([
+  const [jam, genresRes, themesRes, flagRes, tierRes] = await Promise.all([
     getJam(id),
     admin.from("jam_genres").select("genres(name)").eq("jam_id", id),
     admin.from("jam_themes").select("themes(name)").eq("jam_id", id),
-    admin.from("jam_rsvps").select("id", { count: "exact", head: true }).eq("jam_id", id).eq("status", "attending"),
     supabase.from("feature_flags").select("enabled").eq("key", "jam_invites").maybeSingle(),
     // Only whether tiers exist, not their availability — the purchase panel
     // reads that itself. The layout needs the answer on the server: the panel
@@ -89,10 +93,17 @@ export default async function JamPage({
   const userId = user?.id ?? null;
   const genres = ((genresRes.data ?? []) as any[]).map((g: any) => g.genres?.name).filter(Boolean) as string[];
   const themes = ((themesRes.data ?? []) as any[]).map((t: any) => t.themes?.name).filter(Boolean) as string[];
-  const attendingCount = countRes.count ?? 0;
   const invitesEnabled = flagRes.data?.enabled ?? true;
 
-  const [rsvpRes, inviteRes, cohostRes] = await Promise.all([
+  // Excludes the host, whose seat jamSeatsTaken adds back exactly once — a
+  // host with a stray RSVP row of their own must not be counted twice.
+  const [countRes, rsvpRes, inviteRes, cohostRes] = await Promise.all([
+    admin
+      .from("jam_rsvps")
+      .select("id", { count: "exact", head: true })
+      .eq("jam_id", id)
+      .eq("status", "attending")
+      .neq("user_id", jam.host_user_id),
     userId
       ? supabase.from("jam_rsvps").select("status, waitlist_position").eq("jam_id", id).eq("user_id", userId).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -103,6 +114,8 @@ export default async function JamPage({
       ? supabase.from("jam_cohosts").select("user_id").eq("jam_id", id).eq("user_id", userId).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
+
+  const attendingCount = countRes.count ?? 0;
 
   const hostLabel = [jam.profiles?.display_name, jam.profiles?.last_name].filter(Boolean).join(" ") || jam.profiles?.username || null;
   const hostUsername = jam.profiles?.username ?? null;
@@ -117,7 +130,9 @@ export default async function JamPage({
   // Distinct from isHost: someone who can host official events may run any of
   // them without being this one's host. isHost stays literal — it drives the
   // co-host controls and whether the RSVP button is offered.
-  const canManage = userId ? await canManageJam(supabaseAdmin(), id, userId) : false;
+  const [canManage, canEdit] = userId
+    ? await Promise.all([canManageJam(supabaseAdmin(), id, userId), canEditJamById(supabaseAdmin(), id, userId)])
+    : [false, false];
   const hasFullAccess = isOfficial || isAttending || canManage;
   const showRsvp = !isOfficial && !!userId && !pendingInvite && !isHost;
   const canInvite = !!userId && !isOfficial && (canManage || (isAttending && jam.guests_can_invite));
@@ -186,6 +201,8 @@ export default async function JamPage({
   // refreshes the page rather than reporting back, so without the key the view
   // kept its pre-accept status and offered the new attendee an RSVP button.
   return (
+    <>
+    <ShortJamUrl jamId={id} shortCode={jam.short_code} />
     <JamView
       key={rsvpStatus ?? "none"}
       jamId={id}
@@ -196,6 +213,7 @@ export default async function JamPage({
         rsvpStatus,
         waitlistPosition,
         attendingCount,
+        seatsTaken: jamSeatsTaken(jam, attendingCount),
         guestBuyerCount,
         pendingInvite,
         isOfficial,
@@ -204,6 +222,7 @@ export default async function JamPage({
         isCoHost,
         hasFullAccess,
         canManage,
+        canEdit,
         showRsvp,
         canInvite,
         invitesEnabled,
@@ -211,5 +230,6 @@ export default async function JamPage({
         alreadyInvitedIds,
       }}
     />
+    </>
   );
 }

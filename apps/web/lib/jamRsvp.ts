@@ -3,15 +3,17 @@ import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { jamRsvpConfirmedHtml } from "@/emails/jam-rsvp-confirmed";
 import { createNotification } from "@/lib/notifications";
 import { joinJamSetList } from "@/lib/jamAttendance";
+import { jamIsFull } from "@singjam/core";
 
 export const RSVP_JAM_COLUMNS =
-  "id, name, capacity, host_user_id, starts_at, ends_at, timezone, full_address, neighborhood";
+  "id, name, capacity, host_user_id, visibility, starts_at, ends_at, timezone, full_address, neighborhood";
 
 export type RsvpJam = {
   id: string;
   name: string | null;
   capacity: number | null;
   host_user_id: string | null;
+  visibility: string | null;
   starts_at: string;
   ends_at: string | null;
   timezone: string | null;
@@ -42,12 +44,14 @@ export async function rsvpToJam(
     return { status: existing.status, waitlistPosition: existing.waitlist_position ?? null };
   }
 
-  const { count: attendingCount } = await admin
+  let attendingQuery = admin
     .from("jam_rsvps")
     .select("id", { count: "exact", head: true })
     .eq("jam_id", jam.id)
     .eq("status", "attending");
-  const isFull = jam.capacity !== null && (attendingCount ?? 0) >= jam.capacity;
+  if (jam.host_user_id) attendingQuery = attendingQuery.neq("user_id", jam.host_user_id);
+  const { count: attendingCount } = await attendingQuery;
+  const isFull = jamIsFull(jam, attendingCount ?? 0);
 
   let waitlistPosition: number | null = null;
   if (isFull) {

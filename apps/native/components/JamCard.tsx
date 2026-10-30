@@ -59,9 +59,11 @@ function RsvpBadge({ status, waitlistPosition }: { status: string; waitlistPosit
 // Mirrors web's JamListCard (apps/web/components/JamsContent.tsx): poster image
 // or date block on the left, badge line, name + RSVP/Invited badge, date·time,
 // neighborhood, tags, hosted-by, and the ticket-state chip for official events.
-export default function JamCard({ jam, myId, onPress, onManage }: {
+export default function JamCard({ jam, myId, canEdit, onPress, onManage }: {
   jam: JamItem;
   myId: string | null;
+  /** Shows the ⋯ menu — see canEditJam in @singjam/core. */
+  canEdit?: boolean;
   onPress: () => void;
   onManage?: (event: GestureResponderEvent) => void;
 }) {
@@ -188,7 +190,7 @@ export default function JamCard({ jam, myId, onPress, onManage }: {
         ) : null}
       </View>
     </TouchableOpacity>
-    {isHosting && onManage ? (
+    {canEdit && onManage ? (
       <TouchableOpacity
         onPress={onManage}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

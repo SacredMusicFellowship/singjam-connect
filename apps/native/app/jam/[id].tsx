@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { dropUsCountry, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl } from '@singjam/core';
+import { canEditJam, dropUsCountry, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -321,6 +321,7 @@ export default function JamDetailScreen() {
   // Kept so an optimistic RSVP can put you in the attendee list straight away
   // instead of waiting for a reload to learn your own name and avatar.
   const [me, setMe] = useState<Omit<Attendee, 'status'> | null>(null);
+  const [canHostOfficial, setCanHostOfficial] = useState(false);
   const [jamSets, setJamSets] = useState<JamSet[]>([]);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -365,7 +366,7 @@ export default function JamDetailScreen() {
         .eq('jam_id', id)
         .limit(10),
       user
-        ? supabase.from('profiles').select('display_name, username, avatar_url').eq('id', user.id).single()
+        ? supabase.from('profiles').select('display_name, username, avatar_url, can_host_official').eq('id', user.id).single()
         : Promise.resolve({ data: null }),
     ]);
 
@@ -430,6 +431,7 @@ export default function JamDetailScreen() {
         username: p?.username ?? null,
         avatar_url: p?.avatar_url ?? null,
       });
+      setCanHostOfficial(p?.can_host_official === true);
     }
     setMyInviteStatus(inviteResult.data?.status ?? null);
     setJamSets((setsResult.data ?? []).map((s: any) => ({ id: s.id, name: s.name })));
@@ -446,7 +448,8 @@ export default function JamDetailScreen() {
   // a cancel can promote someone off the waitlist and only the server knows who.
   function predictedRsvpStatus(): 'attending' | 'waitlist' {
     if (!jam) return 'attending';
-    return jam.capacity !== null && attendees.length >= jam.capacity ? 'waitlist' : 'attending';
+    const capacityJam = { capacity: jam.capacity, host_user_id: jam.host_id, visibility: jam.visibility };
+    return jamIsFull(capacityJam, attendees.filter(a => a.user_id !== jam.host_id).length) ? 'waitlist' : 'attending';
   }
 
   async function handleRsvp() {
@@ -567,7 +570,16 @@ export default function JamDetailScreen() {
   }
 
   const isHosting = jam.host_id === myUserId;
-  const isFull = jam.capacity !== null && attendees.length >= jam.capacity;
+  const canEdit = !!myUserId && canEditJam({ host_user_id: jam.host_id, visibility: jam.visibility }, { id: myUserId, can_host_official: canHostOfficial });
+  // The host holds a seat but has no RSVP row; on web's list they are the
+  // first person going, and the capacity count includes them the same way.
+  const capacityJam = { capacity: jam.capacity, host_user_id: jam.host_id, visibility: jam.visibility };
+  const othersGoing = attendees.filter(a => a.user_id !== jam.host_id);
+  const seatsTaken = jamSeatsTaken(capacityJam, othersGoing.length);
+  const isFull = jamIsFull(capacityJam, othersGoing.length);
+  const going: Attendee[] = jam.host_id && jam.visibility !== 'official'
+    ? [{ user_id: jam.host_id, status: 'attending', display_name: jam.host_display_name, username: jam.host_username, avatar_url: jam.host_avatar }, ...othersGoing]
+    : othersGoing;
   const timeStr = formatJamTime(jam.starts_at, jam.timezone);
   const isPast = jam.starts_at ? new Date(jam.starts_at) < new Date() : false;
   const hasFullAccess = isHosting || myRsvpStatus === 'attending' || myInviteStatus === 'accepted' || jam.visibility === 'official' || jam.visibility === 'private';
@@ -578,7 +590,7 @@ export default function JamDetailScreen() {
   // Only for attendees who have a row: inflating the total from someone nobody
   // can see is how a headcount stops being explainable. Mirrors web's
   // JamAttendeeList.
-  const memberHeadcount = attendees.reduce((n, a) => n + (memberExtras[a.user_id] ?? 0), 0);
+  const memberHeadcount = going.reduce((n, a) => n + (memberExtras[a.user_id] ?? 0), 0);
 
   return (
     <>
@@ -592,7 +604,7 @@ export default function JamDetailScreen() {
         options={{
           title: jam.name ?? 'Jam',
           headerTintColor: '#d97706',
-          headerRight: isHosting ? () => (
+          headerRight: canEdit ? () => (
             <View className="flex-row gap-4">
               <TouchableOpacity onPress={handleDuplicate} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="copy-outline" size={20} color="#71717a" />
@@ -709,13 +721,13 @@ export default function JamDetailScreen() {
           {jam.capacity !== null ? (
             <InfoRow icon="👥">
               <Text className="text-zinc-700">
-                {attendees.length}{jam.capacity ? ` of ${jam.capacity}` : ''} attending
+                {seatsTaken}{jam.capacity ? ` of ${jam.capacity}` : ''} attending
                 {isFull ? ' · Full — join waitlist' : ''}
               </Text>
             </InfoRow>
-          ) : attendees.length > 0 ? (
+          ) : othersGoing.length > 0 ? (
             <InfoRow icon="👥">
-              <Text className="text-zinc-700">{attendees.length} attending</Text>
+              <Text className="text-zinc-700">{seatsTaken} attending</Text>
             </InfoRow>
           ) : null}
         </View>
@@ -793,13 +805,13 @@ export default function JamDetailScreen() {
 
         {/* Attendees — members and guests together: no account is needed to be
             counted as coming, only to add songs to the set. */}
-        {attendees.length + guestAttendees.length > 0 ? (
+        {going.length + guestAttendees.length > 0 ? (
           <View className="px-4 mb-6">
             <Text className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
-              Attending ({attendees.length + guestHeadcount + memberHeadcount})
+              Attending ({going.length + guestHeadcount + memberHeadcount})
             </Text>
             <View className="flex-row flex-wrap">
-              {attendees.slice(0, 20).map(a => (
+              {going.slice(0, 20).map(a => (
                 <AttendeeAvatar
                   key={a.user_id}
                   attendee={a}
@@ -807,14 +819,14 @@ export default function JamDetailScreen() {
                   extra={memberExtras[a.user_id] ?? 0}
                 />
               ))}
-              {guestAttendees.slice(0, Math.max(0, 20 - attendees.length)).map((g, i) => (
+              {guestAttendees.slice(0, Math.max(0, 20 - going.length)).map((g, i) => (
                 <GuestAvatar key={`guest-${i}`} guest={g} />
               ))}
-              {attendees.length + guestAttendees.length > 20 ? (
+              {going.length + guestAttendees.length > 20 ? (
                 <View className="items-center mr-3 mb-3" style={{ width: 52 }}>
                   <View className="w-10 h-10 rounded-full bg-zinc-100 items-center justify-center mb-1">
                     <Text className="text-zinc-400 text-xs font-medium">
-                      +{attendees.length + guestAttendees.length - 20}
+                      +{going.length + guestAttendees.length - 20}
                     </Text>
                   </View>
                 </View>
