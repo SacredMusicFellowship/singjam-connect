@@ -6,9 +6,9 @@ import { claimJamInvite } from "@/lib/claimJamInvite";
 import { canManageJam, canEditJamById } from "@/lib/jamAuthz";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
 import { formatJamDate } from "@/lib/formatJamTime";
-import { resolveJamId } from "@/lib/jamRef";
+import { resolveJamId } from "@/lib/shortRef";
 import JamView, { type InviteEntry } from "@/components/JamView";
-import ShortJamUrl from "@/components/ShortJamUrl";
+import ShortUrl from "@/components/ShortUrl";
 import { jamSeatExcludedUserId, jamSeatsTaken } from "@singjam/core";
 import { type JamCardData } from "@/components/JamCard";
 
@@ -219,7 +219,7 @@ export default async function JamPage({
   // kept its pre-accept status and offered the new attendee an RSVP button.
   return (
     <>
-    <ShortJamUrl jamId={id} shortCode={jam.short_code} />
+    <ShortUrl base="jam" id={id} shortCode={jam.short_code} />
     <JamView
       key={rsvpStatus ?? "none"}
       jamId={id}

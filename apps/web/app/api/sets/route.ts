@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   if (!user) {
     const { data: publicSetsData } = await supabase
       .from("sets")
-      .select("id, name, description, owner_user_id, profiles(display_name, last_name, username)")
+      .select("id, short_code, name, description, owner_user_id, profiles(display_name, last_name, username)")
       .eq("link_sharing", "public")
       .order("created_at", { ascending: false })
       .limit(20);
@@ -28,17 +28,17 @@ export async function GET(req: Request) {
   const [ownedRes, collabRes, publicRes] = await Promise.all([
     supabase
       .from("sets")
-      .select("id, name, description, created_at, owner_user_id, jam_id, link_sharing")
+      .select("id, short_code, name, description, created_at, owner_user_id, jam_id, link_sharing")
       .eq("owner_user_id", user.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("set_collaborators")
-      .select("set_id, role, sets(id, name, description, created_at, owner_user_id, link_sharing, profiles!owner_user_id(display_name, last_name, username))")
+      .select("set_id, role, sets(id, short_code, name, description, created_at, owner_user_id, link_sharing, profiles!owner_user_id(display_name, last_name, username))")
       .eq("user_id", user.id)
       .eq("status", "accepted"),
     supabase
       .from("sets")
-      .select("id, name, description, owner_user_id, profiles(display_name, last_name, username)")
+      .select("id, short_code, name, description, owner_user_id, profiles(display_name, last_name, username)")
       .eq("link_sharing", "public")
       .neq("owner_user_id", user.id)
       .order("created_at", { ascending: false })

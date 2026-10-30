@@ -6,6 +6,8 @@ import SetDetail from "@/components/SetDetail";
 import SetRequestAccess from "@/components/SetRequestAccess";
 import SetJoinPrompt from "@/components/SetJoinPrompt";
 import SetGuestPrompt from "@/components/SetGuestPrompt";
+import ShortUrl from "@/components/ShortUrl";
+import { resolveSetId } from "@/lib/shortRef";
 
 function supabaseAdmin() {
   return createClient(
@@ -19,7 +21,7 @@ const getSet = cache(async (id: string) => {
   const supabase = await getServerSupabase();
   const { data } = await supabase
     .from("sets")
-    .select("id, name, description, owner_user_id, jam_id, link_sharing, youtube_playlist_id, youtube_playlist_fingerprint, spotify_playlist_id, spotify_playlist_fingerprint, ultimate_guitar_playlist_url, profiles(display_name, last_name, username, avatar_url)")
+    .select("id, short_code, name, description, owner_user_id, jam_id, link_sharing, youtube_playlist_id, youtube_playlist_fingerprint, spotify_playlist_id, spotify_playlist_fingerprint, ultimate_guitar_playlist_url, profiles(display_name, last_name, username, avatar_url)")
     .eq("id", id)
     .single();
   return data as any;
@@ -36,7 +38,8 @@ const getSetSongs = cache(async (id: string) => {
 });
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const id = await resolveSetId((await params).id);
+  if (!id) return { title: "Set" };
   const [set, songs] = await Promise.all([getSet(id), getSetSongs(id)]);
   if (!set) return { title: "Set" };
   const name = set.name ?? "Set";
@@ -50,7 +53,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: name,
     description,
-    openGraph: { title: name, description },
+    alternates: { canonical: `/set/${set.short_code}` },
+    openGraph: { title: name, description, url: `/set/${set.short_code}` },
   };
 }
 
@@ -61,7 +65,8 @@ export default async function SetPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }) {
-  const { id } = await params;
+  const id = await resolveSetId((await params).id);
+  if (!id) notFound();
   const { invite: inviteToken } = await searchParams;
   const supabase = await getServerSupabase();
 
@@ -208,6 +213,7 @@ export default async function SetPage({
 
   return (
     <Suspense>
+      <ShortUrl base="set" id={set.id} shortCode={set.short_code} />
       <SetDetail
         set={set}
         initialSongs={songs}

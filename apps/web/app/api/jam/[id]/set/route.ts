@@ -9,7 +9,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const { data } = await supabase
     .from("sets")
-    .select("id, name")
+    .select("id, short_code, name")
     .eq("jam_id", id)
     .maybeSingle();
 

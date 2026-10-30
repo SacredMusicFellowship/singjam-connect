@@ -15,7 +15,7 @@ export async function POST(
 
   const { data: set } = await admin
     .from("sets")
-    .select("id, name, owner_user_id")
+    .select("id, short_code, name, owner_user_id")
     .eq("id", setId)
     .maybeSingle();
 
@@ -46,7 +46,7 @@ export async function POST(
 
   const { id: inviteId, token } = inserted as any;
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://singjam.org";
-  const url = `${baseUrl}/set/${setId}?invite=${token}`;
+  const url = `${baseUrl}/set/${(set as any).short_code}?invite=${token}`;
   const message = `Join my set list! ${(set as any).name}: ${url}`;
 
   return NextResponse.json({ inviteId, url, message });

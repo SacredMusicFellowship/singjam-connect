@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 type SetCardProps = {
   set: {
     id: string;
+    short_code?: string | null;
     name: string;
     description: string | null;
     owner_user_id: string;
@@ -132,16 +133,16 @@ export default function SetCard({ set, songCount, isOwner, ownerName, ownerUsern
   );
 
   if (!isOwner && !canCopy) {
-    return <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>;
+    return <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>;
   }
 
   if (canCopy) {
-    return <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>;
+    return <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>;
   }
 
   return (
     <div className="relative">
-      <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>
+      <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>
       <div className="absolute top-2 right-2" ref={menuRef}>
         <button
           onClick={() => { setMenuOpen((o) => !o); setConfirming(false); }}

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import sizeOf from "image-size";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { resolveJamId } from "@/lib/jamRef";
+import { resolveJamId } from "@/lib/shortRef";
 import { BrandMark, getBrandOgImageOptions } from "@/lib/og-image";
 
 export const alt = "Jam on SingJam";
