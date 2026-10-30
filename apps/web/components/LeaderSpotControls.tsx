@@ -41,7 +41,7 @@ export default function LeaderSpotControls({ token, onWithdrawn }: { token: stri
             disabled={busy}
             className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
           >
-            {busy ? "Stepping down…" : "Yes, I can't make it"}
+            {busy ? "Stepping down…" : "Step down"}
           </button>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}

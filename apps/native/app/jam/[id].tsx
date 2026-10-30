@@ -525,9 +525,9 @@ export default function JamDetailScreen() {
   }
 
   function handleLeaderWithdraw() {
-    Alert.alert("Can't make it?", "Your ticket will be released and we'll let the host know.", [
+    Alert.alert('Step down as a leader?', "Your ticket will be released and we'll let the host know.", [
       {
-        text: "Yes, I can't make it",
+        text: 'Step down',
         style: 'destructive',
         onPress: async () => {
           if (await leaderAction('withdraw')) load();
