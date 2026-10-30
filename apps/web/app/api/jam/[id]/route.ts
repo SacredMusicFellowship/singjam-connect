@@ -50,6 +50,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: DEV_PRIVATE_JAMS_MESSAGE }, { status: 403 });
   }
 
+  // The admin client skips the trigger that guards publishing official events
+  // (migration 156 lets service_role through), so apply the same rule here.
+  if (visibility === "official" && currentJam.visibility !== "official") {
+    const { data: profile } = await admin.from("profiles").select("role, can_host_official").eq("id", user.id).maybeSingle();
+    if ((profile as any)?.role !== "admin" && !(profile as any)?.can_host_official) {
+      return NextResponse.json({ error: "Only official hosts can make an event official" }, { status: 403 });
+    }
+  }
+
   const { error: updateError } = await admin.from("jams").update({
     name, starts_at, ends_at, neighborhood, full_address, notes, visibility,
     guests_can_invite: visibility !== "official" ? guests_can_invite : false,

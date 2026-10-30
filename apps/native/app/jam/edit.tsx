@@ -319,12 +319,15 @@ export default function EditJamScreen() {
     let imageUrl: string | null | undefined = imageRemoved ? null : undefined;
     if (coverAsset) {
       const ext = coverAsset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-      const path = `${id}.${ext}`;
+      // A fresh name per upload, as web does: the file now goes up before the
+      // save, so overwriting the old one would change the live image even if
+      // the save were then refused.
+      const path = `${id}-${Date.now()}.${ext}`;
       const response = await fetch(coverAsset.uri);
       const blob = await response.blob();
       const { error: uploadError } = await supabase.storage
         .from('jam-images')
-        .upload(path, blob, { contentType: coverAsset.mimeType ?? 'image/jpeg', upsert: true });
+        .upload(path, blob, { contentType: coverAsset.mimeType ?? 'image/jpeg', upsert: false });
       if (uploadError) {
         setError(`Image upload failed: ${uploadError.message}`);
         setSaving(false);

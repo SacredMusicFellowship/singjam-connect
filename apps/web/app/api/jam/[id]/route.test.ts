@@ -208,3 +208,35 @@ describe("edit rights", () => {
     expect(mockEmailSend).not.toHaveBeenCalled();
   });
 });
+
+describe("publishing an official event", () => {
+  const community = { ...storedJam, visibility: "community" };
+
+  function withProfile(profile: unknown) {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "jams") return chain({ data: community }, mockJamUpdate);
+      if (table === "profiles") return chain({ data: profile });
+      return chain({ data: [] });
+    });
+  }
+
+  it("refuses a member turning their own jam official, which the admin client would otherwise let past the trigger", async () => {
+    withProfile({ role: "member", can_host_official: false });
+    const res = await put({ visibility: "official" });
+    expect(res.status).toBe(403);
+    expect(mockJamUpdate).not.toHaveBeenCalled();
+  });
+
+  it("lets an official host make their jam official", async () => {
+    withProfile({ role: "member", can_host_official: true });
+    const res = await put({ visibility: "official" });
+    expect(res.status).toBe(200);
+    expect(mockJamUpdate).toHaveBeenCalled();
+  });
+
+  it("lets an admin make a jam official", async () => {
+    withProfile({ role: "admin", can_host_official: false });
+    const res = await put({ visibility: "official" });
+    expect(res.status).toBe(200);
+  });
+});
