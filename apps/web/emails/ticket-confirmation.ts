@@ -44,7 +44,8 @@ function calendarUrls({
 }
 
 // Google, Apple (our .ics) and Outlook, for an email to someone who has a
-// ticket. Empty when the event has no start time.
+// ticket: the email's first buttons, with no heading, since each names its
+// calendar. Empty when the event has no start time.
 export function calendarBlockHtml({
   jamId,
   jamName,
@@ -63,7 +64,6 @@ export function calendarBlockHtml({
   const icsUrl = `https://singjam.org/api/jam/${jamId}/ics`;
   return `
   <div style="margin-top:24px">
-    <p style="font-size:13px;font-weight:600;color:#71717a;margin:0 0 10px">Add to calendar</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <a href="${cal.google}"
          style="display:inline-block;padding:8px 16px;border:1px solid #e4e4e7;border-radius:8px;font-size:13px;font-weight:500;color:#18181b;text-decoration:none">
