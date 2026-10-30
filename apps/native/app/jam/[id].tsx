@@ -826,6 +826,14 @@ export default function JamDetailScreen() {
                   <Text className="text-zinc-600 font-semibold">Decline</Text>
                 </TouchableOpacity>
               </View>
+            ) : myLeader ? (
+              // A leader steps down rather than cancelling an RSVP, as on web.
+              <TouchableOpacity
+                onPress={handleLeaderWithdraw}
+                className="border border-zinc-200 rounded-xl py-3 items-center"
+              >
+                <Text className="text-zinc-600 font-semibold">✓ Going · Can't make it?</Text>
+              </TouchableOpacity>
             ) : myRsvpStatus === 'attending' || myInviteStatus === 'accepted' ? (
               <TouchableOpacity
                 onPress={handleCancelRsvp}
@@ -892,15 +900,6 @@ export default function JamDetailScreen() {
                 </View>
               ) : null}
             </View>
-            {/* The leader's own controls sit with who's going, as on web. */}
-            {myLeader && !isPast ? (
-              <View className="mt-1 gap-1">
-                <Text className="text-sm text-amber-800 font-medium">You're leading at this event 🎶</Text>
-                <TouchableOpacity onPress={handleLeaderWithdraw}>
-                  <Text className="text-xs text-zinc-600 underline">Can't make it?</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
           </View>
         ) : null}
 

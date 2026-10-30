@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import JamCard, { JamMap, JamPoster, JamSplit, type JamCardData } from "@/components/JamCard";
 import JamRsvpButton from "@/components/JamRsvpButton";
 import JamInvitePanel, { type NewInviteEntry } from "@/components/JamInvitePanel";
@@ -12,6 +13,7 @@ import JamAttendeeList, { JamAttendeeSummary } from "@/components/JamAttendeeLis
 import JamSetList from "@/components/JamSetList";
 import TicketPurchasePanel from "@/components/TicketPurchasePanel";
 import JamLeaderManager from "@/components/JamLeaderManager";
+import LeaderSpotControls from "@/components/LeaderSpotControls";
 import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
 import { jamPath } from "@singjam/core";
 
@@ -128,12 +130,13 @@ export default function JamView({
   // at all, and a fragment is truthy even when it renders nothing — which would
   // leave an empty row and its gap behind on a ticketed event, where the
   // calendar button was the row's only occupant.
-  // A ticket holder or leader gets the same "You're going" as an RSVP, but no
-  // Cancel: a ticket isn't given back from here, and a leader steps down from
-  // their row in Who's going.
-  const goingOnTicket = sellsTickets && data.rsvpStatus === "attending";
+  // A ticket holder or leader gets the same "You're going" as an RSVP. A ticket
+  // isn't given back from here, so there's no Cancel; a leader gets "Can't make
+  // it?" instead, which steps them down.
+  const goingOnTicket = (sellsTickets && data.rsvpStatus === "attending") || !!myLeader;
   const hasActions = showRsvp || (!userId && !isOfficial) || goingOnTicket;
 
+  const router = useRouter();
   const [rsvpStatus, setRsvpStatus] = useState(data.rsvpStatus);
   const [hasFullAccess, setHasFullAccess] = useState(data.hasFullAccess);
   const [inviteList, setInviteList] = useState(data.inviteList);
@@ -182,6 +185,13 @@ export default function JamView({
             <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
               ✓ You&apos;re going
             </span>
+          )}
+          {myLeader && (
+            <LeaderSpotControls
+              token={myLeader.token}
+              hasLeaderTicket={myLeader.hasLeaderTicket}
+              onWithdrawn={() => router.refresh()}
+            />
           )}
           {!userId && !isOfficial && (
             <Link

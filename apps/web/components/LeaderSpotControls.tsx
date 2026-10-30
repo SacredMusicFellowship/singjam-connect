@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-// A leader stepping down from their row in Who's going.
+// A leader stepping down, beside their "You're going" on the event page.
 export default function LeaderSpotControls({
   token,
   hasLeaderTicket,
@@ -35,7 +35,7 @@ export default function LeaderSpotControls({
 
   if (confirming) {
     return (
-      <div className="space-y-2">
+      <div className="w-full space-y-2">
         <p className="text-sm text-zinc-700">
           {hasLeaderTicket
             ? "Step down as a leader? Your ticket will be released and we'll let the host know."
@@ -64,7 +64,7 @@ export default function LeaderSpotControls({
 
   return (
     <div className="space-y-1">
-      <button onClick={() => setConfirming(true)} className="text-xs text-zinc-600 underline hover:text-zinc-900">
+      <button onClick={() => setConfirming(true)} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
         Can&apos;t make it?
       </button>
       {error && <p className="text-xs text-red-600">{error}</p>}
