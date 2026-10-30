@@ -303,6 +303,35 @@ export default function JamCard({
     </div>
   );
 
+  // Below the date and place. On a ticketed page that's above the tier list,
+  // where a ticket holder's calendar and "You're going" sit.
+  const actionsRow =
+    (jam.tickets_url || showCalendar || actions) && (
+    <div className="flex flex-wrap gap-3 items-center">
+      {jam.tickets_url && (
+        <a
+          href={jam.tickets_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+        >
+          Get tickets ↗
+        </a>
+      )}
+      {jam.starts_at && !sellsTickets && (
+        <AddToCalendarButton
+          title={jam.name ?? (isOfficial ? "SingJam event" : "Community jam")}
+          startsAt={jam.starts_at}
+          endsAt={jam.ends_at}
+          location={showFullAddress ? jam.full_address : jam.neighborhood}
+          description={jam.notes}
+          jamId={jam.id ?? undefined}
+        />
+      )}
+      {actions}
+    </div>
+  );
+
   return (
     <div>
       <div className="space-y-4 sm:space-y-6">
@@ -341,6 +370,7 @@ export default function JamCard({
 
         {/* Date / time / location strip */}
         {detailStrip}
+        {ticketPanel && actionsRow}
         {ticketPanel}
 
         {/* Tags */}
@@ -354,32 +384,7 @@ export default function JamCard({
           </div>
         )}
 
-        {/* Actions */}
-        {(jam.tickets_url || showCalendar || actions) && (
-          <div className="flex flex-wrap gap-3 items-center">
-            {jam.tickets_url && (
-              <a
-                href={jam.tickets_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
-              >
-                Get tickets ↗
-              </a>
-            )}
-            {jam.starts_at && !sellsTickets && (
-              <AddToCalendarButton
-                title={jam.name ?? (isOfficial ? "SingJam event" : "Community jam")}
-                startsAt={jam.starts_at}
-                endsAt={jam.ends_at}
-                location={showFullAddress ? jam.full_address : jam.neighborhood}
-                description={jam.notes}
-                jamId={jam.id ?? undefined}
-              />
-            )}
-            {actions}
-          </div>
-        )}
+        {!ticketPanel && actionsRow}
 
         <JamDescription jam={jam} />
         {showMap && <JamMap jam={jam} />}

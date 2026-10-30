@@ -158,7 +158,6 @@ export default function JamView({
             eventPath={jamPath({ id: jamId, short_code: shortCode })}
             isSignedIn={!!userId}
             timezone={jamCardData.timezone}
-            isLeader={!!myLeader}
           />
         ) : undefined
       }
