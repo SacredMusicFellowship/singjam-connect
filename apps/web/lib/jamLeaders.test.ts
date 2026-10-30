@@ -94,7 +94,7 @@ describe("addJamLeader", () => {
   it("issues a member a comp ticket that is not a sale, seats them and emails them", async () => {
     const { admin, calls } = adminWith({
       jams: [{ data: OFFICIAL }],
-      profiles: [{ data: { display_name: "Maria", last_name: "Lopez", username: "maria" } }, { data: { display_name: "Ben" } }, { data: [] }],
+      profiles: [{ data: { display_name: "Maria", last_name: "Lopez", username: "maria" } }, { data: [] }],
       jam_leaders: [{ data: null }, { data: LEADER_ROW }],
       ticket_orders: [{ data: { id: "order-1" } }, { error: null }],
       tickets: [{ data: { qr_token: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } }],
@@ -115,6 +115,7 @@ describe("addJamLeader", () => {
     const html = mockSend.mock.calls[0][0].html as string;
     expect(html).toContain("https://singjam.org/lead/11111111-2222-3333-4444-555555555555");
     expect(html).toContain("AAAAAA");
+    expect(html).not.toContain("added you");
     // Stamped, so the receipt sweeper never sends a "$0.00 paid" email on top.
     expect(calls.ticket_orders[1].update).toHaveBeenCalledWith({ ticket_email_sent_at: expect.any(String) });
     expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ userId: "member-1", type: "jam_leader_added" }));

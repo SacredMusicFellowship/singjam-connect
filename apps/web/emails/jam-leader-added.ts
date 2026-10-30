@@ -6,8 +6,6 @@ import { ticketCode } from "./ticket-confirmation";
 // to the host, so this confirms rather than asks: it carries their ticket, and
 // the way out ("Can't make it?") is a link, not a required step.
 export function jamLeaderAddedHtml({
-  name,
-  hostName,
   jamName,
   jamUrl,
   startsAt,
@@ -18,8 +16,6 @@ export function jamLeaderAddedHtml({
   manageUrl,
   signUpUrl,
 }: {
-  name?: string | null;
-  hostName?: string | null;
   jamName: string;
   jamUrl: string;
   startsAt?: string | null;
@@ -31,17 +27,14 @@ export function jamLeaderAddedHtml({
   /** Only for a leader without an account. */
   signUpUrl?: string | null;
 }) {
-  const greeting = name ? `Hi ${name},` : "Hi,";
   const dateStr = formatJamTime(startsAt, timezone);
-  const addedBy = hostName ? `${hostName} added you` : "You've been added";
 
   return `<!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#18181b;padding:32px 16px">
   <h1 style="font-size:22px;font-weight:700;margin-bottom:8px">You're leading at ${jamName} 🎶</h1>
   <p style="font-size:15px;line-height:1.6;color:#52525b">
-    ${greeting} ${addedBy} as a music leader for <strong>${jamName}</strong>. Thank you for
-    bringing the music — your ticket is on us. Show this email at the door, or just give your name.
+    Thank you for bringing the music — your ticket is on us. Show this email at the door, or just give your name.
   </p>
 
   ${qrToken ? `

@@ -200,17 +200,12 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
   let emailed = false;
   if (email && !sideEffectsBlocked(`leader email for jam ${jam.id}`)) {
     try {
-      const [{ data: host }, linkedSet] = await Promise.all([
-        admin.from("profiles").select("display_name, last_name, username").eq("id", input.addedBy).maybeSingle(),
-        findEventSet(admin, jam.id),
-      ]);
+      const linkedSet = await findEventSet(admin, jam.id);
       const { error } = await resend.emails.send({
         from: EVENTS_FROM_ADDRESS,
         to: email,
         subject: `You're leading at ${jam.name ?? "a SingJam event"}`,
         html: jamLeaderAddedHtml({
-          name: userId ? null : name,
-          hostName: fullName(host),
           jamName: jam.name ?? "the event",
           jamUrl: eventUrl,
           startsAt: jam.starts_at,
