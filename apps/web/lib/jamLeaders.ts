@@ -183,7 +183,7 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
 
   const { data: jam } = await admin
     .from("jams")
-    .select("id, name, short_code, visibility, starts_at, timezone, full_address, neighborhood, host_user_id")
+    .select("id, name, short_code, visibility, starts_at, ends_at, timezone, full_address, neighborhood, host_user_id")
     .eq("id", input.jamId)
     .maybeSingle();
   if (!jam) return { ok: false, status: 404, error: "Event not found" };
@@ -256,9 +256,11 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
         to: email,
         subject: `You're leading at ${jam.name ?? "a SingJam event"}`,
         html: jamLeaderAddedHtml({
+          jamId: jam.id,
           jamName: jam.name ?? "the event",
           jamUrl: eventUrl,
           startsAt: jam.starts_at,
+          endsAt: jam.ends_at,
           timezone: jam.timezone,
           address: jam.full_address ?? jam.neighborhood ?? null,
           qrToken: comp?.qrToken ?? null,

@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { resolveTicketOutcome, type OutcomeSession } from "@/lib/ticketOutcome";
 import TicketConfirmationPoller from "@/components/TicketConfirmationPoller";
+import AddToCalendarButton from "@/components/AddToCalendarButton";
 import { findEventSet } from "@/lib/eventSet";
 import { inNextDev } from "@/lib/devSafety";
 import { buildCheckoutPreview, parsePreviewItems } from "@/lib/ticketCheckoutPreview";
@@ -52,7 +53,11 @@ export default async function TicketsCompletePage({
   const { data: { user } } = await supabase.auth.getUser();
 
   const admin = supabaseAdmin();
-  const { data: jam } = await admin.from("jams").select("name").eq("id", jamId).maybeSingle();
+  const { data: jam } = await admin
+    .from("jams")
+    .select("name, starts_at, ends_at, full_address, neighborhood")
+    .eq("id", jamId)
+    .maybeSingle();
 
   // The set is the reason to come back before the day, so link it directly
   // rather than making people find it on the event page. Readable by anyone,
@@ -165,6 +170,16 @@ export default async function TicketsCompletePage({
             See you at {jamName}. {ticketCount} ticket{ticketCount === 1 ? "" : "s"} ·{" "}
             {money(mine.amount_cents, mine.currency)} — check your email for your ticket confirmation.
           </p>
+          {jam?.starts_at && (
+            <AddToCalendarButton
+              title={jamName}
+              startsAt={jam.starts_at}
+              endsAt={jam.ends_at}
+              location={jam.full_address ?? jam.neighborhood}
+              description={null}
+              jamId={jamId}
+            />
+          )}
         </>
       ) : outcome.kind === "pending" ? (
         <>

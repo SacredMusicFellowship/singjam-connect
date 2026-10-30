@@ -1,14 +1,16 @@
 import { dropUsCountry, dropVenueRepeatedInTitle } from "@singjam/core";
 import { formatJamTime } from "../lib/formatJamTime";
-import { ticketCode } from "./ticket-confirmation";
+import { calendarBlockHtml, ticketCode } from "./ticket-confirmation";
 
 // Sent when a host adds someone as a music leader. The leader already said yes
 // to the host, so this confirms rather than asks: it carries their ticket, and
 // the way out is the event page's RSVP, not a required step.
 export function jamLeaderAddedHtml({
+  jamId,
   jamName,
   jamUrl,
   startsAt,
+  endsAt,
   timezone,
   address,
   qrToken,
@@ -16,9 +18,11 @@ export function jamLeaderAddedHtml({
   signUpUrl,
   hasOwnTicket = false,
 }: {
+  jamId: string;
   jamName: string;
   jamUrl: string;
   startsAt?: string | null;
+  endsAt?: string | null;
   timezone?: string | null;
   address?: string | null;
   qrToken?: string | null;
@@ -59,6 +63,8 @@ export function jamLeaderAddedHtml({
     <a href="https://maps.google.com/?q=${encodeURIComponent(address)}"
        style="font-size:15px;font-weight:500;color:#18181b;margin:0;text-decoration:underline">${dropUsCountry(dropVenueRepeatedInTitle(address, jamName))}</a>
   </div>` : ""}
+
+  ${calendarBlockHtml({ jamId, jamName, startsAt, endsAt, address })}
 
   ${signUpUrl ? `
   <div style="margin-top:24px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px">

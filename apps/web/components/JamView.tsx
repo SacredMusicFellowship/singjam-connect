@@ -118,7 +118,9 @@ export default function JamView({
   const showTicketPanel = isOfficial && hasTicketTiers;
 
   // Either route to a ticket counts: on our own tiers or off to someone else's
-  // checkout, you still don't have one yet.
+  // checkout, you still don't have one yet. Buying holds back nothing but "Add
+  // to calendar", so once you're attending — a ticket bought, or added as a
+  // leader — you get it back.
   const sellsTickets = hasTicketTiers || !!jamCardData.tickets_url;
 
   // Passed as undefined rather than an empty fragment when there is nothing to
@@ -141,7 +143,7 @@ export default function JamView({
   const card = (
     <JamCard
       jam={jamCardData}
-      sellsTickets={sellsTickets}
+      sellsTickets={sellsTickets && rsvpStatus !== "attending"}
       // Official events sell tickets instead of taking RSVPs — showRsvp is
       // false for them. The map is rendered last on the page for every jam
       // type, below.
