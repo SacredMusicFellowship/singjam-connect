@@ -11,6 +11,8 @@ import JamHostActions from "@/components/JamHostActions";
 import JamAttendeeList, { JamAttendeeSummary } from "@/components/JamAttendeeList";
 import JamSetList from "@/components/JamSetList";
 import TicketPurchasePanel from "@/components/TicketPurchasePanel";
+import JamLeaderManager from "@/components/JamLeaderManager";
+import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
 import { jamPath } from "@singjam/core";
 
 export type InviteEntry = {
@@ -57,6 +59,12 @@ export type JamViewData = {
   invitesEnabled: boolean;
   inviteList: InviteEntry[];
   alreadyInvitedIds: string[];
+  /** Music leaders listed publicly, marked in Who's going (official events only). */
+  leaders: PublicJamLeader[];
+  /** Set when the viewer is one of this event's leaders. */
+  myLeader: { userId: string; token: string; hasLeaderTicket: boolean } | null;
+  /** The full leader list with emails, for whoever can manage the event. */
+  managedLeaders: ManagedJamLeader[] | null;
 };
 
 export default function JamView({
@@ -88,6 +96,9 @@ export default function JamView({
     canInvite,
     invitesEnabled,
     alreadyInvitedIds,
+    leaders,
+    myLeader,
+    managedLeaders,
   } = data;
 
   // An official event with no on-site tiers sells through an external link, so
@@ -141,6 +152,7 @@ export default function JamView({
             eventPath={jamPath({ id: jamId, short_code: shortCode })}
             isSignedIn={!!userId}
             timezone={jamCardData.timezone}
+            isLeader={!!myLeader}
           />
         ) : undefined
       }
@@ -182,7 +194,13 @@ export default function JamView({
   // nudge on the completion page is for. See showAttendees above for why an
   // externally-ticketed event gets no list at all.
   const attendees = showAttendees ? (
-    <JamAttendeeList jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} isHost={isHost} />
+    <JamAttendeeList
+      jamId={jamId}
+      hostId={isOfficial ? null : jam.host_user_id}
+      isHost={isHost}
+      leaderIds={leaders.map((l) => l.user_id).filter((id): id is string => !!id)}
+      myLeader={myLeader}
+    />
   ) : null;
 
   const hostTools = (
@@ -197,6 +215,7 @@ export default function JamView({
         />
       )}
       {canManage && <JamInviteList jamId={jamId} invites={inviteList} />}
+      {managedLeaders && <JamLeaderManager jamId={jamId} initialLeaders={managedLeaders} />}
       {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={messageRecipientCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
     </>
   );

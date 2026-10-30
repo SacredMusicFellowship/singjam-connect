@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockAdminFrom, mockConstructEvent, mockSend, mockGetUserById, mockSyncContact } = vi.hoisted(() => ({
+const { mockAdminFrom, mockConstructEvent, mockSend, mockGetUserById, mockSyncContact, mockReseat } = vi.hoisted(() => ({
+  mockReseat: vi.fn().mockResolvedValue(false),
   mockSyncContact: vi.fn().mockResolvedValue([]),
   mockAdminFrom: vi.fn(),
   mockConstructEvent: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/emails/ticket-confirmation", () => ({
   ticketConfirmationHtml: vi.fn(() => "<html>"),
 }));
 vi.mock("@/lib/activecampaign", () => ({ syncContact: mockSyncContact }));
+vi.mock("@/lib/jamLeaders", () => ({ reseatLeaderAfterRefund: mockReseat }));
 
 import { POST } from "./route";
 
@@ -512,6 +514,19 @@ describe("POST /api/stripe/webhook", () => {
     expect(chainFor("jam_rsvps").update).toHaveBeenCalledWith(
       expect.objectContaining({ status: "cancelled" })
     );
+  });
+
+  it("keeps a leader seated when the ticket they bought is refunded", async () => {
+    mockReseat.mockResolvedValueOnce(true);
+    mockConstructEvent.mockReturnValue({
+      type: "charge.refunded",
+      data: { object: { payment_intent: "pi_1", amount: 3000, amount_refunded: 3000 } },
+    });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: ORDER_ID, jam_id: JAM_ID, buyer_user_id: BUYER_ID } }));
+
+    await POST(makeReq());
+    expect(mockReseat).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ buyer_user_id: BUYER_ID }));
+    expect(mockAdminFrom).toHaveBeenCalledTimes(1);
   });
 
   it("leaves tickets valid on a partial refund", async () => {

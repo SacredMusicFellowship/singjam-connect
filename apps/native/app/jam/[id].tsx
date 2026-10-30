@@ -32,6 +32,11 @@ async function jamApiFetch(path: string, method: 'POST' | 'DELETE', body?: objec
 
 type GuestAttendee = { name: string; extra: number };
 
+// Music leaders on an official event, served by the web API: jam_leaders is
+// service_role-only because each row carries the leader's email and token.
+type JamLeader = { id: string; user_id: string | null; name: string; username: string | null; avatar_url: string | null };
+type MyLeaderSpot = { token: string; has_leader_ticket: boolean };
+
 type JamDetail = {
   id: string;
   name: string | null;
@@ -260,7 +265,7 @@ function MaybeMapsLink({ query, children }: { query: string | null; children: Re
   );
 }
 
-function AttendeeAvatar({ attendee, isMe, extra = 0 }: { attendee: Attendee; isMe: boolean; extra?: number }) {
+function AttendeeAvatar({ attendee, isMe, extra = 0, isLeader = false }: { attendee: Attendee; isMe: boolean; extra?: number; isLeader?: boolean }) {
   const name = attendee.display_name ?? attendee.username ?? '?';
   const initial = name[0]?.toUpperCase() ?? '?';
   return (
@@ -277,6 +282,7 @@ function AttendeeAvatar({ attendee, isMe, extra = 0 }: { attendee: Attendee; isM
           ? `${attendee.username ? `@${attendee.username}` : name} +${extra}`
           : attendee.username ? `@${attendee.username}` : name}
       </Text>
+      {isLeader ? <Text className="text-amber-700 text-xs font-medium">Leader</Text> : null}
     </View>
   );
 }
@@ -324,6 +330,8 @@ export default function JamDetailScreen() {
   const [me, setMe] = useState<Omit<Attendee, 'status'> | null>(null);
   const [canHostOfficial, setCanHostOfficial] = useState(false);
   const [jamSets, setJamSets] = useState<JamSet[]>([]);
+  const [leaders, setLeaders] = useState<JamLeader[]>([]);
+  const [myLeader, setMyLeader] = useState<MyLeaderSpot | null>(null);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rsvpLoading, setRsvpLoading] = useState(false);
@@ -423,6 +431,19 @@ export default function JamDetailScreen() {
         );
       })
       .catch(() => { setGuestAttendees([]); setMemberExtras({}); });
+    if (j.visibility === 'official') {
+      const { data: { session } } = await supabase.auth.getSession();
+      fetch(`${WEB_URL}/api/jam/${id}/leaders`, {
+        headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+      })
+        .then(r => (r.ok ? r.json() : { leaders: [], me: null }))
+        .then(d => { setLeaders(d.leaders ?? []); setMyLeader(d.me ?? null); })
+        .catch(() => { setLeaders([]); setMyLeader(null); });
+    } else {
+      setLeaders([]);
+      setMyLeader(null);
+    }
+
     const myRsvp = user ? rawRsvps.find(r => r.user_id === user.id) : undefined;
     setMyRsvpStatus(myRsvp?.status ?? null);
     if (user) {
@@ -486,6 +507,37 @@ export default function JamDetailScreen() {
     if (confirmed && confirmed !== predicted) setMyRsvpStatus(confirmed);
     setRsvpLoading(false);
     load();
+  }
+
+  // Same endpoint web's "Can't make it?" uses.
+  async function leaderAction(action: 'withdraw') {
+    if (!myLeader) return false;
+    const res = await fetch(`${WEB_URL}/api/lead/${myLeader.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      Alert.alert('Error', 'Something went wrong.');
+      return false;
+    }
+    return true;
+  }
+
+  function handleLeaderWithdraw() {
+    const detail = myLeader?.has_leader_ticket
+      ? "Your ticket will be released and we'll let the host know."
+      : "We'll let the host know. The ticket you bought still stands.";
+    Alert.alert('Step down as a leader?', detail, [
+      {
+        text: 'Step down',
+        style: 'destructive',
+        onPress: async () => {
+          if (await leaderAction('withdraw')) load();
+        },
+      },
+      { text: 'Keep my spot', style: 'cancel' },
+    ]);
   }
 
   async function handleCancelRsvp() {
@@ -824,6 +876,7 @@ export default function JamDetailScreen() {
                   attendee={a}
                   isMe={a.user_id === myUserId}
                   extra={memberExtras[a.user_id] ?? 0}
+                  isLeader={leaders.some(l => l.user_id === a.user_id) || (!!myLeader && a.user_id === myUserId)}
                 />
               ))}
               {guestAttendees.slice(0, Math.max(0, 20 - going.length)).map((g, i) => (
@@ -839,6 +892,15 @@ export default function JamDetailScreen() {
                 </View>
               ) : null}
             </View>
+            {/* The leader's own controls sit with who's going, as on web. */}
+            {myLeader && !isPast ? (
+              <View className="mt-1 gap-1">
+                <Text className="text-sm text-amber-800 font-medium">You're leading at this event 🎶</Text>
+                <TouchableOpacity onPress={handleLeaderWithdraw}>
+                  <Text className="text-xs text-zinc-600 underline">Can't make it?</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
         ) : null}
 

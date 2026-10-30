@@ -104,6 +104,9 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
     .from("ticket_orders")
     .select(ORDER_COLS)
     .eq("status", "paid")
+    // A leader's comp has its own email (lib/jamLeaders.ts); the purchase
+    // receipt would tell them they paid $0.00.
+    .eq("source", "purchase")
     .is("ticket_email_sent_at", null)
     .order("paid_at", { ascending: true })
     .order("id", { ascending: true })

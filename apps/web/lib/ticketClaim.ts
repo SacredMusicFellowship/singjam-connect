@@ -39,6 +39,14 @@ export async function claimGuestTickets(
     .in("order_id", orderIds)
     .is("holder_user_id", null);
 
+  // A leader added before they had an account becomes a member leader, so the
+  // event page links their profile.
+  await admin
+    .from("jam_leaders")
+    .update({ user_id: userId, email: null, name: null })
+    .in("order_id", orderIds)
+    .is("user_id", null);
+
   const jamIds = [...new Set(orders.map((o) => o.jam_id))];
   for (const jamId of jamIds) {
     await markAttending(admin, jamId, userId);
