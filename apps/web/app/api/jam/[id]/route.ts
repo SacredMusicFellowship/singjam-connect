@@ -12,6 +12,25 @@ import { buildIcs } from "@/lib/ics";
 import { isValidTimeZone } from "@singjam/core";
 import { devRefusesVisibility, DEV_PRIVATE_JAMS_MESSAGE } from "@/lib/devSafety";
 
+// The web editor sends its baked per-layout crops along with the image. A
+// client that only sends image_url (the native editor) and changes it leaves
+// the old crops pointing at the previous image, so they are cleared and every
+// layout falls back to the new image.
+function imageCropFields(body: any, currentImageUrl: string | null) {
+  if (body.image_crops !== undefined) {
+    return {
+      image_desktop_url: body.image_desktop_url ?? null,
+      image_mobile_url: body.image_mobile_url ?? null,
+      image_list_url: body.image_list_url ?? null,
+      image_crops: body.image_crops,
+    };
+  }
+  if (body.image_url !== undefined && body.image_url !== currentImageUrl) {
+    return { image_desktop_url: null, image_mobile_url: null, image_list_url: null, image_crops: null };
+  }
+  return {};
+}
+
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await supabaseServer();
@@ -27,7 +46,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   const { data: currentJam } = await admin
     .from("jams")
-    .select("host_user_id, name, starts_at, ends_at, neighborhood, full_address, timezone, visibility")
+    .select("host_user_id, name, starts_at, ends_at, neighborhood, full_address, timezone, visibility, image_url")
     .eq("id", id)
     .maybeSingle();
 
@@ -64,6 +83,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     guests_can_invite: visibility !== "official" ? guests_can_invite : false,
     tickets_url: visibility === "official" ? tickets_url : null,
     image_url, image_focal_point, capacity, timezone,
+    ...imageCropFields(body, currentJam.image_url),
   }).eq("id", id);
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });

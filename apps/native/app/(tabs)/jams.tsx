@@ -104,7 +104,7 @@ export default function JamsScreen() {
           .from('jams')
           .select(`
             id, name, visibility, starts_at, ends_at, timezone,
-            neighborhood, notes, image_url, tickets_url, capacity, host_user_id,
+            neighborhood, notes, image_url, image_list_url, tickets_url, capacity, host_user_id,
             profiles!host_user_id ( display_name, username ),
             jam_genres ( genres ( name ) ),
             jam_themes ( themes ( name ) )
@@ -149,6 +149,7 @@ export default function JamsScreen() {
       neighborhood: j.neighborhood,
       notes: j.notes,
       image_url: j.image_url,
+      image_list_url: j.image_list_url,
       tickets_url: j.tickets_url,
       capacity: j.capacity,
       host_id: j.host_user_id,

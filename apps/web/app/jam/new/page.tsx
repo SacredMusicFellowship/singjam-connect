@@ -14,7 +14,7 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
     const [jamRes, genresRes, themesRes] = await Promise.all([
       supabase
         .from("jams")
-        .select("name, visibility, notes, full_address, neighborhood, capacity, guests_can_invite, tickets_url, image_url, image_focal_point, starts_at, ends_at, timezone")
+        .select("name, visibility, notes, full_address, neighborhood, capacity, guests_can_invite, tickets_url, image_url, image_focal_point, image_desktop_url, image_mobile_url, image_list_url, image_crops, starts_at, ends_at, timezone")
         .eq("id", copy)
         .maybeSingle(),
       supabase.from("jam_genres").select("genre_id").eq("jam_id", copy),
@@ -41,8 +41,14 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
         capacity: jam.capacity ? String(jam.capacity) : "",
         guestsCanInvite: jam.guests_can_invite ?? false,
         ticketsUrl: jam.tickets_url ?? "",
-        imageUrl: jam.image_url ?? null,
-        imageFocalPoint: jam.image_focal_point ?? "50% 50%",
+        images: {
+          image_url: jam.image_url,
+          image_focal_point: jam.image_focal_point,
+          image_desktop_url: jam.image_desktop_url,
+          image_mobile_url: jam.image_mobile_url,
+          image_list_url: jam.image_list_url,
+          image_crops: jam.image_crops,
+        },
         selectedGenreIds: ((genresRes.data ?? []) as any[]).map((r) => r.genre_id as string),
         selectedThemeIds: ((themesRes.data ?? []) as any[]).map((r) => r.theme_id as string),
         startTime: fmt(jam.starts_at),

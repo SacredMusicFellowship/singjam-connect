@@ -46,6 +46,7 @@ const storedJam = {
   full_address: "The Starry Plough Pub, Shattuck Avenue, Berkeley, CA, USA",
   timezone: "America/Los_Angeles",
   visibility: "official",
+  image_url: "https://example.com/poster.png",
 };
 
 function chain(result: { data: unknown; error?: unknown }, onUpdate?: (row: unknown) => void, onDelete?: () => void) {
@@ -238,5 +239,29 @@ describe("publishing an official event", () => {
     withProfile({ role: "admin", can_host_official: false });
     const res = await put({ visibility: "official" });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("event image crops", () => {
+  const crops = { image_desktop_url: "d.jpg", image_mobile_url: "m.jpg", image_list_url: "l.jpg", image_crops: { desktop: { src: null, x: 0, y: 0, w: 1, h: 1 } } };
+
+  it("stores the crops the web editor sends", async () => {
+    await put({ image_url: "new.png", ...crops });
+    expect(mockJamUpdate.mock.calls[0][0]).toMatchObject({ image_url: "new.png", ...crops });
+  });
+
+  it("clears the crops when the image changes without new ones, as the native editor does", async () => {
+    await put({ image_url: "new.png" });
+    expect(mockJamUpdate.mock.calls[0][0]).toMatchObject({
+      image_desktop_url: null,
+      image_mobile_url: null,
+      image_list_url: null,
+      image_crops: null,
+    });
+  });
+
+  it("leaves the crops alone when the image is re-sent unchanged", async () => {
+    await put({ image_url: storedJam.image_url });
+    expect(mockJamUpdate.mock.calls[0][0]).not.toHaveProperty("image_crops");
   });
 });

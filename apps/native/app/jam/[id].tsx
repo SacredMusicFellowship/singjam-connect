@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { canEditJam, dropUsCountry, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
+import { canEditJam, dropUsCountry, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -43,6 +43,7 @@ type JamDetail = {
   full_address: string | null;
   notes: string | null;
   image_url: string | null;
+  image_mobile_url: string | null;
   tickets_url: string | null;
   capacity: number | null;
   host_id: string | null;
@@ -342,7 +343,7 @@ export default function JamDetailScreen() {
         .from('jams')
         .select(`
           id, name, visibility, starts_at, ends_at, timezone,
-          neighborhood, full_address, notes, image_url, tickets_url, capacity, host_user_id,
+          neighborhood, full_address, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
           profiles!host_user_id ( display_name, username, avatar_url ),
           jam_genres ( genres ( name ) )
         `)
@@ -388,6 +389,7 @@ export default function JamDetailScreen() {
       full_address: j.full_address,
       notes: j.notes,
       image_url: j.image_url,
+      image_mobile_url: j.image_mobile_url,
       tickets_url: j.tickets_url,
       capacity: j.capacity,
       host_id: j.host_user_id,
@@ -626,10 +628,13 @@ export default function JamDetailScreen() {
 
         {/* Header image or date block */}
         {jam.image_url ? (
+          // The host's 3:2 mobile crop, the same one mobile web shows. Native
+          // Image has no object-position, so an event without one is
+          // centre-cropped rather than cropped around its focal point.
           <Image
-            source={{ uri: jam.image_url }}
+            source={{ uri: jamImageFor(jam, 'mobile')!.src }}
             className="w-full"
-            style={{ height: 200 }}
+            style={{ aspectRatio: 3 / 2 }}
             resizeMode="cover"
           />
         ) : jam.starts_at ? (

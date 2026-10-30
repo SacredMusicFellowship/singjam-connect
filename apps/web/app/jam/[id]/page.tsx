@@ -5,11 +5,10 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { claimJamInvite } from "@/lib/claimJamInvite";
 import { canManageJam, canEditJamById } from "@/lib/jamAuthz";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
-import { formatJamDate } from "@/lib/formatJamTime";
 import { resolveJamId } from "@/lib/shortRef";
 import JamView, { type InviteEntry } from "@/components/JamView";
 import ShortUrl from "@/components/ShortUrl";
-import { jamSeatExcludedUserId, jamSeatsTaken } from "@singjam/core";
+import { formatJamLongDate, formatJamTimeRange, jamPreviewPlace, jamSeatExcludedUserId, jamSeatsTaken } from "@singjam/core";
 import { type JamCardData } from "@/components/JamCard";
 
 // Private jams are unlisted, not access-controlled (migration 160): holding
@@ -19,7 +18,7 @@ const getJam = cache(async (id: string) => {
   const admin = supabaseAdmin();
   const { data } = await admin
     .from("jams")
-    .select("id, short_code, name, visibility, starts_at, ends_at, timezone, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, capacity, host_user_id, guests_can_invite, profiles(display_name, last_name, username)")
+    .select("id, short_code, name, visibility, starts_at, ends_at, timezone, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, image_desktop_url, image_mobile_url, image_list_url, capacity, host_user_id, guests_can_invite, profiles(display_name, last_name, username)")
     .eq("id", id)
     .maybeSingle();
   return data as any;
@@ -42,8 +41,12 @@ export async function generateMetadata({
     jam.visibility === "official"
       ? "SingJam"
       : jam.profiles?.display_name ?? jam.profiles?.username ?? null;
-  const date = formatJamDate(jam.starts_at, jam.timezone);
-  const parts = [date, jam.neighborhood, host ? `Hosted by ${host}` : null].filter(Boolean);
+  // The date, time and place always lead, so a preview that crops or skips the
+  // image still says when and where.
+  const date = formatJamLongDate(jam.starts_at, jam.timezone);
+  const time = formatJamTimeRange(jam.starts_at, jam.ends_at, jam.timezone);
+  const place = jamPreviewPlace(jam);
+  const parts = [date && time ? `${date}, ${time}` : date, place, host ? `Hosted by ${host}` : null].filter(Boolean);
   const description = parts.length
     ? `${parts.join(" · ")}. RSVP and jam together on SingJam.`
     : "An upcoming jam on SingJam. RSVP and join the music.";
@@ -206,6 +209,9 @@ export default async function JamPage({
     tickets_url: jam.tickets_url,
     image_url: jam.image_url,
     image_focal_point: jam.image_focal_point,
+    image_desktop_url: jam.image_desktop_url,
+    image_mobile_url: jam.image_mobile_url,
+    image_list_url: jam.image_list_url,
     genres,
     themes,
     host: hostLabel,

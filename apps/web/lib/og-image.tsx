@@ -20,6 +20,23 @@ async function loadBrandFont(): Promise<ArrayBuffer> {
   return fontDataPromise;
 }
 
+/**
+ * Inter at one weight, subset to just the characters in `text`, for cards
+ * that set their own copy. Null if Google Fonts can't be reached, so the card
+ * still renders in Satori's default font.
+ */
+export async function loadInterSubset(weight: 400 | 700, text: string): Promise<ArrayBuffer | null> {
+  try {
+    const cssUrl = `https://fonts.googleapis.com/css2?family=Inter:wght@${weight}&text=${encodeURIComponent(text)}`;
+    const css = await fetch(cssUrl).then((res) => res.text());
+    const match = css.match(/src: url\(([^)]+)\) format\('(opentype|truetype|woff)'\)/);
+    if (!match) return null;
+    return await fetch(match[1]).then((res) => res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 export async function getBrandOgImageOptions(size: { width: number; height: number }) {
   try {
     const data = await loadBrandFont();

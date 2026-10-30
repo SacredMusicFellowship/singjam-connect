@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { canEditJam, fetchAllRows, jamTicketCta, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
+import { canEditJam, fetchAllRows, jamImageFor, jamTicketCta, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -53,11 +53,10 @@ function RsvpBadge({ status, waitlistPosition }: { status: RsvpStatus; waitlistP
   return null;
 }
 
-function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSummary, rsvp, isInvited, isHosting, canEdit, onDeleted }: {
+function JamListCard({ jam, tags, hostLabel, isOfficial, ticketSummary, rsvp, isInvited, isHosting, canEdit, onDeleted }: {
   jam: any;
   tags: string[];
   hostLabel?: string | null;
-  hostUsername?: string | null;
   isOfficial: boolean;
   ticketSummary?: JamTicketSummary | null;
   rsvp?: { status: RsvpStatus; waitlist_position?: number | null } | null;
@@ -79,6 +78,11 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
   const cta = isOfficial && !isPast
     ? jamTicketCta(jam.tickets_url, ticketSummary, { timezone: jam.timezone })
     : null;
+  const thumb = jamImageFor(jam, "list");
+  // Every card ends on one more row after the place, so they all fill the
+  // same fixed height: the ticket link, else the tags, else "Details →". Only
+  // one fits, so an official card keeps its ticket link over its tags.
+  const showTags = tags.length > 0 && !cta;
 
   useEffect(() => {
     if (!canEdit) return;
@@ -103,13 +107,20 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
   }
 
   const cardBody = (
-    <div className={`group relative flex overflow-hidden rounded-2xl border bg-white transition-colors ${isOfficial ? "border-amber-200 hover:border-amber-300" : "border-zinc-200 hover:border-zinc-300"}`}>
-      {jam.image_url ? (
-        <div className="relative shrink-0 w-24 sm:w-32 overflow-hidden bg-black">
-          <Image src={jam.image_url} alt={jam.name ?? "Event"} fill className="object-contain" sizes="128px" />
+    <div className={`group relative flex h-32 overflow-hidden rounded-2xl border sm:h-36 bg-white transition-colors ${isOfficial ? "border-amber-200 hover:border-amber-300" : "border-zinc-200 hover:border-zinc-300"}`}>
+      {thumb ? (
+        <div className="relative aspect-square h-full shrink-0 overflow-hidden bg-black">
+          <Image
+            src={thumb.src}
+            alt={jam.name ?? "Event"}
+            fill
+            className="object-cover object-[var(--pos)]"
+            style={{ "--pos": thumb.position } as CSSProperties}
+            sizes="144px"
+          />
         </div>
       ) : jam.starts_at ? (
-        <div className={`shrink-0 w-20 flex flex-col items-center justify-center border-r px-2 py-4 ${isOfficial ? "bg-amber-50 border-amber-200" : "bg-zinc-50 border-zinc-100"}`}>
+        <div className={`shrink-0 w-20 flex flex-col items-center justify-center border-r px-2 ${isOfficial ? "bg-amber-50 border-amber-200" : "bg-zinc-50 border-zinc-100"}`}>
           <span className={`text-xs font-semibold uppercase tracking-wide ${isOfficial ? "text-amber-500" : "text-zinc-400"}`}>
             <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "short" }} />
           </span>
@@ -122,7 +133,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
         </div>
       ) : null}
 
-      <div className="flex-1 min-w-0 p-4">
+      <div className="flex min-w-0 flex-1 flex-col justify-center p-3 sm:p-4">
         {isOfficial && (
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-500 mb-0.5">Official SingJam event</p>
         )}
@@ -147,33 +158,36 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
           {rsvp && <RsvpBadge status={rsvp.status} waitlistPosition={rsvp.waitlist_position} />}
         </div>
         {jam.starts_at && (
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="truncate text-xs text-zinc-500 mt-0.5">
             <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "short", month: "short", day: "numeric" }} />
             {" · "}
-            <FormattedTime iso={jam.starts_at} timezone={jam.timezone} />
+            <FormattedTime iso={jam.starts_at} timezone={jam.timezone} options={jam.ends_at ? { timeZoneName: undefined } : undefined} />
             {jam.ends_at && <> – <FormattedTime iso={jam.ends_at} timezone={jam.timezone} /></>}
           </p>
         )}
-        {jam.neighborhood && <p className="text-xs text-zinc-400 mt-0.5">{jam.neighborhood}</p>}
-        {tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
+        {/* The host shares the place's line, and tags get one row, so every
+            card fits the fixed height that keeps its thumbnail square. An
+            official event's eyebrow and border already say it is SingJam's. */}
+        {(jam.neighborhood || (!isOfficial && !isHosting && hostLabel)) && (
+          <p className="truncate text-xs text-zinc-400 mt-0.5">
+            {jam.neighborhood}
+            {jam.neighborhood && !isOfficial && !isHosting && hostLabel && " · "}
+            {!isOfficial && !isHosting && hostLabel && (
+              <>
+                Hosted by <span className="font-medium text-zinc-500">{hostLabel}</span>
+              </>
+            )}
+          </p>
+        )}
+        {showTags && (
+          <div className="mt-1 flex h-5 flex-wrap gap-1 overflow-hidden">
             {tags.map((t) => (
               <span key={t} className={`rounded-full px-2 py-0.5 text-xs ${isOfficial ? "bg-amber-50 text-amber-700" : "bg-zinc-100 text-zinc-600"}`}>{t}</span>
             ))}
           </div>
         )}
-        {isOfficial ? (
-          <p className="mt-2 text-xs text-zinc-400">
-            Hosted by <span className="font-medium text-zinc-500">SingJam</span>
-          </p>
-        ) : (!isHosting && hostLabel && (
-          <p className="mt-2 text-xs text-zinc-400">
-            Hosted by <span className="font-medium text-zinc-500">{hostLabel}</span>
-            {hostUsername && <span className="ml-1">@{hostUsername}</span>}
-          </p>
-        ))}
-        {cta && (
-          <div className="mt-2 flex flex-wrap gap-3">
+        {cta ? (
+          <div className="mt-1.5 flex flex-wrap gap-3">
             <span className={`text-xs font-medium ${cta.hasTickets && !cta.externalUrl ? "text-amber-600 group-hover:text-amber-500" : "text-zinc-500 group-hover:text-zinc-700"}`}>
               {cta.label} →
             </span>
@@ -188,6 +202,8 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
               </a>
             )}
           </div>
+        ) : !showTags && (
+          <p className="mt-1.5 text-xs font-medium text-zinc-500 group-hover:text-zinc-700">Details →</p>
         )}
       </div>
       {/* Stretched link rather than a wrapping <a>: the whole card goes to the
@@ -318,7 +334,7 @@ export default function JamsContent() {
       fetchAllRows<any>((from, to) =>
         supabase
           .from("jams")
-          .select("id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, visibility, host_user_id, jam_genres(genres(name)), jam_themes(themes(name)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)")
+          .select("id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, image_focal_point, image_list_url, visibility, host_user_id, jam_genres(genres(name)), jam_themes(themes(name)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)")
           .gte("starts_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
           .order("starts_at", { ascending: true, nullsFirst: false })
           .order("id")
@@ -444,7 +460,6 @@ export default function JamsContent() {
       jam,
       tags: [...(genresByJam.get(jam.id) ?? []), ...(themesByJam.get(jam.id) ?? [])],
       hostLabel: profileById.get(jam.host_user_id)?.label ?? null,
-      hostUsername: profileById.get(jam.host_user_id)?.username ?? null,
       isOfficial: opts.isOfficial ?? false,
       ticketSummary: ticketSummaryByJam.get(jam.id) ?? null,
       isHosting: opts.isHosting ?? (!!userId && jam.host_user_id === userId),

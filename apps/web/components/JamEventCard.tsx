@@ -1,6 +1,7 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { jamTicketCta, type JamTicketSummary } from "@singjam/core";
+import { jamImageFor, jamTicketCta, type JamTicketSummary } from "@singjam/core";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
 
 export type JamEventCardData = {
@@ -13,6 +14,8 @@ export type JamEventCardData = {
   neighborhood: string | null;
   tickets_url: string | null;
   image_url: string | null;
+  image_focal_point?: string | null;
+  image_list_url?: string | null;
 };
 
 export default function JamEventCard({
@@ -25,18 +28,26 @@ export default function JamEventCard({
   const cta = jamTicketCta(jam.tickets_url, ticketSummary, { timezone: jam.timezone });
 
   const name = jam.name ?? "SingJam event";
+  const thumb = jamImageFor(jam, "list");
 
   return (
     // Stretched link, not a wrapping <a>: the whole card goes to the detail
     // page, while an off-site "Get tickets" stays a real anchor of its own.
     // Nesting anchors would be invalid markup.
-    <div className="group relative flex overflow-hidden rounded-2xl border border-amber-200 bg-white transition-colors hover:border-amber-300">
-      {jam.image_url ? (
-        <div className="relative shrink-0 w-24 sm:w-32 overflow-hidden bg-black">
-          <Image src={jam.image_url} alt={jam.name ?? "Event"} fill className="object-contain" sizes="128px" />
+    <div className="group relative flex h-32 overflow-hidden rounded-2xl border sm:h-36 border-amber-200 bg-white transition-colors hover:border-amber-300">
+      {thumb ? (
+        <div className="relative aspect-square h-full shrink-0 overflow-hidden bg-black">
+          <Image
+            src={thumb.src}
+            alt={jam.name ?? "Event"}
+            fill
+            className="object-cover object-[var(--pos)]"
+            style={{ "--pos": thumb.position } as CSSProperties}
+            sizes="144px"
+          />
         </div>
       ) : jam.starts_at ? (
-        <div className="shrink-0 w-20 flex flex-col items-center justify-center bg-amber-50 border-r border-amber-200 px-2 py-4">
+        <div className="shrink-0 w-20 flex flex-col items-center justify-center bg-amber-50 border-r border-amber-200 px-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-amber-500">
             <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "short" }} />
           </span>
@@ -49,19 +60,19 @@ export default function JamEventCard({
         </div>
       ) : null}
 
-      <div className="flex-1 min-w-0 p-4">
+      <div className="flex min-w-0 flex-1 flex-col justify-center p-3 sm:p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-amber-500 mb-0.5">Official SingJam event</p>
         <p className="font-semibold text-zinc-900 truncate">{jam.name ?? "SingJam event"}</p>
         {jam.starts_at && (
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="truncate text-xs text-zinc-500 mt-0.5">
             <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "short", month: "short", day: "numeric" }} />
             {" · "}
-            <FormattedTime iso={jam.starts_at} timezone={jam.timezone} />
+            <FormattedTime iso={jam.starts_at} timezone={jam.timezone} options={jam.ends_at ? { timeZoneName: undefined } : undefined} />
             {jam.ends_at && <> – <FormattedTime iso={jam.ends_at} timezone={jam.timezone} /></>}
           </p>
         )}
-        {jam.neighborhood && <p className="text-xs text-zinc-400 mt-0.5">{jam.neighborhood}</p>}
-                <div className="mt-2 flex flex-wrap gap-3">
+        {jam.neighborhood && <p className="truncate text-xs text-zinc-400 mt-0.5">{jam.neighborhood}</p>}
+        <div className="mt-1.5 flex flex-wrap gap-3">
           <span className={`text-xs font-medium ${cta.hasTickets && !cta.externalUrl ? "text-amber-600 group-hover:text-amber-500" : "text-zinc-500 group-hover:text-zinc-700"}`}>
             {cta.label} →
           </span>

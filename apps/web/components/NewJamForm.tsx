@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import LocationAutocomplete, { type LocationValue } from "./LocationAutocomplete";
 import TagCombobox from "./TagCombobox";
-import JamCard from "./JamCard";
-import FocalPointPicker from "./FocalPointPicker";
+import JamCard, { JamMap, JamPoster, JamSplit } from "./JamCard";
+import EventImageEditor from "./EventImageEditor";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
-import { JAM_IMAGE_TYPE_ERROR, JAM_IMAGE_TYPES, isJamImageType, jamPath, zonedInputToIso } from "@singjam/core";
+import { useJamImages, type JamImageFields } from "@/lib/useJamImages";
+import { jamPath, zonedInputToIso } from "@singjam/core";
 import { visibilityForNewJam } from "@/lib/devSafety";
 
 type LookupItem = { id: string; name: string };
@@ -24,8 +25,7 @@ export type NewJamInitialData = {
   capacity: string;
   guestsCanInvite: boolean;
   ticketsUrl: string;
-  imageUrl: string | null;
-  imageFocalPoint: string;
+  images: JamImageFields;
   selectedGenreIds: string[];
   selectedThemeIds: string[];
   startTime: string;
@@ -80,12 +80,8 @@ export default function NewJamForm({
   const { timezone, resolving: resolvingTimezone } = useAddressTimezone(locationTbd ? null : location.fullAddress, initialData?.fullAddress ?? null, initialData?.timezone ?? null);
   const [capacity, setCapacity] = useState(initialData?.capacity ?? "");
   const [description, setDescription] = useState(initialData?.notes ?? "");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl ?? null);
-  const [copiedImageUrl, setCopiedImageUrl] = useState<string | null>(initialData?.imageUrl ?? null);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const [focalPoint, setFocalPoint] = useState(initialData?.imageFocalPoint ?? "50% 50%");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const images = useJamImages(initialData?.images);
+  const [previewImages, setPreviewImages] = useState<JamImageFields | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -109,20 +105,6 @@ export default function NewJamForm({
     load();
   }, [supabase]);
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    if (file && !isJamImageType(file.type, file.name)) {
-      setImageError(JAM_IMAGE_TYPE_ERROR);
-      e.target.value = "";
-      return;
-    }
-    setImageError(null);
-    setImageFile(file);
-    setImagePreview(file ? URL.createObjectURL(file) : null);
-    setCopiedImageUrl(null);
-    setFocalPoint("50% 50%");
-  }
-
   function toIso(d: string, t: string) {
     if (!d || !t || !timezone) return null;
     return zonedInputToIso(`${d}T${t}`, timezone);
@@ -136,9 +118,15 @@ export default function NewJamForm({
     return errs;
   }
 
-  function goToPreview() {
+  async function goToPreview() {
     const errs = validate();
     if (errs.length > 0) { setErrors(errs); return; }
+    try {
+      setPreviewImages(await images.previewFields());
+    } catch (e: any) {
+      setErrors([e.message]);
+      return;
+    }
     setErrors([]);
     setPreviewing(true);
   }
@@ -151,20 +139,13 @@ export default function NewJamForm({
     const uid = userData.user?.id;
     if (!uid) { setBusy(false); setStatus("Not signed in."); return; }
 
-    let imageUrl: string | null = copiedImageUrl;
-    if (imageFile) {
-      const ext = imageFile.name.split(".").pop();
-      const path = `${uid}-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("jam-images")
-        .upload(path, imageFile, { upsert: false });
-      if (uploadError) {
-        setBusy(false);
-        setStatus(`Image upload failed: ${uploadError.message}`);
-        return;
-      }
-      const { data: urlData } = supabase.storage.from("jam-images").getPublicUrl(path);
-      imageUrl = urlData.publicUrl;
+    let imageFields: JamImageFields;
+    try {
+      imageFields = await images.commit(supabase, uid);
+    } catch (e: any) {
+      setBusy(false);
+      setStatus(e.message);
+      return;
     }
 
     const defaultName = displayName ? `${displayName}'s jam` : "Community jam";
@@ -181,8 +162,7 @@ export default function NewJamForm({
       visibility: visibilityForNewJam(visibility, privateOnly),
       guests_can_invite: (visibility === "private" || visibility === "community") ? guestsCanInvite : false,
       tickets_url: visibility === "official" && ticketsUrl ? ticketsUrl : null,
-      image_url: imageUrl,
-      image_focal_point: imageUrl ? focalPoint : null,
+      ...imageFields,
       capacity: capacity ? parseInt(capacity, 10) : null,
       timezone,
       created_at: new Date().toISOString(),
@@ -238,256 +218,232 @@ export default function NewJamForm({
   const previewName = name.trim() || (isOfficial ? null : defaultName);
 
   if (previewing) {
+    const previewJam = {
+      name: previewName,
+      visibility,
+      starts_at: toIso(date, startTime),
+      ends_at: toIso(date, endTime),
+      neighborhood: locationTbd ? "TBD" : (location.neighborhood || location.fullAddress || null),
+      full_address: locationTbd ? null : (location.fullAddress || null),
+      notes: description || null,
+      tickets_url: isOfficial && ticketsUrl ? ticketsUrl : null,
+      ...previewImages!,
+      genres: previewGenreNames,
+      themes: previewThemeNames,
+      host: displayName,
+      capacity: capacity ? parseInt(capacity, 10) : null,
+      timezone,
+      hasFullAccess: true, // show full address in preview
+    };
+    const card = (
+      <JamCard
+        jam={previewJam}
+        showMap={false}
+        actions={
+          <div className="flex gap-3">
+            <button
+              onClick={() => setPreviewing(false)}
+              className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
+              ← Edit
+            </button>
+            <button
+              onClick={publish}
+              disabled={busy || resolvingTimezone || !timezone}
+              className="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+            >
+              {busy ? "Publishing…" : "Publish jam"}
+            </button>
+          </div>
+        }
+      />
+    );
     return (
       <div className="space-y-5">
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           This is a preview — your jam hasn't been published yet.
         </div>
-        <JamCard
-          jam={{
-            name: previewName,
-            visibility,
-            starts_at: toIso(date, startTime),
-            ends_at: toIso(date, endTime),
-            neighborhood: locationTbd ? "TBD" : (location.neighborhood || location.fullAddress || null),
-            full_address: locationTbd ? null : (location.fullAddress || null),
-            notes: description || null,
-            tickets_url: isOfficial && ticketsUrl ? ticketsUrl : null,
-            image_url: imagePreview,
-            image_focal_point: focalPoint,
-            genres: previewGenreNames,
-            themes: previewThemeNames,
-            host: displayName,
-            capacity: capacity ? parseInt(capacity, 10) : null,
-            timezone,
-            hasFullAccess: true, // show full address in preview
-          }}
-          actions={
-            <div className="flex gap-3">
-              <button
-                onClick={() => setPreviewing(false)}
-                className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-              >
-                ← Edit
-              </button>
-              <button
-                onClick={publish}
-                disabled={busy || resolvingTimezone || !timezone}
-                className="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-              >
-                {busy ? "Publishing…" : "Publish jam"}
-              </button>
-            </div>
-          }
-        />
+        <JamSplit aside={<JamPoster jam={previewJam} />}>{card}</JamSplit>
+        <JamMap jam={previewJam} />
         {status && <p className="text-sm text-red-600">{status}</p>}
       </div>
     );
   }
 
+  // Laid out like the event page: the image on the left, then the fields in
+  // the order the page shows them, so the host fills in each thing where it
+  // will appear.
   return (
-    <div className="rounded-2xl border border-zinc-200 p-5 shadow-sm space-y-5">
-      {/* Visibility */}
-      <div>
-        <Label text="Who can see this?" />
-        {privateOnly && <p className="mt-1 text-xs text-amber-700">Local dev: new jams are always private</p>}
-        <div className="mt-1.5 flex flex-col gap-2">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input type="radio" name="visibility" value="community" checked={visibility === "community"} onChange={() => setVisibility("community")} disabled={privateOnly} className="mt-0.5" />
-            <div>
-              <span className="text-sm font-medium">Community jam</span>
-              <p className="text-xs text-zinc-500">Visible to all SingJam members</p>
-            </div>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input type="radio" name="visibility" value="private" checked={visibility === "private"} onChange={() => setVisibility("private")} className="mt-0.5" />
-            <div>
-              <span className="text-sm font-medium">Private jam</span>
-              <p className="text-xs text-zinc-500">Only visible to people you invite</p>
-            </div>
-          </label>
-          {canPostOfficial && (
+    <JamSplit aside={<EventImageEditor images={images} />}>
+      <div className="space-y-5">
+        {/* Visibility */}
+        <div>
+          <Label text="Who can see this?" />
+          {privateOnly && <p className="mt-1 text-xs text-amber-700">Local dev: new jams are always private</p>}
+          <div className="mt-1.5 flex flex-col gap-2">
             <label className="flex items-start gap-3 cursor-pointer">
-              <input type="radio" name="visibility" value="official" checked={visibility === "official"} onChange={() => setVisibility("official")} disabled={privateOnly} className="mt-0.5" />
+              <input type="radio" name="visibility" value="community" checked={visibility === "community"} onChange={() => setVisibility("community")} disabled={privateOnly} className="mt-0.5" />
               <div>
-                <span className="text-sm font-medium text-amber-600">Official SingJam event</span>
-                <p className="text-xs text-zinc-500">Public — visible to anyone on the site</p>
+                <span className="text-sm font-medium">Community jam</span>
+                <p className="text-xs text-zinc-500">Visible to all SingJam members</p>
               </div>
             </label>
-          )}
-        </div>
-      </div>
-
-      {/* Guests can invite — private and community jams */}
-      {(visibility === "private" || visibility === "community") && (
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={guestsCanInvite}
-            onChange={(e) => setGuestsCanInvite(e.target.checked)}
-            className="h-4 w-4 rounded"
-          />
-          <div>
-            <span className="text-sm font-medium">Allow attendees to invite others</span>
-            <p className="text-xs text-zinc-500">Guests can invite people directly from the jam page</p>
-          </div>
-        </label>
-      )}
-
-      {/* Name */}
-      <div>
-        <Label text="Event name" optional={!isOfficial} required={isOfficial} />
-        <input
-          className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={isOfficial ? "e.g. SingJam Open Circle — April" : `Defaults to "${defaultName}"`}
-        />
-      </div>
-
-      {/* Date and time */}
-      <div className="space-y-2">
-        <Label text="Date" required />
-        <input
-          className="w-full appearance-none rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium mb-1">
-              Start time <span className="text-red-500">*</span>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="radio" name="visibility" value="private" checked={visibility === "private"} onChange={() => setVisibility("private")} className="mt-0.5" />
+              <div>
+                <span className="text-sm font-medium">Private jam</span>
+                <p className="text-xs text-zinc-500">Only visible to people you invite</p>
+              </div>
             </label>
-            <input className="w-full appearance-none rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">
-              End time <span className="ml-1 text-xs font-normal text-zinc-400">optional</span>
-            </label>
-            <input className="w-full appearance-none rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            {canPostOfficial && (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input type="radio" name="visibility" value="official" checked={visibility === "official"} onChange={() => setVisibility("official")} disabled={privateOnly} className="mt-0.5" />
+                <div>
+                  <span className="text-sm font-medium text-amber-600">Official SingJam event</span>
+                  <p className="text-xs text-zinc-500">Public — visible to anyone on the site</p>
+                </div>
+              </label>
+            )}
           </div>
         </div>
-        <JamTimezoneNote timezone={timezone} resolving={resolvingTimezone} startsAt={toIso(date, startTime)} />
-      </div>
 
-      {/* Location */}
-      <div>
-        <div className="flex items-center justify-between">
-          <Label text={isOfficial ? "Venue / address" : "Location"} required={!locationTbd} />
-          <label className="flex items-center gap-1.5 cursor-pointer">
+        {/* Guests can invite — private and community jams */}
+        {(visibility === "private" || visibility === "community") && (
+          <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
-              checked={locationTbd}
-              onChange={(e) => {
-                setLocationTbd(e.target.checked);
-                if (e.target.checked) setLocation({ fullAddress: "", neighborhood: "" });
-              }}
+              checked={guestsCanInvite}
+              onChange={(e) => setGuestsCanInvite(e.target.checked)}
               className="h-4 w-4 rounded"
             />
-            <span className="text-sm text-zinc-500">TBD</span>
+            <div>
+              <span className="text-sm font-medium">Allow attendees to invite others</span>
+              <p className="text-xs text-zinc-500">Guests can invite people directly from the jam page</p>
+            </div>
           </label>
-        </div>
-        {!isOfficial && !locationTbd && (
-          <p className="text-xs text-zinc-400 mt-0.5 mb-1">Exact address is only shared with people who RSVP</p>
         )}
-        {!locationTbd && (
-          <LocationAutocomplete
-            value={location.fullAddress}
-            onChange={setLocation}
-            placeholder={isOfficial ? "e.g. Freight & Salvage, Berkeley" : "e.g. Cedar Rose Park, Berkeley"}
-          />
-        )}
-      </div>
 
-      {/* Capacity */}
-      <div>
-        <Label text="Capacity" optional />
-        <input
-          className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-          type="number"
-          min="1"
-          value={capacity}
-          onChange={(e) => setCapacity(e.target.value)}
-          placeholder="Leave blank for unlimited"
-        />
-      </div>
-
-      <TagCombobox label="Genres" options={genres} selected={selectedGenres} onChange={setSelectedGenres} placeholder="Search genres…" optional />
-      <TagCombobox label="Themes" options={themes} selected={selectedThemes} onChange={setSelectedThemes} placeholder="Search themes…" optional />
-
-      {/* Description */}
-      <div>
-        <Label text="Description" optional />
-        <textarea
-          className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-          rows={3}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Vibe, what to bring, skill level, etc."
-        />
-      </div>
-
-      {/* Image upload */}
-      <div>
-        <Label text="Cover image" optional />
-        <div className="mt-1 space-y-3">
-          {imagePreview ? (
-            <>
-              <FocalPointPicker src={imagePreview} focalPoint={focalPoint} onChange={setFocalPoint} />
-              <div className="flex gap-4">
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs text-zinc-500 hover:text-zinc-700 transition-colors">
-                  Replace image
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setImageFile(null); setImagePreview(null); setCopiedImageUrl(null); setFocalPoint("50% 50%"); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                  className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
-                >
-                  Remove image
-                </button>
-              </div>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full rounded-xl border-2 border-dashed border-zinc-200 py-6 text-sm text-zinc-400 hover:border-zinc-300 hover:text-zinc-500 transition-colors"
-            >
-              Click to upload a cover image
-            </button>
-          )}
-          <input ref={fileInputRef} type="file" accept={JAM_IMAGE_TYPES.join(",")} className="hidden" onChange={handleImageChange} />
-          {imageError && <p className="mt-1 text-sm text-red-600">{imageError}</p>}
-        </div>
-      </div>
-
-      {isOfficial && (
+        {/* Name */}
         <div>
-          <Label text="Tickets URL" optional />
+          <Label text="Event name" optional={!isOfficial} required={isOfficial} />
+          <input
+            className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-2xl font-bold text-zinc-900"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={isOfficial ? "e.g. SingJam Open Circle — April" : `Defaults to "${defaultName}"`}
+          />
+        </div>
+
+        {/* Date and time */}
+        <div className="space-y-2">
+          <Label text="Date" required />
+          <input
+            className="w-full appearance-none rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                Start time <span className="text-red-500">*</span>
+              </label>
+              <input className="w-full appearance-none rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                End time <span className="ml-1 text-xs font-normal text-zinc-400">optional</span>
+              </label>
+              <input className="w-full appearance-none rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            </div>
+          </div>
+          <JamTimezoneNote timezone={timezone} resolving={resolvingTimezone} startsAt={toIso(date, startTime)} />
+        </div>
+
+        {/* Location */}
+        <div>
+          <div className="flex items-center justify-between">
+            <Label text={isOfficial ? "Venue / address" : "Location"} required={!locationTbd} />
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={locationTbd}
+                onChange={(e) => {
+                  setLocationTbd(e.target.checked);
+                  if (e.target.checked) setLocation({ fullAddress: "", neighborhood: "" });
+                }}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-zinc-500">TBD</span>
+            </label>
+          </div>
+          {!isOfficial && !locationTbd && (
+            <p className="text-xs text-zinc-400 mt-0.5 mb-1">Exact address is only shared with people who RSVP</p>
+          )}
+          {!locationTbd && (
+            <LocationAutocomplete
+              value={location.fullAddress}
+              onChange={setLocation}
+              placeholder={isOfficial ? "e.g. Freight & Salvage, Berkeley" : "e.g. Cedar Rose Park, Berkeley"}
+            />
+          )}
+        </div>
+
+        {/* Capacity */}
+        <div>
+          <Label text="Capacity" optional />
           <input
             className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            type="url"
-            value={ticketsUrl}
-            onChange={(e) => setTicketsUrl(e.target.value)}
-            placeholder="https://humanitix.com/…"
+            type="number"
+            min="1"
+            value={capacity}
+            onChange={(e) => setCapacity(e.target.value)}
+            placeholder="Leave blank for unlimited"
           />
         </div>
-      )}
 
-      {errors.length > 0 && (
-        <ul className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 space-y-1">
-          {errors.map((e) => <li key={e} className="text-sm text-red-600">{e}</li>)}
-        </ul>
-      )}
+        {isOfficial && (
+          <div>
+            <Label text="Tickets URL" optional />
+            <input
+              className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+              type="url"
+              value={ticketsUrl}
+              onChange={(e) => setTicketsUrl(e.target.value)}
+              placeholder="https://humanitix.com/…"
+            />
+          </div>
+        )}
 
-      <button
-        onClick={goToPreview}
-        disabled={resolvingTimezone || !timezone}
-        className="w-full rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-      >
-        Preview
-      </button>
-    </div>
+        <TagCombobox label="Genres" options={genres} selected={selectedGenres} onChange={setSelectedGenres} placeholder="Search genres…" optional />
+        <TagCombobox label="Themes" options={themes} selected={selectedThemes} onChange={setSelectedThemes} placeholder="Search themes…" optional />
+
+        {/* Description */}
+        <div>
+          <Label text="About" optional />
+          <textarea
+            className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+            rows={6}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Vibe, what to bring, skill level, etc."
+          />
+        </div>
+
+        {errors.length > 0 && (
+          <ul className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 space-y-1">
+            {errors.map((e) => <li key={e} className="text-sm text-red-600">{e}</li>)}
+          </ul>
+        )}
+
+        <button
+          onClick={goToPreview}
+          disabled={resolvingTimezone || !timezone}
+          className="w-full rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+        >
+          Preview
+        </button>
+      </div>
+    </JamSplit>
   );
 }
