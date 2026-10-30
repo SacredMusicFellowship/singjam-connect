@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import JamCard, { JamMap, JamPoster, type JamCardData } from "@/components/JamCard";
+import JamCard, { JamMap, JamPoster, JamSplit, type JamCardData } from "@/components/JamCard";
 import JamRsvpButton from "@/components/JamRsvpButton";
 import JamInvitePanel, { type NewInviteEntry } from "@/components/JamInvitePanel";
 import JamInviteResponse from "@/components/JamInviteResponse";
@@ -124,6 +124,9 @@ export default function JamView({
   const inviteResponse =
     pendingInvite && rsvpStatus !== "attending" && !isHost ? <JamInviteResponse jamId={jamId} /> : null;
 
+  // The set list sits in the left column, under who's going.
+  const setList = hasFullAccess ? <JamSetList jamId={jamId} jamName={jam.name} canManage={canManage} /> : null;
+
   const card = (
     <JamCard
       jam={jamCardData}
@@ -172,7 +175,6 @@ export default function JamView({
     />
   );
 
-  const setList = hasFullAccess ? <JamSetList jamId={jamId} jamName={jam.name} canManage={canManage} /> : null;
 
   // Official events that sell here show who's going too. Ticket buyers get an
   // attending RSVP from the Stripe webhook, so the list is populated the same
@@ -199,42 +201,42 @@ export default function JamView({
     </>
   );
 
-  if (showTicketPanel) {
-    // Two columns from md up, after Luma: the image (shown whole) and a compact
-    // who's going on the left; title, date and place, tickets and description
-    // on the right. Everything after that runs full width below both, with the
-    // host's admin tools last, under the map. The summary is desktop-only, since
-    // on a phone the full list is a scroll away.
-    return (
-      <div className="space-y-4">
-        {inviteResponse}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:items-start md:gap-10">
-          <div className="space-y-6">
+  // Two columns from md up, after Luma: the image (or a date tile) and a
+  // compact who's going on the left; title, date and place, tickets and
+  // description on the right. Everything after that runs full width below
+  // both. The summary is desktop-only, since on a phone the full list is a
+  // scroll away. A ticketed event puts the host's admin tools last, under the
+  // map.
+  return (
+    <div className="space-y-4">
+      {inviteResponse}
+      <JamSplit
+        aside={
+          <>
             <JamPoster jam={jamCardData} />
             {showAttendees && (
               <div className="hidden md:block">
                 <JamAttendeeSummary jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} />
               </div>
             )}
-          </div>
-          {card}
-        </div>
-        {setList}
-        {attendees}
-        <JamMap jam={jamCardData} />
-        {hostTools}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {inviteResponse}
-      {card}
-      {setList}
+          </>
+        }
+        asideBelow={setList}
+      >
+        {card}
+      </JamSplit>
       {attendees}
-      {hostTools}
-      <JamMap jam={jamCardData} />
+      {showTicketPanel ? (
+        <>
+          <JamMap jam={jamCardData} />
+          {hostTools}
+        </>
+      ) : (
+        <>
+          {hostTools}
+          <JamMap jam={jamCardData} />
+        </>
+      )}
     </div>
   );
 }

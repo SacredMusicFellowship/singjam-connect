@@ -79,10 +79,11 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
         <div className="flex items-center gap-2">
           <a
             href={`/set/${set.short_code ?? set.id}`}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+            title={set.name}
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
           >
-            {set.name}
-            <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <span className="truncate">{set.name}</span>
+            <svg className="h-4 w-4 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             </svg>
           </a>
@@ -90,7 +91,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
             <button
               onClick={handleUnlink}
               disabled={unlinking}
-              className="inline-flex items-center rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+              className="inline-flex shrink-0 items-center rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
               {unlinking ? "Unlinking…" : "Unlink"}
             </button>

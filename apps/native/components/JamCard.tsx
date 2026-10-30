@@ -1,7 +1,7 @@
 import { View, Text, Image, TouchableOpacity, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { jamTicketCta, type JamTicketSummary } from '@singjam/core';
+import { jamImageFor, jamTicketCta, type JamTicketSummary } from '@singjam/core';
 
 export type JamItem = {
   id: string;
@@ -13,6 +13,7 @@ export type JamItem = {
   neighborhood: string | null;
   notes: string | null;
   image_url: string | null;
+  image_list_url?: string | null;
   tickets_url: string | null;
   capacity: number | null;
   host_id: string | null;
@@ -68,6 +69,7 @@ export default function JamCard({ jam, myId, canEdit, onPress, onManage }: {
   onManage?: (event: GestureResponderEvent) => void;
 }) {
   const isOfficial = jam.visibility === 'official';
+  const thumb = jamImageFor(jam, 'list');
   const isHosting = !!myId && jam.host_id === myId;
   const isInvited = jam.invite_status === 'pending';
 
@@ -77,23 +79,26 @@ export default function JamCard({ jam, myId, canEdit, onPress, onManage }: {
   const cta = isOfficial && !isPast
     ? jamTicketCta(jam.tickets_url, jam.ticket_summary, { timezone: jam.timezone })
     : null;
+  // As on web: one row after the place, so every card fits the fixed height.
+  // The ticket link wins over tags, and tags over "Details →".
+  const showTags = jam.tags.length > 0 && !cta;
 
   return (
     <View className="relative">
     <TouchableOpacity
       onPress={onPress}
-      className={`mx-4 mb-3 flex-row overflow-hidden rounded-2xl border bg-white ${isOfficial ? 'border-amber-200' : 'border-zinc-200'}`}
+      className={`mx-4 mb-3 h-32 flex-row overflow-hidden rounded-2xl border bg-white ${isOfficial ? 'border-amber-200' : 'border-zinc-200'}`}
     >
-      {jam.image_url ? (
-        <View className="relative w-24 shrink-0 overflow-hidden bg-black">
+      {thumb ? (
+        <View className="relative aspect-square h-full shrink-0 overflow-hidden bg-black">
           <Image
-            source={{ uri: jam.image_url }}
+            source={{ uri: thumb.src }}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            resizeMode="contain"
+            resizeMode="cover"
           />
         </View>
       ) : jam.starts_at ? (
-        <View className={`w-20 shrink-0 items-center justify-center border-r px-2 py-4 ${isOfficial ? 'bg-amber-50 border-amber-200' : 'bg-zinc-50 border-zinc-100'}`}>
+        <View className={`w-20 shrink-0 items-center justify-center border-r px-2 ${isOfficial ? 'bg-amber-50 border-amber-200' : 'bg-zinc-50 border-zinc-100'}`}>
           <Text className={`text-xs font-semibold uppercase tracking-wide ${isOfficial ? 'text-amber-500' : 'text-zinc-400'}`}>
             {fmt(jam.starts_at, jam.timezone, { weekday: 'short' })}
           </Text>
@@ -106,7 +111,7 @@ export default function JamCard({ jam, myId, canEdit, onPress, onManage }: {
         </View>
       ) : null}
 
-      <View className="min-w-0 flex-1 p-4">
+      <View className="min-w-0 flex-1 justify-center p-3">
         {isOfficial && (
           <Text className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-amber-500">
             Official SingJam event
@@ -141,17 +146,30 @@ export default function JamCard({ jam, myId, canEdit, onPress, onManage }: {
         </View>
 
         {jam.starts_at && (
-          <Text className="mt-0.5 text-xs text-zinc-500">
+          <Text className="mt-0.5 text-xs text-zinc-500" numberOfLines={1}>
             {fmt(jam.starts_at, jam.timezone, { weekday: 'short', month: 'short', day: 'numeric' })}
             {' · '}
-            {fmt(jam.starts_at, jam.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
+            {fmt(jam.starts_at, jam.timezone, { hour: 'numeric', minute: '2-digit', ...(jam.ends_at ? {} : { timeZoneName: 'short' }) })}
             {jam.ends_at ? ` – ${fmt(jam.ends_at, jam.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}` : ''}
           </Text>
         )}
-        {jam.neighborhood ? <Text className="mt-0.5 text-xs text-zinc-400">{jam.neighborhood}</Text> : null}
+        {/* Same as mobile web: the host shares the place's line and tags get
+            one row, so every card fits the fixed height that keeps its
+            thumbnail square. */}
+        {jam.neighborhood || (!isOfficial && !isHosting && jam.host_display_name) ? (
+          <Text className="mt-0.5 text-xs text-zinc-400" numberOfLines={1}>
+            {jam.neighborhood}
+            {jam.neighborhood && !isOfficial && !isHosting && jam.host_display_name ? ' · ' : ''}
+            {!isOfficial && !isHosting && jam.host_display_name ? (
+              <>
+                Hosted by <Text className="font-medium text-zinc-500">{jam.host_display_name}</Text>
+              </>
+            ) : null}
+          </Text>
+        ) : null}
 
-        {jam.tags.length > 0 && (
-          <View className="mt-2 flex-row flex-wrap" style={{ gap: 4 }}>
+        {showTags && (
+          <View className="mt-1 h-5 flex-row flex-wrap overflow-hidden" style={{ gap: 4 }}>
             {jam.tags.map((t) => (
               <View key={t} className={`rounded-full px-2 py-0.5 ${isOfficial ? 'bg-amber-50' : 'bg-zinc-100'}`}>
                 <Text className={`text-xs ${isOfficial ? 'text-amber-700' : 'text-zinc-600'}`}>{t}</Text>
@@ -160,19 +178,8 @@ export default function JamCard({ jam, myId, canEdit, onPress, onManage }: {
           </View>
         )}
 
-        {isOfficial ? (
-          <Text className="mt-2 text-xs text-zinc-400">
-            Hosted by <Text className="font-medium text-zinc-500">SingJam</Text>
-          </Text>
-        ) : (!isHosting && jam.host_display_name ? (
-          <Text className="mt-2 text-xs text-zinc-400">
-            Hosted by <Text className="font-medium text-zinc-500">{jam.host_display_name}</Text>
-            {jam.host_username ? <Text> @{jam.host_username}</Text> : null}
-          </Text>
-        ) : null)}
-
         {cta ? (
-          <View className="mt-2 flex-row flex-wrap" style={{ gap: 12 }}>
+          <View className="mt-1.5 flex-row flex-wrap" style={{ gap: 12 }}>
             <TouchableOpacity onPress={onPress} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
               <Text className={`text-xs font-medium ${cta.hasTickets && !cta.externalUrl ? 'text-amber-600' : 'text-zinc-500'}`}>
                 {cta.label} →
@@ -187,6 +194,8 @@ export default function JamCard({ jam, myId, canEdit, onPress, onManage }: {
               </TouchableOpacity>
             ) : null}
           </View>
+        ) : !showTags ? (
+          <Text className="mt-1.5 text-xs font-medium text-zinc-500">Details →</Text>
         ) : null}
       </View>
     </TouchableOpacity>

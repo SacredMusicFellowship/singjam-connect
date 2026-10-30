@@ -1,9 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
-import Image from "next/image";
+import { getImageProps } from "next/image";
 import Link from "next/link";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
-import { dropUsCountry, dropVenueRepeatedInTitle, googleMapsUrl } from "@singjam/core";
+import { dropUsCountry, dropVenueRepeatedInTitle, googleMapsUrl, jamImageFor, JAM_IMAGE_SLOTS } from "@singjam/core";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
+import CollapsibleDescription from "@/components/CollapsibleDescription";
 
 export type JamCardData = {
   id?: string | null;
@@ -18,6 +19,9 @@ export type JamCardData = {
   tickets_url: string | null;
   image_url: string | null;
   image_focal_point?: string | null;
+  image_desktop_url?: string | null;
+  image_mobile_url?: string | null;
+  image_list_url?: string | null;
   genres: string[];
   themes: string[];
   host?: string | null;
@@ -87,7 +91,7 @@ export function JamDescription({
   return (
     <div className={`space-y-2 ${className}`}>
       <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">About</h2>
-      <p className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">{jam.notes}</p>
+      <CollapsibleDescription text={jam.notes} />
     </div>
   );
 }
@@ -124,26 +128,83 @@ function LocationText({ query, children }: { query: string | null; children: Rea
 }
 
 /**
- * The event image for the ticketed layout's left column. On wide screens it is
- * shown whole at its own shape, since event images are often flyers carrying
- * the date, address and prices that the banner crop cut off. On phones it fills
- * a fixed-height box, cropped around the host's focal point, so the tickets
- * stay near the top: a portrait flyer loses its bottom (the small print the
- * page repeats as text anyway), a wide photo its sides.
+ * The event image for the two-column layout: the host's square desktop crop
+ * from md up, their 3:2 mobile crop below it. A <picture> rather than two
+ * images, so a phone never downloads the desktop file. Events with no baked
+ * crops show the main image cover-cropped around its focal point instead.
  */
 export function JamPoster({ jam }: { jam: JamCardData }) {
-  if (!jam.image_url) return null;
+  const desktop = jamImageFor(jam, "desktop");
+  const mobile = jamImageFor(jam, "mobile");
+  if (!desktop || !mobile) return <JamDateTile jam={jam} />;
+  const alt = jam.name ?? "Event";
+  const { desktop: d, mobile: m } = JAM_IMAGE_SLOTS;
+  const {
+    props: { srcSet: desktopSrcSet, sizes: desktopSizes },
+  } = getImageProps({ alt, src: desktop.src, width: d.width, height: d.width / d.aspect, sizes: "360px" });
+  const { props: mobileProps } = getImageProps({
+    alt,
+    src: mobile.src,
+    width: m.width,
+    height: m.width / m.aspect,
+    sizes: "100vw",
+    priority: true,
+  });
   return (
-    <Image
-      src={jam.image_url}
-      alt={jam.name ?? "Event"}
-      width={800}
-      height={800}
-      className="h-64 w-full rounded-2xl object-cover object-[var(--focal-point)] sm:h-80 md:h-auto md:object-contain"
-      style={{ "--focal-point": jam.image_focal_point ?? "50% 50%" } as CSSProperties}
-      sizes="(min-width: 768px) 360px, 100vw"
-      priority
-    />
+    <picture>
+      <source media="(min-width: 768px)" srcSet={desktopSrcSet} sizes={desktopSizes} />
+      <img
+        {...mobileProps}
+        className="aspect-[3/2] w-full rounded-2xl object-cover object-[var(--pos-mobile)] md:aspect-square md:object-[var(--pos-desktop)]"
+        style={{ "--pos-mobile": mobile.position, "--pos-desktop": desktop.position } as CSSProperties}
+      />
+    </picture>
+  );
+}
+
+/**
+ * Stands in for the poster on an event without an image, so every event page
+ * has the same two columns, styled like the date tile on the jams list.
+ * Desktop only: on a phone the title already opens the page and the date is
+ * the first row under it.
+ */
+function JamDateTile({ jam }: { jam: JamCardData }) {
+  if (!jam.starts_at) return null;
+  const isOfficial = jam.visibility === "official";
+  const accent = isOfficial ? "text-amber-500" : "text-zinc-400";
+  return (
+    <div
+      className={`hidden aspect-square w-full flex-col items-center justify-center rounded-2xl border md:flex ${isOfficial ? "border-amber-200 bg-amber-50" : "border-zinc-200 bg-zinc-50"}`}
+    >
+      <span className={`text-sm font-semibold uppercase tracking-wide ${accent}`}>
+        <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "long" }} />
+      </span>
+      <span className="text-7xl font-bold leading-none text-zinc-900">
+        <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ day: "numeric" }} />
+      </span>
+      <span className={`mt-1 text-sm font-semibold uppercase tracking-wide ${accent}`}>
+        <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ month: "long" }} />
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The event page's two columns from md up, after Luma: the poster (and
+ * whatever goes under it) on the left, the details on the right. One column
+ * on a phone: poster, details, then `asideBelow`, which on desktop sits in
+ * the left column under the poster. Its row takes up whatever height the
+ * details have to spare, so it starts right under the poster rather than
+ * waiting for the details to end. The editor uses this too, so it lays out
+ * the same.
+ */
+export function JamSplit({ aside, asideBelow, children }: { aside: ReactNode; asideBelow?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:grid-rows-[auto_1fr] md:items-start md:gap-x-10 md:gap-y-6">
+      <div className="space-y-6 md:col-start-1 md:row-start-1">{aside}</div>
+      <div className="min-w-0 md:col-start-2 md:row-span-2 md:row-start-1">{children}</div>
+      {asideBelow && <div className="min-w-0 md:col-start-1 md:row-start-2">{asideBelow}</div>}
+    </div>
   );
 }
 
@@ -163,13 +224,9 @@ export default function JamCard({
    * the only thing above the tier list, which read as the primary action.
    */
   sellsTickets?: boolean;
-  /**
-   * The ticket purchase panel. Its presence switches the card to the ticketed
-   * layout: no hero image (JamView puts JamPoster in a column of its own), the
-   * date and place as plain rows rather than a boxed strip, and the panel
-   * directly under them, so it is the one boxed thing above the description.
-   */
+  /** The ticket purchase panel, directly under the date and place. */
   ticketPanel?: ReactNode;
+
   /**
    * False on the event page, which renders the map itself at the very bottom
    * on every jam type. The New/Edit jam previews keep it inside the card.
@@ -183,12 +240,13 @@ export default function JamCard({
   const mapsUrl = googleMapsUrl(mapQuery);
   const showCalendar = !!jam.starts_at && !sellsTickets;
 
-  const boxed = !ticketPanel;
-  const row = boxed ? "flex items-start gap-4 px-5 py-3 sm:py-4" : "flex items-start gap-3";
-  const iconBox = boxed ? "shrink-0 w-10 flex justify-center pt-0.5" : "shrink-0 pt-0.5";
+  // Plain rows beside the poster (JamSplit draws it in its own column), so a
+  // ticket panel is the one boxed thing above the description.
+  const row = "flex items-start gap-3";
+  const iconBox = "shrink-0 pt-0.5";
 
   const detailStrip = (
-    <div className={boxed ? "rounded-2xl border border-zinc-200 bg-white divide-y divide-zinc-100" : "space-y-3"}>
+    <div className="space-y-3">
       {jam.starts_at && (
         <div className={row}>
           <div className={iconBox}>
@@ -247,23 +305,6 @@ export default function JamCard({
 
   return (
     <div>
-      {/* Hero image */}
-      {jam.image_url && !ticketPanel && (
-        <div
-          className="relative mb-4 h-48 overflow-hidden rounded-2xl bg-black sm:mb-6 sm:h-80"
-          style={{ "--focal-point": jam.image_focal_point ?? "50% 50%" } as CSSProperties}
-        >
-          <Image
-            src={jam.image_url}
-            alt={jam.name ?? "Event"}
-            fill
-            className="object-contain sm:object-cover sm:object-[var(--focal-point)]"
-            sizes="(max-width: 896px) 100vw, 896px"
-            priority
-          />
-        </div>
-      )}
-
       <div className="space-y-4 sm:space-y-6">
         {/* Header */}
         {/* An official event's title, image and venue already say it is
