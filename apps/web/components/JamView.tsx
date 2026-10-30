@@ -128,7 +128,11 @@ export default function JamView({
   // at all, and a fragment is truthy even when it renders nothing — which would
   // leave an empty row and its gap behind on a ticketed event, where the
   // calendar button was the row's only occupant.
-  const hasActions = showRsvp || (!userId && !isOfficial);
+  // A ticket holder or leader gets the same "You're going" as an RSVP, but no
+  // Cancel: a ticket isn't given back from here, and a leader steps down from
+  // their row in Who's going.
+  const goingOnTicket = sellsTickets && data.rsvpStatus === "attending";
+  const hasActions = showRsvp || (!userId && !isOfficial) || goingOnTicket;
 
   const [rsvpStatus, setRsvpStatus] = useState(data.rsvpStatus);
   const [hasFullAccess, setHasFullAccess] = useState(data.hasFullAccess);
@@ -143,7 +147,7 @@ export default function JamView({
   const card = (
     <JamCard
       jam={jamCardData}
-      sellsTickets={sellsTickets && rsvpStatus !== "attending"}
+      sellsTickets={sellsTickets && !goingOnTicket}
       // Official events sell tickets instead of taking RSVPs — showRsvp is
       // false for them. The map is rendered last on the page for every jam
       // type, below.
@@ -174,6 +178,11 @@ export default function JamView({
                 setHasFullAccess(isOfficial || newStatus === "attending" || canManage);
               }}
             />
+          )}
+          {goingOnTicket && (
+            <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
+              ✓ You&apos;re going
+            </span>
           )}
           {!userId && !isOfficial && (
             <Link
