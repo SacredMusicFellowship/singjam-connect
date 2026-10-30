@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { jamIsFull, jamSeatsTaken } from "./jamCapacity";
+import { jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from "./jamCapacity";
 
 const privateJam = { capacity: 9, host_user_id: "host", visibility: "private" };
 const official = { capacity: 9, host_user_id: "creator", visibility: "official" };
@@ -32,5 +32,15 @@ describe("jamIsFull", () => {
 
   it("is never full without a capacity", () => {
     expect(jamIsFull({ ...privateJam, capacity: null }, 500)).toBe(false);
+  });
+});
+
+describe("jamSeatExcludedUserId", () => {
+  it("leaves out the host's row on a jam, since their seat is added separately", () => {
+    expect(jamSeatExcludedUserId(privateJam)).toBe("host");
+  });
+
+  it("leaves nobody out on an official event, where the creator's RSVP is an ordinary one", () => {
+    expect(jamSeatExcludedUserId(official)).toBeNull();
   });
 });

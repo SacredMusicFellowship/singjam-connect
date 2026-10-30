@@ -195,7 +195,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
           in the DOM so it paints over the poster image, which needs its own
           `relative` for next/image fill. */}
       <Link
-        href={`/jam/${jam.id}`}
+        href={`/jam/${jam.short_code ?? jam.id}`}
         className="absolute inset-0 z-0"
         aria-label={jam.name ?? (isOfficial ? "SingJam event" : "Community jam")}
       />
@@ -318,7 +318,7 @@ export default function JamsContent() {
       fetchAllRows<any>((from, to) =>
         supabase
           .from("jams")
-          .select("id, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, visibility, host_user_id, jam_genres(genres(name)), jam_themes(themes(name)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)")
+          .select("id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, visibility, host_user_id, jam_genres(genres(name)), jam_themes(themes(name)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)")
           .gte("starts_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
           .order("starts_at", { ascending: true, nullsFirst: false })
           .order("id")

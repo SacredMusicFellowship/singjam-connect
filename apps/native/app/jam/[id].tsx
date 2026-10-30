@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { canEditJam, dropUsCountry, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatsTaken } from '@singjam/core';
+import { canEditJam, dropUsCountry, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -574,7 +574,9 @@ export default function JamDetailScreen() {
   // The host holds a seat but has no RSVP row; on web's list they are the
   // first person going, and the capacity count includes them the same way.
   const capacityJam = { capacity: jam.capacity, host_user_id: jam.host_id, visibility: jam.visibility };
-  const othersGoing = attendees.filter(a => a.user_id !== jam.host_id);
+  // On an official event nobody is filtered: the creator's RSVP is an ordinary one.
+  const excludedUserId = jamSeatExcludedUserId(capacityJam);
+  const othersGoing = attendees.filter(a => a.user_id !== excludedUserId);
   const seatsTaken = jamSeatsTaken(capacityJam, othersGoing.length);
   const isFull = jamIsFull(capacityJam, othersGoing.length);
   const going: Attendee[] = jam.host_id && jam.visibility !== 'official'

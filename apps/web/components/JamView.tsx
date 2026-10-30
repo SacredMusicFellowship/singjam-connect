@@ -35,6 +35,8 @@ export type JamViewData = {
   attendingCount: number;
   /** Who counts against capacity: the attending RSVPs plus the host's own seat. */
   seatsTaken: number;
+  /** Who "Message attendees" reaches: attending RSVPs other than the viewer, plus guest buyers. */
+  messageRecipientCount: number;
   /** Ticket buyers without an account; only computed for those who can manage. */
   guestBuyerCount: number;
   pendingInvite: boolean;
@@ -70,7 +72,7 @@ export default function JamView({
     waitlistPosition,
     attendingCount,
     seatsTaken,
-    guestBuyerCount,
+    messageRecipientCount,
     pendingInvite,
     isOfficial,
     hasTicketTiers,
@@ -188,7 +190,7 @@ export default function JamView({
         />
       )}
       {canManage && <JamInviteList jamId={jamId} invites={inviteList} />}
-      {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={attendingCount + guestBuyerCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
+      {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={messageRecipientCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
     </>
   );
 

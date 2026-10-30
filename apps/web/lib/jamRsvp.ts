@@ -3,7 +3,7 @@ import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { jamRsvpConfirmedHtml } from "@/emails/jam-rsvp-confirmed";
 import { createNotification } from "@/lib/notifications";
 import { joinJamSetList } from "@/lib/jamAttendance";
-import { jamIsFull } from "@singjam/core";
+import { jamIsFull, jamSeatExcludedUserId } from "@singjam/core";
 
 export const RSVP_JAM_COLUMNS =
   "id, name, capacity, host_user_id, visibility, starts_at, ends_at, timezone, full_address, neighborhood";
@@ -49,7 +49,8 @@ export async function rsvpToJam(
     .select("id", { count: "exact", head: true })
     .eq("jam_id", jam.id)
     .eq("status", "attending");
-  if (jam.host_user_id) attendingQuery = attendingQuery.neq("user_id", jam.host_user_id);
+  const excludedUserId = jamSeatExcludedUserId(jam);
+  if (excludedUserId) attendingQuery = attendingQuery.neq("user_id", excludedUserId);
   const { count: attendingCount } = await attendingQuery;
   const isFull = jamIsFull(jam, attendingCount ?? 0);
 

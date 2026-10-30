@@ -5,6 +5,7 @@ import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
 
 export type JamEventCardData = {
   id: string;
+  short_code?: string | null;
   name: string | null;
   starts_at: string | null;
   ends_at: string | null;
@@ -78,7 +79,7 @@ export default function JamEventCard({
       </div>
       {/* Last in the DOM so it paints over the poster image, which needs its
           own `relative` for next/image fill and would otherwise take the click. */}
-      <Link href={`/jam/${jam.id}`} className="absolute inset-0 z-0" aria-label={name} />
+      <Link href={`/jam/${jam.short_code ?? jam.id}`} className="absolute inset-0 z-0" aria-label={name} />
     </div>
   );
 }
