@@ -111,4 +111,17 @@ describe("GET /api/users/search", () => {
       exclude_user_id: authedUser.id,
     });
   });
+
+  it("leaves the searcher out by default", async () => {
+    await GET(req("ben"));
+    expect(mockRpc).toHaveBeenCalledWith("search_users", { search_query: "ben", exclude_user_id: "user-123" });
+  });
+
+  it("includes the searcher when asked, as the leader panel does", async () => {
+    await GET(new Request("http://localhost/api/users/search?q=ben&include_self=1"));
+    expect(mockRpc).toHaveBeenCalledWith("search_users", {
+      search_query: "ben",
+      exclude_user_id: "00000000-0000-0000-0000-000000000000",
+    });
+  });
 });

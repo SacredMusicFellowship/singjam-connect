@@ -39,7 +39,7 @@ export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: str
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(`/api/users/search?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch(`/api/users/search?q=${encodeURIComponent(query.trim())}&include_self=1`);
         if (res.ok) setResults(await res.json());
       } finally {
         setSearching(false);
