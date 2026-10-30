@@ -226,6 +226,7 @@ export default async function JamPage({
       data={{
         jam: { name: jam.name, capacity: jam.capacity, host_user_id: jam.host_user_id },
         jamCardData,
+        shortCode: jam.short_code,
         userId,
         rsvpStatus,
         waitlistPosition,

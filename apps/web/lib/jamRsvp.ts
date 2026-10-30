@@ -3,13 +3,14 @@ import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { jamRsvpConfirmedHtml } from "@/emails/jam-rsvp-confirmed";
 import { createNotification } from "@/lib/notifications";
 import { joinJamSetList } from "@/lib/jamAttendance";
-import { jamIsFull, jamSeatExcludedUserId } from "@singjam/core";
+import { jamIsFull, jamPath, jamSeatExcludedUserId } from "@singjam/core";
 
 export const RSVP_JAM_COLUMNS =
-  "id, name, capacity, host_user_id, visibility, starts_at, ends_at, timezone, full_address, neighborhood";
+  "id, short_code, name, capacity, host_user_id, visibility, starts_at, ends_at, timezone, full_address, neighborhood";
 
 export type RsvpJam = {
   id: string;
+  short_code?: string | null;
   name: string | null;
   capacity: number | null;
   host_user_id: string | null;
@@ -106,7 +107,7 @@ export async function rsvpToJam(
         name,
         jamName: jam.name ?? "the jam",
         jamId: jam.id,
-        jamUrl: `https://singjam.org/jam/${jam.id}`,
+        jamUrl: `https://singjam.org${jamPath(jam)}`,
         startsAt: jam.starts_at,
         endsAt: jam.ends_at ?? null,
         timezone: jam.timezone,

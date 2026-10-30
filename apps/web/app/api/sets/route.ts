@@ -91,7 +91,7 @@ export async function POST(req: Request) {
   const { data, error } = await supabase
     .from("sets")
     .insert({ name: name.trim(), description: description?.trim() || null, owner_user_id: user.id, jam_id: jamId ?? null })
-    .select("id")
+    .select("id, short_code")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -121,5 +121,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ id: setId });
+  return NextResponse.json({ id: setId, short_code: (data as any).short_code });
 }

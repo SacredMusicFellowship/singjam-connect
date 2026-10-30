@@ -7,7 +7,7 @@ import Link from "next/link";
  * address they bought with claims the ticket and makes them an editor of the
  * set (claimGuestTickets → markAttending), so "add songs" is a real promise.
  */
-export default function SetGuestPrompt({ setId, forEvent }: { setId: string; forEvent: boolean }) {
+export default function SetGuestPrompt({ setId, shortCode, forEvent }: { setId: string; shortCode?: string | null; forEvent: boolean }) {
   return (
     <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
       <p className="text-base font-semibold text-zinc-900">
@@ -19,7 +19,7 @@ export default function SetGuestPrompt({ setId, forEvent }: { setId: string; for
           : "Sign up to copy this set, mark the songs you know, and build sets of your own."}
       </p>
       <Link
-        href={`/auth?mode=signup&next=/set/${setId}`}
+        href={`/auth?mode=signup&next=/set/${shortCode || setId}`}
         className="mt-4 inline-block text-sm font-medium text-amber-600 hover:text-amber-500"
       >
         Sign up →

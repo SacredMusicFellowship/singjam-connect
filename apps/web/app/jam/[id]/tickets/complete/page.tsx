@@ -8,6 +8,7 @@ import { findEventSet } from "@/lib/eventSet";
 import { inNextDev } from "@/lib/devSafety";
 import { buildCheckoutPreview, parsePreviewItems } from "@/lib/ticketCheckoutPreview";
 import { redirect } from "next/navigation";
+import { jamPathById, setPathById } from "@/lib/shortRef";
 
 // `next dev` only: each state of this page, by link, without a real order.
 const SHOW_STATES = ["paid", "pending", "failed", "refunded", "missing"] as const;
@@ -58,10 +59,12 @@ export default async function TicketsCompletePage({
   // so guests get the link too — adding to it is what needs an account. Shown
   // whenever the event has a set, even before songs are added.
   const realSet = await findEventSet(admin, jamId);
+  const eventPath = await jamPathById(jamId);
   // In dev, set=none / set=some shows the page without or with the set-list
   // button whatever this event's set holds; "some" links to the event page
   // when there's no real set to link to.
   const linkedSet = !dev || !set ? realSet : set === "none" ? null : realSet ?? { id: "" };
+  const setHref = linkedSet?.id ? await setPathById(linkedSet.id) : eventPath;
 
   // A charged order is found by its Stripe session; a comped one never had a
   // session, so it comes back by order id instead. Both identifiers are v4
@@ -73,7 +76,7 @@ export default async function TicketsCompletePage({
   const summary = previewItems
     ? await buildCheckoutPreview(admin, jamId, jam?.name ?? null, previewItems, promo ?? "", cover === "1")
     : null;
-  if (summary && "error" in summary) redirect(`/jam/${jamId}`);
+  if (summary && "error" in summary) redirect(eventPath);
   const previewOrder =
     summary && !("error" in summary)
       ? {
@@ -203,7 +206,7 @@ export default async function TicketsCompletePage({
             checkout faster next time.
           </p>
           <Link
-            href={`/auth?next=/jam/${jamId}`}
+            href={`/auth?next=${eventPath}`}
             className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             Create an account
@@ -228,7 +231,7 @@ export default async function TicketsCompletePage({
             what everyone else has picked.
           </p>
           <Link
-            href={linkedSet!.id ? `/set/${linkedSet!.id}` : `/jam/${jamId}`}
+            href={setHref}
             className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             View set list
@@ -239,14 +242,14 @@ export default async function TicketsCompletePage({
       <div className="flex flex-wrap gap-2">
         {outcome.kind === "paid" && linkedSet && !memberSongInvite && (
           <Link
-            href={linkedSet.id ? `/set/${linkedSet.id}` : `/jam/${jamId}`}
+            href={setHref}
             className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             View set list
           </Link>
         )}
         <Link
-          href={`/jam/${jamId}`}
+          href={eventPath}
           className={
             outcome.kind === "paid" && linkedSet
               ? "inline-block rounded-xl border border-zinc-200 px-5 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"

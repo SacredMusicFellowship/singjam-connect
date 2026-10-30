@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { setPath } from "@singjam/core";
 
 type LinkedSet = { id: string; short_code?: string | null; name: string };
 type OwnedSet = { id: string; name: string };
@@ -30,8 +31,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, jamId }),
     });
-    const { id } = await res.json();
-    router.push(`/set/${id}`);
+    router.push(setPath(await res.json()));
   }
 
   async function handleShowLink() {

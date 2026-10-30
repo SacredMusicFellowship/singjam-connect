@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { reorderSongsForPlayed } from "@singjam/core";
+import { jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -51,6 +51,7 @@ export default function SetDetail({
   isPublicViewer = false,
   songKnowledge: initialSongKnowledge = [],
   canAccessJam = false,
+  jamShortCode = null,
 }: {
   set: SetData;
   initialSongs: Song[];
@@ -66,6 +67,7 @@ export default function SetDetail({
   isPublicViewer?: boolean;
   songKnowledge?: { user_id: string; song_id: string; confidence: string }[];
   canAccessJam?: boolean;
+  jamShortCode?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -134,7 +136,7 @@ export default function SetDetail({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
-    }).then(() => router.replace(`/set/${set.id}`));
+    }).then(() => router.replace(setPath(set)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -800,8 +802,7 @@ export default function SetDetail({
     setSetMenuOpen(false);
     const res = await fetch(`/api/sets/${set.id}/copy`, { method: "POST" });
     if (res.ok) {
-      const { id } = await res.json();
-      router.push(`/set/${id}`);
+      router.push(setPath(await res.json()));
     } else {
       setCopying(false);
     }
@@ -857,7 +858,7 @@ export default function SetDetail({
 
       {set.jam_id && canAccessJam && (
         <a
-          href={`/jam/${set.jam_id}`}
+          href={jamPath({ id: set.jam_id, short_code: jamShortCode })}
           className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
         >
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -934,7 +935,7 @@ export default function SetDetail({
             </button>
           ) : (
             <a
-              href={`/auth?next=/set/${set.id}`}
+              href={`/auth?next=${setPath(set)}`}
               className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
             >
               Sign in to copy
@@ -1487,7 +1488,7 @@ export default function SetDetail({
                     onLeadersChanged={handleLeadersChanged}
                     onAddToRepertoire={handleAddToRepertoire}
                     onVoiceUpdated={setUserSingingVoice}
-                    signInUrl={currentUserId ? undefined : `/auth?next=/set/${set.id}`}
+                    signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
                   />
                 );
               }}
@@ -1527,7 +1528,7 @@ export default function SetDetail({
                     onVoiceUpdated={setUserSingingVoice}
                     onTogglePlayed={handleTogglePlayed}
                     onRemove={handleRemoveSong}
-                    signInUrl={currentUserId ? undefined : `/auth?next=/set/${set.id}`}
+                    signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
                   />
                 </div>
               );

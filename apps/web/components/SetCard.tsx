@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { setPath } from "@singjam/core";
 
 type SetCardProps = {
   set: {
@@ -51,8 +52,7 @@ export default function SetCard({ set, songCount, isOwner, ownerName, ownerUsern
     setMenuOpen(false);
     const res = await fetch(`/api/sets/${set.id}/copy`, { method: "POST" });
     if (res.ok) {
-      const { id } = await res.json();
-      router.push(`/set/${id}`);
+      router.push(setPath(await res.json()));
     } else {
       setCopying(false);
     }

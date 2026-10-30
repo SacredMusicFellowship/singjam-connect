@@ -7,6 +7,7 @@ import { inNextDev } from "@/lib/devSafety";
 import { buildCheckoutPreview, parsePreviewItems, previewUrl } from "@/lib/ticketCheckoutPreview";
 import { resolveTicketPaymentState, type PaymentSession } from "@/lib/ticketPaymentState";
 import TicketPaymentPanel from "@/components/TicketPaymentPanel";
+import { jamPathById } from "@/lib/shortRef";
 
 // Card entry, on its own page.
 //
@@ -32,7 +33,7 @@ export default async function TicketPaymentPage({
   const { id: jamId } = await params;
   const { order_id, preview, promo, cover, show } = await searchParams;
 
-  const backToEvent = `/jam/${jamId}`;
+  const backToEvent = await jamPathById(jamId);
 
   // `next dev` never holds tickets, so it can't reach this screen the real way.
   if (show === "expired" && inNextDev()) return <HoldExpired backToEvent={backToEvent} />;

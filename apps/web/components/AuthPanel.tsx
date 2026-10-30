@@ -52,8 +52,8 @@ export default function AuthPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: inviteToken }),
       });
-      const { jamId } = res.ok ? await res.json() : {};
-      if (jamId) return `/jam/${jamId}`;
+      const { jamId, jamPath } = res.ok ? await res.json() : {};
+      if (jamId) return jamPath ?? `/jam/${jamId}`;
     }
     return "/repertoire";
   }
@@ -81,8 +81,8 @@ export default function AuthPanel({
     const dest = await resolveDestination();
     // Nothing more specific was asked for, and they just turned out to own a
     // ticket — send them to it rather than to their repertoire.
-    const claimedJam = claimed?.jam_ids?.[0];
-    router.push(dest === "/repertoire" && claimedJam ? `/jam/${claimedJam}` : dest);
+    const claimedJam = claimed?.jam_path ?? (claimed?.jam_ids?.[0] ? `/jam/${claimed.jam_ids[0]}` : null);
+    router.push(dest === "/repertoire" && claimedJam ? claimedJam : dest);
   }
 
   async function signUp() {
@@ -116,11 +116,11 @@ export default function AuthPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inviteToken }),
       });
-      const { jamId } = await setupRes.json().catch(() => ({}));
+      const { jamId, jamPath } = await setupRes.json().catch(() => ({}));
 
       // The welcome email is sent server-side by /api/auth/complete.
 
-      const dest = jamId ? `/jam/${jamId}` : next ?? "/repertoire";
+      const dest = jamId ? jamPath ?? `/jam/${jamId}` : next ?? "/repertoire";
       router.push(`/account?next=${encodeURIComponent(dest)}`);
     } else {
       // Confirmation still required (fallback)

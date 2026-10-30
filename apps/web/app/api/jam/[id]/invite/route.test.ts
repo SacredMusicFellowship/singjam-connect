@@ -45,6 +45,10 @@ vi.mock("@/emails/jam-invite", () => ({
 
 vi.mock("@/lib/notifications", () => ({ createNotification: mockCreateNotification }));
 vi.mock("@/lib/jamCohosts", () => ({ isJamCohost: mockIsJamCohost }));
+vi.mock("@/lib/shortRef", () => ({
+  jamPathById: async (id: string) => `/jam/${id}`,
+  setPathById: async (id: string) => `/set/${id}`,
+}));
 
 import { POST } from "./route";
 

@@ -20,3 +20,14 @@ async function resolveId(table: "jams" | "sets", ref: string): Promise<string | 
 
 export const resolveJamId = cache((ref: string) => resolveId("jams", ref));
 export const resolveSetId = cache((ref: string) => resolveId("sets", ref));
+
+// For server code holding only an id (emails, redirects): the page's short
+// path, or the uuid path if the row can't be read.
+async function shortPath(table: "jams" | "sets", id: string): Promise<string> {
+  const { data } = await supabaseAdmin().from(table).select("short_code").eq("id", id).maybeSingle();
+  const code = (data as any)?.short_code;
+  return `/${table === "jams" ? "jam" : "set"}/${code || id}`;
+}
+
+export const jamPathById = cache((id: string) => shortPath("jams", id));
+export const setPathById = cache((id: string) => shortPath("sets", id));

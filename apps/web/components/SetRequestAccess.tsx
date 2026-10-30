@@ -5,17 +5,19 @@ import Link from "next/link";
 
 export default function SetRequestAccess({
   setId,
+  shortCode,
   setName,
   isLoggedIn,
   inviteToken,
 }: {
   setId: string;
+  shortCode?: string | null;
   setName: string;
   isLoggedIn: boolean;
   inviteToken?: string;
 }) {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const setPath = `/set/${setId}${inviteToken ? `?invite=${inviteToken}` : ""}`;
+  const setPath = `/set/${shortCode || setId}${inviteToken ? `?invite=${inviteToken}` : ""}`;
 
   async function handleRequest() {
     setStatus("sending");

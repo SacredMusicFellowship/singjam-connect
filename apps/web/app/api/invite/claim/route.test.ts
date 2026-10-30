@@ -11,6 +11,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 // The claim rules themselves are covered in lib/claimJamInvite.test.ts.
 vi.mock("@/lib/claimJamInvite", () => ({ claimJamInvite: mockClaim }));
+vi.mock("@/lib/shortRef", () => ({ jamPathById: async (id: string) => `/jam/code-for-${id}` }));
 
 import { POST } from "./route";
 
@@ -48,7 +49,7 @@ describe("POST /api/invite/claim", () => {
     const res = await POST(makeReq({ token: TOKEN }));
     expect(res.status).toBe(200);
     expect(mockClaim).toHaveBeenCalledWith(TOKEN, "user-1");
-    expect(await res.json()).toMatchObject({ ok: true, jamId: "jam-1" });
+    expect(await res.json()).toMatchObject({ ok: true, jamId: "jam-1", jamPath: "/jam/code-for-jam-1" });
   });
 
   it("returns a null jamId when the token matches nothing", async () => {
@@ -56,6 +57,6 @@ describe("POST /api/invite/claim", () => {
     mockClaim.mockResolvedValue(null);
 
     const res = await POST(makeReq({ token: TOKEN }));
-    expect(await res.json()).toMatchObject({ ok: true, jamId: null });
+    expect(await res.json()).toMatchObject({ ok: true, jamId: null, jamPath: null });
   });
 });

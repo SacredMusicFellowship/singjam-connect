@@ -9,7 +9,7 @@ import JamCard from "./JamCard";
 import FocalPointPicker from "./FocalPointPicker";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
-import { JAM_IMAGE_TYPE_ERROR, JAM_IMAGE_TYPES, isJamImageType, zonedInputToIso } from "@singjam/core";
+import { JAM_IMAGE_TYPE_ERROR, JAM_IMAGE_TYPES, isJamImageType, jamPath, zonedInputToIso } from "@singjam/core";
 import { visibilityForNewJam } from "@/lib/devSafety";
 
 type LookupItem = { id: string; name: string };
@@ -186,7 +186,7 @@ export default function NewJamForm({
       capacity: capacity ? parseInt(capacity, 10) : null,
       timezone,
       created_at: new Date().toISOString(),
-    }).select("id").single();
+    }).select("id, short_code").single();
 
     if (error || !data?.id) {
       setBusy(false);
@@ -227,7 +227,7 @@ export default function NewJamForm({
       }
     }
 
-    router.push(`/jam/${jamId}`);
+    router.push(jamPath(data));
   }
 
   const isOfficial = visibility === "official";

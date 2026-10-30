@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Resend } from "resend";
 import { jamReminderHtml } from "../emails/jam-reminder";
+import { jamPath } from "@singjam/core";
 
 // Sent from the events inbox like other event logistics (see lib/resend.ts). The
 // Netlify function passes a plain Resend client, so the shared reply-to is not
@@ -57,7 +58,7 @@ export async function sendJamReminders(admin: SupabaseClient, resend: Resend): P
 
   let jamsQuery = admin
     .from("jams")
-    .select("id, name, starts_at, timezone, full_address, neighborhood, host_user_id")
+    .select("id, short_code, name, starts_at, timezone, full_address, neighborhood, host_user_id")
     .gte("starts_at", windowStart)
     .lte("starts_at", windowEnd);
 
@@ -82,7 +83,7 @@ export async function sendJamReminders(admin: SupabaseClient, resend: Resend): P
     // Isolate each jam so a failure on one doesn't abort reminders for the rest.
     try {
       const address = jam.full_address ?? jam.neighborhood ?? null;
-      const jamUrl = `https://singjam.org/jam/${jam.id}`;
+      const jamUrl = `https://singjam.org${jamPath(jam)}`;
       const jamDay = new Date(jam.starts_at).toLocaleString("en-US", {
         timeZone: jam.timezone ?? undefined,
         weekday: "long",

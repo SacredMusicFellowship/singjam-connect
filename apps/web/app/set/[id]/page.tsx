@@ -175,13 +175,14 @@ export default async function SetPage({
   // Gate by visibility mode
   if (!isOwner && !isCollaborator && !isAdmin && !isSongEditor) {
     if (set.link_sharing === "private") {
-      return <SetRequestAccess setId={set.id} setName={set.name} isLoggedIn={!!user} inviteToken={inviteToken} />;
+      return <SetRequestAccess setId={set.id} shortCode={set.short_code} setName={set.name} isLoggedIn={!!user} inviteToken={inviteToken} />;
     }
     if (set.link_sharing === "link" && !user) {
       // Open-join sets require a SingJam account to auto-join
       return (
         <SetJoinPrompt
           setId={set.id}
+          shortCode={set.short_code}
           setName={set.name}
           ownerName={set.profiles?.display_name ?? set.profiles?.username ?? null}
           mode="join"
@@ -207,9 +208,12 @@ export default async function SetPage({
       ).data ?? []) as { user_id: string; song_id: string; confidence: string }[]
     : [];
 
-  const canAccessJam = set.jam_id
-    ? await supabase.from("jams").select("id").eq("id", set.jam_id).maybeSingle().then(r => r.data !== null)
-    : false;
+  // RLS decides whether the viewer can see the linked jam; when they can, the
+  // same read gives the short code for the "Back to jam" link.
+  const linkedJam = set.jam_id
+    ? (await supabase.from("jams").select("id, short_code").eq("id", set.jam_id).maybeSingle()).data
+    : null;
+  const canAccessJam = linkedJam !== null;
 
   return (
     <Suspense>
@@ -229,8 +233,9 @@ export default async function SetPage({
         isPublicViewer={isPublicViewer}
         songKnowledge={songKnowledge}
         canAccessJam={canAccessJam}
+        jamShortCode={(linkedJam as any)?.short_code ?? null}
       />
-      {!user && <SetGuestPrompt setId={set.id} forEvent={!!set.jam_id} />}
+      {!user && <SetGuestPrompt setId={set.id} shortCode={set.short_code} forEvent={!!set.jam_id} />}
     </Suspense>
   );
 }

@@ -89,10 +89,13 @@ export function TicketPurchaseSkeleton() {
 
 export default function TicketPurchasePanel({
   jamId,
+  eventPath,
   isSignedIn,
   timezone,
 }: {
   jamId: string;
+  /** The event page's short path, for returning here after signing in. */
+  eventPath?: string;
   isSignedIn: boolean;
   /** The event's timezone, for dating a tier that hasn't opened yet. */
   timezone?: string | null;
@@ -344,7 +347,7 @@ export default function TicketPurchasePanel({
           />
           <p className="text-xs text-zinc-400">
             We&apos;ll send your ticket here.{" "}
-            <a href={`/auth?next=${encodeURIComponent(`/jam/${jamId}`)}`} className="underline hover:text-zinc-600">
+            <a href={`/auth?next=${encodeURIComponent(eventPath ?? `/jam/${jamId}`)}`} className="underline hover:text-zinc-600">
               Or sign in
             </a>
             .

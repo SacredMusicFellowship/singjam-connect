@@ -11,6 +11,7 @@ import JamHostActions from "@/components/JamHostActions";
 import JamAttendeeList, { JamAttendeeSummary } from "@/components/JamAttendeeList";
 import JamSetList from "@/components/JamSetList";
 import TicketPurchasePanel from "@/components/TicketPurchasePanel";
+import { jamPath } from "@singjam/core";
 
 export type InviteEntry = {
   id: string;
@@ -29,6 +30,8 @@ export type JamViewData = {
     host_user_id: string;
   };
   jamCardData: JamCardData;
+  /** The jam's short code, for links back to this page (migration 169). */
+  shortCode?: string | null;
   userId: string | null;
   rsvpStatus: "attending" | "waitlist" | "cancelled" | null;
   waitlistPosition: number | null;
@@ -68,6 +71,7 @@ export default function JamView({
   const {
     jam,
     jamCardData,
+    shortCode,
     userId,
     waitlistPosition,
     attendingCount,
@@ -131,6 +135,7 @@ export default function JamView({
         showTicketPanel ? (
           <TicketPurchasePanel
             jamId={jamId}
+            eventPath={jamPath({ id: jamId, short_code: shortCode })}
             isSignedIn={!!userId}
             timezone={jamCardData.timezone}
           />
@@ -155,7 +160,7 @@ export default function JamView({
           )}
           {!userId && !isOfficial && (
             <Link
-              href={`/auth?next=/jam/${jamId}${inviteToken ? `&invite=${inviteToken}` : ""}`}
+              href={`/auth?next=${jamPath({ id: jamId, short_code: shortCode })}${inviteToken ? `&invite=${inviteToken}` : ""}`}
               className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
             >
               Sign in to RSVP

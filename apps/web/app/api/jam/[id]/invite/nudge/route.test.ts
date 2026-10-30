@@ -24,6 +24,10 @@ vi.mock("@supabase/supabase-js", () => ({
     auth: { admin: { getUserById: mockGetUserById } },
   })),
 }));
+vi.mock("@/lib/shortRef", () => ({
+  jamPathById: async (id: string) => `/jam/${id}`,
+  setPathById: async (id: string) => `/set/${id}`,
+}));
 
 import { POST } from "./route";
 

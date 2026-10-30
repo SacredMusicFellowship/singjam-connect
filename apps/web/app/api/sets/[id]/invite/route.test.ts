@@ -47,6 +47,10 @@ vi.mock("@/emails/set-invite", () => ({
   setCollaboratorInviteHtml: vi.fn().mockReturnValue("<p>invite</p>"),
   setCollaboratorNonMemberInviteHtml: vi.fn().mockReturnValue("<p>non-member invite</p>"),
 }));
+vi.mock("@/lib/shortRef", () => ({
+  jamPathById: async (id: string) => `/jam/${id}`,
+  setPathById: async (id: string) => `/set/${id}`,
+}));
 
 import { POST } from "./route";
 

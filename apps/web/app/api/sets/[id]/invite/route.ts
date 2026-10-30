@@ -4,6 +4,7 @@ import { resolveApiUser } from "@/lib/supabase/apiUser";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { createNotification } from "@/lib/notifications";
 import { setCollaboratorInviteHtml, setCollaboratorNonMemberInviteHtml } from "@/emails/set-invite";
+import { setPathById } from "@/lib/shortRef";
 
 export async function POST(
   req: Request,
@@ -55,7 +56,7 @@ export async function POST(
 
   const setName = (set as any).name ?? "a set";
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://singjam.org";
-  const setUrl = `${baseUrl}/set/${setId}`;
+  const setUrl = `${baseUrl}${await setPathById(setId)}`;
 
   if (inviteeUserId) {
     const { data: existing } = await admin
@@ -119,7 +120,7 @@ export async function POST(
       .select("token")
       .single();
     const token = (inserted as any).token;
-    const signupUrl = `${baseUrl}/set/${setId}?invite=${token}`;
+    const signupUrl = `${baseUrl}${await setPathById(setId)}?invite=${token}`;
 
     await resend.emails.send({
       from: FROM_ADDRESS,

@@ -54,7 +54,7 @@ export async function POST(
       description: set.description,
       owner_user_id: user.id,
     })
-    .select("id")
+    .select("id, short_code")
     .single();
 
   if (createError || !newSet) {
@@ -76,5 +76,5 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ id: newSetId });
+  return NextResponse.json({ id: newSetId, short_code: (newSet as any).short_code });
 }
