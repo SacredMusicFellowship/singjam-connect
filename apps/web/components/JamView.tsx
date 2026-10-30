@@ -11,7 +11,6 @@ import JamHostActions from "@/components/JamHostActions";
 import JamAttendeeList, { JamAttendeeSummary } from "@/components/JamAttendeeList";
 import JamSetList from "@/components/JamSetList";
 import TicketPurchasePanel from "@/components/TicketPurchasePanel";
-import JamLeaders from "@/components/JamLeaders";
 import JamLeaderManager from "@/components/JamLeaderManager";
 import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
 import { jamPath } from "@singjam/core";
@@ -60,7 +59,7 @@ export type JamViewData = {
   invitesEnabled: boolean;
   inviteList: InviteEntry[];
   alreadyInvitedIds: string[];
-  /** Music leaders shown on the event page (official events only). */
+  /** Music leaders listed publicly, marked in Who's going (official events only). */
   leaders: PublicJamLeader[];
   /** Set when the viewer is one of this event's leaders. */
   myLeader: { userId: string; token: string; showPublicly: boolean } | null;
@@ -233,11 +232,6 @@ export default function JamView({
         aside={
           <>
             <JamPoster jam={jamCardData} />
-            {leaders.length > 0 && (
-              <div className="hidden md:block">
-                <JamLeaders leaders={leaders} />
-              </div>
-            )}
             {showAttendees && (
               <div className="hidden md:block">
                 <JamAttendeeSummary jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} />
@@ -248,13 +242,6 @@ export default function JamView({
         asideBelow={setList}
       >
         {card}
-        {/* On a phone the aside is only the poster, so who's leading follows
-            the event details instead. */}
-        {leaders.length > 0 && (
-          <div className="mt-6 md:hidden">
-            <JamLeaders leaders={leaders} />
-          </div>
-        )}
       </JamSplit>
       {attendees}
       {showTicketPanel ? (

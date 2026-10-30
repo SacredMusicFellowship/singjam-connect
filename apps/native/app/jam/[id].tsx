@@ -265,7 +265,7 @@ function MaybeMapsLink({ query, children }: { query: string | null; children: Re
   );
 }
 
-function AttendeeAvatar({ attendee, isMe, extra = 0 }: { attendee: Attendee; isMe: boolean; extra?: number }) {
+function AttendeeAvatar({ attendee, isMe, extra = 0, isLeader = false }: { attendee: Attendee; isMe: boolean; extra?: number; isLeader?: boolean }) {
   const name = attendee.display_name ?? attendee.username ?? '?';
   const initial = name[0]?.toUpperCase() ?? '?';
   return (
@@ -282,6 +282,7 @@ function AttendeeAvatar({ attendee, isMe, extra = 0 }: { attendee: Attendee; isM
           ? `${attendee.username ? `@${attendee.username}` : name} +${extra}`
           : attendee.username ? `@${attendee.username}` : name}
       </Text>
+      {isLeader ? <Text className="text-amber-700 text-xs font-medium">Leader</Text> : null}
     </View>
   );
 }
@@ -864,33 +865,6 @@ export default function JamDetailScreen() {
           </View>
         ) : null}
 
-        {/* Who's leading — after the event details and before who's going,
-            the same order as mobile web. */}
-        {leaders.length > 0 ? (
-          <View className="px-4 mb-6">
-            <Text className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">Leading</Text>
-            <View className="gap-2">
-              {leaders.map(l => (
-                <TouchableOpacity
-                  key={l.id}
-                  disabled={!l.user_id}
-                  onPress={() => router.push(`/profile/${l.user_id}` as any)}
-                  className="flex-row items-center gap-3"
-                >
-                  {l.avatar_url ? (
-                    <Image source={{ uri: l.avatar_url }} className="w-8 h-8 rounded-full" />
-                  ) : (
-                    <View className="w-8 h-8 rounded-full items-center justify-center bg-amber-100">
-                      <Text className="font-semibold text-xs text-amber-700">{l.name[0]?.toUpperCase() ?? '?'}</Text>
-                    </View>
-                  )}
-                  <Text className="flex-1 text-zinc-900 font-medium" numberOfLines={1}>{l.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
         {/* Attendees — members and guests together: no account is needed to be
             counted as coming, only to add songs to the set. */}
         {going.length + guestAttendees.length > 0 ? (
@@ -905,6 +879,7 @@ export default function JamDetailScreen() {
                   attendee={a}
                   isMe={a.user_id === myUserId}
                   extra={memberExtras[a.user_id] ?? 0}
+                  isLeader={leaders.some(l => l.user_id === a.user_id) || (!!myLeader && a.user_id === myUserId)}
                 />
               ))}
               {guestAttendees.slice(0, Math.max(0, 20 - going.length)).map((g, i) => (
