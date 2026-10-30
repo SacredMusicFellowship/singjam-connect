@@ -20,9 +20,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const canManage = user ? await canManageJam(admin, jamId, user.id) : false;
 
   return NextResponse.json({
-    leaders: publicLeaders(leaders, mine?.id),
+    leaders: publicLeaders(leaders),
     // Only the leader themselves gets their token: it is what steps them down.
-    me: mine ? { id: mine.id, token: mine.token, show_publicly: mine.show_publicly } : null,
+    me: mine ? { token: mine.token, show_publicly: mine.show_publicly } : null,
     ...(canManage ? { managed: leaders } : {}),
   });
 }

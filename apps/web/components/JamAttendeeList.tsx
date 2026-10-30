@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import LeaderSpotControls from "@/components/LeaderSpotControls";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { attendeeSummaryParts } from "@singjam/core";
 import { SINGING_LABEL, voiceBadgeClass } from "@/lib/singingVoice";
@@ -42,10 +44,12 @@ function AttendeeRow({
   badge,
   action,
   extra = 0,
+  footer,
 }: {
   profile: any;
   badge: ReactNode;
   action?: ReactNode;
+  footer?: ReactNode;
   /** Seats this person bought beyond their own, shown as "+2". */
   extra?: number;
 }) {
@@ -84,6 +88,7 @@ function AttendeeRow({
           ))}
         </div>
       )}
+      {footer && <div className="mt-2">{footer}</div>}
     </li>
   );
 }
@@ -173,10 +178,25 @@ async function loadAttendees(
  * They still appear as an ordinary "Going" row if they actually RSVP'd or
  * bought a ticket. jams.host_user_id keeps driving authorization either way.
  */
-export default function JamAttendeeList({ jamId, hostId, isHost }: { jamId: string; hostId: string | null; isHost: boolean }) {
+export default function JamAttendeeList({
+  jamId,
+  hostId,
+  isHost,
+  leaderIds = [],
+  myLeader = null,
+}: {
+  jamId: string;
+  hostId: string | null;
+  isHost: boolean;
+  /** Members leading the music who are listed publicly. */
+  leaderIds?: string[];
+  /** Set when the viewer leads this event: their row carries their controls. */
+  myLeader?: { userId: string; token: string; showPublicly: boolean } | null;
+}) {
   const [data, setData] = useState<AttendeeData | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const supabase = supabaseBrowser();
+  const router = useRouter();
 
   useEffect(() => {
     loadAttendees(supabase, jamId, hostId).then(setData);
@@ -224,13 +244,32 @@ export default function JamAttendeeList({ jamId, hostId, isHost }: { jamId: stri
         )}
         {attending.map((r: any) => {
           const isCohost = cohostIds.has(r.user_id);
+          const isMyLeaderRow = myLeader?.userId === r.user_id;
           return (
             <AttendeeRow
               key={r.user_id}
               profile={profileMap.get(r.user_id)}
               extra={memberExtras.get(r.user_id) ?? 0}
+              footer={
+                isMyLeaderRow && myLeader && (
+                  <LeaderSpotControls
+                    token={myLeader.token}
+                    initialShowPublicly={myLeader.showPublicly}
+                    onWithdrawn={() => {
+                      loadAttendees(supabase, jamId, hostId).then(setData);
+                      router.refresh();
+                    }}
+                    onVisibilityChange={() => router.refresh()}
+                    compact
+                  />
+                )
+              }
               badge={
-                isCohost ? (
+                isMyLeaderRow || leaderIds.includes(r.user_id) ? (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                    Leader
+                  </span>
+                ) : isCohost ? (
                   <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700">
                     Co-host
                   </span>

@@ -63,7 +63,7 @@ export type JamViewData = {
   /** Music leaders shown on the event page (official events only). */
   leaders: PublicJamLeader[];
   /** Set when the viewer is one of this event's leaders. */
-  myLeader: { id: string; token: string; showPublicly: boolean } | null;
+  myLeader: { userId: string; token: string; showPublicly: boolean } | null;
   /** The full leader list with emails, for whoever can manage the event. */
   managedLeaders: ManagedJamLeader[] | null;
 };
@@ -194,7 +194,13 @@ export default function JamView({
   // nudge on the completion page is for. See showAttendees above for why an
   // externally-ticketed event gets no list at all.
   const attendees = showAttendees ? (
-    <JamAttendeeList jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} isHost={isHost} />
+    <JamAttendeeList
+      jamId={jamId}
+      hostId={isOfficial ? null : jam.host_user_id}
+      isHost={isHost}
+      leaderIds={leaders.map((l) => l.user_id).filter((id): id is string => !!id)}
+      myLeader={myLeader}
+    />
   ) : null;
 
   const hostTools = (
@@ -229,7 +235,7 @@ export default function JamView({
             <JamPoster jam={jamCardData} />
             {leaders.length > 0 && (
               <div className="hidden md:block">
-                <JamLeaders leaders={leaders} me={myLeader} />
+                <JamLeaders leaders={leaders} />
               </div>
             )}
             {showAttendees && (
@@ -246,7 +252,7 @@ export default function JamView({
             the event details instead. */}
         {leaders.length > 0 && (
           <div className="mt-6 md:hidden">
-            <JamLeaders leaders={leaders} me={myLeader} />
+            <JamLeaders leaders={leaders} />
           </div>
         )}
       </JamSplit>

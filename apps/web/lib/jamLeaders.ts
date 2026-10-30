@@ -93,11 +93,9 @@ export async function describeLeaders(admin: SupabaseClient, rows: JamLeaderRow[
   });
 }
 
-// A hidden leader still sees their own row, since that is where they turn
-// being listed back on.
-export function publicLeaders(leaders: ManagedJamLeader[], viewerLeaderId?: string): PublicJamLeader[] {
+export function publicLeaders(leaders: ManagedJamLeader[]): PublicJamLeader[] {
   return leaders
-    .filter((l) => l.show_publicly || l.id === viewerLeaderId)
+    .filter((l) => l.show_publicly)
     .map(({ id, user_id, name, username, avatar_url }) => ({ id, user_id, name, username, avatar_url }));
 }
 

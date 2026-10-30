@@ -15,8 +15,8 @@ vi.mock("@/lib/supabase/apiUser", () => ({ resolveApiUser: mockUser }));
 vi.mock("@/lib/jamAuthz", () => ({ canManageJam: mockCanManage }));
 vi.mock("@/lib/devSafety", () => ({ ticketingBlocked: mockBlocked }));
 vi.mock("@/lib/jamLeaders", () => ({
-  publicLeaders: (ls: any[], viewerLeaderId?: string) =>
-    ls.filter((l) => l.show_publicly || l.id === viewerLeaderId).map(({ id, user_id, name, username, avatar_url }) => ({ id, user_id, name, username, avatar_url })),
+  publicLeaders: (ls: any[]) =>
+    ls.filter((l) => l.show_publicly).map(({ id, user_id, name, username, avatar_url }) => ({ id, user_id, name, username, avatar_url })),
   addJamLeader: mockAdd,
   jamLeaderRows: mockRows,
   describeLeaders: mockDescribe,
@@ -52,7 +52,7 @@ describe("GET /api/jam/[id]/leaders", () => {
     mockUser.mockResolvedValue({ id: "member-1" });
     mockCanManage.mockResolvedValue(false);
     const body = await (await GET(req("GET"), params)).json();
-    expect(body.me).toEqual({ id: "leader-1", token: "tok", show_publicly: true });
+    expect(body.me).toEqual({ token: "tok", show_publicly: true });
   });
 
   it("never gives one leader's token to another viewer", async () => {

@@ -229,12 +229,4 @@ describe("publicLeaders", () => {
     ]);
     expect(out).toEqual([{ id: "a", user_id: null, name: "Sam", username: null, avatar_url: null }]);
   });
-
-  it("keeps a hidden leader's own row for them, so they can show themselves again", () => {
-    const out = publicLeaders(
-      [{ id: "b", user_id: "u", name: "Shy", username: "shy", avatar_url: null, email: null, show_publicly: false }],
-      "b",
-    );
-    expect(out.map((l) => l.id)).toEqual(["b"]);
-  });
 });

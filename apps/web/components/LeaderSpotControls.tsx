@@ -76,7 +76,7 @@ export default function LeaderSpotControls({
           disabled={busy}
           className="text-zinc-600 underline hover:text-zinc-900 disabled:opacity-50"
         >
-          {compact ? (showPublicly ? "Hide me" : "Show me") : showPublicly ? "Hide me on the event page" : "Show me on the event page"}
+          {compact ? (showPublicly ? "Don't list me as a leader" : "List me as a leader") : showPublicly ? "Hide me on the event page" : "Show me on the event page"}
         </button>
         <button onClick={() => setConfirming(true)} disabled={busy} className="text-zinc-600 underline hover:text-zinc-900 disabled:opacity-50">
           Can&apos;t make it?
