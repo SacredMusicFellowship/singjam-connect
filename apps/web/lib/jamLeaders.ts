@@ -46,7 +46,9 @@ export type ManagedJamLeader = PublicJamLeader & {
 
 const LEADER_COLUMNS = "id, jam_id, user_id, name, email, show_publicly, token, order_id, added_by, created_at";
 
-const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+// Dots only separate the domain's parts, so no two parts of the pattern can
+// match the same characters and it runs in linear time on any input.
+const isEmail = (s: string) => s.length <= 254 && /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/.test(s);
 
 const fullName = (p: any) => [p?.display_name, p?.last_name].filter(Boolean).join(" ") || p?.username || null;
 
