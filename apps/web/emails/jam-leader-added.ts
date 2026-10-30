@@ -4,7 +4,7 @@ import { ticketCode } from "./ticket-confirmation";
 
 // Sent when a host adds someone as a music leader. The leader already said yes
 // to the host, so this confirms rather than asks: it carries their ticket, and
-// the way out ("Can't make it?") is a link, not a required step.
+// the way out is the event page's RSVP, not a required step.
 export function jamLeaderAddedHtml({
   jamName,
   jamUrl,
@@ -13,7 +13,6 @@ export function jamLeaderAddedHtml({
   address,
   qrToken,
   setUrl,
-  manageUrl,
   signUpUrl,
 }: {
   jamName: string;
@@ -23,7 +22,6 @@ export function jamLeaderAddedHtml({
   address?: string | null;
   qrToken?: string | null;
   setUrl?: string | null;
-  manageUrl: string;
   /** Only for a leader without an account. */
   signUpUrl?: string | null;
 }) {
@@ -85,8 +83,9 @@ export function jamLeaderAddedHtml({
   </div>
 
   <p style="margin-top:28px;font-size:13px;line-height:1.6;color:#71717a">
-    Can't make it after all, or would rather not be listed on the event page?
-    <a href="${manageUrl}" style="color:#71717a;text-decoration:underline">Manage your spot</a>.
+    ${signUpUrl
+      ? "Can't make it after all? Just reply to this email and we'll let the host know."
+      : `Can't make it after all? Update your RSVP on the <a href="${jamUrl}" style="color:#71717a;text-decoration:underline">event page</a>.`}
   </p>
   <p style="margin-top:32px;font-size:13px;color:#a1a1aa">SingJam · Music. Community. Love.</p>
 </body>

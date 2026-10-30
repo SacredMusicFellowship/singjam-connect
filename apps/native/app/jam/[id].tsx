@@ -35,7 +35,7 @@ type GuestAttendee = { name: string; extra: number };
 // Music leaders on an official event, served by the web API: jam_leaders is
 // service_role-only because each row carries the leader's email and token.
 type JamLeader = { id: string; user_id: string | null; name: string; username: string | null; avatar_url: string | null };
-type MyLeaderSpot = { token: string; show_publicly: boolean };
+type MyLeaderSpot = { token: string };
 
 type JamDetail = {
   id: string;
@@ -509,8 +509,8 @@ export default function JamDetailScreen() {
     load();
   }
 
-  // Same endpoint as the "Manage your spot" link in the leader's email.
-  async function leaderAction(action: 'withdraw' | 'hide' | 'show') {
+  // Same endpoint web's "Can't make it?" uses.
+  async function leaderAction(action: 'withdraw') {
     if (!myLeader) return false;
     const res = await fetch(`${WEB_URL}/api/lead/${myLeader.token}`, {
       method: 'POST',
@@ -522,12 +522,6 @@ export default function JamDetailScreen() {
       return false;
     }
     return true;
-  }
-
-  async function handleLeaderVisibility() {
-    if (!myLeader) return;
-    const show = !myLeader.show_publicly;
-    if (await leaderAction(show ? 'show' : 'hide')) load();
   }
 
   function handleLeaderWithdraw() {
@@ -899,16 +893,9 @@ export default function JamDetailScreen() {
             {myLeader && !isPast ? (
               <View className="mt-1 gap-1">
                 <Text className="text-sm text-amber-800 font-medium">You're leading at this event 🎶</Text>
-                <View className="flex-row flex-wrap gap-x-4 gap-y-1">
-                  <TouchableOpacity onPress={handleLeaderVisibility}>
-                    <Text className="text-xs text-zinc-600 underline">
-                      {myLeader.show_publicly ? "Don't list me as a leader" : 'List me as a leader'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleLeaderWithdraw}>
-                    <Text className="text-xs text-zinc-600 underline">Can't make it?</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={handleLeaderWithdraw}>
+                  <Text className="text-xs text-zinc-600 underline">Can't make it?</Text>
+                </TouchableOpacity>
               </View>
             ) : null}
           </View>

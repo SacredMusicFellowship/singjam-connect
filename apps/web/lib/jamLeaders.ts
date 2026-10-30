@@ -45,10 +45,6 @@ const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 const fullName = (p: any) => [p?.display_name, p?.last_name].filter(Boolean).join(" ") || p?.username || null;
 
-export function leaderManageUrl(token: string) {
-  return `${SITE_URL}/lead/${token}`;
-}
-
 export async function jamLeaderRows(admin: SupabaseClient, jamId: string): Promise<JamLeaderRow[]> {
   const { data } = await admin
     .from("jam_leaders")
@@ -213,7 +209,6 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
           address: jam.full_address ?? jam.neighborhood ?? null,
           qrToken: ticket?.qr_token ?? null,
           setUrl: linkedSet ? `${SITE_URL}${setPath(linkedSet)}` : null,
-          manageUrl: leaderManageUrl(row.token),
           signUpUrl: userId ? null : `${SITE_URL}/auth?next=${jamPath(jam)}`,
         }),
       });
@@ -288,8 +283,4 @@ export async function removeJamLeader(
       link: jamPath(jam),
     });
   }
-}
-
-export async function setLeaderVisibility(admin: SupabaseClient, leaderId: string, show: boolean): Promise<void> {
-  await admin.from("jam_leaders").update({ show_publicly: show }).eq("id", leaderId);
 }

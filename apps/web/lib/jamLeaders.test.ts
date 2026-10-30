@@ -113,7 +113,8 @@ describe("addJamLeader", () => {
     expect(mockMarkAttending).toHaveBeenCalledWith(admin, "jam-1", "member-1");
     expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ to: "member@example.com" }));
     const html = mockSend.mock.calls[0][0].html as string;
-    expect(html).toContain("https://singjam.org/lead/11111111-2222-3333-4444-555555555555");
+    expect(html).toContain("Update your RSVP");
+    expect(html).not.toContain("/lead/");
     expect(html).toContain("AAAAAA");
     expect(html).not.toContain("added you");
     // Stamped, so the receipt sweeper never sends a "$0.00 paid" email on top.

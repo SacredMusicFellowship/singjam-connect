@@ -106,7 +106,6 @@ export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: str
                 <p className="truncate text-sm font-medium text-zinc-900">{l.name}</p>
                 <p className="truncate text-xs text-zinc-400">
                   {l.username ? `@${l.username}` : l.email}
-                  {!l.show_publicly && " · hidden from event page"}
                 </p>
               </div>
               <button

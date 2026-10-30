@@ -6,8 +6,8 @@ import { ticketingBlocked } from "@/lib/devSafety";
 import { addJamLeader, describeLeaders, jamLeaderRows, publicLeaders, removeJamLeader } from "@/lib/jamLeaders";
 
 // Music leaders on an official event. Anyone may see who is leading; the host
-// (or anyone who can manage the event) adds and removes them. A leader manages
-// their own spot through /api/lead/[token], which works without an account.
+// (or anyone who can manage the event) adds and removes them. A leader steps
+// down through /api/lead/[token], with the token this route gives only them.
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: jamId } = await params;
@@ -22,7 +22,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   return NextResponse.json({
     leaders: publicLeaders(leaders),
     // Only the leader themselves gets their token: it is what steps them down.
-    me: mine ? { token: mine.token, show_publicly: mine.show_publicly } : null,
+    me: mine ? { token: mine.token } : null,
     ...(canManage ? { managed: leaders } : {}),
   });
 }

@@ -261,7 +261,7 @@ export default async function JamPage({
         alreadyInvitedIds,
         leaders: publicLeaders(allLeaders),
         myLeader: myLeaderRow
-          ? { userId: myLeaderRow.user_id!, token: myLeaderRow.token, showPublicly: myLeaderRow.show_publicly }
+          ? { userId: myLeaderRow.user_id!, token: myLeaderRow.token }
           : null,
         managedLeaders: canManage && isOfficial ? allLeaders : null,
       }}

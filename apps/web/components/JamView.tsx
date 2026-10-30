@@ -62,7 +62,7 @@ export type JamViewData = {
   /** Music leaders listed publicly, marked in Who's going (official events only). */
   leaders: PublicJamLeader[];
   /** Set when the viewer is one of this event's leaders. */
-  myLeader: { userId: string; token: string; showPublicly: boolean } | null;
+  myLeader: { userId: string; token: string } | null;
   /** The full leader list with emails, for whoever can manage the event. */
   managedLeaders: ManagedJamLeader[] | null;
 };

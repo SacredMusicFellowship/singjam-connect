@@ -1,16 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockByToken, mockRemove, mockVisibility } = vi.hoisted(() => ({
+const { mockByToken, mockRemove } = vi.hoisted(() => ({
   mockByToken: vi.fn(),
   mockRemove: vi.fn(),
-  mockVisibility: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: vi.fn(() => ({})) }));
 vi.mock("@/lib/jamLeaders", () => ({
   leaderByToken: mockByToken,
   removeJamLeader: mockRemove,
-  setLeaderVisibility: mockVisibility,
 }));
 
 import { POST } from "./route";
@@ -36,18 +34,8 @@ describe("POST /api/lead/[token]", () => {
     expect(mockRemove).toHaveBeenCalledWith({}, LEADER, { notifyHost: true });
   });
 
-  it("hides and shows the leader on the event page", async () => {
-    mockByToken.mockResolvedValue(LEADER);
-    await call("hide");
-    await call("show");
-    expect(mockVisibility.mock.calls).toEqual([
-      [{}, "leader-1", false],
-      [{}, "leader-1", true],
-    ]);
-  });
-
   it("rejects anything else", async () => {
     mockByToken.mockResolvedValue(LEADER);
-    expect((await call("delete-everything")).status).toBe(400);
+    expect((await call("hide")).status).toBe(400);
   });
 });

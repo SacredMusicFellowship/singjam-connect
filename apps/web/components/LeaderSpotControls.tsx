@@ -2,45 +2,26 @@
 
 import { useState } from "react";
 
-// A leader's own controls: stay off the event page, or step down. Shared by
-// their row in the event page's Leading list and the /lead/[token] page their
-// email links to, so a leader without an account has the same two choices.
-export default function LeaderSpotControls({
-  token,
-  initialShowPublicly,
-  onWithdrawn,
-  onVisibilityChange,
-  compact = false,
-}: {
-  token: string;
-  initialShowPublicly: boolean;
-  onWithdrawn: () => void;
-  onVisibilityChange?: (show: boolean) => void;
-  compact?: boolean;
-}) {
-  const [showPublicly, setShowPublicly] = useState(initialShowPublicly);
+// A leader stepping down from their row in Who's going.
+export default function LeaderSpotControls({ token, onWithdrawn }: { token: string; onWithdrawn: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function act(action: "withdraw" | "hide" | "show") {
+  async function withdraw() {
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/lead/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action: "withdraw" }),
     });
     setBusy(false);
     if (!res.ok) {
       setError("Something went wrong. Please try again.");
       return;
     }
-    if (action === "withdraw") onWithdrawn();
-    else {
-      setShowPublicly(action === "show");
-      onVisibilityChange?.(action === "show");
-    }
+    onWithdrawn();
   }
 
   if (confirming) {
@@ -56,7 +37,7 @@ export default function LeaderSpotControls({
             Keep my spot
           </button>
           <button
-            onClick={() => act("withdraw")}
+            onClick={withdraw}
             disabled={busy}
             className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
           >
@@ -70,18 +51,9 @@ export default function LeaderSpotControls({
 
   return (
     <div className="space-y-1">
-      <div className={`flex flex-wrap gap-x-4 gap-y-1 ${compact ? "text-xs" : "text-sm"}`}>
-        <button
-          onClick={() => act(showPublicly ? "hide" : "show")}
-          disabled={busy}
-          className="text-zinc-600 underline hover:text-zinc-900 disabled:opacity-50"
-        >
-          {compact ? (showPublicly ? "Don't list me as a leader" : "List me as a leader") : showPublicly ? "Hide me on the event page" : "Show me on the event page"}
-        </button>
-        <button onClick={() => setConfirming(true)} disabled={busy} className="text-zinc-600 underline hover:text-zinc-900 disabled:opacity-50">
-          Can&apos;t make it?
-        </button>
-      </div>
+      <button onClick={() => setConfirming(true)} className="text-xs text-zinc-600 underline hover:text-zinc-900">
+        Can&apos;t make it?
+      </button>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );

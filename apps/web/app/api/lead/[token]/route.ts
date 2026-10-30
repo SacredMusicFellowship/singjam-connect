@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { leaderByToken, removeJamLeader, setLeaderVisibility } from "@/lib/jamLeaders";
+import { leaderByToken, removeJamLeader } from "@/lib/jamLeaders";
 
-// A leader managing their own spot. The token from their email is the
-// credential, so this works for leaders without an account too.
+// A leader stepping down from the event page. The token is handed only to the
+// leader themselves (GET /api/jam/[id]/leaders), so it is the credential.
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -22,10 +22,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (action === "withdraw") {
     await removeJamLeader(admin, leader, { notifyHost: true });
     return NextResponse.json({ ok: true });
-  }
-  if (action === "hide" || action === "show") {
-    await setLeaderVisibility(admin, leader.id, action === "show");
-    return NextResponse.json({ ok: true, show_publicly: action === "show" });
   }
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }
