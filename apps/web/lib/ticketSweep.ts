@@ -4,6 +4,7 @@ import { SITE_URL, stripe } from "@/lib/stripe";
 import { fulfilPendingOrder, sendTicketEmail, type PaidOrder } from "@/lib/ticketFulfilment";
 import { markAttending } from "@/lib/jamAttendance";
 import { ticketDeliveryFailedEmailHtml, type FailedTicketDelivery } from "@/emails/ticket-delivery-failed";
+import { jamPath } from "@singjam/core";
 
 // The failure Stripe cannot see. It watches for our endpoint erroring, not for
 // it returning 200 while the ticket never went out — which is exactly what
@@ -119,7 +120,7 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
   // One lookup for the whole batch: the alert is useless without event names.
   const { data: jams } = await admin
     .from("jams")
-    .select("id, name, timezone")
+    .select("id, short_code, name, timezone")
     .in("id", [...new Set(orders.map((o) => o.jam_id))]);
   const jamsById = new Map((jams ?? []).map((j: any) => [j.id, j]));
 
@@ -131,7 +132,7 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
     const describe = (reason: string): FailedTicketDelivery => ({
       orderId: order.id,
       jamName: jam?.name ?? "an event",
-      jamUrl: `${SITE_URL}/jam/${order.jam_id}`,
+      jamUrl: `${SITE_URL}${jamPath({ id: order.jam_id, short_code: jam?.short_code })}`,
       buyerEmail: order.buyer_email,
       amountLabel: formatAmount(order.amount_cents, order.currency),
       paidLabel: formatPaidAt(order.paid_at, jam?.timezone ?? null),

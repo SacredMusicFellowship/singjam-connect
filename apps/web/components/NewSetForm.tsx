@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { setPath } from "@singjam/core";
 
 export default function NewSetForm() {
   const router = useRouter();
@@ -29,8 +30,7 @@ export default function NewSetForm() {
       return;
     }
 
-    const { id } = await res.json();
-    router.push(`/set/${id}`);
+    router.push(setPath(await res.json()));
   }
 
   return (

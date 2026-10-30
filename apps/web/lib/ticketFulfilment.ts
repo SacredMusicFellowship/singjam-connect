@@ -5,6 +5,7 @@ import { resend, EVENTS_FROM_ADDRESS } from "@/lib/resend";
 import { ticketConfirmationHtml } from "@/emails/ticket-confirmation";
 import { syncContact } from "@/lib/activecampaign";
 import { findEventSet } from "@/lib/eventSet";
+import { jamPath, setPath } from "@singjam/core";
 
 // Turning a pending order into a real ticket: mark it paid, send the ticket,
 // seat the buyer. Two callers reach this — the Stripe webhook for anything that
@@ -43,7 +44,7 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
   const [{ data: jam }, { data: tickets }] = await Promise.all([
     admin
       .from("jams")
-      .select("name, starts_at, ends_at, timezone, full_address, neighborhood")
+      .select("name, short_code, starts_at, ends_at, timezone, full_address, neighborhood")
       .eq("id", order.jam_id)
       .maybeSingle(),
     admin.from("tickets").select("qr_token, ticket_types(name, price_cents)").eq("order_id", order.id),
@@ -63,7 +64,7 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
       name,
       jamName,
       jamId: order.jam_id,
-      jamUrl: `${SITE_URL}/jam/${order.jam_id}`,
+      jamUrl: `${SITE_URL}${jamPath({ id: order.jam_id, short_code: (jam as any)?.short_code })}`,
       startsAt: jam?.starts_at,
       endsAt: (jam as any)?.ends_at ?? null,
       timezone: (jam as any)?.timezone,
@@ -76,8 +77,8 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
       amountCents: order.amount_cents,
       currency: order.currency,
       isGuest: !order.buyer_user_id,
-      signUpUrl: `${SITE_URL}/auth?next=/jam/${order.jam_id}`,
-      setUrl: linkedSet ? `${SITE_URL}/set/${linkedSet.id}` : null,
+      signUpUrl: `${SITE_URL}/auth?next=${jamPath({ id: order.jam_id, short_code: (jam as any)?.short_code })}`,
+      setUrl: linkedSet ? `${SITE_URL}${setPath(linkedSet)}` : null,
     }),
   });
   // Thrown, not `return false`: false means "no address", which the sweeper

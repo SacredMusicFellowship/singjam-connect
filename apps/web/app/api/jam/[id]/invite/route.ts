@@ -7,6 +7,7 @@ import { createNotification } from "@/lib/notifications";
 import { memberInviteHtml, nonMemberInviteHtml } from "@/emails/jam-invite";
 import { formatJamTime } from "@/lib/formatJamTime";
 import { isJamCohost } from "@/lib/jamCohosts";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function POST(
   req: Request,
@@ -119,7 +120,7 @@ export async function POST(
     const { data: inviteeProfile } = await admin.from("profiles").select("display_name, username").eq("id", inviteeUserId).single();
     const inviteeName = (inviteeProfile as any)?.display_name ?? (inviteeProfile as any)?.username ?? null;
 
-    const jamUrl = `${baseUrl}/jam/${jamId}?invite=${token}`;
+    const jamUrl = `${baseUrl}${await jamPathById(jamId)}?invite=${token}`;
 
     if (email) {
       await resend.emails.send({
@@ -173,7 +174,7 @@ export async function POST(
     }).select("token").single();
     const token = (inserted as any).token;
 
-    const signupUrl = `${baseUrl}/jam/${jamId}?invite=${token}`;
+    const signupUrl = `${baseUrl}${await jamPathById(jamId)}?invite=${token}`;
 
     await resend.emails.send({
       from: FROM_ADDRESS,

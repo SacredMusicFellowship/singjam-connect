@@ -6,10 +6,10 @@ import { claimJamInvite } from "@/lib/claimJamInvite";
 import { canManageJam, canEditJamById } from "@/lib/jamAuthz";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
 import { formatJamDate } from "@/lib/formatJamTime";
-import { resolveJamId } from "@/lib/jamRef";
+import { resolveJamId } from "@/lib/shortRef";
 import JamView, { type InviteEntry } from "@/components/JamView";
-import ShortJamUrl from "@/components/ShortJamUrl";
-import { jamSeatsTaken } from "@singjam/core";
+import ShortUrl from "@/components/ShortUrl";
+import { jamSeatExcludedUserId, jamSeatsTaken } from "@singjam/core";
 import { type JamCardData } from "@/components/JamCard";
 
 // Private jams are unlisted, not access-controlled (migration 160): holding
@@ -96,14 +96,17 @@ export default async function JamPage({
   const invitesEnabled = flagRes.data?.enabled ?? true;
 
   // Excludes the host, whose seat jamSeatsTaken adds back exactly once — a
-  // host with a stray RSVP row of their own must not be counted twice.
+  // host with a stray RSVP row of their own must not be counted twice. On an
+  // official event nobody is excluded: the creator's RSVP is an ordinary one.
+  const excludedUserId = jamSeatExcludedUserId(jam);
+  let attendingQuery = admin
+    .from("jam_rsvps")
+    .select("id", { count: "exact", head: true })
+    .eq("jam_id", id)
+    .eq("status", "attending");
+  if (excludedUserId) attendingQuery = attendingQuery.neq("user_id", excludedUserId);
   const [countRes, rsvpRes, inviteRes, cohostRes] = await Promise.all([
-    admin
-      .from("jam_rsvps")
-      .select("id", { count: "exact", head: true })
-      .eq("jam_id", id)
-      .eq("status", "attending")
-      .neq("user_id", jam.host_user_id),
+    attendingQuery,
     userId
       ? supabase.from("jam_rsvps").select("status, waitlist_position").eq("jam_id", id).eq("user_id", userId).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -141,8 +144,22 @@ export default async function JamPage({
   let guestBuyerCount = 0;
   let alreadyInvitedIds: string[] = [];
 
+  // "Message attendees" goes to everyone attending except whoever sends it, so
+  // its count is its own — not the capacity count, which leaves out the host.
+  let messageRecipientCount = 0;
+
   if (canManage) {
-    guestBuyerCount = (await guestTicketBuyers(admin, id)).size;
+    const [buyers, { count: othersAttending }] = await Promise.all([
+      guestTicketBuyers(admin, id),
+      admin
+        .from("jam_rsvps")
+        .select("id", { count: "exact", head: true })
+        .eq("jam_id", id)
+        .eq("status", "attending")
+        .neq("user_id", userId!),
+    ]);
+    guestBuyerCount = buyers.size;
+    messageRecipientCount = (othersAttending ?? 0) + guestBuyerCount;
     const { data: rawInvites } = await supabase
       .from("jam_invites")
       .select("id, invited_user_id, invitee_email, status")
@@ -202,18 +219,20 @@ export default async function JamPage({
   // kept its pre-accept status and offered the new attendee an RSVP button.
   return (
     <>
-    <ShortJamUrl jamId={id} shortCode={jam.short_code} />
+    <ShortUrl base="jam" id={id} shortCode={jam.short_code} />
     <JamView
       key={rsvpStatus ?? "none"}
       jamId={id}
       data={{
         jam: { name: jam.name, capacity: jam.capacity, host_user_id: jam.host_user_id },
         jamCardData,
+        shortCode: jam.short_code,
         userId,
         rsvpStatus,
         waitlistPosition,
         attendingCount,
         seatsTaken: jamSeatsTaken(jam, attendingCount),
+        messageRecipientCount,
         guestBuyerCount,
         pendingInvite,
         isOfficial,

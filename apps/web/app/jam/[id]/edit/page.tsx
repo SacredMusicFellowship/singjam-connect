@@ -14,7 +14,7 @@ export default async function EditJamPage({ params }: { params: Promise<{ id: st
   const [jamRes, genresRes, themesRes] = await Promise.all([
     supabase
       .from("jams")
-      .select("id, name, visibility, starts_at, ends_at, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, capacity, host_user_id, guests_can_invite, timezone")
+      .select("id, short_code, name, visibility, starts_at, ends_at, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, capacity, host_user_id, guests_can_invite, timezone")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("jam_genres").select("genre_id").eq("jam_id", id),

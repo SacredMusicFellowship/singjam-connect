@@ -10,6 +10,10 @@ vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ supabaseServer: vi.fn() }));
 vi.mock("@/lib/stripe", () => ({ stripe: vi.fn(), TICKET_PM_CONFIG: null, EXCLUDED_PAYMENT_METHODS: [] }));
 vi.mock("@/components/TicketPaymentPanel", () => ({ default: () => null }));
+vi.mock("@/lib/shortRef", () => ({
+  jamPathById: async (id: string) => `/jam/${id}`,
+  setPathById: async (id: string) => `/set/${id}`,
+}));
 
 import TicketPaymentPage from "./page";
 

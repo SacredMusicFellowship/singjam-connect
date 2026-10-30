@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { setPath } from "@singjam/core";
 
-type LinkedSet = { id: string; name: string };
+type LinkedSet = { id: string; short_code?: string | null; name: string };
 type OwnedSet = { id: string; name: string };
 
 export default function JamSetList({ jamId, jamName, canManage }: { jamId: string; jamName: string | null; canManage: boolean }) {
@@ -30,8 +31,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, jamId }),
     });
-    const { id } = await res.json();
-    router.push(`/set/${id}`);
+    router.push(setPath(await res.json()));
   }
 
   async function handleShowLink() {
@@ -78,7 +78,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
       {set ? (
         <div className="flex items-center gap-2">
           <a
-            href={`/set/${set.id}`}
+            href={`/set/${set.short_code ?? set.id}`}
             className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
           >
             {set.name}

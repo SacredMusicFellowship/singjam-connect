@@ -34,6 +34,10 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 vi.mock("@/lib/jamAuthz", () => ({ canManageJam: mockCanManage }));
+vi.mock("@/lib/shortRef", () => ({
+  jamPathById: async (id: string) => `/jam/${id}`,
+  setPathById: async (id: string) => `/set/${id}`,
+}));
 
 import { POST } from "./route";
 

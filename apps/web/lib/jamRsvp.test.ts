@@ -130,6 +130,19 @@ describe("rsvpToJam", () => {
     expect(result).toEqual({ status: "waitlist", waitlistPosition: 1 });
   });
 
+  it("counts an official event's creator as an ordinary attendee", async () => {
+    // No host seat is added on official events, so leaving the creator's RSVP
+    // out of the count would make every official headcount one short.
+    const { admin, chains } = fakeAdmin({
+      jam_rsvps: [{ data: null }, { count: 7 }, { data: [{ id: "r1" }] }],
+      profiles: [{ data: { display_name: "Nina" } }],
+    });
+
+    await rsvpToJam(admin, { ...JAM, visibility: "official", capacity: 9 }, USER_ID);
+
+    expect(chains.jam_rsvps[1].neq).not.toHaveBeenCalled();
+  });
+
   it("seats the last open spot once the host is counted", async () => {
     const { admin } = fakeAdmin({
       jam_rsvps: [{ data: null }, { count: 7 }, { data: [{ id: "r1" }] }],

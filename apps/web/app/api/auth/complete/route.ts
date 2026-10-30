@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { syncContact } from "@/lib/activecampaign";
 import { claimGuestTickets } from "@/lib/ticketClaim";
+import { jamPathById } from "@/lib/shortRef";
 
 // Called after immediate-session signup (email confirmation disabled) to
 // create the profile and link any invite token, mirroring the callback route.
@@ -55,5 +56,5 @@ export async function POST(req: Request) {
     jamId = invite?.jam_id ?? null;
   }
 
-  return NextResponse.json({ jamId });
+  return NextResponse.json({ jamId, jamPath: jamId ? await jamPathById(jamId) : null });
 }

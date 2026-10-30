@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { setPath } from "@singjam/core";
 
 type SetCardProps = {
   set: {
     id: string;
+    short_code?: string | null;
     name: string;
     description: string | null;
     owner_user_id: string;
@@ -50,8 +52,7 @@ export default function SetCard({ set, songCount, isOwner, ownerName, ownerUsern
     setMenuOpen(false);
     const res = await fetch(`/api/sets/${set.id}/copy`, { method: "POST" });
     if (res.ok) {
-      const { id } = await res.json();
-      router.push(`/set/${id}`);
+      router.push(setPath(await res.json()));
     } else {
       setCopying(false);
     }
@@ -132,16 +133,16 @@ export default function SetCard({ set, songCount, isOwner, ownerName, ownerUsern
   );
 
   if (!isOwner && !canCopy) {
-    return <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>;
+    return <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>;
   }
 
   if (canCopy) {
-    return <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>;
+    return <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>;
   }
 
   return (
     <div className="relative">
-      <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>
+      <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>
       <div className="absolute top-2 right-2" ref={menuRef}>
         <button
           onClick={() => { setMenuOpen((o) => !o); setConfirming(false); }}

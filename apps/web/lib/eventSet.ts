@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export async function findEventSet(
   admin: SupabaseClient,
   jamId: string
-): Promise<{ id: string } | null> {
-  const { data: set } = await admin.from("sets").select("id").eq("jam_id", jamId).maybeSingle();
+): Promise<{ id: string; short_code?: string | null } | null> {
+  const { data: set } = await admin.from("sets").select("id, short_code").eq("jam_id", jamId).maybeSingle();
   return set ?? null;
 }

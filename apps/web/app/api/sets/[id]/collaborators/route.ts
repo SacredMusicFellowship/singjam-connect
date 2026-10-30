@@ -4,6 +4,7 @@ import { resolveApiUser } from "@/lib/supabase/apiUser";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { createNotification } from "@/lib/notifications";
 import { setAccessGrantedHtml } from "@/emails/set-access-granted";
+import { setPathById } from "@/lib/shortRef";
 
 export async function PATCH(
   req: Request,
@@ -76,7 +77,7 @@ export async function PATCH(
 
     const setName = (setData as any)?.name ?? "a set list";
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://singjam.org";
-    const setUrl = `${baseUrl}/set/${setId}`;
+    const setUrl = `${baseUrl}${await setPathById(setId)}`;
 
     await createNotification({
       userId: existing.user_id,

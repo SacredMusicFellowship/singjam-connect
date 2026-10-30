@@ -7,6 +7,7 @@ import { sendBulkEmail } from "@/lib/sendBulkEmail";
 import { jamHostMessageHtml } from "@/emails/jam-host-message";
 import { isJamCohost } from "@/lib/jamCohosts";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function POST(
   req: Request,
@@ -50,7 +51,7 @@ export async function POST(
     .single();
   const hostName = (hostProfile as any)?.display_name ?? (hostProfile as any)?.username ?? "Your host";
 
-  const jamUrl = `https://singjam.org/jam/${jamId}`;
+  const jamUrl = `https://singjam.org${await jamPathById(jamId)}`;
   const jamName = jam.name ?? "Your jam";
 
   // Collect recipients — keyed by email to deduplicate
