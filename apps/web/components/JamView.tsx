@@ -11,6 +11,10 @@ import JamHostActions from "@/components/JamHostActions";
 import JamAttendeeList, { JamAttendeeSummary } from "@/components/JamAttendeeList";
 import JamSetList from "@/components/JamSetList";
 import TicketPurchasePanel from "@/components/TicketPurchasePanel";
+import JamLeaders from "@/components/JamLeaders";
+import JamLeaderBanner from "@/components/JamLeaderBanner";
+import JamLeaderManager from "@/components/JamLeaderManager";
+import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
 import { jamPath } from "@singjam/core";
 
 export type InviteEntry = {
@@ -57,6 +61,12 @@ export type JamViewData = {
   invitesEnabled: boolean;
   inviteList: InviteEntry[];
   alreadyInvitedIds: string[];
+  /** Music leaders shown on the event page (official events only). */
+  leaders: PublicJamLeader[];
+  /** Set when the viewer is one of this event's leaders. */
+  myLeader: { token: string; showPublicly: boolean } | null;
+  /** The full leader list with emails, for whoever can manage the event. */
+  managedLeaders: ManagedJamLeader[] | null;
 };
 
 export default function JamView({
@@ -88,6 +98,9 @@ export default function JamView({
     canInvite,
     invitesEnabled,
     alreadyInvitedIds,
+    leaders,
+    myLeader,
+    managedLeaders,
   } = data;
 
   // An official event with no on-site tiers sells through an external link, so
@@ -197,6 +210,7 @@ export default function JamView({
         />
       )}
       {canManage && <JamInviteList jamId={jamId} invites={inviteList} />}
+      {managedLeaders && <JamLeaderManager jamId={jamId} initialLeaders={managedLeaders} />}
       {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={messageRecipientCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
     </>
   );
@@ -210,10 +224,16 @@ export default function JamView({
   return (
     <div className="space-y-4">
       {inviteResponse}
+      {myLeader && <JamLeaderBanner token={myLeader.token} showPublicly={myLeader.showPublicly} />}
       <JamSplit
         aside={
           <>
             <JamPoster jam={jamCardData} />
+            {leaders.length > 0 && (
+              <div className="hidden md:block">
+                <JamLeaders leaders={leaders} />
+              </div>
+            )}
             {showAttendees && (
               <div className="hidden md:block">
                 <JamAttendeeSummary jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} />
@@ -224,6 +244,13 @@ export default function JamView({
         asideBelow={setList}
       >
         {card}
+        {/* On a phone the aside is only the poster, so who's leading follows
+            the event details instead. */}
+        {leaders.length > 0 && (
+          <div className="mt-6 md:hidden">
+            <JamLeaders leaders={leaders} />
+          </div>
+        )}
       </JamSplit>
       {attendees}
       {showTicketPanel ? (

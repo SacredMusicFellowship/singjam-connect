@@ -32,6 +32,11 @@ async function jamApiFetch(path: string, method: 'POST' | 'DELETE', body?: objec
 
 type GuestAttendee = { name: string; extra: number };
 
+// Music leaders on an official event, served by the web API: jam_leaders is
+// service_role-only because each row carries the leader's email and token.
+type JamLeader = { id: string; user_id: string | null; name: string; username: string | null; avatar_url: string | null };
+type MyLeaderSpot = { token: string; show_publicly: boolean };
+
 type JamDetail = {
   id: string;
   name: string | null;
@@ -324,6 +329,8 @@ export default function JamDetailScreen() {
   const [me, setMe] = useState<Omit<Attendee, 'status'> | null>(null);
   const [canHostOfficial, setCanHostOfficial] = useState(false);
   const [jamSets, setJamSets] = useState<JamSet[]>([]);
+  const [leaders, setLeaders] = useState<JamLeader[]>([]);
+  const [myLeader, setMyLeader] = useState<MyLeaderSpot | null>(null);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rsvpLoading, setRsvpLoading] = useState(false);
@@ -423,6 +430,19 @@ export default function JamDetailScreen() {
         );
       })
       .catch(() => { setGuestAttendees([]); setMemberExtras({}); });
+    if (j.visibility === 'official') {
+      const { data: { session } } = await supabase.auth.getSession();
+      fetch(`${WEB_URL}/api/jam/${id}/leaders`, {
+        headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+      })
+        .then(r => (r.ok ? r.json() : { leaders: [], me: null }))
+        .then(d => { setLeaders(d.leaders ?? []); setMyLeader(d.me ?? null); })
+        .catch(() => { setLeaders([]); setMyLeader(null); });
+    } else {
+      setLeaders([]);
+      setMyLeader(null);
+    }
+
     const myRsvp = user ? rawRsvps.find(r => r.user_id === user.id) : undefined;
     setMyRsvpStatus(myRsvp?.status ?? null);
     if (user) {
@@ -486,6 +506,40 @@ export default function JamDetailScreen() {
     if (confirmed && confirmed !== predicted) setMyRsvpStatus(confirmed);
     setRsvpLoading(false);
     load();
+  }
+
+  // Same endpoint as the "Manage your spot" link in the leader's email.
+  async function leaderAction(action: 'withdraw' | 'hide' | 'show') {
+    if (!myLeader) return false;
+    const res = await fetch(`${WEB_URL}/api/lead/${myLeader.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      Alert.alert('Error', 'Something went wrong.');
+      return false;
+    }
+    return true;
+  }
+
+  async function handleLeaderVisibility() {
+    if (!myLeader) return;
+    const show = !myLeader.show_publicly;
+    if (await leaderAction(show ? 'show' : 'hide')) load();
+  }
+
+  function handleLeaderWithdraw() {
+    Alert.alert("Can't make it?", "Your ticket will be released and we'll let the host know.", [
+      {
+        text: "Yes, I can't make it",
+        style: 'destructive',
+        onPress: async () => {
+          if (await leaderAction('withdraw')) load();
+        },
+      },
+      { text: 'Keep my spot', style: 'cancel' },
+    ]);
   }
 
   async function handleCancelRsvp() {
@@ -739,6 +793,24 @@ export default function JamDetailScreen() {
           ) : null}
         </View>
 
+        {myLeader && !isPast ? (
+          <View className="px-4 mb-6">
+            <View className="bg-amber-50 rounded-xl p-4 border border-amber-200 gap-2">
+              <Text className="text-amber-900 font-medium">You're leading at this event. Thank you! 🎶</Text>
+              <View className="flex-row flex-wrap gap-x-4 gap-y-1">
+                <TouchableOpacity onPress={handleLeaderVisibility}>
+                  <Text className="text-zinc-600 underline">
+                    {myLeader.show_publicly ? 'Hide me on the event page' : 'Show me on the event page'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleLeaderWithdraw}>
+                  <Text className="text-zinc-600 underline">Can't make it?</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         {/* RSVP action */}
         {!isPast ? (
           <View className="px-4 mb-6">
@@ -807,6 +879,33 @@ export default function JamDetailScreen() {
           <View className="px-4 mb-6">
             <Text className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-2">About</Text>
             <Text className="text-zinc-700 leading-relaxed">{jam.notes}</Text>
+          </View>
+        ) : null}
+
+        {/* Who's leading — after the event details and before who's going,
+            the same order as mobile web. */}
+        {leaders.length > 0 ? (
+          <View className="px-4 mb-6">
+            <Text className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">Leading</Text>
+            <View className="gap-2">
+              {leaders.map(l => (
+                <TouchableOpacity
+                  key={l.id}
+                  disabled={!l.user_id}
+                  onPress={() => router.push(`/profile/${l.user_id}` as any)}
+                  className="flex-row items-center gap-3"
+                >
+                  {l.avatar_url ? (
+                    <Image source={{ uri: l.avatar_url }} className="w-8 h-8 rounded-full" />
+                  ) : (
+                    <View className="w-8 h-8 rounded-full items-center justify-center bg-amber-100">
+                      <Text className="font-semibold text-xs text-amber-700">{l.name[0]?.toUpperCase() ?? '?'}</Text>
+                    </View>
+                  )}
+                  <Text className="flex-1 text-zinc-900 font-medium" numberOfLines={1}>{l.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         ) : null}
 

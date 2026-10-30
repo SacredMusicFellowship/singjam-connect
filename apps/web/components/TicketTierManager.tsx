@@ -52,6 +52,7 @@ type Guest = {
   email: string | null;
   tier: string;
   is_member: boolean;
+  is_leader?: boolean;
   checked_in_at: string | null;
   // Returned by the orders route all along; the type just never said so.
   paid_at: string | null;
@@ -64,7 +65,7 @@ type Guest = {
 // What the buyer paid for the order this ticket is part of — on the order's
 // first ticket only, so a two-ticket order doesn't read as two purchases.
 function paidLabel(g: Guest) {
-  if (g.order_position > 1) return "";
+  if (g.order_position > 1 || g.is_leader) return "";
   const amount = money(g.order_amount_cents, g.currency);
   return g.order_tickets > 1 ? `${amount} for ${g.order_tickets} tickets` : amount;
 }
@@ -83,6 +84,7 @@ type PromoCode = { id: string; code: string; label: string; redeemed: number | n
 
 type Summary = {
   tickets_sold: number;
+  leaders?: number;
   orders: number;
   gross_cents: number;
   fee_cents: number;
@@ -463,7 +465,7 @@ export default function TicketTierManager({
           <div className={STAT_GRID}>
             {[
               { label: "Tickets sold", value: String(summary.tickets_sold) },
-              { label: "Checked in", value: `${summary.checked_in}/${summary.tickets_sold}` },
+              { label: "Checked in", value: `${summary.checked_in}/${summary.tickets_sold + (summary.leaders ?? 0)}` },
               { label: "Gross", value: money(summary.gross_cents, summary.currency) },
               { label: "Stripe fees", value: money(summary.fee_cents, summary.currency) },
               { label: "Net", value: money(summary.net_cents, summary.currency) },
@@ -777,6 +779,11 @@ export default function TicketTierManager({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-medium text-zinc-900">{g.name}</p>
+                      {g.is_leader && (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                          leader
+                        </span>
+                      )}
                       {!g.is_member && (
                         <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
                           guest
@@ -824,6 +831,11 @@ export default function TicketTierManager({
                     <tr key={g.ticket_id} className="border-t border-zinc-100">
                       <td className="py-2 pr-3">
                         <span className="text-zinc-900">{g.name}</span>
+                        {g.is_leader && (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                            leader
+                          </span>
+                        )}
                         {!g.is_member && (
                           <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
                             guest

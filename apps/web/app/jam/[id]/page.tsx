@@ -6,6 +6,7 @@ import { claimJamInvite } from "@/lib/claimJamInvite";
 import { canManageJam, canEditJamById } from "@/lib/jamAuthz";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
 import { resolveJamId } from "@/lib/shortRef";
+import { describeLeaders, jamLeaderRows, publicLeaders } from "@/lib/jamLeaders";
 import JamView, { type InviteEntry } from "@/components/JamView";
 import ShortUrl from "@/components/ShortUrl";
 import { formatJamLongDate, formatJamTimeRange, jamPreviewPlace, jamSeatExcludedUserId, jamSeatsTaken } from "@singjam/core";
@@ -140,6 +141,11 @@ export default async function JamPage({
     ? await Promise.all([canManageJam(supabaseAdmin(), id, userId), canEditJamById(supabaseAdmin(), id, userId)])
     : [false, false];
   const hasFullAccess = isOfficial || isAttending || canManage;
+
+  // Music leaders are an official-event feature (migration 172).
+  const leaderRows = isOfficial ? await jamLeaderRows(admin, id) : [];
+  const allLeaders = await describeLeaders(admin, leaderRows);
+  const myLeaderRow = userId ? leaderRows.find((r) => r.user_id === userId) : undefined;
   const showRsvp = !isOfficial && !!userId && !pendingInvite && !isHost;
   const canInvite = !!userId && !isOfficial && (canManage || (isAttending && jam.guests_can_invite));
 
@@ -253,6 +259,9 @@ export default async function JamPage({
         invitesEnabled,
         inviteList,
         alreadyInvitedIds,
+        leaders: publicLeaders(allLeaders),
+        myLeader: myLeaderRow ? { token: myLeaderRow.token, showPublicly: myLeaderRow.show_publicly } : null,
+        managedLeaders: canManage && isOfficial ? allLeaders : null,
       }}
     />
     </>
