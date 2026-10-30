@@ -12,7 +12,6 @@ import JamAttendeeList, { JamAttendeeSummary } from "@/components/JamAttendeeLis
 import JamSetList from "@/components/JamSetList";
 import TicketPurchasePanel from "@/components/TicketPurchasePanel";
 import JamLeaders from "@/components/JamLeaders";
-import JamLeaderBanner from "@/components/JamLeaderBanner";
 import JamLeaderManager from "@/components/JamLeaderManager";
 import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
 import { jamPath } from "@singjam/core";
@@ -64,7 +63,7 @@ export type JamViewData = {
   /** Music leaders shown on the event page (official events only). */
   leaders: PublicJamLeader[];
   /** Set when the viewer is one of this event's leaders. */
-  myLeader: { token: string; showPublicly: boolean } | null;
+  myLeader: { id: string; token: string; showPublicly: boolean } | null;
   /** The full leader list with emails, for whoever can manage the event. */
   managedLeaders: ManagedJamLeader[] | null;
 };
@@ -224,14 +223,13 @@ export default function JamView({
   return (
     <div className="space-y-4">
       {inviteResponse}
-      {myLeader && <JamLeaderBanner token={myLeader.token} showPublicly={myLeader.showPublicly} />}
       <JamSplit
         aside={
           <>
             <JamPoster jam={jamCardData} />
             {leaders.length > 0 && (
               <div className="hidden md:block">
-                <JamLeaders leaders={leaders} />
+                <JamLeaders leaders={leaders} me={myLeader} />
               </div>
             )}
             {showAttendees && (
@@ -248,7 +246,7 @@ export default function JamView({
             the event details instead. */}
         {leaders.length > 0 && (
           <div className="mt-6 md:hidden">
-            <JamLeaders leaders={leaders} />
+            <JamLeaders leaders={leaders} me={myLeader} />
           </div>
         )}
       </JamSplit>

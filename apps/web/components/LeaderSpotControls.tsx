@@ -2,17 +2,21 @@
 
 import { useState } from "react";
 
-// A leader's own controls: stay off the event page, or step down. Shared by the
-// banner on the event page and the /lead/[token] page their email links to, so
-// a leader without an account has the same two choices.
+// A leader's own controls: stay off the event page, or step down. Shared by
+// their row in the event page's Leading list and the /lead/[token] page their
+// email links to, so a leader without an account has the same two choices.
 export default function LeaderSpotControls({
   token,
   initialShowPublicly,
   onWithdrawn,
+  onVisibilityChange,
+  compact = false,
 }: {
   token: string;
   initialShowPublicly: boolean;
   onWithdrawn: () => void;
+  onVisibilityChange?: (show: boolean) => void;
+  compact?: boolean;
 }) {
   const [showPublicly, setShowPublicly] = useState(initialShowPublicly);
   const [confirming, setConfirming] = useState(false);
@@ -33,7 +37,10 @@ export default function LeaderSpotControls({
       return;
     }
     if (action === "withdraw") onWithdrawn();
-    else setShowPublicly(action === "show");
+    else {
+      setShowPublicly(action === "show");
+      onVisibilityChange?.(action === "show");
+    }
   }
 
   if (confirming) {
@@ -63,13 +70,13 @@ export default function LeaderSpotControls({
 
   return (
     <div className="space-y-1">
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      <div className={`flex flex-wrap gap-x-4 gap-y-1 ${compact ? "text-xs" : "text-sm"}`}>
         <button
           onClick={() => act(showPublicly ? "hide" : "show")}
           disabled={busy}
           className="text-zinc-600 underline hover:text-zinc-900 disabled:opacity-50"
         >
-          {showPublicly ? "Hide me on the event page" : "Show me on the event page"}
+          {compact ? (showPublicly ? "Hide me" : "Show me") : showPublicly ? "Hide me on the event page" : "Show me on the event page"}
         </button>
         <button onClick={() => setConfirming(true)} disabled={busy} className="text-zinc-600 underline hover:text-zinc-900 disabled:opacity-50">
           Can&apos;t make it?

@@ -35,7 +35,7 @@ type GuestAttendee = { name: string; extra: number };
 // Music leaders on an official event, served by the web API: jam_leaders is
 // service_role-only because each row carries the leader's email and token.
 type JamLeader = { id: string; user_id: string | null; name: string; username: string | null; avatar_url: string | null };
-type MyLeaderSpot = { token: string; show_publicly: boolean };
+type MyLeaderSpot = { id: string; token: string; show_publicly: boolean };
 
 type JamDetail = {
   id: string;
@@ -793,24 +793,6 @@ export default function JamDetailScreen() {
           ) : null}
         </View>
 
-        {myLeader && !isPast ? (
-          <View className="px-4 mb-6">
-            <View className="bg-amber-50 rounded-xl p-4 border border-amber-200 gap-2">
-              <Text className="text-amber-900 font-medium">You're leading at this event. Thank you! 🎶</Text>
-              <View className="flex-row flex-wrap gap-x-4 gap-y-1">
-                <TouchableOpacity onPress={handleLeaderVisibility}>
-                  <Text className="text-zinc-600 underline">
-                    {myLeader.show_publicly ? 'Hide me on the event page' : 'Show me on the event page'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleLeaderWithdraw}>
-                  <Text className="text-zinc-600 underline">Can't make it?</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        ) : null}
-
         {/* RSVP action */}
         {!isPast ? (
           <View className="px-4 mb-6">
@@ -889,21 +871,38 @@ export default function JamDetailScreen() {
             <Text className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">Leading</Text>
             <View className="gap-2">
               {leaders.map(l => (
-                <TouchableOpacity
-                  key={l.id}
-                  disabled={!l.user_id}
-                  onPress={() => router.push(`/profile/${l.user_id}` as any)}
-                  className="flex-row items-center gap-3"
-                >
-                  {l.avatar_url ? (
-                    <Image source={{ uri: l.avatar_url }} className="w-8 h-8 rounded-full" />
-                  ) : (
-                    <View className="w-8 h-8 rounded-full items-center justify-center bg-amber-100">
-                      <Text className="font-semibold text-xs text-amber-700">{l.name[0]?.toUpperCase() ?? '?'}</Text>
+                <View key={l.id}>
+                  <TouchableOpacity
+                    disabled={!l.user_id}
+                    onPress={() => router.push(`/profile/${l.user_id}` as any)}
+                    className="flex-row items-center gap-3"
+                  >
+                    {l.avatar_url ? (
+                      <Image source={{ uri: l.avatar_url }} className="w-8 h-8 rounded-full" />
+                    ) : (
+                      <View className="w-8 h-8 rounded-full items-center justify-center bg-amber-100">
+                        <Text className="font-semibold text-xs text-amber-700">{l.name[0]?.toUpperCase() ?? '?'}</Text>
+                      </View>
+                    )}
+                    <Text className="flex-1 text-zinc-900 font-medium" numberOfLines={1}>{l.name}</Text>
+                  </TouchableOpacity>
+                  {/* The leader manages their spot from their own row, as on web. */}
+                  {myLeader?.id === l.id && !isPast ? (
+                    <View className="pl-11 mt-1 gap-1">
+                      {!myLeader.show_publicly ? (
+                        <Text className="text-xs text-zinc-400">Hidden — only you can see this</Text>
+                      ) : null}
+                      <View className="flex-row flex-wrap gap-x-4 gap-y-1">
+                        <TouchableOpacity onPress={handleLeaderVisibility}>
+                          <Text className="text-xs text-zinc-600 underline">{myLeader.show_publicly ? 'Hide me' : 'Show me'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleLeaderWithdraw}>
+                          <Text className="text-xs text-zinc-600 underline">Can't make it?</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  )}
-                  <Text className="flex-1 text-zinc-900 font-medium" numberOfLines={1}>{l.name}</Text>
-                </TouchableOpacity>
+                  ) : null}
+                </View>
               ))}
             </View>
           </View>
