@@ -92,7 +92,6 @@ export default function TicketPurchasePanel({
   eventPath,
   isSignedIn,
   timezone,
-  isLeader = false,
 }: {
   jamId: string;
   /** The event page's short path, for returning here after signing in. */
@@ -100,8 +99,6 @@ export default function TicketPurchasePanel({
   isSignedIn: boolean;
   /** The event's timezone, for dating a tier that hasn't opened yet. */
   timezone?: string | null;
-  /** The viewer leads this event, so anything they buy here is for someone else. */
-  isLeader?: boolean;
 }) {
   const [types, setTypes] = useState<TicketType[] | null>(null);
   // What the whole event has left under its total limit; null when it has none.
@@ -266,11 +263,6 @@ export default function TicketPurchasePanel({
   return (
     <div className={`space-y-3 ${COLUMN}`}>
       <h3 className="text-sm font-semibold tracking-wide text-zinc-700">Tickets</h3>
-      {isLeader && (
-        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          You&apos;re leading, so your seat is covered. Tickets you buy here are for guests.
-        </p>
-      )}
 
       {types.map((t) => {
         // The event's total is shared across tiers, so what this tier can add

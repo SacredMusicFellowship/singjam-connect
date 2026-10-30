@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import JamCard, { JamMap, JamPoster, JamSplit, type JamCardData } from "@/components/JamCard";
 import JamRsvpButton from "@/components/JamRsvpButton";
 import JamInvitePanel, { type NewInviteEntry } from "@/components/JamInvitePanel";
@@ -12,6 +13,7 @@ import JamAttendeeList, { JamAttendeeSummary } from "@/components/JamAttendeeLis
 import JamSetList from "@/components/JamSetList";
 import TicketPurchasePanel from "@/components/TicketPurchasePanel";
 import JamLeaderManager from "@/components/JamLeaderManager";
+import LeaderSpotControls from "@/components/LeaderSpotControls";
 import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
 import { jamPath } from "@singjam/core";
 
@@ -118,7 +120,9 @@ export default function JamView({
   const showTicketPanel = isOfficial && hasTicketTiers;
 
   // Either route to a ticket counts: on our own tiers or off to someone else's
-  // checkout, you still don't have one yet.
+  // checkout, you still don't have one yet. Buying holds back nothing but "Add
+  // to calendar", so once you're attending — a ticket bought, or added as a
+  // leader — you get it back.
   const sellsTickets = hasTicketTiers || !!jamCardData.tickets_url;
 
   // Passed as undefined rather than an empty fragment when there is nothing to
@@ -126,8 +130,13 @@ export default function JamView({
   // at all, and a fragment is truthy even when it renders nothing — which would
   // leave an empty row and its gap behind on a ticketed event, where the
   // calendar button was the row's only occupant.
-  const hasActions = showRsvp || (!userId && !isOfficial);
+  // A ticket holder or leader gets the same "You're going" as an RSVP. A ticket
+  // isn't given back from here, so there's no Cancel; a leader gets "Can't make
+  // it?" instead, which steps them down.
+  const goingOnTicket = (sellsTickets && data.rsvpStatus === "attending") || !!myLeader;
+  const hasActions = showRsvp || (!userId && !isOfficial) || goingOnTicket;
 
+  const router = useRouter();
   const [rsvpStatus, setRsvpStatus] = useState(data.rsvpStatus);
   const [hasFullAccess, setHasFullAccess] = useState(data.hasFullAccess);
   const [inviteList, setInviteList] = useState(data.inviteList);
@@ -141,7 +150,7 @@ export default function JamView({
   const card = (
     <JamCard
       jam={jamCardData}
-      sellsTickets={sellsTickets}
+      sellsTickets={sellsTickets && !goingOnTicket}
       // Official events sell tickets instead of taking RSVPs — showRsvp is
       // false for them. The map is rendered last on the page for every jam
       // type, below.
@@ -152,7 +161,6 @@ export default function JamView({
             eventPath={jamPath({ id: jamId, short_code: shortCode })}
             isSignedIn={!!userId}
             timezone={jamCardData.timezone}
-            isLeader={!!myLeader}
           />
         ) : undefined
       }
@@ -171,6 +179,18 @@ export default function JamView({
                 setRsvpStatus(newStatus);
                 setHasFullAccess(isOfficial || newStatus === "attending" || canManage);
               }}
+            />
+          )}
+          {goingOnTicket && (
+            <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
+              ✓ You&apos;re going
+            </span>
+          )}
+          {myLeader && (
+            <LeaderSpotControls
+              token={myLeader.token}
+              hasLeaderTicket={myLeader.hasLeaderTicket}
+              onWithdrawn={() => router.refresh()}
             />
           )}
           {!userId && !isOfficial && (

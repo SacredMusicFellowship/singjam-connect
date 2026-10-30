@@ -114,6 +114,8 @@ describe("addJamLeader", () => {
     expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ to: "member@example.com" }));
     const html = mockSend.mock.calls[0][0].html as string;
     expect(html).toContain("Update your RSVP");
+    expect(html).toContain("Google Calendar");
+    expect(html).toContain("https://singjam.org/api/jam/jam-1/ics");
     expect(html).not.toContain("/lead/");
     expect(html).toContain("AAAAAA");
     expect(html).not.toContain("added you");

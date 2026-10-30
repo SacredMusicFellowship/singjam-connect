@@ -43,6 +43,44 @@ function calendarUrls({
   };
 }
 
+// Google, Apple (our .ics) and Outlook, for an email to someone who has a
+// ticket: the email's first buttons, with no heading, since each names its
+// calendar. Empty when the event has no start time.
+export function calendarBlockHtml({
+  jamId,
+  jamName,
+  startsAt,
+  endsAt,
+  address,
+}: {
+  jamId: string;
+  jamName: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  address?: string | null;
+}) {
+  if (!startsAt) return "";
+  const cal = calendarUrls({ title: jamName, startsAt, endsAt: endsAt ?? null, location: address ?? null });
+  const icsUrl = `https://singjam.org/api/jam/${jamId}/ics`;
+  return `
+  <div style="margin-top:24px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="${cal.google}"
+         style="display:inline-block;padding:8px 16px;border:1px solid #e4e4e7;border-radius:8px;font-size:13px;font-weight:500;color:#18181b;text-decoration:none">
+        Google Calendar
+      </a>
+      <a href="${icsUrl}"
+         style="display:inline-block;padding:8px 16px;border:1px solid #e4e4e7;border-radius:8px;font-size:13px;font-weight:500;color:#18181b;text-decoration:none">
+        Apple Calendar
+      </a>
+      <a href="${cal.outlook}"
+         style="display:inline-block;padding:8px 16px;border:1px solid #e4e4e7;border-radius:8px;font-size:13px;font-weight:500;color:#18181b;text-decoration:none">
+        Outlook
+      </a>
+    </div>
+  </div>`;
+}
+
 // "Advance" alone reads as an adjective with nothing to modify, exactly as it
 // did on the payment page. Singular: each row is one ticket. A tier whose name
 // already says "ticket" keeps the host's wording.
@@ -86,10 +124,6 @@ export function ticketConfirmationHtml({
 }) {
   const greeting = name ? `Hi ${name},` : "Hi,";
   const dateStr = formatJamTime(startsAt, timezone);
-  const icsUrl = `https://singjam.org/api/jam/${jamId}/ics`;
-  const cal = startsAt
-    ? calendarUrls({ title: jamName, startsAt, endsAt: endsAt ?? null, location: address ?? null })
-    : null;
 
   const plural = tickets.length === 1 ? "ticket" : "tickets";
 
@@ -156,24 +190,7 @@ export function ticketConfirmationHtml({
        style="font-size:15px;font-weight:500;color:#18181b;margin:0;text-decoration:underline">${dropUsCountry(dropVenueRepeatedInTitle(address, jamName))}</a>
   </div>` : ""}
 
-  ${cal ? `
-  <div style="margin-top:24px">
-    <p style="font-size:13px;font-weight:600;color:#71717a;margin:0 0 10px">Add to calendar</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <a href="${cal.google}"
-         style="display:inline-block;padding:8px 16px;border:1px solid #e4e4e7;border-radius:8px;font-size:13px;font-weight:500;color:#18181b;text-decoration:none">
-        Google Calendar
-      </a>
-      <a href="${icsUrl}"
-         style="display:inline-block;padding:8px 16px;border:1px solid #e4e4e7;border-radius:8px;font-size:13px;font-weight:500;color:#18181b;text-decoration:none">
-        Apple Calendar
-      </a>
-      <a href="${cal.outlook}"
-         style="display:inline-block;padding:8px 16px;border:1px solid #e4e4e7;border-radius:8px;font-size:13px;font-weight:500;color:#18181b;text-decoration:none">
-        Outlook
-      </a>
-    </div>
-  </div>` : ""}
+  ${calendarBlockHtml({ jamId, jamName, startsAt, endsAt, address })}
 
   ${isGuest && signUpUrl ? `
   <div style="margin-top:24px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px">
