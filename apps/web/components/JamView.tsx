@@ -137,6 +137,7 @@ export default function JamView({
   const hasActions = showRsvp || (!userId && !isOfficial) || goingOnTicket;
 
   const router = useRouter();
+  const [attendeesVersion, setAttendeesVersion] = useState(0);
   const [rsvpStatus, setRsvpStatus] = useState(data.rsvpStatus);
   const [hasFullAccess, setHasFullAccess] = useState(data.hasFullAccess);
   const [inviteList, setInviteList] = useState(data.inviteList);
@@ -220,6 +221,7 @@ export default function JamView({
       isHost={isHost}
       leaderIds={leaders.map((l) => l.user_id).filter((id): id is string => !!id)}
       myLeader={myLeader}
+      version={attendeesVersion}
     />
   ) : null;
 
@@ -235,7 +237,16 @@ export default function JamView({
         />
       )}
       {canManage && <JamInviteList jamId={jamId} invites={inviteList} />}
-      {managedLeaders && <JamLeaderManager jamId={jamId} initialLeaders={managedLeaders} />}
+      {managedLeaders && (
+        <JamLeaderManager
+          jamId={jamId}
+          initialLeaders={managedLeaders}
+          onChange={() => {
+            setAttendeesVersion((v) => v + 1);
+            router.refresh();
+          }}
+        />
+      )}
       {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={messageRecipientCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
     </>
   );
@@ -255,7 +266,7 @@ export default function JamView({
             <JamPoster jam={jamCardData} />
             {showAttendees && (
               <div className="hidden md:block">
-                <JamAttendeeSummary jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} />
+                <JamAttendeeSummary jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} version={attendeesVersion} />
               </div>
             )}
           </>
