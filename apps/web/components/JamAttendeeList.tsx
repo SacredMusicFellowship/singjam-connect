@@ -179,6 +179,7 @@ export default function JamAttendeeList({
   isHost,
   leaderIds = [],
   myLeader = null,
+  version = 0,
 }: {
   jamId: string;
   hostId: string | null;
@@ -187,6 +188,8 @@ export default function JamAttendeeList({
   leaderIds?: string[];
   /** Set when the viewer leads this event: their row says Leader even if they aren't listed publicly. */
   myLeader?: { userId: string } | null;
+  /** Bumped when the host changes who is coming from this page, to reload the list. */
+  version?: number;
 }) {
   const [data, setData] = useState<AttendeeData | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -195,7 +198,7 @@ export default function JamAttendeeList({
   useEffect(() => {
     loadAttendees(supabase, jamId, hostId).then(setData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jamId, hostId]);
+  }, [jamId, hostId, version]);
 
   async function toggleCohost(userId: string, makeCohost: boolean) {
     setPending(userId);
@@ -319,14 +322,14 @@ const SUMMARY_AVATARS = 6;
  * down to the full list. Fetches on its own rather than sharing the list's state so
  * either can render without the other; the rules live in loadAttendees.
  */
-export function JamAttendeeSummary({ jamId, hostId }: { jamId: string; hostId: string | null }) {
+export function JamAttendeeSummary({ jamId, hostId, version = 0 }: { jamId: string; hostId: string | null; version?: number }) {
   const [data, setData] = useState<AttendeeData | null>(null);
   const supabase = supabaseBrowser();
 
   useEffect(() => {
     loadAttendees(supabase, jamId, hostId).then(setData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jamId, hostId]);
+  }, [jamId, hostId, version]);
 
   if (!data || data.totalGoing === 0) return null;
   const { profileMap, attending, guests, totalGoing } = data;

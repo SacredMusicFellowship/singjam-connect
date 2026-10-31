@@ -19,7 +19,16 @@ type UserResult = {
 // The host's side of music leaders. Adding someone confirms them — they have
 // already said yes — so they are emailed straight away, with a free ticket
 // unless they already got one, and can step down from the event page.
-export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: string; initialLeaders: ManagedJamLeader[] }) {
+export default function JamLeaderManager({
+  jamId,
+  initialLeaders,
+  onChange,
+}: {
+  jamId: string;
+  initialLeaders: ManagedJamLeader[];
+  /** Adding or removing a leader seats or unseats them, so the page's lists reload. */
+  onChange?: () => void;
+}) {
   const [leaders, setLeaders] = useState(initialLeaders);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserResult[]>([]);
@@ -62,6 +71,7 @@ export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: str
       return;
     }
     setLeaders((prev) => [...prev, body.leader]);
+    onChange?.();
     setQuery("");
     setResults([]);
     setName("");
@@ -90,6 +100,7 @@ export default function JamLeaderManager({ jamId, initialLeaders }: { jamId: str
       return;
     }
     setLeaders((prev) => prev.filter((l) => l.id !== leader.id));
+    onChange?.();
   }
 
   const leadingIds = new Set(leaders.map((l) => l.user_id).filter(Boolean));
