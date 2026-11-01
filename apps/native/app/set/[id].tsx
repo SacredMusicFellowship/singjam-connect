@@ -276,9 +276,13 @@ function SongRow({
   const supportParticipants = visibleParticipants.filter(
     (p) => !leaderIds.includes(p.user_id) && participantKnowledge.get(p.user_id) === 'support'
   );
+  // As on web: who's learning the song, so leaders see who might want help.
+  const learnParticipants = visibleParticipants.filter(
+    (p) => !leaderIds.includes(p.user_id) && participantKnowledge.get(p.user_id) === 'learn'
+  );
   const showLeaderBlock =
     !isPublicViewer &&
-    (leadParticipants.length > 0 || supportParticipants.length > 0 || (canEdit && participants.length > 0));
+    (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0));
 
   function confirmRemove() {
     Alert.alert(
@@ -401,6 +405,18 @@ function SongRow({
                   {supportParticipants.map((p) => (
                     <View key={p.user_id} className="rounded-full px-2 py-0.5 mr-1 mb-1 bg-sky-100">
                       <Text className="text-sky-700 text-xs font-medium">{participantLabel(p)}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+            {learnParticipants.length > 0 ? (
+              <View className="flex-row items-start">
+                <Text className="text-zinc-400 text-[10px] font-medium mr-1.5 mt-1">Learning</Text>
+                <View className="flex-row flex-wrap flex-1">
+                  {learnParticipants.map((p) => (
+                    <View key={p.user_id} className="rounded-full px-2 py-0.5 mr-1 mb-1 bg-zinc-100">
+                      <Text className="text-zinc-600 text-xs font-medium">{participantLabel(p)}</Text>
                     </View>
                   ))}
                 </View>

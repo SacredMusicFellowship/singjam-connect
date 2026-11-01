@@ -28,7 +28,7 @@ export default function SetSongRow({
   participantKnowledge,
   currentUserId,
   currentUserSingingVoice,
-  inRepertoire,
+  myConfidence,
   onMediaAdded,
   onKeyChanged,
   onLeadersChanged,
@@ -49,7 +49,8 @@ export default function SetSongRow({
   participantKnowledge: Map<string, string>;
   currentUserId: string | null;
   currentUserSingingVoice: string | null;
-  inRepertoire: boolean;
+  /** The viewer's own role for this song, if it's in their repertoire. */
+  myConfidence: string | null;
   onMediaAdded: (songId: string, field: "youtube_url" | "spotify_url" | "chord_chart_url", url: string) => void;
   onKeyChanged: (id: string, key: string | null) => void;
   onLeadersChanged: (id: string, leaderUserIds: string[]) => void;
@@ -153,6 +154,11 @@ export default function SetSongRow({
   const supportParticipants = visibleParticipants.filter(
     (p) => !leaderIds.includes(p.user_id) && participantKnowledge.get(p.user_id) === "support"
   );
+  // Shown so leaders can see who might want help, and learners find each other.
+  const learnParticipants = visibleParticipants.filter(
+    (p) => !leaderIds.includes(p.user_id) && participantKnowledge.get(p.user_id) === "learn"
+  );
+  const learning = myConfidence === "learn";
 
   return (
     <div className="flex-1 min-w-0 space-y-2">
@@ -194,7 +200,7 @@ export default function SetSongRow({
               <span className="text-xs font-semibold text-zinc-900">{song.songs.tonality}</span>
             )}
           </div>
-          {!inRepertoire && (currentUserId || signInUrl) && (
+          {(!myConfidence || learning) && (currentUserId || signInUrl) && (
             !currentUserId ? (
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <a
@@ -217,6 +223,15 @@ export default function SetSongRow({
                   offerLearn={false}
                   onVoiceUpdated={onVoiceUpdated}
                 />
+              </div>
+            ) : learning ? (
+              // Marked "Want to learn it": say so here, and make moving up to
+              // Lead or Support one tap once they're ready.
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">Learning</span>
+                <button onClick={() => setPickingRepertoire(true)} className="text-xs text-indigo-600 hover:underline">
+                  I know it now
+                </button>
               </div>
             ) : (
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -321,7 +336,7 @@ export default function SetSongRow({
         </div>
       </div>
 
-      {(leadParticipants.length > 0 || supportParticipants.length > 0 || (canEdit && participants.length > 0)) && (
+      {(leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0)) && (
         <div className="space-y-1">
           {(leadParticipants.length > 0 || (canEdit && participants.length > 0)) && (
             <div className="flex items-start gap-1.5">
@@ -365,6 +380,22 @@ export default function SetSongRow({
                       key={p.user_id}
                       className="rounded-full px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700"
                     >
+                      {label}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {learnParticipants.length > 0 && (
+            <div className="flex items-start gap-1.5">
+              <span className="shrink-0 text-[10px] text-zinc-400 font-medium pt-0.5">Learning</span>
+              <div className="flex flex-wrap gap-1 flex-1">
+                {learnParticipants.map((p) => {
+                  const firstName = p.display_name ?? p.username ?? "?";
+                  const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                  return (
+                    <span key={p.user_id} className="rounded-full px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-600">
                       {label}
                     </span>
                   );
