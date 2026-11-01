@@ -47,13 +47,15 @@ type Props = {
 // in its own app. Spacing is tighter than web's so more songs fit a phone.
 function SuggestionCard({ song, canLead, onAdd, onView, confidence }: Props) {
   function handleAddTap(event: GestureResponderEvent) {
+    // A new add comes from "I know this song!", so it asks lead or support;
+    // learning has its own link. Changing an existing role offers all three.
     showOptionsSheet({
       title: confidence ? song.title : `Add "${song.title}" as…`,
       anchor: anchorFrom(event),
       options: [
         { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => onAdd(song, 'lead') },
         { label: 'Support', onPress: () => onAdd(song, 'support') },
-        { label: 'Learn', onPress: () => onAdd(song, 'learn') },
+        ...(confidence ? [{ label: 'Learn', onPress: () => onAdd(song, 'learn') }] : []),
       ],
     });
   }
@@ -144,9 +146,14 @@ function SuggestionCard({ song, canLead, onAdd, onView, confidence }: Props) {
             </TouchableOpacity>
           </>
         ) : (
-          <TouchableOpacity onPress={handleAddTap} className="rounded-xl bg-indigo-500 px-3 py-1.5">
-            <Text className="text-sm font-medium text-white">+ Add to repertoire</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity onPress={handleAddTap} className="rounded-xl bg-indigo-500 px-3 py-1.5">
+              <Text className="text-sm font-medium text-white">I know this song!</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onAdd(song, 'learn')} className="px-1.5 py-1.5">
+              <Text className="text-sm text-indigo-600">Want to learn it</Text>
+            </TouchableOpacity>
+          </>
         )}
         <TouchableOpacity onPress={() => onView(song)} className="rounded-xl border border-zinc-200 px-3 py-1.5">
           <Text className="text-sm text-zinc-600">View</Text>

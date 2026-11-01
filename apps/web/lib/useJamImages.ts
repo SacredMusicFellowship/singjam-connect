@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   defaultCrop,
+  JAM_IMAGE_EDITABLE_SLOTS,
   JAM_IMAGE_SLOT_KEYS,
   JAM_IMAGE_SLOTS,
   type CropRect,
@@ -60,7 +61,7 @@ async function bakeSlot(src: string, slot: JamImageSlot, rect: CropRect | undefi
 }
 
 /**
- * The event image and its three crops while an event is being edited. Crops
+ * The event image and its crops while an event is being edited. Crops
  * are baked into files on Preview, so the preview shows exactly what will be
  * saved, and uploaded on save. Nothing image-related is re-uploaded unless the
  * host changed something.
@@ -90,9 +91,10 @@ export function useJamImages(initial?: Partial<JamImageFields> | null) {
     return url;
   }
 
-  const slotSrc = (slot: JamImageSlot) => srcs[slot] ?? main;
+  const cropSlot = (slot: JamImageSlot) => JAM_IMAGE_SLOTS[slot].cropFrom ?? slot;
+  const slotSrc = (slot: JamImageSlot) => srcs[cropSlot(slot)] ?? main;
   // A slot's own image has no focal point, so its default crop is centred.
-  const slotFocal = (slot: JamImageSlot) => (srcs[slot] ? "50% 50%" : focal);
+  const slotFocal = (slot: JamImageSlot) => (srcs[cropSlot(slot)] ? "50% 50%" : focal);
 
   function chooseMain(file: File) {
     setMain(fileUrl(file));
@@ -129,7 +131,7 @@ export function useJamImages(initial?: Partial<JamImageFields> | null) {
     if (baked.current?.version === version) return baked.current.result;
     for (const b of Object.values(baked.current?.result ?? {})) URL.revokeObjectURL(b.url);
     const entries = await Promise.all(
-      JAM_IMAGE_SLOT_KEYS.map(async (s) => [s, await bakeSlot(slotSrc(s)!, s, rects[s], slotFocal(s))] as const)
+      JAM_IMAGE_SLOT_KEYS.map(async (s) => [s, await bakeSlot(slotSrc(s)!, s, rects[cropSlot(s)], slotFocal(s))] as const)
     );
     const result = Object.fromEntries(entries) as Baked;
     baked.current = { version, result };
@@ -176,11 +178,11 @@ export function useJamImages(initial?: Partial<JamImageFields> | null) {
 
     const [imageUrl, ...rest] = await Promise.all([
       stored(main, "main"),
-      ...JAM_IMAGE_SLOT_KEYS.map((s) => (srcs[s] ? stored(srcs[s]!, `${s}-source`) : Promise.resolve(null))),
+      ...JAM_IMAGE_EDITABLE_SLOTS.map((s) => (srcs[s] ? stored(srcs[s]!, `${s}-source`) : Promise.resolve(null))),
       ...JAM_IMAGE_SLOT_KEYS.map((s) => upload(b[s].blob, `${s}.jpg`, "image/jpeg")),
     ]);
-    const slotSources = slotRecord((s) => rest[JAM_IMAGE_SLOT_KEYS.indexOf(s)]);
-    const bakedUrls = slotRecord((s) => rest[JAM_IMAGE_SLOT_KEYS.length + JAM_IMAGE_SLOT_KEYS.indexOf(s)]);
+    const slotSources = slotRecord((s) => rest[JAM_IMAGE_EDITABLE_SLOTS.indexOf(cropSlot(s))]);
+    const bakedUrls = slotRecord((s) => rest[JAM_IMAGE_EDITABLE_SLOTS.length + JAM_IMAGE_SLOT_KEYS.indexOf(s)]);
 
     const fields = {
       image_url: imageUrl,

@@ -378,28 +378,35 @@ export default function SongDetailScreen() {
     });
   }
 
-  async function handleAddToRepertoire(event: GestureResponderEvent) {
-    if (!song) return;
-    if (!myUserId) { router.push('/(auth)/sign-in' as any); return; }
+  function addToRepertoire(confidence: string) {
+    if (!song || !myUserId) return;
     const songId = song.id;
     const uid = myUserId;
-
-    const upsert = (confidence: string) => applyConfidence(confidence, () =>
+    applyConfidence(confidence, () =>
       supabase.from('user_songs').upsert(
         { user_id: uid, song_id: songId, confidence, updated_at: new Date().toISOString() },
         { onConflict: 'user_id,song_id' }
       )
     );
+  }
 
+  // "I know this song!" asks lead or support; learning has its own link, as on web.
+  async function handleAddToRepertoire(event: GestureResponderEvent) {
+    if (!song) return;
+    if (!myUserId) { router.push('/(auth)/sign-in' as any); return; }
     showOptionsSheet({
       title: `Add "${song.title}" as…`,
       anchor: anchorFrom(event),
       options: [
-        { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => upsert('lead') },
-        { label: 'Support', onPress: () => upsert('support') },
-        { label: 'Learn', onPress: () => upsert('learn') },
+        { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => addToRepertoire('lead') },
+        { label: 'Support', onPress: () => addToRepertoire('support') },
       ],
     });
+  }
+
+  function handleWantToLearn() {
+    if (!myUserId) { router.push('/(auth)/sign-in' as any); return; }
+    addToRepertoire('learn');
   }
 
   // Web exposes Remove as its own button next to the role control, so it lives
@@ -538,12 +545,17 @@ export default function SongDetailScreen() {
             </TouchableOpacity>
           </>
         ) : (
-          <TouchableOpacity
-            onPress={handleAddToRepertoire}
-            className="rounded-xl bg-indigo-500 px-4 py-2"
-          >
-            <Text className="text-white text-sm font-medium">+ Add to repertoire</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              onPress={handleAddToRepertoire}
+              className="rounded-xl bg-indigo-500 px-4 py-2"
+            >
+              <Text className="text-white text-sm font-medium">I know this song!</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleWantToLearn} className="px-1.5 py-2">
+              <Text className="text-indigo-600 text-sm">Want to learn it</Text>
+            </TouchableOpacity>
+          </>
         )}
         {isAdmin ? (
           // The song editor is web-only, so admins hand off to the browser.

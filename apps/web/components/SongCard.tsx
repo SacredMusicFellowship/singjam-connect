@@ -194,16 +194,22 @@ export default function SongCard({
             singingVoice={singingVoice}
             initialAskVoice={askingLeadVoice}
             onSave={(level) => { addSong(songId, level); setAskingLeadVoice(false); }}
+            offerLearn={!picking}
             onCancel={() => { setPendingAddId(null); setAskingLeadVoice(false); }}
             onVoiceUpdated={onVoiceUpdated}
           />
         ) : (
-          <button
-            className="rounded-xl bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 transition-colors"
-            onClick={() => onAdd(songId, slug)}
-          >
-            + Add to repertoire
-          </button>
+          <>
+            <button
+              className="rounded-xl bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 transition-colors"
+              onClick={() => onAdd(songId, slug)}
+            >
+              I know this song!
+            </button>
+            <button className="px-1.5 text-sm text-indigo-600 hover:underline" onClick={() => addSong(songId, "learn")}>
+              Want to learn it
+            </button>
+          </>
         )}
         {!picking && !askingLeadVoice && (
           <Link href={href} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50">

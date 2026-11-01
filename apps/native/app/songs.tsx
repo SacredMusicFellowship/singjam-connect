@@ -111,7 +111,7 @@ const CATALOG_CACHE_UID = null;
 
 // Which songs you own, cached alongside it and user-scoped. Without this the
 // warm catalog renders before ownership is known, so songs already in your
-// repertoire briefly offer "+ Add to repertoire" — and tapping that upserts,
+// repertoire briefly offer "I know this song!" — and tapping that upserts,
 // silently overwriting the role you had.
 const OWNED_CACHE_KEY = '/songs:owned';
 
@@ -178,7 +178,7 @@ export default function SongLibraryScreen() {
         readCache<[string, string][]>(OWNED_CACHE_KEY, cachedUid),
       ]);
       // Only render early once ownership is known too, otherwise owned songs
-      // would offer "+ Add to repertoire" and a fast tap would overwrite the
+      // would offer "I know this song!" and a fast tap would overwrite the
       // role. A guest has no ownership to know, so it's already safe there;
       // a signed-in user needs a cache entry matching their own id.
       const ownershipKnown = cachedUid === null || cachedOwned !== null;

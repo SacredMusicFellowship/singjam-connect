@@ -4,7 +4,7 @@ import { useRef, useState, type CSSProperties } from "react";
 import {
   cropZoom,
   defaultCrop,
-  JAM_IMAGE_SLOT_KEYS,
+  JAM_IMAGE_EDITABLE_SLOTS,
   JAM_IMAGE_SLOTS,
   JAM_IMAGE_TYPE_ERROR,
   JAM_IMAGE_TYPES,
@@ -22,10 +22,9 @@ const ASPECT_CLASS: Record<JamImageSlot, string> = {
   list: "aspect-square",
 };
 
-const WHERE: Record<JamImageSlot, string> = {
-  desktop: "Shown on the event page on a computer, and in link previews.",
+const WHERE: Partial<Record<JamImageSlot, string>> = {
+  desktop: "Shown on the event page on a computer, in link previews and as the thumbnail in the jams list.",
   mobile: "Shown on the event page on a phone and in the app.",
-  list: "Shown as the thumbnail in the jams list.",
 };
 
 const MAX_ZOOM = 4;
@@ -181,7 +180,7 @@ export default function EventImageEditor({ images }: { images: JamImages }) {
   return (
     <div className="space-y-4">
       <div className="flex items-end gap-3" role="tablist" aria-label="Image layout">
-        {JAM_IMAGE_SLOT_KEYS.map((s) => (
+        {JAM_IMAGE_EDITABLE_SLOTS.map((s) => (
           <button
             key={s}
             type="button"

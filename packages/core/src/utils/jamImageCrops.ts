@@ -1,17 +1,21 @@
-// Event images come in three crops, one per place they are shown. Each is
-// baked into its own file when the event is saved; until then (and for events
+// Event images come in three files, one per place they are shown. Each is
+// baked when the event is saved; until then (and for events
 // made before crops existed) a slot shows image_url cropped around the focal
 // point.
 
 export type JamImageSlot = "desktop" | "mobile" | "list";
 
-export const JAM_IMAGE_SLOTS: Record<JamImageSlot, { label: string; aspect: number; width: number }> = {
+export const JAM_IMAGE_SLOTS: Record<JamImageSlot, { label: string; aspect: number; width: number; cropFrom?: JamImageSlot }> = {
   desktop: { label: "Desktop", aspect: 1, width: 1080 },
   mobile: { label: "Mobile", aspect: 3 / 2, width: 1200 },
-  list: { label: "List", aspect: 1, width: 400 },
+  // The same shape as desktop, so it is the desktop crop baked smaller.
+  list: { label: "List", aspect: 1, width: 400, cropFrom: "desktop" },
 };
 
 export const JAM_IMAGE_SLOT_KEYS = Object.keys(JAM_IMAGE_SLOTS) as JamImageSlot[];
+
+/** The slots a host crops; the others are baked from another slot's crop. */
+export const JAM_IMAGE_EDITABLE_SLOTS = JAM_IMAGE_SLOT_KEYS.filter((s) => !JAM_IMAGE_SLOTS[s].cropFrom);
 
 /** A crop rectangle, as fractions of the source image's width and height. */
 export type CropRect = { x: number; y: number; w: number; h: number };

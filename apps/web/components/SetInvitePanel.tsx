@@ -447,26 +447,37 @@ export default function SetInvitePanel({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 md:p-0"
           onClick={() => setQrDataUrl(null)}
         >
+          {/* Shown on a screen at the jam, in the home page's look: dark slate
+              with an amber glow. The QR is sized to the screen's height so the
+              whole thing fits without scrolling. */}
           <div
-            className="bg-amber-50 rounded-2xl p-6 flex flex-col items-center gap-4 shadow-xl max-w-xs w-full md:max-w-none md:w-full md:h-full md:rounded-none md:justify-center md:gap-6 md:p-16"
+            className="relative overflow-hidden rounded-2xl bg-slate-900 px-6 py-8 flex flex-col items-center gap-6 shadow-xl max-w-xs w-full md:max-w-none md:w-full md:h-full md:rounded-none md:justify-center md:gap-7 md:p-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-col items-center gap-4 md:gap-5 text-center">
-              <p className="text-sm font-bold text-zinc-800 md:text-xl">Welcome to SingJam!</p>
-              <h2 className="text-base font-bold text-zinc-800 text-center md:text-[2rem] md:font-extrabold md:w-[360px]">
-                Scan to view the set
-              </h2>
-              <p className="text-sm font-bold text-zinc-800 text-center md:text-xl flex items-center justify-center gap-2 flex-wrap">
-                Know a song? Hit
-                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white">
-                  + Add to repertoire
-                </span>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-500/25 via-transparent to-transparent" />
+            <div className="relative flex flex-col items-center text-center">
+              <h2 className="text-2xl font-bold tracking-tight text-white md:text-5xl">Welcome to SingJam!</h2>
+              <p className="mt-1 text-lg font-bold tracking-tight text-amber-400 md:mt-2 md:text-4xl">
+                Scan to see today&apos;s songs
+              </p>
+              <p className="mt-5 rounded-2xl bg-white/10 px-4 py-2.5 text-sm font-medium text-slate-100 ring-1 ring-white/15 md:mt-6 md:rounded-full md:px-6 md:py-3 md:text-xl">
+                Know one? Tap{" "}
+                <span className="mx-1 inline-block rounded-full bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white md:px-3.5 md:py-1.5 md:text-lg">
+                  I know this song!
+                </span>{" "}
+                so we can sing it together.
               </p>
             </div>
-            <img src={qrDataUrl} alt="QR code invite link" className="w-64 h-64 rounded-xl md:w-[360px] md:h-[360px]" />
+            <div className="relative rounded-3xl bg-white p-3 shadow-lg md:p-5">
+              <img
+                src={qrDataUrl}
+                alt="QR code invite link"
+                className="w-56 h-56 md:w-[min(26rem,40vh)] md:h-[min(26rem,40vh)]"
+              />
+            </div>
             <button
               onClick={() => setQrDataUrl(null)}
-              className="rounded-xl bg-amber-100 px-6 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-200 transition-colors md:px-8 md:py-3 md:text-base"
+              className="relative rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-400 transition-colors md:px-8 md:py-3 md:text-base"
             >
               Done
             </button>
