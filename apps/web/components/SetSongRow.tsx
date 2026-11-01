@@ -233,14 +233,6 @@ export default function SetSongRow({
                   onVoiceUpdated={onVoiceUpdated}
                 />
               </div>
-            ) : learning ? (
-              // Marked "Want to learn it": say so here, and make moving up to
-              // Lead or Support one tap once they're ready.
-              <div className="mt-1.5">
-                <button onClick={() => setPickingRepertoire(true)} className="text-xs text-indigo-600 hover:underline">
-                  I know it now
-                </button>
-              </div>
             ) : (
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <button
@@ -249,12 +241,16 @@ export default function SetSongRow({
                 >
                   I know this song!
                 </button>
-                <button
-                  onClick={() => onAddToRepertoire(song.song_id, "learn")}
-                  className="text-xs text-indigo-600 hover:underline"
-                >
-                  Want to learn it
-                </button>
+                {/* Already learning it: the badge by the title says so, and
+                    "I know this song!" is how they move up. */}
+                {!learning && (
+                  <button
+                    onClick={() => onAddToRepertoire(song.song_id, "learn")}
+                    className="text-xs text-indigo-600 hover:underline"
+                  >
+                    Want to learn it
+                  </button>
+                )}
               </div>
             )
           )}
