@@ -448,13 +448,13 @@ export default function SetInvitePanel({
           onClick={() => setQrDataUrl(null)}
         >
           <div
-            className="bg-amber-50 rounded-2xl p-6 flex flex-col items-center gap-4 shadow-xl max-w-xs w-full md:max-w-none md:w-full md:h-full md:rounded-none md:justify-center md:gap-6 md:p-16"
+            className="bg-amber-50 rounded-2xl p-6 flex flex-col items-center gap-5 shadow-xl max-w-xs w-full md:max-w-none md:w-full md:h-full md:rounded-none md:justify-center md:gap-10 md:p-16"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-col items-center gap-3 md:gap-6 text-center">
-              <h2 className="text-2xl font-extrabold text-amber-600 md:text-6xl">Welcome to SingJam!</h2>
-              <p className="text-base font-bold text-zinc-800 md:text-4xl">Scan to see today&apos;s songs</p>
-              <p className="text-sm font-semibold text-zinc-700 md:text-2xl flex items-center justify-center gap-2 flex-wrap md:max-w-3xl">
+            <div className="flex flex-col items-center text-center">
+              <h2 className="text-2xl font-extrabold leading-tight text-amber-600 md:text-6xl">Welcome to SingJam!</h2>
+              <p className="mt-1 text-base font-bold text-zinc-800 md:mt-3 md:text-4xl">Scan to see today&apos;s songs</p>
+              <p className="mt-4 text-sm font-semibold text-zinc-700 md:mt-8 md:text-2xl flex items-center justify-center gap-x-2 gap-y-1.5 flex-wrap md:gap-x-3 md:max-w-3xl">
                 Know one? Tap
                 <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white md:px-4 md:py-2 md:text-xl">
                   I know this song!
