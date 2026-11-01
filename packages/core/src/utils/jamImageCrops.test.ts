@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { cropZoom, defaultCrop, jamImageFor, panCrop, zoomCrop } from "./jamImageCrops";
+import { cropZoom, defaultCrop, JAM_IMAGE_EDITABLE_SLOTS, JAM_IMAGE_SLOTS, jamImageFor, panCrop, zoomCrop } from "./jamImageCrops";
 
 const close = (a: number, b: number) => expect(a).toBeCloseTo(b, 6);
+
+describe("JAM_IMAGE_EDITABLE_SLOTS", () => {
+  it("leaves out the list thumbnail, which is baked from the desktop crop", () => {
+    expect(JAM_IMAGE_EDITABLE_SLOTS).toEqual(["desktop", "mobile"]);
+    expect(JAM_IMAGE_SLOTS.list.aspect).toBe(JAM_IMAGE_SLOTS.desktop.aspect);
+  });
+});
 
 describe("defaultCrop", () => {
   it("takes the full height of a wide image in a square slot, centred", () => {
