@@ -20,6 +20,7 @@ export default function ConfidencePicker({
   variant = "card",
   initialAskVoice = false,
   songTitle,
+  offerLearn = true,
 }: {
   singingVoice: string | null;
   saving?: boolean;
@@ -29,6 +30,8 @@ export default function ConfidencePicker({
   variant?: "compact" | "card";
   initialAskVoice?: boolean;
   songTitle?: string;
+  /** False after "I know this song!": learning has its own "Want to learn it" link. */
+  offerLearn?: boolean;
 }) {
   const supabase = supabaseBrowser();
   const [localVoice, setLocalVoice] = useState(singingVoice);
@@ -91,14 +94,20 @@ export default function ConfidencePicker({
   return (
     <div className={card}>
       <p className={heading}>
-        {songTitle ? (
+        {!offerLearn ? (
+          songTitle ? (
+            <>Lead or support on <span className="font-bold">{songTitle}</span>?</>
+          ) : (
+            "Lead or support?"
+          )
+        ) : songTitle ? (
           <>How well do you know <span className="font-bold">{songTitle}</span>?</>
         ) : (
           "How well do you know this song?"
         )}
       </p>
       <div className={wrap}>
-        {LEVELS.map(({ key, label }) => {
+        {LEVELS.filter((l) => offerLearn || l.key !== "learn").map(({ key, label }) => {
           const blocked = isBlocked(key);
           return (
             <button

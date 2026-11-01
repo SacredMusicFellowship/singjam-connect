@@ -196,12 +196,17 @@ export default function SetSongRow({
           </div>
           {!inRepertoire && (currentUserId || signInUrl) && (
             !currentUserId ? (
-              <a
-                href={signInUrl}
-                className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
-              >
-                + Add to repertoire
-              </a>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <a
+                  href={signInUrl}
+                  className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
+                >
+                  I know this song!
+                </a>
+                <a href={signInUrl} className="text-xs text-indigo-600 hover:underline">
+                  Want to learn it
+                </a>
+              </div>
             ) : pickingRepertoire ? (
               <div className="mt-1.5">
                 <ConfidencePicker
@@ -209,16 +214,25 @@ export default function SetSongRow({
                   singingVoice={currentUserSingingVoice}
                   onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setPickingRepertoire(false); }}
                   onCancel={() => setPickingRepertoire(false)}
+                  offerLearn={false}
                   onVoiceUpdated={onVoiceUpdated}
                 />
               </div>
             ) : (
-              <button
-                onClick={() => setPickingRepertoire(true)}
-                className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
-              >
-                + Add to repertoire
-              </button>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setPickingRepertoire(true)}
+                  className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
+                >
+                  I know this song!
+                </button>
+                <button
+                  onClick={() => onAddToRepertoire(song.song_id, "learn")}
+                  className="text-xs text-indigo-600 hover:underline"
+                >
+                  Want to learn it
+                </button>
+              </div>
             )
           )}
         </div>

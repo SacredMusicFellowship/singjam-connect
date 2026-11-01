@@ -459,7 +459,7 @@ export default function SetInvitePanel({
               <p className="text-sm font-bold text-zinc-800 text-center md:text-xl flex items-center justify-center gap-2 flex-wrap">
                 Know a song? Hit
                 <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white">
-                  + Add to repertoire
+                  I know this song!
                 </span>
               </p>
             </div>
