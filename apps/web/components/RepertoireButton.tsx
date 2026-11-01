@@ -1,5 +1,6 @@
 "use client";
 
+import { hasLeadVoice } from "@singjam/core";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -107,7 +108,7 @@ export default function RepertoireButton({
           value={confidence}
           disabled={saving}
           onChange={(e) => {
-            if (e.target.value === "lead" && !singingVoice?.split(",").includes("lead")) {
+            if (e.target.value === "lead" && !hasLeadVoice(singingVoice)) {
               setVoiceCheckPending(true);
               setPicking(true);
             } else {

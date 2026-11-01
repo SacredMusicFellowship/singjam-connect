@@ -15,6 +15,7 @@ import {
   type SongJammers,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
+import { ensureLeadVoice } from '@/lib/leadVoice';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import AddToSetModal from '@/components/AddToSetModal';
 import ContentContainer from '@/components/ContentContainer';
@@ -221,7 +222,6 @@ export default function SongDetailScreen() {
   const [notFound, setNotFound] = useState(false);
   const [addToSetVisible, setAddToSetVisible] = useState(false);
 
-  const canLead = !!singingVoice && singingVoice !== 'none';
 
   // The nav bar is empty at rest so the first screenful matches web, then the
   // title fades in once the heading scrolls away. Driven natively off the scroll
@@ -378,8 +378,9 @@ export default function SongDetailScreen() {
     });
   }
 
-  function addToRepertoire(confidence: string) {
+  async function addToRepertoire(confidence: string) {
     if (!song || !myUserId) return;
+    if (!(await ensureLeadVoice(confidence, singingVoice, myUserId, setSingingVoice))) return;
     const songId = song.id;
     const uid = myUserId;
     applyConfidence(confidence, () =>
@@ -398,7 +399,7 @@ export default function SongDetailScreen() {
       title: `Add "${song.title}" as…`,
       anchor: anchorFrom(event),
       options: [
-        { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => addToRepertoire('lead') },
+        { label: 'Lead', onPress: () => addToRepertoire('lead') },
         { label: 'Support', onPress: () => addToRepertoire('support') },
       ],
     });
@@ -432,17 +433,20 @@ export default function SongDetailScreen() {
     const songId = song.id;
     const uid = myUserId;
 
-    const update = (confidence: string) => applyConfidence(confidence, () =>
-      supabase.from('user_songs')
-        .update({ confidence, updated_at: new Date().toISOString() })
-        .eq('user_id', uid).eq('song_id', songId)
-    );
+    const update = async (confidence: string) => {
+      if (!(await ensureLeadVoice(confidence, singingVoice, uid, setSingingVoice))) return;
+      applyConfidence(confidence, () =>
+        supabase.from('user_songs')
+          .update({ confidence, updated_at: new Date().toISOString() })
+          .eq('user_id', uid).eq('song_id', songId)
+      );
+    };
 
     showOptionsSheet({
       title: song.title,
       anchor: anchorFrom(event),
       options: [
-        { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => update('lead') },
+        { label: 'Lead', onPress: () => update('lead') },
         { label: 'Support', onPress: () => update('support') },
         { label: 'Learn', onPress: () => update('learn') },
         { label: 'Remove from repertoire', destructive: true, onPress: handleRemoveFromRepertoire },

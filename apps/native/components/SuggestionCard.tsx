@@ -32,7 +32,6 @@ const CONFIDENCE_LABELS: Record<string, string> = {
 // hand every row the same two functions and let memo do its job.
 type Props = {
   song: Suggestion;
-  canLead: boolean;
   onAdd: (song: Suggestion, confidence: string) => void;
   onView: (song: Suggestion) => void;
   // Set when the song is already in the user's repertoire: the Add button is
@@ -45,7 +44,7 @@ type Props = {
 // YouTube and Spotify players inline; here they open the apps instead, since a
 // WebView per row would hurt list scrolling and Spotify only plays full tracks
 // in its own app. Spacing is tighter than web's so more songs fit a phone.
-function SuggestionCard({ song, canLead, onAdd, onView, confidence }: Props) {
+function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
   function handleAddTap(event: GestureResponderEvent) {
     // A new add comes from "I know this song!", so it asks lead or support;
     // learning has its own link. Changing an existing role offers all three.
@@ -53,7 +52,7 @@ function SuggestionCard({ song, canLead, onAdd, onView, confidence }: Props) {
       title: confidence ? song.title : `Add "${song.title}" as…`,
       anchor: anchorFrom(event),
       options: [
-        { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => onAdd(song, 'lead') },
+        { label: 'Lead', onPress: () => onAdd(song, 'lead') },
         { label: 'Support', onPress: () => onAdd(song, 'support') },
         ...(confidence ? [{ label: 'Learn', onPress: () => onAdd(song, 'learn') }] : []),
       ],

@@ -7,6 +7,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { songMatchesFilters, deriveFilterOptions, countActiveFilters, type SongFilterState } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
+import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
 import ContentContainer from '@/components/ContentContainer';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
@@ -158,7 +159,6 @@ export default function SongLibraryScreen() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [singingVoice, setSingingVoice] = useState<string | null>(null);
-  const canLead = !!singingVoice && singingVoice !== 'none';
   const [filters, setFilters] = useState<Filters>(emptyFilters());
   const [hideMySongs, setHideMySongs] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -263,6 +263,7 @@ export default function SongLibraryScreen() {
   // Adding and changing the role are the same upsert, exactly as on web.
   const addSong = useCallback(async (song: { song_id: string }, confidence: string) => {
     if (!userId) { router.push('/(auth)/sign-in' as any); return; }
+    if (!(await ensureLeadVoice(confidence, singingVoice, userId, setSingingVoice))) return;
     const previous = myConfidenceRef.current;
     setMyConfidence(prev => new Map(prev).set(song.song_id, confidence));
     const { error } = await supabase.from('user_songs').upsert(
@@ -273,7 +274,7 @@ export default function SongLibraryScreen() {
       Alert.alert('Error', error.message);
       setMyConfidence(previous);
     }
-  }, [userId, router]);
+  }, [userId, router, singingVoice]);
 
   const viewSong = useCallback((song: { song_id: string }) => {
     router.push(`/song/${song.song_id}` as any);
@@ -282,12 +283,11 @@ export default function SongLibraryScreen() {
   const renderItem = useCallback(({ item }: { item: SongMeta }) => (
     <SuggestionCard
       song={item}
-      canLead={canLead}
       confidence={myConfidence.get(item.song_id) ?? null}
       onAdd={addSong}
       onView={viewSong}
     />
-  ), [myConfidence, canLead, addSong, viewSong]);
+  ), [myConfidence, addSong, viewSong]);
 
   const activeFilterCount = countActiveFilters(filters);
   const searching = query.trim().length > 0;
