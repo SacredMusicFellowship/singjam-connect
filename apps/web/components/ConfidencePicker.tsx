@@ -59,7 +59,7 @@ export default function ConfidencePicker({
   }
 
   const isCompact = variant === "compact";
-  const card = `${isCompact ? "rounded-xl p-3 space-y-2" : "rounded-2xl p-4 space-y-2.5"} border border-indigo-300 bg-indigo-50 animate-attention-pop`;
+  const card = `${isCompact ? "w-fit max-w-full rounded-xl p-3 space-y-2" : "rounded-2xl p-4 space-y-2.5"} border border-indigo-300 bg-indigo-50 animate-attention-pop`;
   const heading = isCompact ? "text-xs font-semibold text-indigo-900" : "text-sm font-semibold text-indigo-900";
   const wrap = isCompact ? "flex flex-wrap items-center gap-1.5" : "flex flex-wrap items-center gap-2";
 
