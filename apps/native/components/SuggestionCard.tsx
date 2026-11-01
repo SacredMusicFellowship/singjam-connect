@@ -50,7 +50,7 @@ function SuggestionCard({ song, canLead, onAdd, onView, confidence }: Props) {
     // A new add comes from "I know this song!", so it asks lead or support;
     // learning has its own link. Changing an existing role offers all three.
     showOptionsSheet({
-      title: confidence ? song.title : `Lead or support on "${song.title}"?`,
+      title: confidence ? song.title : `Add "${song.title}" as…`,
       anchor: anchorFrom(event),
       options: [
         { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => onAdd(song, 'lead') },

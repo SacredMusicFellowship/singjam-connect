@@ -94,13 +94,7 @@ export default function ConfidencePicker({
   return (
     <div className={card}>
       <p className={heading}>
-        {!offerLearn ? (
-          songTitle ? (
-            <>Lead or support on <span className="font-bold">{songTitle}</span>?</>
-          ) : (
-            "Lead or support?"
-          )
-        ) : songTitle ? (
+        {songTitle ? (
           <>How well do you know <span className="font-bold">{songTitle}</span>?</>
         ) : (
           "How well do you know this song?"

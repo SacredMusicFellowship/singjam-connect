@@ -395,7 +395,7 @@ export default function SongDetailScreen() {
     if (!song) return;
     if (!myUserId) { router.push('/(auth)/sign-in' as any); return; }
     showOptionsSheet({
-      title: `Lead or support on "${song.title}"?`,
+      title: `Add "${song.title}" as…`,
       anchor: anchorFrom(event),
       options: [
         { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => addToRepertoire('lead') },
