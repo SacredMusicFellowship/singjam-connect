@@ -27,7 +27,6 @@ export type RepertoireCardSong = {
 type Props = {
   song: RepertoireCardSong;
   selected: boolean;
-  canLead: boolean;
   isLast: boolean;
   onToggleSelect: (song: RepertoireCardSong) => void;
   onConfidenceChange: (song: RepertoireCardSong, confidence: string) => void;
@@ -40,7 +39,7 @@ type Props = {
 // title + (songwriters), production/artist line, jammer count, then a
 // confidence control + Add to set / View / Remove actions.
 function RepertoireCard({
-  song, selected, canLead, isLast,
+  song, selected, isLast,
   onToggleSelect, onConfidenceChange, onAddToSet, onView, onRemove,
 }: Props) {
   function handleConfidenceTap(event: GestureResponderEvent) {
@@ -48,7 +47,7 @@ function RepertoireCard({
       title: song.title,
       anchor: anchorFrom(event),
       options: [
-        { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => onConfidenceChange(song, 'lead') },
+        { label: 'Lead', onPress: () => onConfidenceChange(song, 'lead') },
         { label: 'Support', onPress: () => onConfidenceChange(song, 'support') },
         { label: 'Learn', onPress: () => onConfidenceChange(song, 'learn') },
       ],

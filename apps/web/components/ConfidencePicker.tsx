@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { hasLeadVoice, LEAD_VOICE_UPGRADE } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 type Level = "lead" | "support" | "learn";
@@ -40,16 +41,17 @@ export default function ConfidencePicker({
 
   useEffect(() => { setLocalVoice(singingVoice); }, [singingVoice]);
 
-  const isBlocked = (level: Level) =>
-    level === "lead" && !localVoice?.split(",").includes("lead");
+  // Lead looks and works like any other choice; someone whose profile doesn't
+  // say they sing lead is asked first, and a yes adds it to their profile.
+  const needsVoice = (level: Level) => level === "lead" && !hasLeadVoice(localVoice);
 
   async function handleVoiceConfirm() {
     setSavingVoice(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      await supabase.from("profiles").update({ singing_voice: "lead,backup" }).eq("id", session.user.id);
-      setLocalVoice("lead,backup");
-      onVoiceUpdated?.("lead,backup");
+      await supabase.from("profiles").update({ singing_voice: LEAD_VOICE_UPGRADE }).eq("id", session.user.id);
+      setLocalVoice(LEAD_VOICE_UPGRADE);
+      onVoiceUpdated?.(LEAD_VOICE_UPGRADE);
     }
     setSavingVoice(false);
     setAskingVoice(false);
@@ -64,7 +66,7 @@ export default function ConfidencePicker({
   if (askingVoice) {
     return (
       <div className={card}>
-        <p className={heading}>Can you sing?</p>
+        <p className={heading}>Do you sing lead?</p>
         <div className={wrap}>
           <button
             disabled={savingVoice}
@@ -102,29 +104,25 @@ export default function ConfidencePicker({
       </p>
       <div className={wrap}>
         {LEVELS.filter((l) => offerLearn || l.key !== "learn").map(({ key, label }) => {
-          const blocked = isBlocked(key);
+          const askFirst = needsVoice(key);
           return (
             <button
               key={key}
               disabled={saving}
               onClick={async () => {
-                if (blocked) { setAskingVoice(true); return; }
+                if (askFirst) { setAskingVoice(true); return; }
                 await onSave(key);
               }}
               className={isCompact
                 ? `rounded-full px-2 py-1.5 text-xs transition-opacity disabled:opacity-50 ${
-                    blocked
-                      ? "bg-white text-zinc-400"
-                      : key === "lead"
+                    key === "lead"
                       ? "bg-amber-100 text-amber-800 font-semibold hover:opacity-80"
                       : key === "support"
                       ? "bg-white text-zinc-700 hover:opacity-80"
                       : "bg-white text-zinc-500 hover:opacity-80"
                   }`
                 : `rounded-xl border px-3 py-1.5 text-sm transition-colors disabled:opacity-40 ${
-                    blocked
-                      ? "border-zinc-200 bg-white text-zinc-400"
-                      : key === "lead"
+                    key === "lead"
                       ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
                       : "border-indigo-200 bg-white text-zinc-700 hover:bg-indigo-100"
                   }`

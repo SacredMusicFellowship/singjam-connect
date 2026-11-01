@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { mergeSuggestionsById, songMatchesFilters, deriveFilterOptions, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
+import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
 import { useAuth } from '@/lib/auth-context';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
@@ -125,7 +126,6 @@ export default function RepertoireScreen() {
   const [suggestionsLoadingMore, setSuggestionsLoadingMore] = useState(false);
   const loadingMoreRef = useRef(false);
 
-  const canLead = !!singingVoice && singingVoice !== 'none';
 
   async function load(showRefresh = false) {
     if (showRefresh) setRefreshing(true);
@@ -236,11 +236,12 @@ export default function RepertoireScreen() {
   latest.current = { songs, suggestions, load };
 
   const handleConfidenceChange = useCallback(async (song: { song_id: string }, confidence: string) => {
+    if (!(await ensureLeadVoice(confidence, singingVoice, userId, setSingingVoice))) return;
     const songId = song.song_id;
     setSongs(prev => prev.map(s => s.song_id === songId ? { ...s, confidence } : s));
     const { error } = await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
     if (error) { Alert.alert('Error', error.message); latest.current.load(); }
-  }, [userId]);
+  }, [userId, singingVoice]);
 
   const handleRemove = useCallback(async (song: { song_id: string }) => {
     const songId = song.song_id;
@@ -274,6 +275,7 @@ export default function RepertoireScreen() {
   // suggestion and insert it into the repertoire, reverting both on error.
   const addFromSuggestion = useCallback(async (s: Suggestion, confidence: string) => {
     if (!userId) return;
+    if (!(await ensureLeadVoice(confidence, singingVoice, userId, setSingingVoice))) return;
     const prevSongs = latest.current.songs;
     const prevSuggestions = latest.current.suggestions;
     setSuggestions(prev => prev.filter(x => x.song_id !== s.song_id));
@@ -311,7 +313,7 @@ export default function RepertoireScreen() {
       setSongs(prevSongs);
       setSuggestions(prevSuggestions);
     }
-  }, [userId]);
+  }, [userId, singingVoice]);
 
   const toggleSelect = useCallback((song: { song_id: string }) => {
     setSelectedIds(prev => toggleSet(prev, song.song_id));
@@ -339,6 +341,7 @@ export default function RepertoireScreen() {
   function handleBulkConfidence(event: GestureResponderEvent) {
     const ids = Array.from(selectedIds);
     async function apply(confidence: string) {
+      if (!(await ensureLeadVoice(confidence, singingVoice, userId, setSingingVoice))) return;
       setSongs(prev => prev.map(s => selectedIds.has(s.song_id) ? { ...s, confidence } : s));
       setSelectedIds(new Set());
       for (const songId of ids) {
@@ -348,9 +351,7 @@ export default function RepertoireScreen() {
     showOptionsSheet({
       title: `Change role for ${ids.length} ${ids.length === 1 ? 'song' : 'songs'}`,
       anchor: anchorFrom(event),
-      options: CONFIDENCE_LEVELS
-        .filter(l => l.key !== 'lead' || canLead)
-        .map(l => ({ label: l.label, onPress: () => { apply(l.key); } })),
+      options: CONFIDENCE_LEVELS.map(l => ({ label: l.label, onPress: () => { apply(l.key); } })),
     });
   }
 
@@ -381,7 +382,6 @@ export default function RepertoireScreen() {
       <RepertoireCard
         song={item}
         selected={selectedIds.has(item.song_id)}
-        canLead={canLead}
         isLast={index === filtered.length - 1}
         onToggleSelect={toggleSelect}
         onConfidenceChange={handleConfidenceChange}
@@ -390,7 +390,7 @@ export default function RepertoireScreen() {
         onRemove={handleRemove}
       />
     ),
-    [selectedIds, canLead, filtered.length, toggleSelect, handleConfidenceChange, addOneToSet, viewSong, handleRemove]
+    [selectedIds, filtered.length, toggleSelect, handleConfidenceChange, addOneToSet, viewSong, handleRemove]
   );
 
   // Search results reuse the same two cards web does: owned songs keep their role
@@ -403,8 +403,7 @@ export default function RepertoireScreen() {
           <RepertoireCard
             song={owned}
             selected={selectedIds.has(owned.song_id)}
-            canLead={canLead}
-            isLast={index === sortedSearchResults.length - 1}
+              isLast={index === sortedSearchResults.length - 1}
             onToggleSelect={toggleSelect}
             onConfidenceChange={handleConfidenceChange}
             onAddToSet={addOneToSet}
@@ -416,13 +415,12 @@ export default function RepertoireScreen() {
       return (
         <SuggestionCard
           song={item}
-          canLead={canLead}
           onAdd={addFromSuggestion}
           onView={viewSong}
         />
       );
     },
-    [songsById, selectedIds, canLead, sortedSearchResults.length, toggleSelect,
+    [songsById, selectedIds, sortedSearchResults.length, toggleSelect,
      handleConfidenceChange, addOneToSet, viewSong, handleRemove, addFromSuggestion]
   );
 
@@ -573,7 +571,6 @@ export default function RepertoireScreen() {
         <SuggestionCard
           key={s.song_id}
           song={s}
-          canLead={canLead}
           onAdd={addFromSuggestion}
           onView={viewSong}
         />
@@ -586,7 +583,7 @@ export default function RepertoireScreen() {
     </View>
   ) : null, [
     searching, searchLoading, submitOpen, query, router,
-    showSuggestions, suggestions, canLead, addFromSuggestion, viewSong,
+    showSuggestions, suggestions, addFromSuggestion, viewSong,
     suggestionsLoadingMore,
   ]);
 

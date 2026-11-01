@@ -1,5 +1,6 @@
 "use client";
 
+import { hasLeadVoice } from "@singjam/core";
 import { useState } from "react";
 import Link from "next/link";
 import { formatComposers } from "@/lib/formatComposers";
@@ -171,7 +172,7 @@ export default function SongCard({
             <select
               value={confidence}
               onChange={(e) => {
-                if (e.target.value === "lead" && !singingVoice?.split(",").includes("lead")) {
+                if (e.target.value === "lead" && !hasLeadVoice(singingVoice)) {
                   setAskingLeadVoice(true);
                 } else {
                   addSong(songId, e.target.value);

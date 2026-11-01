@@ -16,7 +16,8 @@ import { FilterPanel } from "@/components/FilterPanel";
 import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { setsAcceptingSongs } from "@singjam/core";
+import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
+import ConfidencePicker from "@/components/ConfidencePicker";
 import SearchInput from "@/components/SearchInput";
 
 const CONFIDENCE_LEVELS = [
@@ -451,8 +452,20 @@ export default function RepertoirePage() {
     setTimeout(() => setBulkStatus(null), status.ok ? 2500 : 5000);
   }
 
-  function bulkUpdateConfidence(level: string) {
+  // A role dropdown can't hold ConfidencePicker's inline question, so choosing
+  // Lead without lead vocals on the profile asks here instead; yes adds them.
+  async function leadVoiceOk(level: string) {
+    if (level !== "lead" || hasLeadVoice(singingVoice) || !userId) return true;
+    if (!window.confirm("Do you sing lead? We'll add lead vocals to your profile.")) return false;
+    const { error } = await supabase.from("profiles").update({ singing_voice: LEAD_VOICE_UPGRADE }).eq("id", userId);
+    if (error) { alert(error.message); return false; }
+    setSingingVoice(LEAD_VOICE_UPGRADE);
+    return true;
+  }
+
+  async function bulkUpdateConfidence(level: string) {
     if (!userId) return;
+    if (!(await leadVoiceOk(level))) { setBulkConfidenceLevel(""); return; }
     const ids = Array.from(selectedIds);
     setBulkConfidenceLevel("");
     itemsMutatedRef.current = true;
@@ -498,8 +511,9 @@ export default function RepertoirePage() {
     await bulkAddToSet(id);
   }
 
-  const updateConfidence = (song_id: string, next: string) => {
+  const updateConfidence = async (song_id: string, next: string) => {
     if (!userId) return;
+    if (!(await leadVoiceOk(next))) return;
     const prev = items.find((x) => x.song_id === song_id)?.confidence ?? null;
     itemsMutatedRef.current = true;
     setItems((cur) => cur.map((it) => (it.song_id === song_id ? { ...it, confidence: next } : it)));
@@ -773,9 +787,8 @@ export default function RepertoirePage() {
                               <option
                                 key={l.key}
                                 value={l.key}
-                                disabled={l.key === "lead" && (!singingVoice || singingVoice === "none")}
                               >
-                                {l.key === "lead" && (!singingVoice || singingVoice === "none") ? "Lead (singers only)" : l.label}
+                                {l.label}
                               </option>
                             ))}
                           </select>
@@ -800,37 +813,13 @@ export default function RepertoirePage() {
                           </button>
                         </>
                       ) : isPicking ? (
-                        <>
-                          {CONFIDENCE_LEVELS.map((l) => {
-                            const blocked = l.key === "lead" && (!singingVoice || singingVoice === "none");
-                            return (
-                              <span key={l.key} className="relative group">
-                                <button
-                                  disabled={blocked}
-                                  className={`rounded-xl border px-3 py-1.5 text-sm ${
-                                    blocked
-                                      ? "border-zinc-200 bg-zinc-100 text-zinc-400 cursor-not-allowed"
-                                      : "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
-                                  }`}
-                                  onClick={() => !blocked && addSong(result.song_id, l.key, result)}
-                                >
-                                  {l.label}
-                                </button>
-                                {blocked && (
-                                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block whitespace-nowrap rounded-lg bg-zinc-800 px-2 py-1 text-xs text-white z-10">
-                                    Only available for singers
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          })}
-                          <button
-                            className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50"
-                            onClick={() => setPendingAddId(null)}
-                          >
-                            ✕
-                          </button>
-                        </>
+                        <ConfidencePicker
+                          variant="compact"
+                          singingVoice={singingVoice}
+                          onSave={(level) => addSong(result.song_id, level, result)}
+                          onCancel={() => setPendingAddId(null)}
+                          onVoiceUpdated={(voice) => setSingingVoice(voice)}
+                        />
                       ) : (
                         <>
                           <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
@@ -975,7 +964,6 @@ export default function RepertoirePage() {
                     <option
                       key={l.key}
                       value={l.key}
-                      disabled={l.key === "lead" && (!singingVoice || singingVoice === "none")}
                     >
                       {l.label}
                     </option>
@@ -1113,9 +1101,8 @@ export default function RepertoirePage() {
                         <option
                           key={l.key}
                           value={l.key}
-                          disabled={l.key === "lead" && (!singingVoice || singingVoice === "none")}
                         >
-                          {l.key === "lead" && (!singingVoice || singingVoice === "none") ? "Lead (singers only)" : l.label}
+                          {l.label}
                         </option>
                       ))}
                     </select>
