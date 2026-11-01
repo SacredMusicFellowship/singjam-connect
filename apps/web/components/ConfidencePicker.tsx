@@ -59,7 +59,7 @@ export default function ConfidencePicker({
   }
 
   const isCompact = variant === "compact";
-  const card = `${isCompact ? "rounded-xl p-3 space-y-2" : "rounded-2xl p-4 space-y-2.5"} border border-indigo-300 bg-indigo-50 animate-attention-pop`;
+  const card = `${isCompact ? "w-fit max-w-full rounded-xl p-3 space-y-2" : "rounded-2xl p-4 space-y-2.5"} border border-indigo-300 bg-indigo-50 animate-attention-pop`;
   const heading = isCompact ? "text-xs font-semibold text-indigo-900" : "text-sm font-semibold text-indigo-900";
   const wrap = isCompact ? "flex flex-wrap items-center gap-1.5" : "flex flex-wrap items-center gap-2";
 
@@ -72,7 +72,7 @@ export default function ConfidencePicker({
             disabled={savingVoice}
             onClick={handleVoiceConfirm}
             className={isCompact
-              ? "rounded-full px-2 py-1.5 text-xs bg-amber-100 text-amber-800 hover:opacity-80 transition-opacity disabled:opacity-50"
+              ? "rounded-full border border-amber-400 bg-amber-50 px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
               : "rounded-xl border border-amber-400 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
             }
           >
@@ -82,7 +82,7 @@ export default function ConfidencePicker({
             disabled={savingVoice}
             onClick={() => setAskingVoice(false)}
             className={isCompact
-              ? "text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-50"
+              ? "rounded-full border border-indigo-200 bg-white px-2.5 py-1 text-xs text-zinc-500 hover:bg-indigo-100 disabled:opacity-50"
               : "rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:bg-indigo-100 disabled:opacity-50"
             }
           >
@@ -114,12 +114,10 @@ export default function ConfidencePicker({
                 await onSave(key);
               }}
               className={isCompact
-                ? `rounded-full px-2 py-1.5 text-xs transition-opacity disabled:opacity-50 ${
+                ? `rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-40 ${
                     key === "lead"
-                      ? "bg-amber-100 text-amber-800 font-semibold hover:opacity-80"
-                      : key === "support"
-                      ? "bg-white text-zinc-700 hover:opacity-80"
-                      : "bg-white text-zinc-500 hover:opacity-80"
+                      ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                      : "border-indigo-200 bg-white text-zinc-700 hover:bg-indigo-100"
                   }`
                 : `rounded-xl border px-3 py-1.5 text-sm transition-colors disabled:opacity-40 ${
                     key === "lead"
@@ -135,11 +133,12 @@ export default function ConfidencePicker({
         <button
           onClick={onCancel}
           className={isCompact
-            ? "text-xs text-zinc-500 hover:text-zinc-700"
+            ? "rounded-full border border-indigo-200 bg-white px-2 py-1 text-xs text-zinc-500 hover:bg-indigo-100"
             : "rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:bg-indigo-100"
           }
+          aria-label="Cancel"
         >
-          {isCompact ? "Cancel" : "✕"}
+          ✕
         </button>
       </div>
     </div>

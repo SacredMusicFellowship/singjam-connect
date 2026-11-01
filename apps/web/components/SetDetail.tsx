@@ -1480,7 +1480,7 @@ export default function SetDetail({
                     participantKnowledge={knowledgeForSong}
                     currentUserId={currentUserId}
                     currentUserSingingVoice={userSingingVoice}
-                    inRepertoire={userRepertoire.has(song.song_id)}
+                    myConfidence={userRepertoire.get(song.song_id) ?? null}
                     onRemove={handleRemoveSong}
                     onTogglePlayed={handleTogglePlayed}
                     onMediaAdded={handleMediaAdded}
@@ -1520,7 +1520,7 @@ export default function SetDetail({
                     participantKnowledge={knowledgeForSong}
                     currentUserId={currentUserId}
                     currentUserSingingVoice={userSingingVoice}
-                    inRepertoire={userRepertoire.has(song.song_id)}
+                    myConfidence={userRepertoire.get(song.song_id) ?? null}
                     onMediaAdded={handleMediaAdded}
                     onKeyChanged={handleKeyChanged}
                     onLeadersChanged={handleLeadersChanged}
