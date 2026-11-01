@@ -451,19 +451,18 @@ export default function SetInvitePanel({
             className="bg-amber-50 rounded-2xl p-6 flex flex-col items-center gap-4 shadow-xl max-w-xs w-full md:max-w-none md:w-full md:h-full md:rounded-none md:justify-center md:gap-6 md:p-16"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-col items-center gap-4 md:gap-5 text-center">
-              <p className="text-sm font-bold text-zinc-800 md:text-xl">Welcome to SingJam!</p>
-              <h2 className="text-base font-bold text-zinc-800 text-center md:text-[2rem] md:font-extrabold md:w-[360px]">
-                Scan to view the set
-              </h2>
-              <p className="text-sm font-bold text-zinc-800 text-center md:text-xl flex items-center justify-center gap-2 flex-wrap">
-                Know a song? Hit
-                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white">
+            <div className="flex flex-col items-center gap-3 md:gap-6 text-center">
+              <h2 className="text-2xl font-extrabold text-amber-600 md:text-6xl">Welcome to SingJam!</h2>
+              <p className="text-base font-bold text-zinc-800 md:text-4xl">Scan to see today&apos;s songs</p>
+              <p className="text-sm font-semibold text-zinc-700 md:text-2xl flex items-center justify-center gap-2 flex-wrap md:max-w-3xl">
+                Know one? Tap
+                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white md:px-4 md:py-2 md:text-xl">
                   I know this song!
                 </span>
+                so we can sing it together.
               </p>
             </div>
-            <img src={qrDataUrl} alt="QR code invite link" className="w-64 h-64 rounded-xl md:w-[360px] md:h-[360px]" />
+            <img src={qrDataUrl} alt="QR code invite link" className="w-64 h-64 rounded-xl md:w-[440px] md:h-[440px]" />
             <button
               onClick={() => setQrDataUrl(null)}
               className="rounded-xl bg-amber-100 px-6 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-200 transition-colors md:px-8 md:py-3 md:text-base"
