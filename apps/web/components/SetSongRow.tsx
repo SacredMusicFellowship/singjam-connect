@@ -164,13 +164,22 @@ export default function SetSongRow({
     <div className="flex-1 min-w-0 space-y-2">
       <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
-          {song.songs.slug ? (
-            <Link href={`/songs/${song.songs.slug}`} target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-900 hover:text-amber-600 truncate block">
-              {song.songs.title}
-            </Link>
-          ) : (
-            <p className="font-medium text-zinc-900 truncate">{song.songs.title}</p>
-          )}
+          <div className="flex items-center gap-2 min-w-0">
+            {song.songs.slug ? (
+              <Link href={`/songs/${song.songs.slug}`} target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-900 hover:text-amber-600 truncate">
+                {song.songs.title}
+              </Link>
+            ) : (
+              <p className="font-medium text-zinc-900 truncate">{song.songs.title}</p>
+            )}
+            {/* Green like "You're going" on a jam, so a song you're learning
+                stands out as you scroll the set. */}
+            {learning && (
+              <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                Learning
+              </span>
+            )}
+          </div>
           {song.songs.display_artist && (
             <p className="text-xs text-zinc-500 truncate">{song.songs.display_artist}</p>
           )}
@@ -227,8 +236,7 @@ export default function SetSongRow({
             ) : learning ? (
               // Marked "Want to learn it": say so here, and make moving up to
               // Lead or Support one tap once they're ready.
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">Learning</span>
+              <div className="mt-1.5">
                 <button onClick={() => setPickingRepertoire(true)} className="text-xs text-indigo-600 hover:underline">
                   I know it now
                 </button>
