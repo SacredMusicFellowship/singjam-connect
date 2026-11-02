@@ -179,6 +179,8 @@ export default function JamView({
               onStatusChange={(newStatus) => {
                 setRsvpStatus(newStatus);
                 setHasFullAccess(isOfficial || newStatus === "attending" || canManage);
+                // The full address only comes from the server once you're attending.
+                router.refresh();
               }}
             />
           )}

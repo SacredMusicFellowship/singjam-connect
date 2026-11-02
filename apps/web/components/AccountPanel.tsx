@@ -630,7 +630,7 @@ export default function AccountPanel() {
               placeholder="City"
             />
           </div>
-          <div className="mt-1 text-xs text-zinc-500">We only show neighborhood-level info until an invite is accepted.</div>
+          <div className="mt-1 text-xs text-zinc-500">Only your city is shown, never a street address.</div>
         </div>
 
         {/* Singing voice */}

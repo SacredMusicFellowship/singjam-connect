@@ -12,6 +12,7 @@ vi.mock("@/lib/notifications", () => ({ createNotification: mockCreateNotificati
 vi.mock("@/lib/jamAttendance", () => ({ joinJamSetList: mockJoinJamSetList }));
 
 import { rsvpToJam, type RsvpJam } from "./jamRsvp";
+import { jamRsvpConfirmedHtml } from "@/emails/jam-rsvp-confirmed";
 
 const JAM: RsvpJam = {
   id: "jam-1",
@@ -66,6 +67,8 @@ describe("rsvpToJam", () => {
     );
     expect(mockJoinJamSetList).toHaveBeenCalledWith(admin, "jam-1", USER_ID);
     expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ to: "me@example.com" }));
+    // The RSVP's id is what lets the email's .ics link carry the full address.
+    expect(jamRsvpConfirmedHtml).toHaveBeenCalledWith(expect.objectContaining({ rsvpId: "r1" }));
     expect(mockCreateNotification).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "host-1", type: "jam_rsvp", title: "Scott is going to Leaders jam" })
     );

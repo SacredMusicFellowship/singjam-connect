@@ -107,6 +107,7 @@ export async function rsvpToJam(
         name,
         jamName: jam.name ?? "the jam",
         jamId: jam.id,
+        rsvpId: written[0].id,
         jamUrl: `https://singjam.org${jamPath(jam)}`,
         startsAt: jam.starts_at,
         endsAt: jam.ends_at ?? null,

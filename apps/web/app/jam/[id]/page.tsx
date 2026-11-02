@@ -80,7 +80,11 @@ export default async function JamPage({
 
   // Jam-scoped reads go through the admin client for the same reason getJam
   // does: the link is the credential. The per-user reads below stay RLS-scoped.
-  const [jam, genresRes, themesRes, flagRes, tierRes] = await Promise.all([
+  // The street address is the one jam field that isn't the link's to give: a
+  // public jam shows it only to people who've RSVP'd. jam_full_address
+  // (migration 173) decides, as this viewer, so it never reaches the page —
+  // or its serialized props — for anyone else.
+  const [jam, genresRes, themesRes, flagRes, tierRes, addressRes] = await Promise.all([
     getJam(id),
     admin.from("jam_genres").select("genres(name)").eq("jam_id", id),
     admin.from("jam_themes").select("themes(name)").eq("jam_id", id),
@@ -90,6 +94,7 @@ export default async function JamPage({
     // renders nothing for an event selling through tickets_url, and the map
     // sits beside it only when there is something for it to sit beside.
     admin.from("ticket_types").select("id", { count: "exact", head: true }).eq("jam_id", id),
+    supabase.rpc("jam_full_address", { jam_id_param: id }),
   ]);
 
   if (!jam) return <p className="text-sm text-zinc-500">Jam not found.</p>;
@@ -210,7 +215,7 @@ export default async function JamPage({
     ends_at: jam.ends_at,
     timezone: jam.timezone,
     neighborhood: jam.neighborhood,
-    full_address: jam.full_address,
+    full_address: (addressRes.data as string | null) ?? null,
     notes: jam.notes,
     tickets_url: jam.tickets_url,
     image_url: jam.image_url,
@@ -223,7 +228,6 @@ export default async function JamPage({
     host: hostLabel,
     hostUsername,
     capacity: jam.capacity,
-    hasFullAccess,
   };
 
   // JamView seeds its RSVP state from these props once. Accepting an invite

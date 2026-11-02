@@ -209,7 +209,6 @@ export default function EditJamForm({
       host: displayName,
       capacity: capacity ? parseInt(capacity, 10) : null,
       timezone,
-      hasFullAccess: true,
     };
     const card = <JamCard jam={previewJam} showMap={false} />;
     return (
@@ -253,14 +252,14 @@ export default function EditJamForm({
               <input type="radio" name="visibility" value="community" checked={visibility === "community"} onChange={() => setVisibility("community")} className="mt-0.5" />
               <div>
                 <span className="text-sm font-medium">Community jam</span>
-                <p className="text-xs text-zinc-500">Visible to all SingJam members</p>
+                <p className="text-xs text-zinc-500">Listed for everyone. The full address goes only to people who RSVP</p>
               </div>
             </label>
             <label className="flex items-start gap-3 cursor-pointer">
               <input type="radio" name="visibility" value="private" checked={visibility === "private"} onChange={() => setVisibility("private")} className="mt-0.5" />
               <div>
                 <span className="text-sm font-medium">Private jam</span>
-                <p className="text-xs text-zinc-500">Only visible to people you invite</p>
+                <p className="text-xs text-zinc-500">Unlisted. Anyone with the link can see it, address included, and RSVP</p>
               </div>
             </label>
             {canPostOfficial && (

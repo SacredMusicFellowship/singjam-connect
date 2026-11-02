@@ -11,14 +11,16 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
 
   if (copy) {
     const supabase = await supabaseServer();
-    const [jamRes, genresRes, themesRes] = await Promise.all([
+    // Copying a public jam you haven't RSVP'd to doesn't hand you its address.
+    const [jamRes, genresRes, themesRes, addressRes] = await Promise.all([
       supabase
         .from("jams")
-        .select("name, visibility, notes, full_address, neighborhood, capacity, guests_can_invite, tickets_url, image_url, image_focal_point, image_desktop_url, image_mobile_url, image_list_url, image_crops, starts_at, ends_at, timezone")
+        .select("name, visibility, notes, neighborhood, capacity, guests_can_invite, tickets_url, image_url, image_focal_point, image_desktop_url, image_mobile_url, image_list_url, image_crops, starts_at, ends_at, timezone")
         .eq("id", copy)
         .maybeSingle(),
       supabase.from("jam_genres").select("genre_id").eq("jam_id", copy),
       supabase.from("jam_themes").select("theme_id").eq("jam_id", copy),
+      supabase.rpc("jam_full_address", { jam_id_param: copy }),
     ]);
 
     if (jamRes.data) {
@@ -36,7 +38,7 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
         visibility: jam.visibility,
         name: jam.name ?? "",
         notes: jam.notes ?? "",
-        fullAddress: jam.full_address ?? "",
+        fullAddress: (addressRes.data as string | null) ?? "",
         neighborhood: jam.neighborhood ?? "",
         capacity: jam.capacity ? String(jam.capacity) : "",
         guestsCanInvite: jam.guests_can_invite ?? false,
@@ -61,7 +63,7 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{initialData ? "Copy jam" : "Post a jam"}</h1>
-      <p className="text-sm text-zinc-600">Casual. Address hidden until accepted.</p>
+      <p className="text-sm text-zinc-600">Casual. The full address is only shared with people who RSVP.</p>
       <NewJamForm initialData={initialData} privateOnly={devGuardOn()} />
     </div>
   );

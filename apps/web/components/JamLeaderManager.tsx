@@ -38,6 +38,9 @@ export default function JamLeaderManager({
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set synchronously, so a double-click can't send a second add before the
+  // first click's busy state has rendered.
+  const addingRef = useRef(false);
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -57,15 +60,26 @@ export default function JamLeaderManager({
   }, [query]);
 
   async function add(payload: { userId: string } | { name: string; email: string }, key: string) {
+    if (addingRef.current) return;
+    addingRef.current = true;
     setBusy(key);
     setFeedback(null);
-    const res = await fetch(`/api/jam/${jamId}/leaders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json().catch(() => ({}));
-    setBusy(null);
+    let res: Response;
+    let body: any;
+    try {
+      res = await fetch(`/api/jam/${jamId}/leaders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      body = await res.json().catch(() => ({}));
+    } catch {
+      setFeedback({ msg: "Couldn't add leader", ok: false });
+      return;
+    } finally {
+      addingRef.current = false;
+      setBusy(null);
+    }
     if (!res.ok) {
       setFeedback({ msg: body.error ?? "Couldn't add leader", ok: false });
       return;
@@ -104,6 +118,7 @@ export default function JamLeaderManager({
   }
 
   const leadingIds = new Set(leaders.map((l) => l.user_id).filter(Boolean));
+  const guestAlreadyLeading = leaders.some((l) => !l.user_id && l.email?.toLowerCase() === email.trim().toLowerCase());
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
@@ -211,12 +226,13 @@ export default function JamLeaderManager({
           />
           <button
             type="submit"
-            disabled={!name.trim() || !email.trim() || busy === "guest"}
+            disabled={!name.trim() || !email.trim() || guestAlreadyLeading || busy === "guest"}
             className="shrink-0 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {busy === "guest" ? "Adding…" : "Add"}
           </button>
         </div>
+        {guestAlreadyLeading && <p className="text-xs text-zinc-500">That email is already leading this event.</p>}
       </form>
 
       {feedback && <p className={`text-xs ${feedback.ok ? "text-green-700" : "text-red-600"}`}>{feedback.msg}</p>}

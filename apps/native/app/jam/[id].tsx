@@ -346,12 +346,12 @@ export default function JamDetailScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
 
-    const [jamResult, rsvpsResult, inviteResult, setsResult, meResult] = await Promise.all([
+    const [jamResult, rsvpsResult, inviteResult, setsResult, meResult, addressResult] = await Promise.all([
       supabase
         .from('jams')
         .select(`
           id, name, visibility, starts_at, ends_at, timezone,
-          neighborhood, full_address, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
+          neighborhood, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
           profiles!host_user_id ( display_name, username, avatar_url ),
           jam_genres ( genres ( name ) )
         `)
@@ -377,6 +377,9 @@ export default function JamDetailScreen() {
       user
         ? supabase.from('profiles').select('display_name, username, avatar_url, can_host_official').eq('id', user.id).single()
         : Promise.resolve({ data: null }),
+      // A public jam's street address is only for people who've RSVP'd
+      // (migration 173); the RSVP handlers reload, which fetches it.
+      supabase.rpc('jam_full_address', { jam_id_param: id }),
     ]);
 
     if (!jamResult.data) {
@@ -394,7 +397,7 @@ export default function JamDetailScreen() {
       ends_at: j.ends_at,
       timezone: j.timezone,
       neighborhood: j.neighborhood,
-      full_address: j.full_address,
+      full_address: (addressResult.data as string | null) ?? null,
       notes: j.notes,
       image_url: j.image_url,
       image_mobile_url: j.image_mobile_url,
@@ -638,7 +641,6 @@ export default function JamDetailScreen() {
     : othersGoing;
   const timeStr = formatJamTime(jam.starts_at, jam.timezone);
   const isPast = jam.starts_at ? new Date(jam.starts_at) < new Date() : false;
-  const hasFullAccess = isHosting || myRsvpStatus === 'attending' || myInviteStatus === 'accepted' || jam.visibility === 'official' || jam.visibility === 'private';
 
   const attendeeIds = new Set(attendees.map(a => a.user_id));
   // One order can cover several people under a single name, so heads and rows differ.
@@ -732,18 +734,15 @@ export default function JamDetailScreen() {
 
           {jam.neighborhood || jam.full_address ? (
             <InfoRow icon="📍">
-              {/* Tapping the venue opens Maps, matching mobile web. Pointed at
-                  the most precise line this viewer is actually shown, so it
-                  cannot leak an address the screen withholds until RSVP. */}
-              <MaybeMapsLink
-                query={hasFullAccess ? jam.full_address ?? jam.neighborhood : jam.neighborhood}
-              >
+              {/* Tapping the venue opens Maps, matching mobile web. full_address
+                  is only loaded for viewers jam_full_address lets see it. */}
+              <MaybeMapsLink query={jam.full_address ?? jam.neighborhood}>
                 {jam.neighborhood ? (
                   <Text className="text-zinc-700 font-medium">{dropUsCountry(jam.neighborhood)}</Text>
                 ) : null}
-                {jam.full_address && hasFullAccess ? (
+                {jam.full_address ? (
                   <Text className="text-zinc-400 text-sm mt-0.5">{dropUsCountry(dropVenueRepeatedInTitle(jam.full_address, jam.name))}</Text>
-                ) : jam.full_address && !hasFullAccess ? (
+                ) : jam.visibility === 'community' && jam.neighborhood && jam.neighborhood !== 'TBD' ? (
                   <Text className="text-zinc-400 text-sm mt-0.5 italic">Full address shown after RSVP</Text>
                 ) : null}
               </MaybeMapsLink>
