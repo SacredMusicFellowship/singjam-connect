@@ -208,6 +208,44 @@ export async function syncContact(
   return failed;
 }
 
+const FIRST_TIME_ATTENDEE_TAG_ID = "37"; // SingJam First-Time Attendee
+
+// Applies the first-time attendee tag. Upserts by email only, so it never
+// changes lists or overwrites names. Returns false if AC rejected either step.
+export async function tagFirstTimeAttendee(email: string): Promise<boolean> {
+  if (!AC_API_URL || !AC_API_KEY) return false;
+  if (sideEffectsBlocked(`ActiveCampaign first-time attendee tag for ${email}`)) return false;
+
+  const contactData = await acFetch("/contact/sync", {
+    method: "POST",
+    body: JSON.stringify({ contact: { email } }),
+  });
+  const contactId: string | undefined = contactData?.contact?.id;
+  if (!contactId) return false;
+
+  const result = await acFetch("/contactTags", {
+    method: "POST",
+    body: JSON.stringify({ contactTag: { contact: contactId, tag: FIRST_TIME_ATTENDEE_TAG_ID } }),
+  });
+  return result !== null;
+}
+
+export type TaggedContact = { email: string; firstName: string; lastName: string };
+
+// Every contact carrying a tag. Returns null rather than a partial list if any
+// page fails.
+export async function fetchContactsWithTag(tagId: string): Promise<TaggedContact[] | null> {
+  if (!AC_API_URL || !AC_API_KEY) return null;
+  const contacts: TaggedContact[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const data = await acFetch(`/contacts?tagid=${tagId}&limit=100&offset=${offset}`, { method: "GET" });
+    if (!data) return null;
+    const batch: TaggedContact[] = data.contacts ?? [];
+    contacts.push(...batch);
+    if (batch.length < 100) return contacts;
+  }
+}
+
 // Permanently removes the contact from ActiveCampaign. Safe to call for
 // emails with no matching contact — treated as already-deleted, not a failure.
 export async function deleteContact(email: string): Promise<boolean> {
