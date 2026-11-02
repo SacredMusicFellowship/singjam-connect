@@ -460,7 +460,7 @@ export default function SetSongRow({
                       className={`rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
                     >
                       {name}
-                      {personalKey && <span className="font-normal opacity-80"> in {personalKey}</span>}
+                      {personalKey && ` [${personalKey}]`}
                     </button>
                   );
                 })}

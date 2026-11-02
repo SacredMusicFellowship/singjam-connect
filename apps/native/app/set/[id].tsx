@@ -440,9 +440,7 @@ function SongRow({
                       >
                         <Text className={`text-xs font-medium ${isLeader ? 'text-white' : 'text-amber-700'}`}>
                           {participantLabel(p)}
-                          {participantKeys.get(p.user_id) ? (
-                            <Text className="font-normal opacity-80"> in {participantKeys.get(p.user_id)}</Text>
-                          ) : null}
+                          {participantKeys.get(p.user_id) ? ` [${participantKeys.get(p.user_id)}]` : null}
                         </Text>
                       </TouchableOpacity>
                     );
