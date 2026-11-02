@@ -12,6 +12,8 @@ export default function AdminAttendanceLoading() {
         </div>
       </div>
 
+      <div className="h-11 animate-pulse rounded-xl border border-slate-200 bg-white" />
+
       <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
         {[0, 1, 2, 3, 4, 5, 6].map((i) => (
           <div key={i} className="flex items-center gap-3 px-4 py-3">
