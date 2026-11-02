@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, Modal, FlatList, TextInput,
@@ -252,15 +252,26 @@ function SongRow({
     !isPublicViewer &&
     (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0));
 
+  // Set when Cancel closes the editor, so the input's blur doesn't save.
+  const discardNotesRef = useRef(false);
+
   function startEditingNotes() {
+    discardNotesRef.current = false;
     setNotesInput(song.notes ?? '');
     setEditingNotes(true);
   }
 
-  function saveNotes() {
+  function saveNotes(value: string = notesInput) {
+    if (discardNotesRef.current) return;
+    discardNotesRef.current = true;
     setEditingNotes(false);
-    const next = notesInput.trim() || null;
+    const next = value.trim() || null;
     if (next !== song.notes) onNotesChange(next);
+  }
+
+  function cancelNotes() {
+    discardNotesRef.current = true;
+    setEditingNotes(false);
   }
 
   function confirmRemove() {
@@ -353,25 +364,51 @@ function SongRow({
         </View>
 
         {editingNotes ? (
-          <TextInput
-            value={notesInput}
-            onChangeText={setNotesInput}
-            onBlur={saveNotes}
-            onSubmitEditing={saveNotes}
-            maxLength={SET_SONG_NOTE_MAX}
-            placeholder="e.g. Capo 3, start soft"
-            placeholderTextColor="#a1a1aa"
-            returnKeyType="done"
-            autoFocus
-            className="mt-2 ml-9 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-900"
-          />
+          <View className="mt-2 ml-9">
+            <TextInput
+              value={notesInput}
+              onChangeText={setNotesInput}
+              onBlur={() => saveNotes()}
+              onSubmitEditing={() => saveNotes()}
+              maxLength={SET_SONG_NOTE_MAX}
+              placeholder="e.g. Capo 3, start soft"
+              placeholderTextColor="#a1a1aa"
+              returnKeyType="done"
+              autoFocus
+              className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-900"
+            />
+            <View className="flex-row items-center gap-3 mt-2">
+              <TouchableOpacity onPress={() => saveNotes()} className="rounded-lg bg-amber-500 px-3 py-1.5">
+                <Text className="text-xs font-semibold text-white">Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={cancelNotes} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Text className="text-xs text-zinc-500">Cancel</Text>
+              </TouchableOpacity>
+              {song.notes ? (
+                <TouchableOpacity onPress={() => saveNotes('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                  <Text className="text-xs text-zinc-400">Remove note</Text>
+                </TouchableOpacity>
+              ) : null}
+              <Text className="ml-auto text-[10px] text-zinc-400">{notesInput.length}/{SET_SONG_NOTE_MAX}</Text>
+            </View>
+          </View>
         ) : !isPublicViewer && song.notes ? (
-          <TouchableOpacity disabled={!canEdit} onPress={startEditingNotes} className="mt-1.5 ml-9">
-            <Text className="text-sm text-zinc-600">{song.notes}</Text>
-          </TouchableOpacity>
+          <View className="mt-2 ml-9 flex-row items-start rounded-lg bg-zinc-50 px-2.5 py-1.5">
+            <Ionicons name="document-text-outline" size={14} color="#a1a1aa" style={{ marginTop: 1, marginRight: 6 }} />
+            <Text className="flex-1 text-sm text-zinc-700">{song.notes}</Text>
+            {canEdit ? (
+              <TouchableOpacity onPress={startEditingNotes} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} className="ml-2">
+                <Text className="text-xs font-medium text-amber-600">Edit</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         ) : canEdit ? (
-          <TouchableOpacity onPress={startEditingNotes} className="mt-1.5 ml-9 self-start" hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-            <Text className="text-xs text-zinc-400">+ Note</Text>
+          <TouchableOpacity
+            onPress={startEditingNotes}
+            className="mt-2 ml-9 self-start rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5"
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Text className="text-xs text-zinc-500">+ Add note</Text>
           </TouchableOpacity>
         ) : null}
 
@@ -1251,6 +1288,7 @@ export default function SetDetailScreen() {
             data={songs}
             keyExtractor={(item) => item.id}
             onDragEnd={({ data }) => handleReorder(data)}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: canEdit ? 140 : 40 }}
             renderItem={({ item, drag, isActive, getIndex }: RenderItemParams<SetSong>) => (
               <ScaleDecorator>
@@ -1274,6 +1312,7 @@ export default function SetDetailScreen() {
           <FlatList
             data={displayedSongs}
             keyExtractor={(item) => item.id}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: canEdit ? 140 : 40 }}
             ListEmptyComponent={
               <View className="items-center justify-center py-16 px-8">
