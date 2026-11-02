@@ -436,11 +436,18 @@ function SongRow({
                             : [...leaderIds, p.user_id];
                           onLeaderToggle(next);
                         }}
-                        className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${isLeader ? 'bg-amber-400' : 'bg-amber-100'}`}
+                        className={`flex-row items-center rounded-full px-2 py-0.5 mr-1 mb-1 ${isLeader ? 'bg-amber-400' : 'bg-amber-100'}`}
                       >
                         <Text className={`text-xs font-medium ${isLeader ? 'text-white' : 'text-amber-700'}`}>
-                          {participantKeys.get(p.user_id) ? `${participantLabel(p)} – ${participantKeys.get(p.user_id)}` : participantLabel(p)}
+                          {participantLabel(p)}
                         </Text>
+                        {participantKeys.get(p.user_id) ? (
+                          <View className={`ml-1 -mr-1 rounded-full px-1.5 bg-white`}>
+                            <Text className={`text-[10px] font-semibold ${isLeader ? 'text-amber-600' : 'text-amber-800'}`}>
+                              {participantKeys.get(p.user_id)}
+                            </Text>
+                          </View>
+                        ) : null}
                       </TouchableOpacity>
                     );
                   })}

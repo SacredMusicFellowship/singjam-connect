@@ -450,7 +450,6 @@ export default function SetSongRow({
                   const firstName = p.display_name ?? p.username ?? "?";
                   const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                   const personalKey = participantKeys.get(p.user_id);
-                  const label = personalKey ? `${name} – ${personalKey}` : name;
                   const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
                   return (
                     <button
@@ -458,9 +457,17 @@ export default function SetSongRow({
                       type="button"
                       onClick={() => isClickable && handleToggleLeader(p.user_id)}
                       disabled={!isClickable}
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
                     >
-                      {label}
+                      {name}
+                      {personalKey && (
+                        <span
+                          className={`-mr-1 rounded-full px-1.5 text-[10px] font-semibold ${isLeader ? "bg-white text-amber-600" : "bg-white text-amber-800"}`}
+                          title={`${name}'s key`}
+                        >
+                          {personalKey}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
