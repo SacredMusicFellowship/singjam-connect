@@ -26,12 +26,12 @@ function groupByPerson(rows: AttendanceRow[]): Attendee[] {
     const person = byEmail.get(row.email) ?? {
       email: row.email,
       name: null,
-      isMember: false,
+      isUser: false,
       firstTimerTagged: false,
       events: [],
     };
     person.name ??= row.name;
-    person.isMember ||= row.user_id !== null;
+    person.isUser ||= row.user_id !== null;
     person.firstTimerTagged ||= row.first_timer_tagged_at !== null;
     person.events.push(row.jams);
     byEmail.set(row.email, person);
