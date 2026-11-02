@@ -6,6 +6,7 @@ import Link from "next/link";
 import { formatComposersLong, sortByLastName, setsAcceptingSongs } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
+import MySongNotes from "@/components/MySongNotes";
 import AddToSetPanel from "@/components/AddToSetPanel";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
@@ -102,6 +103,8 @@ export default function SongPageContent() {
   const [data, setData] = useState<SongData | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [confidence, setConfidence] = useState<string | null>(null);
+  const [myKey, setMyKey] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [songUsers, setSongUsers] = useState<SongUsers | null>(null);
   const [songUsersLoading, setSongUsersLoading] = useState(false);
   const [currentUserEntry, setCurrentUserEntry] = useState<JammerEntry | null>(null);
@@ -150,7 +153,7 @@ export default function SongPageContent() {
           ? supabase.from("profiles").select("role, singing_voice, display_name, last_name, username").eq("id", user.id).single()
           : Promise.resolve({ data: null }),
         user
-          ? supabase.from("user_songs").select("confidence").eq("user_id", user.id).eq("song_id", song.id).maybeSingle()
+          ? supabase.from("user_songs").select("confidence, key_note").eq("user_id", user.id).eq("song_id", song.id).maybeSingle()
           : Promise.resolve({ data: null }),
         fetch(`/api/songs/${song.id}/count`).then((r) => r.json()),
       ]);
@@ -166,6 +169,8 @@ export default function SongPageContent() {
         });
       }
       setConfidence(loadedConfidence);
+      setMyKey((userSongRes.data as any)?.key_note ?? null);
+      setUserId(user?.id ?? null);
       setData({
         song,
         isAdmin,
@@ -327,6 +332,10 @@ export default function SongPageContent() {
           </div>
         )}
       </div>
+
+      {confidence && userId && (
+        <MySongNotes key={song.id} songId={song.id} userId={userId} initialKey={myKey} />
+      )}
 
       {(recordingArtists.length > 0 || song.year_written) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">

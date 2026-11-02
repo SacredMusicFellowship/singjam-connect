@@ -20,6 +20,7 @@ import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import AddToSetModal from '@/components/AddToSetModal';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
+import MySongNotes from '@/components/MySongNotes';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -661,6 +662,8 @@ export default function SongDetailScreen() {
             ) : null}
           </View>
         ) : null}
+
+        {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} /> : null}
 
         {/* Recordings — web groups the written year in here rather than the header */}
         {(song.recordingArtists.length > 0 || song.year_written) ? (
