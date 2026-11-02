@@ -125,18 +125,21 @@ function RepertoireCard({
           <Ionicons name="chevron-down" size={12} color={isLead ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => onKeyTap(song)}
-          className={`flex-row items-center rounded-xl border px-2.5 py-1.5 ${
-            song.key_note ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'
-          }`}
-          accessibilityLabel="My key"
-        >
-          <Text className={`text-sm ${song.key_note ? 'text-amber-800' : 'text-zinc-700'}`}>
-            {song.key_note ? `My key: ${song.key_note}` : 'My key'}
-          </Text>
-          <Ionicons name="chevron-down" size={12} color={song.key_note ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
+        <View className="flex-row items-center gap-1.5">
+          <Text className="text-sm text-zinc-700">My key</Text>
+          <TouchableOpacity
+            onPress={() => onKeyTap(song)}
+            className={`flex-row items-center rounded-xl border px-2.5 py-1.5 ${
+              song.key_note ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'
+            }`}
+            accessibilityLabel="My key"
+          >
+            <Text className={`text-sm ${song.key_note ? 'text-amber-800' : 'text-zinc-700'}`}>
+              {song.key_note ?? '—'}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color={song.key_note ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           onPress={() => onAddToSet(song)}
