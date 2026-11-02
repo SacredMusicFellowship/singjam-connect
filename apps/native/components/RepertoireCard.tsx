@@ -15,6 +15,7 @@ export type RepertoireCardSong = {
   song_id: string;
   title: string;
   confidence: string;
+  key_note: string | null;
   display_artist: string | null;
   composers: string[];
   cultures: string[];
@@ -30,6 +31,7 @@ type Props = {
   isLast: boolean;
   onToggleSelect: (song: RepertoireCardSong) => void;
   onConfidenceChange: (song: RepertoireCardSong, confidence: string) => void;
+  onKeyTap: (song: RepertoireCardSong) => void;
   onAddToSet: (song: RepertoireCardSong) => void;
   onView: (song: RepertoireCardSong) => void;
   onRemove: (song: RepertoireCardSong) => void;
@@ -37,10 +39,10 @@ type Props = {
 
 // Mirrors the repertoire row card in web's repertoire/page.tsx: checkbox,
 // title + (songwriters), production/artist line, jammer count, then a
-// confidence control + Add to set / View / Remove actions.
+// confidence control, the member's own key + Add to set / View / Remove actions.
 function RepertoireCard({
   song, selected, isLast,
-  onToggleSelect, onConfidenceChange, onAddToSet, onView, onRemove,
+  onToggleSelect, onConfidenceChange, onKeyTap, onAddToSet, onView, onRemove,
 }: Props) {
   function handleConfidenceTap(event: GestureResponderEvent) {
     showOptionsSheet({
@@ -121,6 +123,19 @@ function RepertoireCard({
             {confidenceLabel}
           </Text>
           <Ionicons name="chevron-down" size={12} color={isLead ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onKeyTap(song)}
+          className={`flex-row items-center rounded-xl border px-2.5 py-1.5 ${
+            song.key_note ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'
+          }`}
+          accessibilityLabel="My key"
+        >
+          <Text className={`text-sm ${song.key_note ? 'text-amber-800 font-medium' : 'text-zinc-500'}`}>
+            {song.key_note ? `Key: ${song.key_note}` : 'My key'}
+          </Text>
+          <Ionicons name="chevron-down" size={12} color={song.key_note ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
         <TouchableOpacity

@@ -86,4 +86,30 @@ describe("PATCH /api/sets/[id]/songs/[songId]", () => {
     expect(await res.json()).toEqual({ ok: true });
     expect(updateSpy.update).toHaveBeenCalledWith({ played: true });
   });
+
+  it("saves a trimmed note, and clears a blank one", async () => {
+    for (const [notes, saved] of [["  Capo 3  ", "Capo 3"], ["   ", null]] as const) {
+      const updateSpy = updateChain({ error: null });
+      mockAdminFrom
+        .mockReturnValueOnce(chain({ data: setRow }))
+        .mockReturnValueOnce(chain({ data: null }))
+        .mockReturnValueOnce(updateSpy);
+      const res = await PATCH(req("set-1", "song-1", { notes }), {
+        params: Promise.resolve({ id: "set-1", songId: "song-1" }),
+      });
+      expect(res.status).toBe(200);
+      expect(updateSpy.update).toHaveBeenCalledWith({ notes: saved });
+    }
+  });
+
+  it("rejects a note over 200 characters without writing", async () => {
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: setRow }))
+      .mockReturnValueOnce(chain({ data: null }));
+    const res = await PATCH(req("set-1", "song-1", { notes: "x".repeat(201) }), {
+      params: Promise.resolve({ id: "set-1", songId: "song-1" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockAdminFrom).toHaveBeenCalledTimes(2);
+  });
 });

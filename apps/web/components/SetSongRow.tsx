@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
+import { SET_SONG_NOTE_MAX } from "@singjam/core";
 import {
   MUSICAL_KEYS,
   YoutubeIcon,
@@ -26,11 +27,13 @@ export default function SetSongRow({
   participants,
   hasEligible,
   participantKnowledge,
+  participantKeys,
   currentUserId,
   currentUserSingingVoice,
   myConfidence,
   onMediaAdded,
   onKeyChanged,
+  onNotesChanged,
   onLeadersChanged,
   onAddToRepertoire,
   onVoiceUpdated,
@@ -47,12 +50,15 @@ export default function SetSongRow({
   participants: Participant[];
   hasEligible: boolean;
   participantKnowledge: Map<string, string>;
+  /** The key each participant plays this song in, from their repertoire. */
+  participantKeys: Map<string, string>;
   currentUserId: string | null;
   currentUserSingingVoice: string | null;
   /** The viewer's own role for this song, if it's in their repertoire. */
   myConfidence: string | null;
   onMediaAdded: (songId: string, field: "youtube_url" | "spotify_url" | "chord_chart_url", url: string) => void;
   onKeyChanged: (id: string, key: string | null) => void;
+  onNotesChanged: (id: string, notes: string | null) => void;
   onLeadersChanged: (id: string, leaderUserIds: string[]) => void;
   onAddToRepertoire: (songId: string, confidence: string) => Promise<void>;
   onVoiceUpdated: (voice: string) => void;
@@ -66,6 +72,8 @@ export default function SetSongRow({
   const [pickingRepertoire, setPickingRepertoire] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesInput, setNotesInput] = useState("");
   const [youtubeSearchResults, setYoutubeSearchResults] = useState<Array<{ videoId: string; title: string; channel: string; url: string }>>([]);
   const [youtubeSearching, setYoutubeSearching] = useState(false);
 
@@ -133,6 +141,17 @@ export default function SetSongRow({
   async function handleSave() {
     if (!addingField || !urlInput.trim()) return;
     await saveMedia(addingField, urlInput.trim());
+  }
+
+  function startEditingNotes() {
+    setNotesInput(song.notes ?? "");
+    setEditingNotes(true);
+  }
+
+  function saveNotes() {
+    setEditingNotes(false);
+    const next = notesInput.trim() || null;
+    if (next !== song.notes) onNotesChanged(song.id, next);
   }
 
   function handleToggleLeader(userId: string) {
@@ -208,7 +227,38 @@ export default function SetSongRow({
             {!isPublicViewer && song.songs.tonality && (
               <span className="text-xs font-semibold text-zinc-900">{song.songs.tonality}</span>
             )}
+            {canEdit && !song.notes && !editingNotes && (
+              <button onClick={startEditingNotes} className="text-xs text-zinc-400 hover:text-zinc-600">
+                + Note
+              </button>
+            )}
           </div>
+          {editingNotes ? (
+            <input
+              value={notesInput}
+              onChange={(e) => setNotesInput(e.target.value)}
+              onBlur={saveNotes}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+                if (e.key === "Escape") setEditingNotes(false);
+              }}
+              maxLength={SET_SONG_NOTE_MAX}
+              placeholder="e.g. Capo 3, start soft"
+              aria-label="Note for this song"
+              autoFocus
+              className="mt-1 w-full max-w-sm rounded border border-zinc-300 px-1.5 py-0.5 text-xs focus:border-amber-400 focus:outline-none"
+            />
+          ) : (
+            !isPublicViewer && song.notes && (
+              canEdit ? (
+                <button onClick={startEditingNotes} className="mt-1 block max-w-full text-left text-xs text-zinc-600 hover:text-zinc-900" title="Edit note">
+                  {song.notes}
+                </button>
+              ) : (
+                <p className="mt-1 text-xs text-zinc-600">{song.notes}</p>
+              )
+            )
+          )}
           {(!myConfidence || learning) && (currentUserId || signInUrl) && (
             !currentUserId ? (
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -355,7 +405,9 @@ export default function SetSongRow({
                   const isLeader = leaderIds.includes(p.user_id);
                   const isClickable = canEdit && participantKnowledge.get(p.user_id) === "lead";
                   const firstName = p.display_name ?? p.username ?? "?";
-                  const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                  const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                  const personalKey = participantKeys.get(p.user_id);
+                  const label = personalKey ? `${name} · ${personalKey}` : name;
                   const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
                   return (
                     <button

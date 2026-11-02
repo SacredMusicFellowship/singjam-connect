@@ -12,6 +12,7 @@ import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterS
 import InlineDropdown from '@/components/InlineDropdown';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RepertoireCard from '@/components/RepertoireCard';
+import KeyPicker from '@/components/KeyPicker';
 import SuggestionCard, { type Suggestion } from '@/components/SuggestionCard';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
 import AddToSetModal from '@/components/AddToSetModal';
@@ -84,6 +85,7 @@ async function fetchRichUserSongs(): Promise<RichUserSong[]> {
     song_id: row.song_id,
     slug: row.slug ?? null,
     confidence: row.confidence ?? 'learn',
+    key_note: row.key_note ?? null,
     updated_at: row.updated_at,
     title: row.title ?? '',
     display_artist: row.display_artist ?? null,
@@ -112,6 +114,7 @@ export default function RepertoireScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all');
+  const [keyPickerSongId, setKeyPickerSongId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOrder>('title_asc');
   const [extFilters, setExtFilters] = useState<SongFilterState>(emptyFilterDimensions());
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -243,6 +246,14 @@ export default function RepertoireScreen() {
     if (error) { Alert.alert('Error', error.message); latest.current.load(); }
   }, [userId, singingVoice]);
 
+  const handleKeyChange = useCallback(async (songId: string, key_note: string | null) => {
+    setSongs(prev => prev.map(s => s.song_id === songId ? { ...s, key_note } : s));
+    const { error } = await supabase.from('user_songs').update({ key_note }).eq('user_id', userId).eq('song_id', songId);
+    if (error) { Alert.alert('Error', error.message); latest.current.load(); }
+  }, [userId]);
+
+  const handleKeyTap = useCallback((song: { song_id: string }) => setKeyPickerSongId(song.song_id), []);
+
   const handleRemove = useCallback(async (song: { song_id: string }) => {
     const songId = song.song_id;
     setSongs(prev => prev.filter(s => s.song_id !== songId));
@@ -287,6 +298,7 @@ export default function RepertoireScreen() {
         song_id: s.song_id,
         slug: s.slug,
         confidence,
+        key_note: null,
         updated_at: new Date().toISOString(),
         title: s.title,
         display_artist: s.display_artist,
@@ -385,12 +397,13 @@ export default function RepertoireScreen() {
         isLast={index === filtered.length - 1}
         onToggleSelect={toggleSelect}
         onConfidenceChange={handleConfidenceChange}
+        onKeyTap={handleKeyTap}
         onAddToSet={addOneToSet}
         onView={viewSong}
         onRemove={handleRemove}
       />
     ),
-    [selectedIds, filtered.length, toggleSelect, handleConfidenceChange, addOneToSet, viewSong, handleRemove]
+    [selectedIds, filtered.length, toggleSelect, handleConfidenceChange, handleKeyTap, addOneToSet, viewSong, handleRemove]
   );
 
   // Search results reuse the same two cards web does: owned songs keep their role
@@ -406,6 +419,7 @@ export default function RepertoireScreen() {
               isLast={index === sortedSearchResults.length - 1}
             onToggleSelect={toggleSelect}
             onConfidenceChange={handleConfidenceChange}
+            onKeyTap={handleKeyTap}
             onAddToSet={addOneToSet}
             onView={viewSong}
             onRemove={handleRemove}
@@ -421,7 +435,7 @@ export default function RepertoireScreen() {
       );
     },
     [songsById, selectedIds, sortedSearchResults.length, toggleSelect,
-     handleConfidenceChange, addOneToSet, viewSong, handleRemove, addFromSuggestion]
+     handleConfidenceChange, handleKeyTap, addOneToSet, viewSong, handleRemove, addFromSuggestion]
   );
 
 
@@ -688,6 +702,14 @@ export default function RepertoireScreen() {
         />
       )}
       </ContentContainer>
+
+      <KeyPicker
+        visible={!!keyPickerSongId}
+        title="My key"
+        current={songs.find(s => s.song_id === keyPickerSongId)?.key_note ?? null}
+        onClose={() => setKeyPickerSongId(null)}
+        onSelect={(key) => { if (keyPickerSongId) handleKeyChange(keyPickerSongId, key); }}
+      />
 
       {addToSetSongs && (
         <AddToSetModal

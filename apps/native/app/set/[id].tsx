@@ -11,13 +11,13 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { formatComposers, reorderSongsForPlayed } from '@singjam/core';
+import { formatComposers, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
+import KeyPicker from '@/components/KeyPicker';
+import UgBackTip from '@/components/UgBackTip';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
-
-const MUSICAL_KEYS = ['A', 'Bb', 'B', 'C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab'];
 
 type SetSortOrder = 'custom' | 'title_asc' | 'title_desc';
 
@@ -49,11 +49,13 @@ type SetSong = {
   song_id: string;
   position: number;
   key_note: string | null;
+  notes: string | null;
   played: boolean;
   leader_user_ids: string[];
   songs: {
     title: string;
     display_artist: string | null;
+    chord_chart_url: string | null;
     song_composers: { people: { name: string } | null }[];
   };
 };
@@ -191,46 +193,6 @@ function AddSongModal({
   );
 }
 
-function KeyPicker({
-  visible,
-  current,
-  onClose,
-  onSelect,
-}: {
-  visible: boolean;
-  current: string | null;
-  onClose: () => void;
-  onSelect: (key: string | null) => void;
-}) {
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="formSheet" onRequestClose={onClose}>
-      <View className="flex-1 bg-white">
-        <View className="flex-row items-center px-4 pt-4 pb-2 border-b border-zinc-100">
-          <TouchableOpacity onPress={onClose}>
-            <Text className="text-amber-600 font-medium">Cancel</Text>
-          </TouchableOpacity>
-          <Text className="flex-1 text-center font-semibold text-zinc-900">Select Key</Text>
-          <TouchableOpacity onPress={() => { onSelect(null); onClose(); }}>
-            <Text className="text-zinc-400 font-medium">Clear</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView>
-          {MUSICAL_KEYS.map((k) => (
-            <TouchableOpacity
-              key={k}
-              onPress={() => { onSelect(k); onClose(); }}
-              className={`px-6 py-4 border-b border-zinc-100 flex-row items-center justify-between ${current === k ? 'bg-amber-50' : ''}`}
-            >
-              <Text className={`text-base ${current === k ? 'text-amber-700 font-semibold' : 'text-zinc-900'}`}>{k}</Text>
-              {current === k ? <Ionicons name="checkmark" size={18} color="#d97706" /> : null}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
 function SongRow({
   song,
   canEdit,
@@ -239,10 +201,12 @@ function SongRow({
   isActive,
   participants,
   participantKnowledge,
+  participantKeys,
   hasEligible,
   isPublicViewer,
   onRemove,
   onKeyChange,
+  onNotesChange,
   onLeaderToggle,
   onTogglePlayed,
 }: {
@@ -253,14 +217,18 @@ function SongRow({
   isActive?: boolean;
   participants: Participant[];
   participantKnowledge: Map<string, string>;
+  participantKeys: Map<string, string>;
   hasEligible: boolean;
   isPublicViewer: boolean;
   onRemove: () => void;
   onKeyChange: (key: string | null) => void;
+  onNotesChange: (notes: string | null) => void;
   onLeaderToggle: (newLeaderIds: string[]) => void;
   onTogglePlayed: () => void;
 }) {
   const [keyPickerVisible, setKeyPickerVisible] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesInput, setNotesInput] = useState('');
   const composerNames = (song.songs.song_composers ?? [])
     .map((sc) => sc.people?.name)
     .filter(Boolean) as string[];
@@ -283,6 +251,17 @@ function SongRow({
   const showLeaderBlock =
     !isPublicViewer &&
     (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0));
+
+  function startEditingNotes() {
+    setNotesInput(song.notes ?? '');
+    setEditingNotes(true);
+  }
+
+  function saveNotes() {
+    setEditingNotes(false);
+    const next = notesInput.trim() || null;
+    if (next !== song.notes) onNotesChange(next);
+  }
 
   function confirmRemove() {
     Alert.alert(
@@ -325,6 +304,16 @@ function SongRow({
               <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>{artist}</Text>
             ) : null}
           </View>
+          {song.songs.chord_chart_url ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(song.songs.chord_chart_url!).catch(() => Alert.alert('Could not open link'))}
+              className="mr-3 flex-row items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 bg-white"
+              accessibilityLabel="Chord chart"
+            >
+              <Text className="text-xs font-medium text-zinc-600">Chords</Text>
+              <Ionicons name="open-outline" size={11} color="#a1a1aa" />
+            </TouchableOpacity>
+          ) : null}
           {canEdit ? (
             <TouchableOpacity
               onPress={onTogglePlayed}
@@ -363,6 +352,29 @@ function SongRow({
           ) : null}
         </View>
 
+        {editingNotes ? (
+          <TextInput
+            value={notesInput}
+            onChangeText={setNotesInput}
+            onBlur={saveNotes}
+            onSubmitEditing={saveNotes}
+            maxLength={SET_SONG_NOTE_MAX}
+            placeholder="e.g. Capo 3, start soft"
+            placeholderTextColor="#a1a1aa"
+            returnKeyType="done"
+            autoFocus
+            className="mt-2 ml-9 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-900"
+          />
+        ) : !isPublicViewer && song.notes ? (
+          <TouchableOpacity disabled={!canEdit} onPress={startEditingNotes} className="mt-1.5 ml-9">
+            <Text className="text-sm text-zinc-600">{song.notes}</Text>
+          </TouchableOpacity>
+        ) : canEdit ? (
+          <TouchableOpacity onPress={startEditingNotes} className="mt-1.5 ml-9 self-start" hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <Text className="text-xs text-zinc-400">+ Note</Text>
+          </TouchableOpacity>
+        ) : null}
+
         {showLeaderBlock ? (
           <View className="mt-2 pl-9 gap-1">
             {(leadParticipants.length > 0 || (canEdit && participants.length > 0)) ? (
@@ -390,7 +402,7 @@ function SongRow({
                         className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${isLeader ? 'bg-amber-400' : 'bg-amber-100'}`}
                       >
                         <Text className={`text-xs font-medium ${isLeader ? 'text-white' : 'text-amber-700'}`}>
-                          {participantLabel(p)}
+                          {participantKeys.get(p.user_id) ? `${participantLabel(p)} · ${participantKeys.get(p.user_id)}` : participantLabel(p)}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -563,7 +575,7 @@ function SetSettingsModal({
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text className="text-amber-600 font-medium">Done</Text>
           </TouchableOpacity>
-          <Text className="flex-1 text-center font-semibold text-zinc-900">Set Settings</Text>
+          <Text className="flex-1 text-center font-semibold text-zinc-900">Invite people</Text>
           <View style={{ width: 48 }} />
         </View>
 
@@ -695,7 +707,7 @@ export default function SetDetailScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
-  const [songKnowledge, setSongKnowledge] = useState<{ user_id: string; song_id: string; confidence: string }[]>([]);
+  const [songKnowledge, setSongKnowledge] = useState<{ user_id: string; song_id: string; confidence: string; key_note: string | null }[]>([]);
   const [sortBy, setSortBy] = useState<SetSortOrder>('custom');
   const [filterQuery, setFilterQuery] = useState('');
   const [spotifyExporting, setSpotifyExporting] = useState(false);
@@ -710,7 +722,7 @@ export default function SetDetailScreen() {
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, played, leader_user_ids, songs(title, display_artist, song_composers(people(name)))';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, chord_chart_url, song_composers(people(name)))';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -736,7 +748,7 @@ export default function SetDetailScreen() {
             sortByPosition(
               prev.map((s) =>
                 s.id === row.id
-                  ? { ...s, position: row.position, key_note: row.key_note, played: row.played, leader_user_ids: row.leader_user_ids }
+                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: row.leader_user_ids }
                   : s
               )
             )
@@ -826,7 +838,7 @@ export default function SetDetailScreen() {
         .single(),
       supabase
         .from('set_songs')
-        .select('id, song_id, position, key_note, played, leader_user_ids, songs(title, display_artist, song_composers(people(name)))')
+        .select('id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, chord_chart_url, song_composers(people(name)))')
         .eq('set_id', id)
         .order('position', { ascending: true }),
       user
@@ -894,6 +906,13 @@ export default function SetDetailScreen() {
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, key_note: key } : s));
     const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { key_note: key });
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update key.'); }
+  }
+
+  async function handleNotesChange(songId: string, notes: string | null) {
+    const previous = songs;
+    setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, notes } : s));
+    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { notes });
+    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not save note.'); }
   }
 
   async function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
@@ -1019,7 +1038,7 @@ export default function SetDetailScreen() {
     let cancelled = false;
     supabase
       .from('user_songs')
-      .select('user_id, song_id, confidence')
+      .select('user_id, song_id, confidence, key_note')
       .in('user_id', participantIds)
       .in('song_id', songIds)
       .in('confidence', ['lead', 'support', 'learn'])
@@ -1033,6 +1052,17 @@ export default function SetDetailScreen() {
     for (const k of songKnowledge) {
       if (!m.has(k.song_id)) m.set(k.song_id, new Map());
       m.get(k.song_id)!.set(k.user_id, k.confidence);
+    }
+    return m;
+  }, [songKnowledge]);
+
+  // Per-song lookup: songId → Map<userId, the key they play it in>.
+  const songKeyMap = useMemo(() => {
+    const m = new Map<string, Map<string, string>>();
+    for (const k of songKnowledge) {
+      if (!k.key_note) continue;
+      if (!m.has(k.song_id)) m.set(k.song_id, new Map());
+      m.get(k.song_id)!.set(k.user_id, k.key_note);
     }
     return m;
   }, [songKnowledge]);
@@ -1111,7 +1141,8 @@ export default function SetDetailScreen() {
     const rowParticipants = participants.filter(
       (p) => knowledgeForSong.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id)
     );
-    return { participants: rowParticipants, participantKnowledge: knowledgeForSong, hasEligible, isPublicViewer };
+    const participantKeys = songKeyMap.get(song.song_id) ?? new Map<string, string>();
+    return { participants: rowParticipants, participantKnowledge: knowledgeForSong, participantKeys, hasEligible, isPublicViewer };
   };
 
   return (
@@ -1123,8 +1154,8 @@ export default function SetDetailScreen() {
           headerRight: () => (
             <View className="flex-row gap-4">
               {canEdit && (
-                <TouchableOpacity onPress={() => setSettingsVisible(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="settings-outline" size={20} color="#71717a" />
+                <TouchableOpacity onPress={() => setSettingsVisible(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Invite people">
+                  <Ionicons name="person-add-outline" size={20} color="#71717a" />
                 </TouchableOpacity>
               )}
               {isOwner && (
@@ -1202,6 +1233,8 @@ export default function SetDetailScreen() {
           </View>
         )}
 
+        {songs.some((s) => s.songs.chord_chart_url) && <UgBackTip />}
+
         {songs.length === 0 ? (
           <View className="flex-1 items-center justify-center py-20 px-8">
             <Text className="text-zinc-900 font-semibold mb-1">No songs yet</Text>
@@ -1226,6 +1259,7 @@ export default function SetDetailScreen() {
                   {...leaderProps(item)}
                   onRemove={() => handleRemoveSong(item.song_id)}
                   onKeyChange={(key) => handleKeyChange(item.song_id, key)}
+                  onNotesChange={(notes) => handleNotesChange(item.song_id, notes)}
                   onLeaderToggle={(newIds) => handleLeaderToggle(item.song_id, newIds)}
                   onTogglePlayed={() => handleTogglePlayed(item, !item.played)}
                 />
@@ -1250,6 +1284,7 @@ export default function SetDetailScreen() {
                 {...leaderProps(item)}
                 onRemove={() => handleRemoveSong(item.song_id)}
                 onKeyChange={(key) => handleKeyChange(item.song_id, key)}
+                onNotesChange={(notes) => handleNotesChange(item.song_id, notes)}
                 onLeaderToggle={(newIds) => handleLeaderToggle(item.song_id, newIds)}
                 onTogglePlayed={() => handleTogglePlayed(item, !item.played)}
               />

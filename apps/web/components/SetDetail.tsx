@@ -10,6 +10,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
 import SetSongRow from "@/components/SetSongRow";
+import UgBackTip from "@/components/UgBackTip";
 import {
   YoutubeIcon,
   SpotifyIcon,
@@ -22,6 +23,7 @@ import {
   type Song,
   type Participant,
   type Collaborator,
+  type SongKnowledge,
   type PlaylistLink,
   type SetData,
 } from "@/components/setDetailShared";
@@ -35,6 +37,8 @@ const SetInvitePanel = dynamic(() => import("@/components/SetInvitePanel"), {
 const SetSongPanel = dynamic(() => import("@/components/SetSongPanel"), {
   loading: () => <div className="h-12 animate-pulse rounded-xl bg-zinc-100" />,
 });
+
+const EMPTY_KEYS = new Map<string, string>();
 
 export default function SetDetail({
   set,
@@ -65,7 +69,7 @@ export default function SetDetail({
   isAdmin: boolean;
   isSongEditor?: boolean;
   isPublicViewer?: boolean;
-  songKnowledge?: { user_id: string; song_id: string; confidence: string }[];
+  songKnowledge?: SongKnowledge[];
   canAccessJam?: boolean;
   jamShortCode?: string | null;
 }) {
@@ -216,7 +220,7 @@ export default function SetDetail({
           const [profileRes, knowledgeRes] = await Promise.all([
             supabase.from("profiles").select("display_name, last_name, username, avatar_url").eq("id", row.user_id).single(),
             currentSongIds.length > 0
-              ? supabase.from("user_songs").select("user_id, song_id, confidence").eq("user_id", row.user_id).in("song_id", currentSongIds).in("confidence", ["lead", "support", "learn"])
+              ? supabase.from("user_songs").select("user_id, song_id, confidence, key_note").eq("user_id", row.user_id).in("song_id", currentSongIds).in("confidence", ["lead", "support", "learn"])
               : Promise.resolve({ data: [] as any[] }),
           ]);
           const newCollab: Collaborator = {
@@ -237,7 +241,7 @@ export default function SetDetail({
           if (knowledgeRes.data?.length) {
             setSongKnowledge((prev) => [
               ...prev.filter((k) => k.user_id !== row.user_id),
-              ...(knowledgeRes.data as { user_id: string; song_id: string; confidence: string }[]),
+              ...(knowledgeRes.data as SongKnowledge[]),
             ]);
           }
           participantIdsRef.current.add(row.user_id);
@@ -255,7 +259,7 @@ export default function SetDetail({
             const [profileRes, knowledgeRes] = await Promise.all([
               supabase.from("profiles").select("display_name, last_name, username, avatar_url").eq("id", row.user_id).single(),
               currentSongIds.length > 0
-                ? supabase.from("user_songs").select("user_id, song_id, confidence").eq("user_id", row.user_id).in("song_id", currentSongIds).in("confidence", ["lead", "support", "learn"])
+                ? supabase.from("user_songs").select("user_id, song_id, confidence, key_note").eq("user_id", row.user_id).in("song_id", currentSongIds).in("confidence", ["lead", "support", "learn"])
                 : Promise.resolve({ data: [] as any[] }),
             ]);
             const newCollab: Collaborator = {
@@ -276,7 +280,7 @@ export default function SetDetail({
             if (knowledgeRes.data?.length) {
               setSongKnowledge((prev) => [
                 ...prev.filter((k) => k.user_id !== row.user_id),
-                ...(knowledgeRes.data as { user_id: string; song_id: string; confidence: string }[]),
+                ...(knowledgeRes.data as SongKnowledge[]),
               ]);
             }
             participantIdsRef.current.add(row.user_id);
@@ -319,7 +323,7 @@ export default function SetDetail({
             if (!["lead", "support", "learn"].includes(row.confidence)) return;
             setSongKnowledge((prev) => [
               ...prev.filter((k) => !(k.user_id === row.user_id && k.song_id === row.song_id)),
-              { user_id: row.user_id, song_id: row.song_id, confidence: row.confidence },
+              { user_id: row.user_id, song_id: row.song_id, confidence: row.confidence, key_note: row.key_note ?? null },
             ]);
           }
         }
@@ -334,14 +338,14 @@ export default function SetDetail({
             supabase
               .from("set_songs")
               .select(
-                "id, song_id, position, key_note, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
+                "id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
               )
               .eq("id", row.id)
               .single(),
             participantIds.length > 0
               ? supabase
                   .from("user_songs")
-                  .select("user_id, song_id, confidence")
+                  .select("user_id, song_id, confidence, key_note")
                   .eq("song_id", row.song_id)
                   .in("user_id", participantIds)
                   .in("confidence", ["lead", "support", "learn"])
@@ -357,7 +361,7 @@ export default function SetDetail({
           if (knowledgeRes.data?.length) {
             setSongKnowledge((prev) => [
               ...prev.filter((k) => k.song_id !== row.song_id),
-              ...(knowledgeRes.data as { user_id: string; song_id: string; confidence: string }[]),
+              ...(knowledgeRes.data as SongKnowledge[]),
             ]);
           }
         }
@@ -371,7 +375,7 @@ export default function SetDetail({
             prev
               .map((s) =>
                 s.id === row.id
-                  ? { ...s, position: row.position, key_note: row.key_note, played: row.played, leader_user_ids: row.leader_user_ids }
+                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: row.leader_user_ids }
                   : s
               )
               .sort((a, b) => a.position - b.position)
@@ -472,7 +476,7 @@ export default function SetDetail({
     setUserRepertoire((prev) => new Map(prev).set(songId, confidence));
     setSongKnowledge((prev) => [
       ...prev.filter((k) => !(k.user_id === currentUserId! && k.song_id === songId)),
-      { user_id: currentUserId!, song_id: songId, confidence },
+      { user_id: currentUserId!, song_id: songId, confidence, key_note: prev.find((k) => k.user_id === currentUserId && k.song_id === songId)?.key_note ?? null },
     ]);
   }
 
@@ -508,6 +512,18 @@ export default function SetDetail({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key_note: key }),
     });
+  }
+
+  async function handleNotesChanged(id: string, notes: string | null) {
+    const entry = songs.find((s) => s.id === id);
+    if (!entry) return;
+    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, notes } : s));
+    const res = await fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes }),
+    });
+    if (!res.ok) setSongs((prev) => prev.map((s) => s.id === id ? { ...s, notes: entry.notes } : s));
   }
 
   async function handleTogglePlayed(id: string, played: boolean) {
@@ -588,9 +604,14 @@ export default function SetDetail({
 
   // Build a per-song lookup: songId → Map<userId, confidence>
   const songKnowledgeMap = new Map<string, Map<string, string>>();
+  const songKeyMap = new Map<string, Map<string, string>>();
   for (const k of songKnowledge) {
     if (!songKnowledgeMap.has(k.song_id)) songKnowledgeMap.set(k.song_id, new Map());
     songKnowledgeMap.get(k.song_id)!.set(k.user_id, k.confidence);
+    if (k.key_note) {
+      if (!songKeyMap.has(k.song_id)) songKeyMap.set(k.song_id, new Map());
+      songKeyMap.get(k.song_id)!.set(k.user_id, k.key_note);
+    }
   }
 
   function handleMoveSong(oldIndex: number, newIndex: number) {
@@ -1157,9 +1178,9 @@ export default function SetDetail({
               className="flex items-center gap-1.5 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
               </svg>
-              Share
+              Invite
             </button>
             {showInvitePanel && (
               <div className="basis-full">
@@ -1419,6 +1440,8 @@ export default function SetDetail({
           </div>
         )}
 
+        {songs.some((s) => s.songs.chord_chart_url) && <UgBackTip />}
+
         {songs.length > 0 && (
           <>
           <SearchInput
@@ -1478,6 +1501,7 @@ export default function SetDetail({
                     participants={rowParticipants}
                     hasEligible={hasEligible}
                     participantKnowledge={knowledgeForSong}
+                    participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
                     currentUserId={currentUserId}
                     currentUserSingingVoice={userSingingVoice}
                     myConfidence={userRepertoire.get(song.song_id) ?? null}
@@ -1485,6 +1509,7 @@ export default function SetDetail({
                     onTogglePlayed={handleTogglePlayed}
                     onMediaAdded={handleMediaAdded}
                     onKeyChanged={handleKeyChanged}
+                    onNotesChanged={handleNotesChanged}
                     onLeadersChanged={handleLeadersChanged}
                     onAddToRepertoire={handleAddToRepertoire}
                     onVoiceUpdated={setUserSingingVoice}
@@ -1518,11 +1543,13 @@ export default function SetDetail({
                     participants={rowParticipants}
                     hasEligible={hasEligible}
                     participantKnowledge={knowledgeForSong}
+                    participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
                     currentUserId={currentUserId}
                     currentUserSingingVoice={userSingingVoice}
                     myConfidence={userRepertoire.get(song.song_id) ?? null}
                     onMediaAdded={handleMediaAdded}
                     onKeyChanged={handleKeyChanged}
+                    onNotesChanged={handleNotesChanged}
                     onLeadersChanged={handleLeadersChanged}
                     onAddToRepertoire={handleAddToRepertoire}
                     onVoiceUpdated={setUserSingingVoice}

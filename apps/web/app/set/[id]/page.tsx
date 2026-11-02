@@ -3,6 +3,7 @@ import { Suspense, cache } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
 import SetDetail from "@/components/SetDetail";
+import type { SongKnowledge } from "@/components/setDetailShared";
 import SetRequestAccess from "@/components/SetRequestAccess";
 import SetJoinPrompt from "@/components/SetJoinPrompt";
 import SetGuestPrompt from "@/components/SetGuestPrompt";
@@ -31,7 +32,7 @@ const getSetSongs = cache(async (id: string) => {
   const supabase = await getServerSupabase();
   const { data } = await supabase
     .from("set_songs")
-    .select("id, song_id, position, key_note, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))")
+    .select("id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))")
     .eq("set_id", id)
     .order("position", { ascending: true });
   return (data ?? []) as any[];
@@ -201,11 +202,11 @@ export default async function SetPage({
   const songKnowledge = songIds.length > 0 && participantIds.length > 0
     ? ((await supabase
         .from("user_songs")
-        .select("user_id, song_id, confidence")
+        .select("user_id, song_id, confidence, key_note")
         .in("user_id", participantIds)
         .in("song_id", songIds)
         .in("confidence", ["lead", "support", "learn"])
-      ).data ?? []) as { user_id: string; song_id: string; confidence: string }[]
+      ).data ?? []) as SongKnowledge[]
     : [];
 
   // RLS decides whether the viewer can see the linked jam; when they can, the

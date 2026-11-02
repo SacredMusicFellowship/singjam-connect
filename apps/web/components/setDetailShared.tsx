@@ -1,10 +1,14 @@
-export const MUSICAL_KEYS = ["A", "Bb", "B", "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab"];
+export { MUSICAL_KEYS } from "@singjam/core";
+
+// A participant's role for a set song, plus the key they play it in.
+export type SongKnowledge = { user_id: string; song_id: string; confidence: string; key_note: string | null };
 
 export type Song = {
   id: string;
   song_id: string;
   position: number;
   key_note: string | null;
+  notes: string | null;
   played: boolean;
   leader_user_ids: string[];
   songs: {

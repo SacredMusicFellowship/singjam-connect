@@ -16,7 +16,7 @@ import { FilterPanel } from "@/components/FilterPanel";
 import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
+import { hasLeadVoice, LEAD_VOICE_UPGRADE, MUSICAL_KEYS, setsAcceptingSongs } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import SearchInput from "@/components/SearchInput";
 
@@ -38,6 +38,7 @@ type Item = {
   song_id: string;
   slug: string | null;
   confidence: string | null;
+  key_note: string | null;
   updated_at: string | null;
   title: string;
   display_artist: string | null;
@@ -98,6 +99,25 @@ type AddableSong = {
   languages: string[] | null;
 };
 
+
+// The key the member plays the song in, shown to their set-mates next to their name.
+function MyKeySelect({ value, onChange }: { value: string | null; onChange: (key: string | null) => void }) {
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+      className={`rounded-xl border px-2 py-1.5 text-xs sm:text-sm ${
+        value ? "border-amber-200 bg-amber-50 text-amber-800 font-medium" : "border-zinc-200 text-zinc-500"
+      }`}
+      aria-label="My key"
+    >
+      <option value="">My key</option>
+      {MUSICAL_KEYS.map((k) => (
+        <option key={k} value={k}>Key: {k}</option>
+      ))}
+    </select>
+  );
+}
 
 function SuggestionsPanel({
   suggestions,
@@ -305,6 +325,7 @@ export default function RepertoirePage() {
           song_id: r.song_id,
           slug: r.slug ?? null,
           confidence: r.confidence,
+          key_note: r.key_note ?? null,
           updated_at: r.updated_at,
           title: r.title,
           display_artist: r.display_artist,
@@ -530,6 +551,24 @@ export default function RepertoirePage() {
     });
   };
 
+  const updateKey = (song_id: string, next: string | null) => {
+    if (!userId) return;
+    const prev = items.find((x) => x.song_id === song_id)?.key_note ?? null;
+    itemsMutatedRef.current = true;
+    setItems((cur) => cur.map((it) => (it.song_id === song_id ? { ...it, key_note: next } : it)));
+    startTransition(async () => {
+      const { error } = await supabase
+        .from("user_songs")
+        .update({ key_note: next })
+        .eq("user_id", userId)
+        .eq("song_id", song_id);
+      if (error) {
+        setItems((cur) => cur.map((it) => (it.song_id === song_id ? { ...it, key_note: prev } : it)));
+        alert(error.message);
+      }
+    });
+  };
+
   const removeFromRepertoire = (song_id: string) => {
     if (!userId) return;
     const prevItems = items;
@@ -560,6 +599,7 @@ export default function RepertoirePage() {
         song_id: songId,
         slug: result.slug ?? null,
         confidence,
+        key_note: null,
         updated_at: new Date().toISOString(),
         title: result.title,
         display_artist: result.display_artist ?? null,
@@ -792,6 +832,7 @@ export default function RepertoirePage() {
                               </option>
                             ))}
                           </select>
+                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} />
                           {userSets.length > 0 && (
                             <AddToSetPanel
                               songId={result.song_id}
@@ -1106,6 +1147,8 @@ export default function RepertoirePage() {
                         </option>
                       ))}
                     </select>
+
+                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} />
 
                     {userSets.length > 0 && (
                       <AddToSetPanel

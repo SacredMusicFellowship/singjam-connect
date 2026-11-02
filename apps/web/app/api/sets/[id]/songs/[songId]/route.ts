@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { resolveApiUser } from "@/lib/supabase/apiUser";
+import { normalizeSetSongNote, SET_SONG_NOTE_MAX } from "@singjam/core";
 
 export async function PATCH(
   req: Request,
@@ -24,6 +25,13 @@ export async function PATCH(
   const updates: Record<string, unknown> = {};
   if ("key_note" in body) updates.key_note = body.key_note as string | null;
   if ("played" in body) updates.played = Boolean(body.played);
+  if ("notes" in body) {
+    const notes = normalizeSetSongNote(body.notes);
+    if (notes === undefined) {
+      return NextResponse.json({ error: `Notes must be ${SET_SONG_NOTE_MAX} characters or fewer` }, { status: 400 });
+    }
+    updates.notes = notes;
+  }
   if ("leader_user_ids" in body && Array.isArray(body.leader_user_ids)) {
     updates.leader_user_ids = body.leader_user_ids;
     if (body.leader_user_ids.length > 0) {

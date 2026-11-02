@@ -14,6 +14,7 @@ export * from './utils/jamImageTypes';
 export * from './utils/jamPreviewText';
 export * from './utils/jamTicketState';
 export * from './utils/mergeSuggestionsById';
+export * from './utils/musicalKeys';
 export * from './utils/normalizeSearch';
 export * from './utils/optionSheet';
 export * from './utils/reorderSongsForPlayed';
