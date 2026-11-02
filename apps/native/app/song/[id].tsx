@@ -555,7 +555,7 @@ export default function SongDetailScreen() {
               accessibilityLabel="My key"
             >
               <Text className={`text-sm ${myKey ? 'text-amber-800' : 'text-slate-700'}`}>
-                {myKey ? `Key: ${myKey}` : 'My key'}
+                {myKey ? `My key: ${myKey}` : 'My key'}
               </Text>
               <Ionicons name="chevron-down" size={12} color={myKey ? '#92400e' : '#64748b'} style={{ marginLeft: 4 }} />
             </TouchableOpacity>

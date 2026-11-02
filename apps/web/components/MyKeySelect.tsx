@@ -13,7 +13,7 @@ export default function MyKeySelect({ value, onChange }: { value: string | null;
     >
       <option value="">My key</option>
       {MUSICAL_KEYS.map((k) => (
-        <option key={k} value={k}>Key: {k}</option>
+        <option key={k} value={k}>My key: {k}</option>
       ))}
     </select>
   );

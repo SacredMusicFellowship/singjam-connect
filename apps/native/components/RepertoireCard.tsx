@@ -133,7 +133,7 @@ function RepertoireCard({
           accessibilityLabel="My key"
         >
           <Text className={`text-sm ${song.key_note ? 'text-amber-800' : 'text-zinc-700'}`}>
-            {song.key_note ? `Key: ${song.key_note}` : 'My key'}
+            {song.key_note ? `My key: ${song.key_note}` : 'My key'}
           </Text>
           <Ionicons name="chevron-down" size={12} color={song.key_note ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
