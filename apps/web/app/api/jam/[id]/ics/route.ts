@@ -4,7 +4,7 @@ import { buildIcs } from "@/lib/ics";
 // Linked from emails, so there's usually no session. A public jam's full
 // address goes only to someone attending, proven by their RSVP's id, which the
 // confirmation email puts in the link; anyone else gets the neighbourhood, as
-// on the page (migration 174).
+// on the page (jam_full_address, migrations 173-174).
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
