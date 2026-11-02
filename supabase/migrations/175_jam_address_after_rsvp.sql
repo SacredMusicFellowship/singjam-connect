@@ -1,4 +1,4 @@
--- Migration 174: a public jam's full address is only readable by people who
+-- Migration 175: a public jam's full address is only readable by people who
 -- have RSVP'd, not by anyone holding the anon key.
 --
 -- The "read jams" policy lets anyone read a community jam, and RLS is row-level,
@@ -7,7 +7,7 @@
 -- API didn't.
 --
 -- full_address is taken out of the column grants for anon and authenticated, so
--- jam_full_address() (migration 173) is the only way a client reads it. Writes
+-- jam_full_address() (migrations 173, 174) is the only way a client reads it. Writes
 -- are unchanged: hosts still insert and update the column directly.
 --
 -- Apply only after the app code that stopped selecting full_address directly

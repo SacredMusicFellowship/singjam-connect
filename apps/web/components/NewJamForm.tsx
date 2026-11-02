@@ -233,7 +233,6 @@ export default function NewJamForm({
       host: displayName,
       capacity: capacity ? parseInt(capacity, 10) : null,
       timezone,
-      hasFullAccess: true, // show full address in preview
     };
     const card = (
       <JamCard

@@ -27,7 +27,6 @@ export type JamCardData = {
   host?: string | null;
   hostUsername?: string | null;
   capacity?: number | null;
-  hasFullAccess: boolean;
 };
 
 
@@ -36,8 +35,8 @@ export type JamCardData = {
 // and would otherwise have to restate the rules.
 function locationView(jam: JamCardData) {
   const isTbd = (jam.neighborhood === "TBD" && !jam.full_address) || jam.full_address === "TBD";
-  const showFullAddress =
-    (jam.hasFullAccess || jam.visibility === "private") && !!jam.full_address && !isTbd;
+  // full_address is only filled in for a viewer jam_full_address lets see it.
+  const showFullAddress = !!jam.full_address && !isTbd;
   return {
     showFullAddress,
     mapQuery: isTbd ? null : showFullAddress ? jam.full_address! : jam.neighborhood,
@@ -283,7 +282,7 @@ export default function JamCard({
             <LocationText query={mapsUrl}>
               {dropUsCountry(showFullAddress ? dropVenueRepeatedInTitle(jam.full_address!, jam.name) : jam.neighborhood ?? "")}
             </LocationText>
-            {!showFullAddress && !isOfficial && jam.neighborhood !== "TBD" && (
+            {!showFullAddress && jam.visibility === "community" && jam.neighborhood !== "TBD" && (
               <p className="text-xs text-zinc-400 mt-0.5">Full address shown after RSVP</p>
             )}
           </div>

@@ -641,7 +641,6 @@ export default function JamDetailScreen() {
     : othersGoing;
   const timeStr = formatJamTime(jam.starts_at, jam.timezone);
   const isPast = jam.starts_at ? new Date(jam.starts_at) < new Date() : false;
-  const hasFullAccess = isHosting || myRsvpStatus === 'attending' || myInviteStatus === 'accepted' || jam.visibility === 'official' || jam.visibility === 'private';
 
   const attendeeIds = new Set(attendees.map(a => a.user_id));
   // One order can cover several people under a single name, so heads and rows differ.
@@ -735,18 +734,15 @@ export default function JamDetailScreen() {
 
           {jam.neighborhood || jam.full_address ? (
             <InfoRow icon="📍">
-              {/* Tapping the venue opens Maps, matching mobile web. Pointed at
-                  the most precise line this viewer is actually shown, so it
-                  cannot leak an address the screen withholds until RSVP. */}
-              <MaybeMapsLink
-                query={hasFullAccess ? jam.full_address ?? jam.neighborhood : jam.neighborhood}
-              >
+              {/* Tapping the venue opens Maps, matching mobile web. full_address
+                  is only loaded for viewers jam_full_address lets see it. */}
+              <MaybeMapsLink query={jam.full_address ?? jam.neighborhood}>
                 {jam.neighborhood ? (
                   <Text className="text-zinc-700 font-medium">{dropUsCountry(jam.neighborhood)}</Text>
                 ) : null}
-                {jam.full_address && hasFullAccess ? (
+                {jam.full_address ? (
                   <Text className="text-zinc-400 text-sm mt-0.5">{dropUsCountry(dropVenueRepeatedInTitle(jam.full_address, jam.name))}</Text>
-                ) : jam.full_address && !hasFullAccess ? (
+                ) : jam.visibility === 'community' && jam.neighborhood && jam.neighborhood !== 'TBD' ? (
                   <Text className="text-zinc-400 text-sm mt-0.5 italic">Full address shown after RSVP</Text>
                 ) : null}
               </MaybeMapsLink>

@@ -45,7 +45,7 @@ The native app (`apps/native`) is the mobile companion to the web app (`apps/web
   grant select, insert, update, delete on public.your_table to service_role;
   ```
 
-- `public.jams` uses **column-level** select grants for `anon`/`authenticated` (migration 174) so `full_address` stays private. A migration that adds a column to `jams` must also `grant select (new_col) on public.jams to anon, authenticated;` if clients read it, and clients must never `select('*')` from `jams`. Clients read the address only through `jam_full_address(jam_id)`
+- `public.jams` uses **column-level** select grants for `anon`/`authenticated` (migration 175) so `full_address` stays private. A migration that adds a column to `jams` must also `grant select (new_col) on public.jams to anon, authenticated;` if clients read it, and clients must never `select('*')` from `jams`. Clients read the address only through `jam_full_address(jam_id)`
 
 ## Querying Lists
 

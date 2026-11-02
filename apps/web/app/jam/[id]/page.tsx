@@ -228,7 +228,6 @@ export default async function JamPage({
     host: hostLabel,
     hostUsername,
     capacity: jam.capacity,
-    hasFullAccess,
   };
 
   // JamView seeds its RSVP state from these props once. Accepting an invite

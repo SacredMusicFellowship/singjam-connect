@@ -209,7 +209,6 @@ export default function EditJamForm({
       host: displayName,
       capacity: capacity ? parseInt(capacity, 10) : null,
       timezone,
-      hasFullAccess: true,
     };
     const card = <JamCard jam={previewJam} showMap={false} />;
     return (
