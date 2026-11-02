@@ -346,12 +346,12 @@ export default function JamDetailScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
 
-    const [jamResult, rsvpsResult, inviteResult, setsResult, meResult] = await Promise.all([
+    const [jamResult, rsvpsResult, inviteResult, setsResult, meResult, addressResult] = await Promise.all([
       supabase
         .from('jams')
         .select(`
           id, name, visibility, starts_at, ends_at, timezone,
-          neighborhood, full_address, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
+          neighborhood, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
           profiles!host_user_id ( display_name, username, avatar_url ),
           jam_genres ( genres ( name ) )
         `)
@@ -377,6 +377,9 @@ export default function JamDetailScreen() {
       user
         ? supabase.from('profiles').select('display_name, username, avatar_url, can_host_official').eq('id', user.id).single()
         : Promise.resolve({ data: null }),
+      // A public jam's street address is only for people who've RSVP'd
+      // (migration 173); the RSVP handlers reload, which fetches it.
+      supabase.rpc('jam_full_address', { jam_id_param: id }),
     ]);
 
     if (!jamResult.data) {
@@ -394,7 +397,7 @@ export default function JamDetailScreen() {
       ends_at: j.ends_at,
       timezone: j.timezone,
       neighborhood: j.neighborhood,
-      full_address: j.full_address,
+      full_address: (addressResult.data as string | null) ?? null,
       notes: j.notes,
       image_url: j.image_url,
       image_mobile_url: j.image_mobile_url,

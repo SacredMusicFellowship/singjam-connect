@@ -248,17 +248,22 @@ export default function EditJamScreen() {
   useEffect(() => {
     if (!id) return;
     async function load() {
-      const [jamResult, genreResult, themeResult, jamGenresResult, jamThemesResult] = await Promise.all([
-        supabase.from('jams').select('*').eq('id', id).single(),
+      const [jamResult, genreResult, themeResult, jamGenresResult, jamThemesResult, addressResult] = await Promise.all([
+        supabase
+          .from('jams')
+          .select('name, notes, visibility, capacity, guests_can_invite, timezone, starts_at, ends_at, neighborhood, image_url')
+          .eq('id', id)
+          .single(),
         supabase.from('genres').select('id, name').order('name'),
         supabase.from('themes').select('id, name').order('name'),
         supabase.from('jam_genres').select('genre_id').eq('jam_id', id),
         supabase.from('jam_themes').select('theme_id').eq('jam_id', id),
+        supabase.rpc('jam_full_address', { jam_id_param: id }),
       ]);
 
       if (!jamResult.data) { setNotFound(true); setLoadingJam(false); return; }
 
-      const j = jamResult.data as any;
+      const j = { ...(jamResult.data as any), full_address: (addressResult.data as string | null) ?? null };
       setName(j.name ?? '');
       setDescription(j.notes ?? '');
       setVisibility(j.visibility);

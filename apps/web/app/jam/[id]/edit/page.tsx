@@ -11,17 +11,18 @@ export default async function EditJamPage({ params }: { params: Promise<{ id: st
 
   if (!user) redirect(`/auth?next=${encodeURIComponent(`/jam/${id}/edit`)}`);
 
-  const [jamRes, genresRes, themesRes] = await Promise.all([
+  const [jamRes, genresRes, themesRes, addressRes] = await Promise.all([
     supabase
       .from("jams")
-      .select("id, short_code, name, visibility, starts_at, ends_at, neighborhood, full_address, notes, tickets_url, image_url, image_focal_point, image_desktop_url, image_mobile_url, image_list_url, image_crops, capacity, host_user_id, guests_can_invite, timezone")
+      .select("id, short_code, name, visibility, starts_at, ends_at, neighborhood, notes, tickets_url, image_url, image_focal_point, image_desktop_url, image_mobile_url, image_list_url, image_crops, capacity, host_user_id, guests_can_invite, timezone")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("jam_genres").select("genre_id").eq("jam_id", id),
     supabase.from("jam_themes").select("theme_id").eq("jam_id", id),
+    supabase.rpc("jam_full_address", { jam_id_param: id }),
   ]);
 
-  const jam = jamRes.data;
+  const jam = jamRes.data ? { ...jamRes.data, full_address: (addressRes.data as string | null) ?? null } : null;
   if (!jam) notFound();
   // The host, or for an official event anyone who can host one. See lib/jamAuthz.ts.
   if (!(await canEditJamById(supabaseAdmin(), id, user.id))) notFound();

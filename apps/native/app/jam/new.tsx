@@ -17,8 +17,8 @@ type LookupItem = { id: string; name: string };
 type PlaceSuggestion = { description: string; neighborhood: string; placeId: string };
 
 const VISIBILITY_OPTIONS: { value: 'community' | 'private'; label: string; desc: string }[] = [
-  { value: 'community', label: 'Community', desc: 'Open to all SingJam members' },
-  { value: 'private', label: 'Private', desc: 'Invite-only, visible only to invitees' },
+  { value: 'community', label: 'Community', desc: 'Listed for everyone. The full address goes only to people who RSVP' },
+  { value: 'private', label: 'Private', desc: 'Unlisted. Anyone with the link can see it, address included, and RSVP' },
 ];
 
 // ── Location modal ────────────────────────────────────────────────────────────
