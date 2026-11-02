@@ -107,7 +107,7 @@ function MyKeySelect({ value, onChange }: { value: string | null; onChange: (key
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || null)}
       className={`rounded-xl border px-2 py-1.5 text-xs sm:text-sm ${
-        value ? "border-amber-200 bg-amber-50 text-amber-800" : "border-zinc-200 text-zinc-500"
+        value ? "border-amber-200 bg-amber-50 text-amber-800" : "border-zinc-200"
       }`}
       aria-label="My key"
     >
