@@ -95,7 +95,7 @@ describe("addJamLeader", () => {
     const { admin, calls } = adminWith({
       jams: [{ data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria", last_name: "Lopez", username: "maria" } }, { data: [] }],
-      jam_leaders: [{ data: null }, { data: LEADER_ROW }],
+      jam_leaders: [{ data: null }, { data: null }, { data: LEADER_ROW }],
       ticket_orders: [{ data: [] }, { data: { id: "order-1" } }, { error: null }],
       tickets: [{ data: { qr_token: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } }],
     });
@@ -129,7 +129,7 @@ describe("addJamLeader", () => {
     const { admin, calls } = adminWith({
       jams: [{ data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria" } }, { data: [] }],
-      jam_leaders: [{ data: null }, { data: { ...LEADER_ROW, order_id: null } }],
+      jam_leaders: [{ data: null }, { data: null }, { data: { ...LEADER_ROW, order_id: null } }],
       ticket_orders: [bought, bought],
     });
 
@@ -138,7 +138,7 @@ describe("addJamLeader", () => {
     expect(res).toMatchObject({ ok: true, leader: { own_ticket_cents: 1500 } });
     expect(calls.tickets).toBeUndefined();
     expect(calls.ticket_orders.every((c: any) => c.insert.mock.calls.length === 0)).toBe(true);
-    expect(calls.jam_leaders[1].insert).toHaveBeenCalledWith(expect.objectContaining({ order_id: null }));
+    expect(calls.jam_leaders[2].insert).toHaveBeenCalledWith(expect.objectContaining({ order_id: null }));
     expect(mockSend.mock.calls[0][0].html).toContain("You already have a ticket");
   });
 
@@ -147,7 +147,7 @@ describe("addJamLeader", () => {
     const { admin, calls } = adminWith({
       jams: [{ data: OFFICIAL }, { data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria" } }, { data: null }, { data: [] }],
-      jam_leaders: [{ data: null }, { data: LEADER_ROW }],
+      jam_leaders: [{ data: null }, { data: null }, { data: LEADER_ROW }],
       ticket_orders: [{ data: [] }, { data: { id: "order-1" } }],
       tickets: [{ data: { qr_token: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } }],
     });
@@ -190,11 +190,36 @@ describe("addJamLeader", () => {
     expect(calls.ticket_orders).toBeUndefined();
   });
 
+  it("won't add a member who is already leading as a guest under their email", async () => {
+    const { admin, calls } = adminWith(
+      {
+        jams: [{ data: OFFICIAL }],
+        profiles: [{ data: { display_name: "Maria" } }],
+        jam_leaders: [{ data: null }, { data: { id: "leader-guest" } }],
+      },
+      "Maria@Example.com",
+    );
+    const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", userId: "member-1" });
+    expect(res).toEqual({ ok: false, status: 409, error: "Already leading this event" });
+    expect(calls.jam_leaders[1].eq).toHaveBeenCalledWith("email", "maria@example.com");
+    expect(calls.ticket_orders).toBeUndefined();
+  });
+
+  it("won't add the same guest email twice", async () => {
+    const { admin, calls } = adminWith({
+      jams: [{ data: OFFICIAL }],
+      jam_leaders: [{ data: { id: "leader-guest" } }],
+    });
+    const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", name: "Maria", email: "Maria@Example.com" });
+    expect(res).toEqual({ ok: false, status: 409, error: "Already leading this event" });
+    expect(calls.ticket_orders).toBeUndefined();
+  });
+
   it("cancels the comp it just made when a concurrent add wins the race", async () => {
     const { admin, calls } = adminWith({
       jams: [{ data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria" } }],
-      jam_leaders: [{ data: null }, { data: null, error: { code: "23505", message: "duplicate" } }],
+      jam_leaders: [{ data: null }, { data: null }, { data: null, error: { code: "23505", message: "duplicate" } }],
       ticket_orders: [{ data: [] }, { data: { id: "order-1" } }],
       tickets: [{ data: { qr_token: "x" } }],
     });
@@ -208,7 +233,7 @@ describe("addJamLeader", () => {
     const { admin } = adminWith({
       jams: [{ data: OFFICIAL }],
       profiles: [{ data: { display_name: "Maria" } }, { data: null }, { data: [] }],
-      jam_leaders: [{ data: null }, { data: LEADER_ROW }],
+      jam_leaders: [{ data: null }, { data: null }, { data: LEADER_ROW }],
       ticket_orders: [{ data: [] }, { data: { id: "order-1" } }],
       tickets: [{ data: { qr_token: "x" } }],
     });

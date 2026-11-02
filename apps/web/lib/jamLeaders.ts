@@ -205,13 +205,20 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
     ]);
     if (!profile) return { ok: false, status: 404, error: "Member not found" };
     name = fullName(profile);
-    email = authData.user?.email ?? null;
+    email = authData.user?.email?.toLowerCase() ?? null;
   }
 
-  const existing = userId
+  // A member can also already be leading as the guest the host typed in before
+  // they had an account, under the same email — that row was never linked to
+  // them, and adding them again would issue a second free ticket.
+  const byUser = userId
     ? await admin.from("jam_leaders").select("id").eq("jam_id", jam.id).eq("user_id", userId).maybeSingle()
-    : await admin.from("jam_leaders").select("id").eq("jam_id", jam.id).is("user_id", null).ilike("email", email!).maybeSingle();
-  if (existing.data) return { ok: false, status: 409, error: "Already leading this event" };
+    : { data: null };
+  const byEmail =
+    !byUser.data && email
+      ? await admin.from("jam_leaders").select("id").eq("jam_id", jam.id).is("user_id", null).eq("email", email).maybeSingle()
+      : { data: null };
+  if (byUser.data || byEmail.data) return { ok: false, status: 409, error: "Already leading this event" };
 
   // Someone who already got a ticket comes in on that one. A second, free one
   // would count them twice in Who's going; whether to refund what they paid is
