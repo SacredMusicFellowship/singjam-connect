@@ -457,17 +457,10 @@ export default function SetSongRow({
                       type="button"
                       onClick={() => isClickable && handleToggleLeader(p.user_id)}
                       disabled={!isClickable}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
                     >
                       {name}
-                      {personalKey && (
-                        <span
-                          className={`-mr-1 rounded-full px-1.5 text-[10px] font-semibold ${isLeader ? "bg-white text-amber-600" : "bg-white text-amber-800"}`}
-                          title={`${name}'s key`}
-                        >
-                          {personalKey}
-                        </span>
-                      )}
+                      {personalKey && <span className="font-normal opacity-80"> in {personalKey}</span>}
                     </button>
                   );
                 })}
