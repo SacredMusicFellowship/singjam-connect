@@ -19,3 +19,19 @@ export function normalizeSetSongNote(value: unknown): string | null | undefined 
   if (trimmed.length > SET_SONG_NOTE_MAX) return undefined;
   return trimmed || null;
 }
+
+// The set key to switch to when a song's leaders change: the personal key of
+// the first newly selected leader who has one. Undefined means leave the set
+// key alone (a leader was removed, or no new leader has a key).
+export function keyForNewLeaders(
+  previousLeaderIds: string[],
+  nextLeaderIds: string[],
+  personalKeys: Map<string, string>,
+): string | undefined {
+  for (const id of nextLeaderIds) {
+    if (previousLeaderIds.includes(id)) continue;
+    const key = personalKeys.get(id);
+    if (key) return key;
+  }
+  return undefined;
+}

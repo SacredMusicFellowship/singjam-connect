@@ -102,6 +102,47 @@ describe("PATCH /api/sets/[id]/songs/[songId]", () => {
     }
   });
 
+  // A query awaited directly (no terminal call), e.g. upsert(...) or select().eq().in().
+  function awaited(result: any) {
+    const c: any = {};
+    for (const m of ["select", "eq", "in", "upsert"]) c[m] = vi.fn().mockReturnValue(c);
+    c.maybeSingle = vi.fn().mockResolvedValue(result);
+    c.then = (resolve: any, reject: any) => Promise.resolve(result).then(resolve, reject);
+    return c;
+  }
+
+  it("switches the set key to a newly selected leader's own key", async () => {
+    const updateSpy = updateChain({ error: null });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: setRow }))
+      .mockReturnValueOnce(chain({ data: null }))
+      .mockReturnValueOnce(awaited({ data: { leader_user_ids: [] } })) // current leaders
+      .mockReturnValueOnce(awaited({ error: null })) // mark leaders as "lead"
+      .mockReturnValueOnce(awaited({ data: [{ user_id: "ana", key_note: "G" }] })) // their keys
+      .mockReturnValueOnce(updateSpy);
+    const res = await PATCH(req("set-1", "song-1", { leader_user_ids: ["ana"] }), {
+      params: Promise.resolve({ id: "set-1", songId: "song-1" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, key_note: "G" });
+    expect(updateSpy.update).toHaveBeenCalledWith({ leader_user_ids: ["ana"], key_note: "G" });
+  });
+
+  it("leaves the set key alone when a leader is only removed", async () => {
+    const updateSpy = updateChain({ error: null });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: setRow }))
+      .mockReturnValueOnce(chain({ data: null }))
+      .mockReturnValueOnce(awaited({ data: { leader_user_ids: ["ana", "ben"] } }))
+      .mockReturnValueOnce(awaited({ error: null }))
+      .mockReturnValueOnce(updateSpy);
+    const res = await PATCH(req("set-1", "song-1", { leader_user_ids: ["ana"] }), {
+      params: Promise.resolve({ id: "set-1", songId: "song-1" }),
+    });
+    expect(await res.json()).toEqual({ ok: true });
+    expect(updateSpy.update).toHaveBeenCalledWith({ leader_user_ids: ["ana"] });
+  });
+
   it("rejects a note over 200 characters without writing", async () => {
     mockAdminFrom
       .mockReturnValueOnce(chain({ data: setRow }))

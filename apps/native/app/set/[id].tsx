@@ -919,7 +919,11 @@ export default function SetDetailScreen() {
     const previous = songs;
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, leader_user_ids: newLeaderIds } : s));
     const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { leader_user_ids: newLeaderIds });
-    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update leaders.'); }
+    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update leaders.'); return; }
+    // A newly selected leader brings their own key (decided by the API).
+    if (json && 'key_note' in json) {
+      setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, key_note: json.key_note } : s));
+    }
   }
 
   async function handleReorder(data: SetSong[]) {

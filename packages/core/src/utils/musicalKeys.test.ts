@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isMusicalKey, normalizeSetSongNote, SET_SONG_NOTE_MAX } from "./musicalKeys";
+import { isMusicalKey, keyForNewLeaders, normalizeSetSongNote, SET_SONG_NOTE_MAX } from "./musicalKeys";
 
 describe("isMusicalKey", () => {
   it("accepts listed keys", () => {
@@ -34,5 +34,27 @@ describe("normalizeSetSongNote", () => {
 
   it("allows a note exactly at the limit", () => {
     expect(normalizeSetSongNote("x".repeat(SET_SONG_NOTE_MAX))).toHaveLength(SET_SONG_NOTE_MAX);
+  });
+});
+
+describe("keyForNewLeaders", () => {
+  const keys = new Map([["ana", "G"], ["ben", "D"]]);
+
+  it("uses the newly selected leader's key", () => {
+    expect(keyForNewLeaders([], ["ana"], keys)).toBe("G");
+    expect(keyForNewLeaders(["ana"], ["ana", "ben"], keys)).toBe("D");
+  });
+
+  it("leaves the key alone when a leader is only removed", () => {
+    expect(keyForNewLeaders(["ana", "ben"], ["ana"], keys)).toBeUndefined();
+    expect(keyForNewLeaders(["ana"], [], keys)).toBeUndefined();
+  });
+
+  it("leaves the key alone when the new leader has no personal key", () => {
+    expect(keyForNewLeaders([], ["cal"], keys)).toBeUndefined();
+  });
+
+  it("skips a new leader without a key in favour of one who has a key", () => {
+    expect(keyForNewLeaders([], ["cal", "ben"], keys)).toBe("D");
   });
 });

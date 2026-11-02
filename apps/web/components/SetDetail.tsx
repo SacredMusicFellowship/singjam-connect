@@ -559,7 +559,13 @@ export default function SetDetail({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ leader_user_ids: leaderUserIds }),
-    });
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json && "key_note" in json) {
+          setSongs((prev) => prev.map((s) => s.id === id ? { ...s, key_note: json.key_note } : s));
+        }
+      });
   }
 
   const participants: Participant[] = [
