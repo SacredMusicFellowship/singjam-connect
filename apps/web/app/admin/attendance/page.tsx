@@ -53,7 +53,12 @@ function groupByPerson(rows: AttendanceRow[]): Attendee[] {
   );
 }
 
-export default async function AdminAttendancePage() {
+export default async function AdminAttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email?: string }>;
+}) {
+  const linkedEmail = (await searchParams).email?.toLowerCase();
   // event_attendance holds guest emails and has no client policies, so it is
   // read with the service role — re-check the role rather than trust the layout.
   const [user, role] = await Promise.all([getServerUser(), getServerUserRole()]);
@@ -68,6 +73,9 @@ export default async function AdminAttendancePage() {
       .range(from, to) as any
   );
   const people = groupByPerson(rows);
+  // Linked from the Users tab: lead with that person, already expanded.
+  const linked = people.findIndex((p) => p.email === linkedEmail);
+  if (linked > 0) people.unshift(...people.splice(linked, 1));
   const eventCount = new Set(rows.map((r) => r.jams.id)).size;
 
   return (
@@ -97,7 +105,7 @@ export default async function AdminAttendancePage() {
         <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
           {people.map((p) => (
             <li key={p.email}>
-              <details className="group">
+              <details className="group" open={p.email === linkedEmail}>
                 <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-slate-50">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
