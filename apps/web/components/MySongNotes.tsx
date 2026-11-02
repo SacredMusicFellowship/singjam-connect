@@ -66,7 +66,7 @@ export default function MySongNotes({
           value={keyNote ?? ""}
           onChange={(e) => saveKey(e.target.value || null)}
           className={`rounded-xl border px-2 py-1.5 text-sm ${
-            keyNote ? "border-amber-200 bg-amber-50 text-amber-800 font-medium" : "border-slate-200 text-slate-500"
+            keyNote ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 text-slate-500"
           }`}
           aria-label="My key"
         >

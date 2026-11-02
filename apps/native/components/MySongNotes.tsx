@@ -65,7 +65,7 @@ export default function MySongNotes({ songId, userId }: { songId: string; userId
           className={`flex-row items-center rounded-xl border px-2.5 py-1.5 ${keyNote ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'}`}
           accessibilityLabel="My key"
         >
-          <Text className={`text-sm ${keyNote ? 'text-amber-800 font-medium' : 'text-slate-500'}`}>
+          <Text className={`text-sm ${keyNote ? 'text-amber-800' : 'text-slate-500'}`}>
             {keyNote ? `Key: ${keyNote}` : 'My key'}
           </Text>
           <Ionicons name="chevron-down" size={12} color={keyNote ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
