@@ -16,7 +16,6 @@ type AttendanceRow = {
   user_id: string | null;
   name: string | null;
   source: "checkin" | "ac_import";
-  first_timer_tagged_at: string | null;
   jams: AttendedEvent;
 };
 
@@ -27,12 +26,10 @@ function groupByPerson(rows: AttendanceRow[]): Attendee[] {
       email: row.email,
       name: null,
       isUser: false,
-      firstTimerTagged: false,
       events: [],
     };
     person.name ??= row.name;
     person.isUser ||= row.user_id !== null;
-    person.firstTimerTagged ||= row.first_timer_tagged_at !== null;
     person.events.push(row.jams);
     byEmail.set(row.email, person);
   }
@@ -56,7 +53,7 @@ export default async function AdminAttendancePage({
   const rows = await fetchAllRows<AttendanceRow>((from, to) =>
     admin
       .from("event_attendance")
-      .select("id, email, user_id, name, source, first_timer_tagged_at, jams!inner(id, name, starts_at, timezone)")
+      .select("id, email, user_id, name, source, jams!inner(id, name, starts_at, timezone)")
       .order("id")
       .range(from, to) as any
   );

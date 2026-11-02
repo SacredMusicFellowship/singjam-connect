@@ -9,7 +9,6 @@ export type Attendee = {
   email: string;
   name: string | null;
   isUser: boolean;
-  firstTimerTagged: boolean;
   // Newest first.
   events: AttendedEvent[];
 };
@@ -35,20 +34,13 @@ function lastDate(p: Attendee) {
 
 function Badges({ person }: { person: Attendee }) {
   return (
-    <>
-      <span
-        className={`rounded px-1.5 py-0.5 text-xs font-medium ${
-          person.isUser ? "bg-sky-50 text-sky-700" : "bg-zinc-100 text-zinc-600"
-        }`}
-      >
-        {person.isUser ? "User" : "Guest"}
-      </span>
-      {person.firstTimerTagged && (
-        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
-          First-timer tagged
-        </span>
-      )}
-    </>
+    <span
+      className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+        person.isUser ? "bg-sky-50 text-sky-700" : "bg-zinc-100 text-zinc-600"
+      }`}
+    >
+      {person.isUser ? "User" : "Guest"}
+    </span>
   );
 }
 
