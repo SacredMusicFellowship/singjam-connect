@@ -402,7 +402,7 @@ function SongRow({
                         className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${isLeader ? 'bg-amber-400' : 'bg-amber-100'}`}
                       >
                         <Text className={`text-xs font-medium ${isLeader ? 'text-white' : 'text-amber-700'}`}>
-                          {participantKeys.get(p.user_id) ? `${participantLabel(p)} · ${participantKeys.get(p.user_id)}` : participantLabel(p)}
+                          {participantKeys.get(p.user_id) ? `${participantLabel(p)} – ${participantKeys.get(p.user_id)}` : participantLabel(p)}
                         </Text>
                       </TouchableOpacity>
                     );

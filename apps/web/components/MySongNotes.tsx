@@ -1,22 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MUSICAL_KEYS, PERSONAL_SONG_NOTES_MAX } from "@singjam/core";
+import { PERSONAL_SONG_NOTES_MAX } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
-// The member's own key (shared with set-mates via user_songs) and private
-// notes (user_song_notes, readable only by them) for a song in their repertoire.
-export default function MySongNotes({
-  songId,
-  userId,
-  initialKey,
-}: {
-  songId: string;
-  userId: string;
-  initialKey: string | null;
-}) {
+// A member's private notes on a song in their repertoire (user_song_notes,
+// readable only by them).
+export default function MySongNotes({ songId, userId }: { songId: string; userId: string }) {
   const supabase = supabaseBrowser();
-  const [keyNote, setKeyNote] = useState(initialKey);
   const [notes, setNotes] = useState<string | null>(null);
   const [savedNotes, setSavedNotes] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -38,13 +29,6 @@ export default function MySongNotes({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songId, userId]);
 
-  async function saveKey(next: string | null) {
-    const prev = keyNote;
-    setKeyNote(next);
-    const { error } = await supabase.from("user_songs").update({ key_note: next }).eq("user_id", userId).eq("song_id", songId);
-    if (error) { setKeyNote(prev); alert(error.message); }
-  }
-
   async function saveNotes() {
     const next = (notes ?? "").trim();
     if (next === savedNotes) return;
@@ -60,23 +44,7 @@ export default function MySongNotes({
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">My key &amp; notes</h2>
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={keyNote ?? ""}
-          onChange={(e) => saveKey(e.target.value || null)}
-          className={`rounded-xl border px-2 py-1.5 text-sm ${
-            keyNote ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200"
-          }`}
-          aria-label="My key"
-        >
-          <option value="">My key</option>
-          {MUSICAL_KEYS.map((k) => (
-            <option key={k} value={k}>Key: {k}</option>
-          ))}
-        </select>
-        <span className="text-xs text-slate-400">Shown next to your name on set lists.</span>
-      </div>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">My notes</h2>
       {notes === null ? (
         <div className="h-20 animate-pulse rounded-lg bg-slate-100" />
       ) : (

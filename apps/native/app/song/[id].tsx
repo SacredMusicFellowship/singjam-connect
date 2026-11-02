@@ -21,6 +21,7 @@ import AddToSetModal from '@/components/AddToSetModal';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import MySongNotes from '@/components/MySongNotes';
+import KeyPicker from '@/components/KeyPicker';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -214,6 +215,8 @@ export default function SongDetailScreen() {
   const [song, setSong] = useState<SongDetail | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [myConfidence, setMyConfidence] = useState<string | null>(null);
+  const [myKey, setMyKey] = useState<string | null>(null);
+  const [keyPickerVisible, setKeyPickerVisible] = useState(false);
   const [jammers, setJammers] = useState<SongJammers | null>(null);
   const [popularity, setPopularity] = useState(0);
   const [singingVoice, setSingingVoice] = useState<string | null>(null);
@@ -268,7 +271,7 @@ export default function SongDetailScreen() {
         .eq('id', songId)
         .single(),
       user
-        ? supabase.from('user_songs').select('confidence')
+        ? supabase.from('user_songs').select('confidence, key_note')
             .eq('user_id', user.id).eq('song_id', songId).maybeSingle()
         : Promise.resolve({ data: null }),
       user
@@ -331,6 +334,7 @@ export default function SongDetailScreen() {
     });
 
     setMyConfidence((confidenceRes.data as any)?.confidence ?? null);
+    setMyKey((confidenceRes.data as any)?.key_note ?? null);
     const p = profileRes.data as any;
     setSingingVoice(p?.singing_voice ?? null);
     setIsAdmin(p?.role === 'admin');
@@ -514,6 +518,14 @@ export default function SongDetailScreen() {
 
   // Web repeats this control group at the top and bottom of the page, so a long
   // song doesn't force a scroll back up to change your role.
+  async function handleKeyChange(next: string | null) {
+    if (!myUserId) return;
+    const prev = myKey;
+    setMyKey(next);
+    const { error } = await supabase.from('user_songs').update({ key_note: next }).eq('user_id', myUserId).eq('song_id', songId);
+    if (error) { setMyKey(prev); Alert.alert('Error', error.message); }
+  }
+
   function renderRepertoireControls() {
     return (
       <View className="flex-row flex-wrap items-center gap-2 mt-4">
@@ -534,6 +546,18 @@ export default function SongDetailScreen() {
                 color={isLead ? '#92400e' : '#64748b'}
                 style={{ marginLeft: 4 }}
               />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setKeyPickerVisible(true)}
+              className={`flex-row items-center rounded-xl border px-3 py-2 ${
+                myKey ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'
+              }`}
+              accessibilityLabel="My key"
+            >
+              <Text className={`text-sm ${myKey ? 'text-amber-800' : 'text-slate-700'}`}>
+                {myKey ? `Key: ${myKey}` : 'My key'}
+              </Text>
+              <Ionicons name="chevron-down" size={12} color={myKey ? '#92400e' : '#64748b'} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setAddToSetVisible(true)}
@@ -664,6 +688,14 @@ export default function SongDetailScreen() {
         ) : null}
 
         {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} /> : null}
+
+        <KeyPicker
+          visible={keyPickerVisible}
+          title="My key"
+          current={myKey}
+          onClose={() => setKeyPickerVisible(false)}
+          onSelect={handleKeyChange}
+        />
 
         {/* Recordings — web groups the written year in here rather than the header */}
         {(song.recordingArtists.length > 0 || song.year_written) ? (

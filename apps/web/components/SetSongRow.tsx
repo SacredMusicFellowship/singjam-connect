@@ -407,7 +407,7 @@ export default function SetSongRow({
                   const firstName = p.display_name ?? p.username ?? "?";
                   const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                   const personalKey = participantKeys.get(p.user_id);
-                  const label = personalKey ? `${name} · ${personalKey}` : name;
+                  const label = personalKey ? `${name} – ${personalKey}` : name;
                   const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
                   return (
                     <button

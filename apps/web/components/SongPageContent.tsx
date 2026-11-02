@@ -7,6 +7,7 @@ import { formatComposersLong, sortByLastName, setsAcceptingSongs } from "@singja
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
+import MyKeySelect from "@/components/MyKeySelect";
 import AddToSetPanel from "@/components/AddToSetPanel";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
@@ -193,6 +194,14 @@ export default function SongPageContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  async function handleKeyChange(next: string | null) {
+    if (!userId || !data) return;
+    const prev = myKey;
+    setMyKey(next);
+    const { error } = await supabase.from("user_songs").update({ key_note: next }).eq("user_id", userId).eq("song_id", data.song.id);
+    if (error) { setMyKey(prev); alert(error.message); }
+  }
+
   function handleConfidenceChange(level: string | null) {
     setConfidence(level);
     if (!currentUserEntry) return;
@@ -295,6 +304,7 @@ export default function SongPageContent() {
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
+              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
               {confidence && (
                 <AddToSetPanel
                   songId={song.id}
@@ -334,7 +344,7 @@ export default function SongPageContent() {
       </div>
 
       {confidence && userId && (
-        <MySongNotes key={song.id} songId={song.id} userId={userId} initialKey={myKey} />
+        <MySongNotes key={song.id} songId={song.id} userId={userId} />
       )}
 
       {(recordingArtists.length > 0 || song.year_written) && (
@@ -534,6 +544,7 @@ export default function SongPageContent() {
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
+            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
             {confidence && (
               <AddToSetPanel
                 songId={song.id}
