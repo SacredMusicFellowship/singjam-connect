@@ -20,6 +20,9 @@ import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import AddToSetModal from '@/components/AddToSetModal';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
+import MySongNotes from '@/components/MySongNotes';
+import KeyPicker from '@/components/KeyPicker';
+import UgBackTip from '@/components/UgBackTip';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -213,6 +216,8 @@ export default function SongDetailScreen() {
   const [song, setSong] = useState<SongDetail | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [myConfidence, setMyConfidence] = useState<string | null>(null);
+  const [myKey, setMyKey] = useState<string | null>(null);
+  const [keyPickerVisible, setKeyPickerVisible] = useState(false);
   const [jammers, setJammers] = useState<SongJammers | null>(null);
   const [popularity, setPopularity] = useState(0);
   const [singingVoice, setSingingVoice] = useState<string | null>(null);
@@ -267,7 +272,7 @@ export default function SongDetailScreen() {
         .eq('id', songId)
         .single(),
       user
-        ? supabase.from('user_songs').select('confidence')
+        ? supabase.from('user_songs').select('confidence, key_note')
             .eq('user_id', user.id).eq('song_id', songId).maybeSingle()
         : Promise.resolve({ data: null }),
       user
@@ -330,6 +335,7 @@ export default function SongDetailScreen() {
     });
 
     setMyConfidence((confidenceRes.data as any)?.confidence ?? null);
+    setMyKey((confidenceRes.data as any)?.key_note ?? null);
     const p = profileRes.data as any;
     setSingingVoice(p?.singing_voice ?? null);
     setIsAdmin(p?.role === 'admin');
@@ -410,19 +416,21 @@ export default function SongDetailScreen() {
     addToRepertoire('learn');
   }
 
-  // Web exposes Remove as its own button next to the role control, so it lives
-  // outside the sheet here too — the sheet keeps its entry as well, matching how
-  // the repertoire cards behave.
+  // Removing is rare, so like web it lives only at the foot of the page. The key
+  // goes with the user_songs row; migration 179's trigger deletes the notes.
   function handleRemoveFromRepertoire() {
     if (!myUserId || !song) return;
     const songId = song.id;
     const uid = myUserId;
 
-    Alert.alert('Remove from repertoire', `Remove "${song.title}" from your repertoire?`, [
+    Alert.alert('Remove from repertoire', `Remove "${song.title}" from your repertoire? Your key and notes for it will be deleted.`, [
       {
-        text: 'Remove', style: 'destructive', onPress: () => applyConfidence(null, () =>
-          supabase.from('user_songs').delete().eq('user_id', uid).eq('song_id', songId)
-        ),
+        text: 'Remove', style: 'destructive', onPress: () => {
+          setMyKey(null);
+          applyConfidence(null, () =>
+            supabase.from('user_songs').delete().eq('user_id', uid).eq('song_id', songId)
+          );
+        },
       },
       { text: 'Cancel', style: 'cancel' },
     ]);
@@ -449,7 +457,6 @@ export default function SongDetailScreen() {
         { label: 'Lead', onPress: () => update('lead') },
         { label: 'Support', onPress: () => update('support') },
         { label: 'Learn', onPress: () => update('learn') },
-        { label: 'Remove from repertoire', destructive: true, onPress: handleRemoveFromRepertoire },
       ],
     });
   }
@@ -513,6 +520,14 @@ export default function SongDetailScreen() {
 
   // Web repeats this control group at the top and bottom of the page, so a long
   // song doesn't force a scroll back up to change your role.
+  async function handleKeyChange(next: string | null) {
+    if (!myUserId) return;
+    const prev = myKey;
+    setMyKey(next);
+    const { error } = await supabase.from('user_songs').update({ key_note: next }).eq('user_id', myUserId).eq('song_id', songId);
+    if (error) { setMyKey(prev); Alert.alert('Error', error.message); }
+  }
+
   function renderRepertoireControls() {
     return (
       <View className="flex-row flex-wrap items-center gap-2 mt-4">
@@ -534,18 +549,27 @@ export default function SongDetailScreen() {
                 style={{ marginLeft: 4 }}
               />
             </TouchableOpacity>
+            <View className="flex-row items-center gap-1.5">
+              <Text className="text-sm text-slate-700">My key</Text>
+              <TouchableOpacity
+                onPress={() => setKeyPickerVisible(true)}
+                className={`flex-row items-center rounded-xl border px-3 py-2 ${
+                  myKey ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'
+                }`}
+                accessibilityLabel="My key"
+              >
+                <Text className={`text-sm ${myKey ? 'text-amber-800' : 'text-slate-700'}`}>
+                  {myKey ?? '—'}
+                </Text>
+                <Ionicons name="chevron-down" size={12} color={myKey ? '#92400e' : '#64748b'} style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               onPress={() => setAddToSetVisible(true)}
               className="flex-row items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
               <Ionicons name="list-outline" size={14} color="#64748b" />
               <Text className="text-slate-600 text-sm">Add to set</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleRemoveFromRepertoire}
-              className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5"
-            >
-              <Text className="text-xs text-slate-400">Remove</Text>
             </TouchableOpacity>
           </>
         ) : (
@@ -605,6 +629,7 @@ export default function SongDetailScreen() {
         // component, and NativeWind's className handling for it is unproven.
         style={{ flex: 1, backgroundColor: 'white' }}
         contentContainerStyle={{ paddingBottom: 60 }}
+        keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -641,6 +666,31 @@ export default function SongDetailScreen() {
           ) : null}
 
           {renderRepertoireControls()}
+
+          {song.chord_chart_url || song.genius_url ? (
+            <View className="flex-row flex-wrap gap-2 mt-3">
+              {song.chord_chart_url ? (
+                <TouchableOpacity
+                  onPress={() => openUrl(song.chord_chart_url!)}
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
+                >
+                  <Text className="text-slate-600 text-sm font-medium">Chords</Text>
+                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
+                </TouchableOpacity>
+              ) : null}
+              {song.genius_url ? (
+                <TouchableOpacity
+                  onPress={() => openUrl(song.genius_url!)}
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
+                >
+                  <Text className="text-slate-600 text-sm font-medium">Lyrics</Text>
+                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+          {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} className="mt-3" /> : null}
+          {song.chord_chart_url ? <UgBackTip className="mt-3" /> : null}
         </View>
 
         {/* Songwriters */}
@@ -661,6 +711,14 @@ export default function SongDetailScreen() {
             ) : null}
           </View>
         ) : null}
+
+        <KeyPicker
+          visible={keyPickerVisible}
+          title="My key"
+          current={myKey}
+          onClose={() => setKeyPickerVisible(false)}
+          onSelect={handleKeyChange}
+        />
 
         {/* Recordings — web groups the written year in here rather than the header */}
         {(song.recordingArtists.length > 0 || song.year_written) ? (
@@ -714,7 +772,7 @@ export default function SongDetailScreen() {
         ) : null}
 
         {/* Lyrics card */}
-        {(song.first_line || song.hook || song.genius_url || song.chord_chart_url) ? (
+        {(song.first_line || song.hook) ? (
           <View className="px-4 py-4 border-b border-slate-100">
             <SectionHeader title="Lyrics" />
             {song.first_line ? (
@@ -724,31 +782,11 @@ export default function SongDetailScreen() {
               </Text>
             ) : null}
             {song.hook ? (
-              <Text className="text-sm text-slate-700 mb-3">
+              <Text className="text-sm text-slate-700">
                 <Text className="font-medium text-slate-500">Hook: </Text>
                 <Text className="italic">{song.hook}</Text>
               </Text>
             ) : null}
-            <View className="flex-row flex-wrap gap-2 mt-1">
-              {song.genius_url ? (
-                <TouchableOpacity
-                  onPress={() => openUrl(song.genius_url!)}
-                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
-                >
-                  <Text className="text-slate-600 text-sm font-medium">Full lyrics</Text>
-                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
-                </TouchableOpacity>
-              ) : null}
-              {song.chord_chart_url ? (
-                <TouchableOpacity
-                  onPress={() => openUrl(song.chord_chart_url!)}
-                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
-                >
-                  <Text className="text-slate-600 text-sm font-medium">Chord chart</Text>
-                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
           </View>
         ) : null}
 
@@ -836,6 +874,16 @@ export default function SongDetailScreen() {
               {myConfidence ? '← Back to repertoire' : '← Back to search'}
             </Text>
           </TouchableOpacity>
+          {myConfidence ? (
+            <View className="mt-6 pt-4 pb-6 border-t border-slate-100">
+              <TouchableOpacity
+                onPress={handleRemoveFromRepertoire}
+                className="self-start rounded-xl border border-slate-200 bg-white px-2.5 py-1.5"
+              >
+                <Text className="text-xs text-slate-400">Remove from my repertoire</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
       </Animated.ScrollView>

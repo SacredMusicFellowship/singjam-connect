@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
+import { SET_SONG_NOTE_MAX } from "@singjam/core";
 import {
   MUSICAL_KEYS,
   YoutubeIcon,
@@ -26,11 +27,13 @@ export default function SetSongRow({
   participants,
   hasEligible,
   participantKnowledge,
+  participantKeys,
   currentUserId,
   currentUserSingingVoice,
   myConfidence,
   onMediaAdded,
   onKeyChanged,
+  onNotesChanged,
   onLeadersChanged,
   onAddToRepertoire,
   onVoiceUpdated,
@@ -47,12 +50,15 @@ export default function SetSongRow({
   participants: Participant[];
   hasEligible: boolean;
   participantKnowledge: Map<string, string>;
+  /** The key each participant plays this song in, from their repertoire. */
+  participantKeys: Map<string, string>;
   currentUserId: string | null;
   currentUserSingingVoice: string | null;
   /** The viewer's own role for this song, if it's in their repertoire. */
   myConfidence: string | null;
   onMediaAdded: (songId: string, field: "youtube_url" | "spotify_url" | "chord_chart_url", url: string) => void;
   onKeyChanged: (id: string, key: string | null) => void;
+  onNotesChanged: (id: string, notes: string | null) => void;
   onLeadersChanged: (id: string, leaderUserIds: string[]) => void;
   onAddToRepertoire: (songId: string, confidence: string) => Promise<void>;
   onVoiceUpdated: (voice: string) => void;
@@ -66,6 +72,10 @@ export default function SetSongRow({
   const [pickingRepertoire, setPickingRepertoire] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesInput, setNotesInput] = useState("");
+  // Set when Cancel/Escape closes the editor, so the input's blur doesn't save.
+  const discardNotesRef = useRef(false);
   const [youtubeSearchResults, setYoutubeSearchResults] = useState<Array<{ videoId: string; title: string; channel: string; url: string }>>([]);
   const [youtubeSearching, setYoutubeSearching] = useState(false);
 
@@ -133,6 +143,25 @@ export default function SetSongRow({
   async function handleSave() {
     if (!addingField || !urlInput.trim()) return;
     await saveMedia(addingField, urlInput.trim());
+  }
+
+  function startEditingNotes() {
+    discardNotesRef.current = false;
+    setNotesInput(song.notes ?? "");
+    setEditingNotes(true);
+  }
+
+  function saveNotes(value: string = notesInput) {
+    if (discardNotesRef.current) return;
+    discardNotesRef.current = true;
+    setEditingNotes(false);
+    const next = value.trim() || null;
+    if (next !== song.notes) onNotesChanged(song.id, next);
+  }
+
+  function cancelNotes() {
+    discardNotesRef.current = true;
+    setEditingNotes(false);
   }
 
   function handleToggleLeader(userId: string) {
@@ -209,6 +238,70 @@ export default function SetSongRow({
               <span className="text-xs font-semibold text-zinc-900">{song.songs.tonality}</span>
             )}
           </div>
+          {editingNotes ? (
+            <div className="mt-1.5 max-w-sm space-y-1.5">
+              <input
+                value={notesInput}
+                onChange={(e) => setNotesInput(e.target.value)}
+                onBlur={() => saveNotes()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveNotes();
+                  if (e.key === "Escape") cancelNotes();
+                }}
+                maxLength={SET_SONG_NOTE_MAX}
+                placeholder="e.g. Capo 3, start soft"
+                aria-label="Note for this song"
+                autoFocus
+                className="w-full rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+              />
+              {/* onMouseDown keeps the input from blurring (and saving) before the click lands. */}
+              <div className="flex items-center gap-2">
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => saveNotes()}
+                  className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
+                >
+                  Save
+                </button>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={cancelNotes}
+                  className="text-xs text-zinc-500 hover:text-zinc-700"
+                >
+                  Cancel
+                </button>
+                {song.notes && (
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => saveNotes("")}
+                    className="text-xs text-zinc-400 hover:text-red-500"
+                  >
+                    Remove note
+                  </button>
+                )}
+                <span className="ml-auto text-[10px] text-zinc-400">{notesInput.length}/{SET_SONG_NOTE_MAX}</span>
+              </div>
+            </div>
+          ) : !isPublicViewer && song.notes ? (
+            <div className="mt-1.5 flex max-w-sm items-start gap-1.5 rounded-lg bg-zinc-50 px-2.5 py-1.5">
+              <svg className="mt-px h-3.5 w-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+              <p className="flex-1 min-w-0 text-xs text-zinc-700 break-words">{song.notes}</p>
+              {canEdit && (
+                <button onClick={startEditingNotes} className="shrink-0 text-xs font-medium text-amber-600 hover:text-amber-500">
+                  Edit
+                </button>
+              )}
+            </div>
+          ) : canEdit ? (
+            <button
+              onClick={startEditingNotes}
+              className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5 text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-colors"
+            >
+              + Add note
+            </button>
+          ) : null}
           {(!myConfidence || learning) && (currentUserId || signInUrl) && (
             !currentUserId ? (
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -355,7 +448,8 @@ export default function SetSongRow({
                   const isLeader = leaderIds.includes(p.user_id);
                   const isClickable = canEdit && participantKnowledge.get(p.user_id) === "lead";
                   const firstName = p.display_name ?? p.username ?? "?";
-                  const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                  const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                  const personalKey = participantKeys.get(p.user_id);
                   const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
                   return (
                     <button
@@ -365,7 +459,8 @@ export default function SetSongRow({
                       disabled={!isClickable}
                       className={`rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
                     >
-                      {label}
+                      {name}
+                      {personalKey && ` (${personalKey})`}
                     </button>
                   );
                 })}

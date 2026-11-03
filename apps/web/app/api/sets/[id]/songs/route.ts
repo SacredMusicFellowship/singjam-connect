@@ -107,7 +107,7 @@ export async function POST(
     added_by_user_id: user.id,
   }));
   const columns =
-    "id, song_id, position, key_note, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, song_recording_artists(position, youtube_url, spotify_url))";
+    "id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, song_recording_artists(position, youtube_url, spotify_url))";
 
   // Single-song adds keep reporting a duplicate as 409 — web surfaces it as
   // "Already in that set". A batch can't: one song the caller already has would
@@ -127,7 +127,7 @@ export async function POST(
 
     const { data: knowledge } = await admin
       .from("user_songs")
-      .select("user_id, song_id, confidence")
+      .select("user_id, song_id, confidence, key_note")
       .eq("song_id", ids[0]);
 
     return NextResponse.json({ song: data, knowledge: knowledge ?? [] });
@@ -142,7 +142,7 @@ export async function POST(
 
   const { data: knowledge } = await admin
     .from("user_songs")
-    .select("user_id, song_id, confidence")
+    .select("user_id, song_id, confidence, key_note")
     .in("song_id", ids);
 
   return NextResponse.json({ songs: data ?? [], added: (data ?? []).length, knowledge: knowledge ?? [] });

@@ -6,6 +6,9 @@ import Link from "next/link";
 import { formatComposersLong, sortByLastName, setsAcceptingSongs } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
+import MySongNotes from "@/components/MySongNotes";
+import MyKeySelect from "@/components/MyKeySelect";
+import UgBackTip from "@/components/UgBackTip";
 import AddToSetPanel from "@/components/AddToSetPanel";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
@@ -102,6 +105,10 @@ export default function SongPageContent() {
   const [data, setData] = useState<SongData | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [confidence, setConfidence] = useState<string | null>(null);
+  const [myKey, setMyKey] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [songUsers, setSongUsers] = useState<SongUsers | null>(null);
   const [songUsersLoading, setSongUsersLoading] = useState(false);
   const [currentUserEntry, setCurrentUserEntry] = useState<JammerEntry | null>(null);
@@ -150,7 +157,7 @@ export default function SongPageContent() {
           ? supabase.from("profiles").select("role, singing_voice, display_name, last_name, username").eq("id", user.id).single()
           : Promise.resolve({ data: null }),
         user
-          ? supabase.from("user_songs").select("confidence").eq("user_id", user.id).eq("song_id", song.id).maybeSingle()
+          ? supabase.from("user_songs").select("confidence, key_note").eq("user_id", user.id).eq("song_id", song.id).maybeSingle()
           : Promise.resolve({ data: null }),
         fetch(`/api/songs/${song.id}/count`).then((r) => r.json()),
       ]);
@@ -166,6 +173,8 @@ export default function SongPageContent() {
         });
       }
       setConfidence(loadedConfidence);
+      setMyKey((userSongRes.data as any)?.key_note ?? null);
+      setUserId(user?.id ?? null);
       setData({
         song,
         isAdmin,
@@ -187,6 +196,28 @@ export default function SongPageContent() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // Deleting the user_songs row takes the key with it; migration 179's trigger
+  // deletes the private notes.
+  async function handleRemoveFromRepertoire() {
+    if (!userId || !data) return;
+    setRemoving(true);
+    const { error } = await supabase.from("user_songs").delete().eq("user_id", userId).eq("song_id", data.song.id);
+    setRemoving(false);
+    if (error) { alert(error.message); return; }
+    setConfirmingRemove(false);
+    setMyKey(null);
+    handleConfidenceChange(null);
+    router.refresh();
+  }
+
+  async function handleKeyChange(next: string | null) {
+    if (!userId || !data) return;
+    const prev = myKey;
+    setMyKey(next);
+    const { error } = await supabase.from("user_songs").update({ key_note: next }).eq("user_id", userId).eq("song_id", data.song.id);
+    if (error) { setMyKey(prev); alert(error.message); }
+  }
 
   function handleConfidenceChange(level: string | null) {
     setConfidence(level);
@@ -290,6 +321,7 @@ export default function SongPageContent() {
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
+              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
               {confidence && (
                 <AddToSetPanel
                   songId={song.id}
@@ -309,6 +341,24 @@ export default function SongPageContent() {
               </Link>
             )}
           </div>
+          {(song.chord_chart_url || song.genius_url) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {song.chord_chart_url && (
+                <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+                  Chords ↗
+                </a>
+              )}
+              {song.genius_url && (
+                <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+                  Lyrics ↗
+                </a>
+              )}
+            </div>
+          )}
+          {confidence && userId && <MySongNotes key={song.id} songId={song.id} userId={userId} className="mt-3" />}
+          {song.chord_chart_url && <UgBackTip className="mt-3" />}
         </div>
 
         {(composers.length > 0 || lyricists.length > 0) && (
@@ -425,7 +475,7 @@ export default function SongPageContent() {
         );
       })()}
 
-      {(song.first_line || song.hook || song.genius_url || song.chord_chart_url) && (
+      {(song.first_line || song.hook) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
           {song.first_line && (
@@ -439,22 +489,6 @@ export default function SongPageContent() {
               <span className="font-medium text-slate-500">Hook: </span>
               <em>{song.hook}</em>
             </p>
-          )}
-          {(song.genius_url || song.chord_chart_url) && (
-            <div className="flex gap-2 pt-1">
-              {song.genius_url && (
-                <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Full lyrics ↗
-                </a>
-              )}
-              {song.chord_chart_url && (
-                <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Chord chart ↗
-                </a>
-              )}
-            </div>
           )}
         </section>
       )}
@@ -525,6 +559,7 @@ export default function SongPageContent() {
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
+            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
             {confidence && (
               <AddToSetPanel
                 songId={song.id}
@@ -549,6 +584,37 @@ export default function SongPageContent() {
           {confidence ? "← Back to repertoire" : "← Back to search"}
         </Link>
       </div>
+
+      {confidence && userId && (
+        <div className="border-t border-slate-100 pt-4 text-center sm:text-left">
+          {confirmingRemove ? (
+            <div className="inline-flex flex-col items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 sm:items-start">
+              <p className="text-sm text-red-700">
+                Remove &ldquo;{song.title}&rdquo; from your repertoire? Your key and notes for it will be deleted.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleRemoveFromRepertoire}
+                  disabled={removing}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+                >
+                  {removing ? "Removing…" : "Remove"}
+                </button>
+                <button onClick={() => setConfirmingRemove(false)} className="text-sm text-slate-500 hover:text-slate-700">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmingRemove(true)}
+              className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+            >
+              Remove from my repertoire
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

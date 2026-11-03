@@ -15,6 +15,7 @@ import { SortDropdown } from "@/components/SortDropdown";
 import { FilterPanel } from "@/components/FilterPanel";
 import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
+import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
 import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
@@ -38,6 +39,7 @@ type Item = {
   song_id: string;
   slug: string | null;
   confidence: string | null;
+  key_note: string | null;
   updated_at: string | null;
   title: string;
   display_artist: string | null;
@@ -305,6 +307,7 @@ export default function RepertoirePage() {
           song_id: r.song_id,
           slug: r.slug ?? null,
           confidence: r.confidence,
+          key_note: r.key_note ?? null,
           updated_at: r.updated_at,
           title: r.title,
           display_artist: r.display_artist,
@@ -530,18 +533,21 @@ export default function RepertoirePage() {
     });
   };
 
-  const removeFromRepertoire = (song_id: string) => {
+  const updateKey = (song_id: string, next: string | null) => {
     if (!userId) return;
-    const prevItems = items;
+    const prev = items.find((x) => x.song_id === song_id)?.key_note ?? null;
     itemsMutatedRef.current = true;
-    setItems((prev) => prev.filter((x) => x.song_id !== song_id));
+    setItems((cur) => cur.map((it) => (it.song_id === song_id ? { ...it, key_note: next } : it)));
     startTransition(async () => {
       const { error } = await supabase
         .from("user_songs")
-        .delete()
+        .update({ key_note: next })
         .eq("user_id", userId)
         .eq("song_id", song_id);
-      if (error) { alert(error.message); setItems(prevItems); }
+      if (error) {
+        setItems((cur) => cur.map((it) => (it.song_id === song_id ? { ...it, key_note: prev } : it)));
+        alert(error.message);
+      }
     });
   };
 
@@ -560,6 +566,7 @@ export default function RepertoirePage() {
         song_id: songId,
         slug: result.slug ?? null,
         confidence,
+        key_note: null,
         updated_at: new Date().toISOString(),
         title: result.title,
         display_artist: result.display_artist ?? null,
@@ -792,6 +799,7 @@ export default function RepertoirePage() {
                               </option>
                             ))}
                           </select>
+                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} />
                           {userSets.length > 0 && (
                             <AddToSetPanel
                               songId={result.song_id}
@@ -805,12 +813,6 @@ export default function RepertoirePage() {
                           <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
                             View
                           </Link>
-                          <button
-                            onClick={() => removeFromRepertoire(inRep.song_id)}
-                            className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-                          >
-                            Remove
-                          </button>
                         </>
                       ) : isPicking ? (
                         <ConfidencePicker
@@ -1107,6 +1109,8 @@ export default function RepertoirePage() {
                       ))}
                     </select>
 
+                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} />
+
                     {userSets.length > 0 && (
                       <AddToSetPanel
                         songId={it.song_id}
@@ -1125,13 +1129,6 @@ export default function RepertoirePage() {
                     >
                       View
                     </Link>
-
-                    <button
-                      onClick={() => removeFromRepertoire(it.song_id)}
-                      className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-                    >
-                      Remove
-                    </button>
                   </div>
                 </div>
               ))}

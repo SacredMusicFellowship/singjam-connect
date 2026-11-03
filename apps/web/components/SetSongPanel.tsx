@@ -133,6 +133,7 @@ export default function SetSongPanel({
       song_id: songId,
       position: currentSongIds.length,
       key_note: null,
+      notes: null,
       leader_user_ids: [],
       songs: {
         title: hint.title,
