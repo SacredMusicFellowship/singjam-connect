@@ -674,7 +674,7 @@ export default function SongDetailScreen() {
                   onPress={() => openUrl(song.chord_chart_url!)}
                   className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
                 >
-                  <Text className="text-slate-600 text-sm font-medium">Chord chart</Text>
+                  <Text className="text-slate-600 text-sm font-medium">Chords</Text>
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
                 </TouchableOpacity>
               ) : null}
@@ -683,7 +683,7 @@ export default function SongDetailScreen() {
                   onPress={() => openUrl(song.genius_url!)}
                   className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
                 >
-                  <Text className="text-slate-600 text-sm font-medium">Full lyrics</Text>
+                  <Text className="text-slate-600 text-sm font-medium">Lyrics</Text>
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
                 </TouchableOpacity>
               ) : null}

@@ -346,13 +346,13 @@ export default function SongPageContent() {
               {song.chord_chart_url && (
                 <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Chord chart ↗
+                  Chords ↗
                 </a>
               )}
               {song.genius_url && (
                 <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Full lyrics ↗
+                  Lyrics ↗
                 </a>
               )}
             </div>
