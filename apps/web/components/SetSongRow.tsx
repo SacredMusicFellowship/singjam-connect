@@ -302,51 +302,6 @@ export default function SetSongRow({
               + Add note
             </button>
           ) : null}
-          {(!myConfidence || learning) && (currentUserId || signInUrl) && (
-            !currentUserId ? (
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <a
-                  href={signInUrl}
-                  className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
-                >
-                  I know this song!
-                </a>
-                <a href={signInUrl} className="text-xs text-indigo-600 hover:underline">
-                  Want to learn it
-                </a>
-              </div>
-            ) : pickingRepertoire ? (
-              <div className="mt-1.5">
-                <ConfidencePicker
-                  variant="compact"
-                  singingVoice={currentUserSingingVoice}
-                  onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setPickingRepertoire(false); }}
-                  onCancel={() => setPickingRepertoire(false)}
-                  offerLearn={false}
-                  onVoiceUpdated={onVoiceUpdated}
-                />
-              </div>
-            ) : (
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => setPickingRepertoire(true)}
-                  className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
-                >
-                  I know this song!
-                </button>
-                {/* Already learning it: the badge by the title says so, and
-                    "I know this song!" is how they move up. */}
-                {!learning && (
-                  <button
-                    onClick={() => onAddToRepertoire(song.song_id, "learn")}
-                    className="text-xs text-indigo-600 hover:underline"
-                  >
-                    Want to learn it
-                  </button>
-                )}
-              </div>
-            )
-          )}
         </div>
 
         <div className="shrink-0 flex items-center gap-0.5">
@@ -432,6 +387,54 @@ export default function SetSongRow({
           ) : null}
         </div>
       </div>
+
+      {/* Below the title row rather than inside it, so on a phone both buttons
+          get the card's full width and sit side by side. */}
+      {(!myConfidence || learning) && (currentUserId || signInUrl) && (
+        !currentUserId ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={signInUrl}
+              className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
+            >
+              I know this song!
+            </a>
+            <a href={signInUrl} className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors">
+              Want to learn it
+            </a>
+          </div>
+        ) : pickingRepertoire ? (
+          <div>
+            <ConfidencePicker
+              variant="compact"
+              singingVoice={currentUserSingingVoice}
+              onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setPickingRepertoire(false); }}
+              onCancel={() => setPickingRepertoire(false)}
+              offerLearn={false}
+              onVoiceUpdated={onVoiceUpdated}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setPickingRepertoire(true)}
+              className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
+            >
+              I know this song!
+            </button>
+            {/* Already learning it: the badge by the title says so, and
+                "I know this song!" is how they move up. */}
+            {!learning && (
+              <button
+                onClick={() => onAddToRepertoire(song.song_id, "learn")}
+                className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors"
+              >
+                Want to learn it
+              </button>
+            )}
+          </div>
+        )
+      )}
 
       {(leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0)) && (
         <div className="space-y-1">
