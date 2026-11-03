@@ -22,6 +22,7 @@ import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import MySongNotes from '@/components/MySongNotes';
 import KeyPicker from '@/components/KeyPicker';
+import UgBackTip from '@/components/UgBackTip';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -669,6 +670,30 @@ export default function SongDetailScreen() {
           ) : null}
 
           {renderRepertoireControls()}
+
+          {song.chord_chart_url || song.genius_url ? (
+            <View className="flex-row flex-wrap gap-2 mt-3">
+              {song.chord_chart_url ? (
+                <TouchableOpacity
+                  onPress={() => openUrl(song.chord_chart_url!)}
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
+                >
+                  <Text className="text-slate-600 text-sm font-medium">Chord chart</Text>
+                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
+                </TouchableOpacity>
+              ) : null}
+              {song.genius_url ? (
+                <TouchableOpacity
+                  onPress={() => openUrl(song.genius_url!)}
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
+                >
+                  <Text className="text-slate-600 text-sm font-medium">Full lyrics</Text>
+                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+          {song.chord_chart_url ? <UgBackTip className="mt-3" /> : null}
         </View>
 
         {/* Songwriters */}
@@ -700,31 +725,6 @@ export default function SongDetailScreen() {
           onSelect={handleKeyChange}
         />
 
-        {/* Recordings — web groups the written year in here rather than the header */}
-        {(song.recordingArtists.length > 0 || song.year_written) ? (
-          <View className="px-4 py-4 border-b border-slate-100">
-            {song.year_written ? (
-              <Text className="text-sm text-slate-600 mb-3">
-                <Text className="font-medium text-slate-700">Written: </Text>
-                {song.year_written}
-              </Text>
-            ) : null}
-            {song.recordingArtists.length > 0 ? (
-              <>
-                <SectionHeader title="Recordings" />
-                <View className="flex-row flex-wrap">
-                  {song.recordingArtists.map((ra, i) => (
-                    <View key={i} className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5">
-                      <Text className="text-slate-700 text-sm">{ra.name}</Text>
-                      {ra.year ? <Text className="text-slate-400 text-sm">{ra.year}</Text> : null}
-                    </View>
-                  ))}
-                </View>
-              </>
-            ) : null}
-          </View>
-        ) : null}
-
         {/* Media — inline YouTube player plus hand-off buttons for both apps */}
         {hasMedia ? (
           <View className="px-4 py-4 border-b border-slate-100">
@@ -751,8 +751,33 @@ export default function SongDetailScreen() {
           </View>
         ) : null}
 
+        {/* Recordings — web groups the written year in here rather than the header */}
+        {(song.recordingArtists.length > 0 || song.year_written) ? (
+          <View className="px-4 py-4 border-b border-slate-100">
+            {song.year_written ? (
+              <Text className="text-sm text-slate-600 mb-3">
+                <Text className="font-medium text-slate-700">Written: </Text>
+                {song.year_written}
+              </Text>
+            ) : null}
+            {song.recordingArtists.length > 0 ? (
+              <>
+                <SectionHeader title="Recordings" />
+                <View className="flex-row flex-wrap">
+                  {song.recordingArtists.map((ra, i) => (
+                    <View key={i} className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5">
+                      <Text className="text-slate-700 text-sm">{ra.name}</Text>
+                      {ra.year ? <Text className="text-slate-400 text-sm">{ra.year}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Lyrics card */}
-        {(song.first_line || song.hook || song.genius_url || song.chord_chart_url) ? (
+        {(song.first_line || song.hook) ? (
           <View className="px-4 py-4 border-b border-slate-100">
             <SectionHeader title="Lyrics" />
             {song.first_line ? (
@@ -762,31 +787,11 @@ export default function SongDetailScreen() {
               </Text>
             ) : null}
             {song.hook ? (
-              <Text className="text-sm text-slate-700 mb-3">
+              <Text className="text-sm text-slate-700">
                 <Text className="font-medium text-slate-500">Hook: </Text>
                 <Text className="italic">{song.hook}</Text>
               </Text>
             ) : null}
-            <View className="flex-row flex-wrap gap-2 mt-1">
-              {song.genius_url ? (
-                <TouchableOpacity
-                  onPress={() => openUrl(song.genius_url!)}
-                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
-                >
-                  <Text className="text-slate-600 text-sm font-medium">Full lyrics</Text>
-                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
-                </TouchableOpacity>
-              ) : null}
-              {song.chord_chart_url ? (
-                <TouchableOpacity
-                  onPress={() => openUrl(song.chord_chart_url!)}
-                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
-                >
-                  <Text className="text-slate-600 text-sm font-medium">Chord chart</Text>
-                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
           </View>
         ) : null}
 

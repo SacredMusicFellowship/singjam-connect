@@ -6,7 +6,7 @@ const DISMISSED_KEY = 'sj-ug-back-tip-dismissed';
 
 // Mirrors web's UgBackTip: the Ultimate Guitar app reopens the last chart
 // unless you tap its own back arrow before leaving it.
-export default function UgBackTip() {
+export default function UgBackTip({ className = 'mx-4 mt-3' }: { className?: string }) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function UgBackTip() {
   }
 
   return (
-    <View className="mx-4 mt-3 flex-row items-start rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5">
+    <View className={`flex-row items-start rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 ${className}`}>
       <Text className="flex-1 text-xs text-zinc-600 mr-3">
         Using the Ultimate Guitar app? Tap the back arrow <Text className="italic">inside UG</Text> before you return here, or the next chart will open this song again.
       </Text>

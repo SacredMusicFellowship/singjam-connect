@@ -8,6 +8,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
 import MyKeySelect from "@/components/MyKeySelect";
+import UgBackTip from "@/components/UgBackTip";
 import AddToSetPanel from "@/components/AddToSetPanel";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
@@ -324,6 +325,23 @@ export default function SongPageContent() {
               </Link>
             )}
           </div>
+          {(song.chord_chart_url || song.genius_url) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {song.chord_chart_url && (
+                <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+                  Chord chart ↗
+                </a>
+              )}
+              {song.genius_url && (
+                <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+                  Full lyrics ↗
+                </a>
+              )}
+            </div>
+          )}
+          {song.chord_chart_url && <UgBackTip className="mt-3" />}
         </div>
 
         {(composers.length > 0 || lyricists.length > 0) && (
@@ -345,29 +363,6 @@ export default function SongPageContent() {
 
       {confidence && userId && (
         <MySongNotes key={song.id} songId={song.id} userId={userId} />
-      )}
-
-      {(recordingArtists.length > 0 || song.year_written) && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-          {song.year_written && (
-            <p className="text-sm text-slate-600">
-              <span className="font-medium text-slate-700">Written:</span> {song.year_written}
-            </p>
-          )}
-          {recordingArtists.length > 0 && (
-            <>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recordings</h2>
-              <div className="flex flex-wrap gap-2">
-                {recordingArtists.map((a: any, i: number) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-                    {a.name}
-                    {a.year && <span className="text-slate-400">{a.year}</span>}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
       )}
 
       {(() => {
@@ -444,7 +439,30 @@ export default function SongPageContent() {
         );
       })()}
 
-      {(song.first_line || song.hook || song.genius_url || song.chord_chart_url) && (
+      {(recordingArtists.length > 0 || song.year_written) && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+          {song.year_written && (
+            <p className="text-sm text-slate-600">
+              <span className="font-medium text-slate-700">Written:</span> {song.year_written}
+            </p>
+          )}
+          {recordingArtists.length > 0 && (
+            <>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recordings</h2>
+              <div className="flex flex-wrap gap-2">
+                {recordingArtists.map((a: any, i: number) => (
+                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                    {a.name}
+                    {a.year && <span className="text-slate-400">{a.year}</span>}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {(song.first_line || song.hook) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
           {song.first_line && (
@@ -458,22 +476,6 @@ export default function SongPageContent() {
               <span className="font-medium text-slate-500">Hook: </span>
               <em>{song.hook}</em>
             </p>
-          )}
-          {(song.genius_url || song.chord_chart_url) && (
-            <div className="flex gap-2 pt-1">
-              {song.genius_url && (
-                <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Full lyrics ↗
-                </a>
-              )}
-              {song.chord_chart_url && (
-                <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Chord chart ↗
-                </a>
-              )}
-            </div>
           )}
         </section>
       )}
