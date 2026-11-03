@@ -254,15 +254,6 @@ export default function RepertoireScreen() {
 
   const handleKeyTap = useCallback((song: { song_id: string }) => setKeyPickerSongId(song.song_id), []);
 
-  const handleRemove = useCallback(async (song: { song_id: string }) => {
-    const songId = song.song_id;
-    setSongs(prev => prev.filter(s => s.song_id !== songId));
-    setSelectedIds(prev => { const next = new Set(prev); next.delete(songId); return next; });
-    const { error } = await supabase.from('user_songs').delete().eq('user_id', userId).eq('song_id', songId);
-    if (error) { Alert.alert('Error', error.message); latest.current.load(); }
-  }, [userId]);
-
-
   const loadMoreSuggestions = useCallback(async () => {
     if (!suggestionsHasMore || loadingMoreRef.current || !userId) return;
     loadingMoreRef.current = true;
@@ -400,10 +391,9 @@ export default function RepertoireScreen() {
         onKeyTap={handleKeyTap}
         onAddToSet={addOneToSet}
         onView={viewSong}
-        onRemove={handleRemove}
       />
     ),
-    [selectedIds, filtered.length, toggleSelect, handleConfidenceChange, handleKeyTap, addOneToSet, viewSong, handleRemove]
+    [selectedIds, filtered.length, toggleSelect, handleConfidenceChange, handleKeyTap, addOneToSet, viewSong]
   );
 
   // Search results reuse the same two cards web does: owned songs keep their role
@@ -422,7 +412,6 @@ export default function RepertoireScreen() {
             onKeyTap={handleKeyTap}
             onAddToSet={addOneToSet}
             onView={viewSong}
-            onRemove={handleRemove}
           />
         );
       }
@@ -435,7 +424,7 @@ export default function RepertoireScreen() {
       );
     },
     [songsById, selectedIds, sortedSearchResults.length, toggleSelect,
-     handleConfidenceChange, handleKeyTap, addOneToSet, viewSong, handleRemove, addFromSuggestion]
+     handleConfidenceChange, handleKeyTap, addOneToSet, viewSong, addFromSuggestion]
   );
 
 

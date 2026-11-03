@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatComposers } from '@singjam/core';
@@ -34,15 +34,14 @@ type Props = {
   onKeyTap: (song: RepertoireCardSong) => void;
   onAddToSet: (song: RepertoireCardSong) => void;
   onView: (song: RepertoireCardSong) => void;
-  onRemove: (song: RepertoireCardSong) => void;
 };
 
 // Mirrors the repertoire row card in web's repertoire/page.tsx: checkbox,
 // title + (songwriters), production/artist line, jammer count, then a
-// confidence control, the member's own key + Add to set / View / Remove actions.
+// confidence control, the member's own key + Add to set / View actions.
 function RepertoireCard({
   song, selected, isLast,
-  onToggleSelect, onConfidenceChange, onKeyTap, onAddToSet, onView, onRemove,
+  onToggleSelect, onConfidenceChange, onKeyTap, onAddToSet, onView,
 }: Props) {
   function handleConfidenceTap(event: GestureResponderEvent) {
     showOptionsSheet({
@@ -54,13 +53,6 @@ function RepertoireCard({
         { label: 'Learn', onPress: () => onConfidenceChange(song, 'learn') },
       ],
     });
-  }
-
-  function handleRemoveTap() {
-    Alert.alert('Remove song', `Remove "${song.title}" from your repertoire?`, [
-      { text: 'Remove', style: 'destructive', onPress: () => onRemove(song) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
   }
 
   const composersLabel = song.composers.length > 0
@@ -155,12 +147,6 @@ function RepertoireCard({
           <Text className="text-sm text-zinc-600">View</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={handleRemoveTap}
-          className="rounded-xl border border-zinc-200 bg-white px-2 py-1"
-        >
-          <Text className="text-xs text-zinc-400">Remove</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );

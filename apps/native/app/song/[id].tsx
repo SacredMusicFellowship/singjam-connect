@@ -416,19 +416,21 @@ export default function SongDetailScreen() {
     addToRepertoire('learn');
   }
 
-  // Web exposes Remove as its own button next to the role control, so it lives
-  // outside the sheet here too — the sheet keeps its entry as well, matching how
-  // the repertoire cards behave.
+  // Removing is rare, so like web it lives only at the foot of the page. The key
+  // goes with the user_songs row; migration 179's trigger deletes the notes.
   function handleRemoveFromRepertoire() {
     if (!myUserId || !song) return;
     const songId = song.id;
     const uid = myUserId;
 
-    Alert.alert('Remove from repertoire', `Remove "${song.title}" from your repertoire?`, [
+    Alert.alert('Remove from repertoire', `Remove "${song.title}" from your repertoire? Your key and notes for it will be deleted.`, [
       {
-        text: 'Remove', style: 'destructive', onPress: () => applyConfidence(null, () =>
-          supabase.from('user_songs').delete().eq('user_id', uid).eq('song_id', songId)
-        ),
+        text: 'Remove', style: 'destructive', onPress: () => {
+          setMyKey(null);
+          applyConfidence(null, () =>
+            supabase.from('user_songs').delete().eq('user_id', uid).eq('song_id', songId)
+          );
+        },
       },
       { text: 'Cancel', style: 'cancel' },
     ]);
@@ -455,7 +457,6 @@ export default function SongDetailScreen() {
         { label: 'Lead', onPress: () => update('lead') },
         { label: 'Support', onPress: () => update('support') },
         { label: 'Learn', onPress: () => update('learn') },
-        { label: 'Remove from repertoire', destructive: true, onPress: handleRemoveFromRepertoire },
       ],
     });
   }
@@ -569,12 +570,6 @@ export default function SongDetailScreen() {
             >
               <Ionicons name="list-outline" size={14} color="#64748b" />
               <Text className="text-slate-600 text-sm">Add to set</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleRemoveFromRepertoire}
-              className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5"
-            >
-              <Text className="text-xs text-slate-400">Remove</Text>
             </TouchableOpacity>
           </>
         ) : (
@@ -879,6 +874,13 @@ export default function SongDetailScreen() {
               {myConfidence ? '← Back to repertoire' : '← Back to search'}
             </Text>
           </TouchableOpacity>
+          {myConfidence ? (
+            <View className="mt-6 pt-4 pb-6 border-t border-slate-100">
+              <TouchableOpacity onPress={handleRemoveFromRepertoire} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} className="self-start">
+                <Text className="text-xs text-slate-400">Remove from my repertoire</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
       </Animated.ScrollView>

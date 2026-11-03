@@ -107,6 +107,8 @@ export default function SongPageContent() {
   const [confidence, setConfidence] = useState<string | null>(null);
   const [myKey, setMyKey] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [songUsers, setSongUsers] = useState<SongUsers | null>(null);
   const [songUsersLoading, setSongUsersLoading] = useState(false);
   const [currentUserEntry, setCurrentUserEntry] = useState<JammerEntry | null>(null);
@@ -194,6 +196,20 @@ export default function SongPageContent() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // Deleting the user_songs row takes the key with it; migration 179's trigger
+  // deletes the private notes.
+  async function handleRemoveFromRepertoire() {
+    if (!userId || !data) return;
+    setRemoving(true);
+    const { error } = await supabase.from("user_songs").delete().eq("user_id", userId).eq("song_id", data.song.id);
+    setRemoving(false);
+    if (error) { alert(error.message); return; }
+    setConfirmingRemove(false);
+    setMyKey(null);
+    handleConfidenceChange(null);
+    router.refresh();
+  }
 
   async function handleKeyChange(next: string | null) {
     if (!userId || !data) return;
@@ -571,6 +587,34 @@ export default function SongPageContent() {
           {confidence ? "← Back to repertoire" : "← Back to search"}
         </Link>
       </div>
+
+      {confidence && userId && (
+        <div className="border-t border-slate-100 pt-4 text-center sm:text-left">
+          {confirmingRemove ? (
+            <div className="inline-flex flex-col items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 sm:items-start">
+              <p className="text-sm text-red-700">
+                Remove &ldquo;{song.title}&rdquo; from your repertoire? Your key and notes for it will be deleted.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleRemoveFromRepertoire}
+                  disabled={removing}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+                >
+                  {removing ? "Removing…" : "Remove"}
+                </button>
+                <button onClick={() => setConfirmingRemove(false)} className="text-sm text-slate-500 hover:text-slate-700">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmingRemove(true)} className="text-xs text-slate-400 hover:text-red-500">
+              Remove from my repertoire
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -69,25 +69,6 @@ export default function RepertoireButton({
     }
   }
 
-  async function remove() {
-    setSaving(true);
-    const session = await getSession();
-    if (!session) return;
-
-    const { error } = await supabase
-      .from("user_songs")
-      .delete()
-      .eq("user_id", session.user.id)
-      .eq("song_id", songId);
-
-    setSaving(false);
-    if (!error) {
-      setConfidence(null);
-      onConfidenceChange?.(null);
-      router.refresh();
-    }
-  }
-
   if (picking) {
     return (
       <ConfidencePicker
@@ -127,13 +108,6 @@ export default function RepertoireButton({
           ))}
         </select>
         {children}
-        <button
-          onClick={remove}
-          disabled={saving}
-          className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40"
-        >
-          Remove
-        </button>
       </div>
     );
   }

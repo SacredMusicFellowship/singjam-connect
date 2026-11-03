@@ -551,21 +551,6 @@ export default function RepertoirePage() {
     });
   };
 
-  const removeFromRepertoire = (song_id: string) => {
-    if (!userId) return;
-    const prevItems = items;
-    itemsMutatedRef.current = true;
-    setItems((prev) => prev.filter((x) => x.song_id !== song_id));
-    startTransition(async () => {
-      const { error } = await supabase
-        .from("user_songs")
-        .delete()
-        .eq("user_id", userId)
-        .eq("song_id", song_id);
-      if (error) { alert(error.message); setItems(prevItems); }
-    });
-  };
-
   const addSong = (songId: string, confidence: string, result: AddableSong) => {
     if (!userId) return;
     const prevItems = items;
@@ -828,12 +813,6 @@ export default function RepertoirePage() {
                           <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
                             View
                           </Link>
-                          <button
-                            onClick={() => removeFromRepertoire(inRep.song_id)}
-                            className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-                          >
-                            Remove
-                          </button>
                         </>
                       ) : isPicking ? (
                         <ConfidencePicker
@@ -1150,13 +1129,6 @@ export default function RepertoirePage() {
                     >
                       View
                     </Link>
-
-                    <button
-                      onClick={() => removeFromRepertoire(it.song_id)}
-                      className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-                    >
-                      Remove
-                    </button>
                   </div>
                 </div>
               ))}
