@@ -1,0 +1,52 @@
+Running 22 checks on your project...
+19/22 checks passed. 3 checks failed. Possible issues detected:
+Use the --verbose flag to see more details about passed checks.
+
+✖ Check that no duplicate dependencies are installed
+Your project contains duplicate native module dependencies, which should be de-duplicated.
+Native builds may only contain one version of any given native module, and having multiple versions of a single Native module installed may lead to unexpected build errors.
+Found duplicates for react:
+  ├─ react@19.2.3 (at: node_modules/react)
+  └─ react@19.2.4 (at: ../../node_modules/react)
+Advice:
+Resolve your dependency issues and deduplicate your dependencies. Learn more: https://expo.fyi/resolving-dependency-issues
+
+✖ Check for Expo SDK versions affected by Hermes V1 regressions
+This project uses Hermes V1 with expo@56.0.12, which is affected by a known memory regression.
+Detected Hermes V1 250829098.0.10 from React Native. Hermes V1 250829098.0.15 and earlier are affected by this regression; 250829098.0.16 is the first version that contains the fix.
+Advice:
+Upgrade to Expo SDK 57 and expo@57.0.9 or later by running `npx expo install expo@^57.0.9 --fix`. See https://expo.dev/changelog/sdk-57#known-regressions for the latest details.
+Upgrade to React Native 0.86.2 or later, which includes the fixed Hermes version. For Expo projects, install Expo SDK 57 with expo@57.0.9 or later and run `npx expo install --fix` to align React Native and other dependencies.
+
+✖ Check that packages match versions required by installed Expo SDK
+
+⚠️ Minor version mismatches
+package               expected  found    
+react-native-screens  ~4.26.0   4.25.2   
+
+🔧 Patch version mismatches
+package               expected  found    
+@expo/metro-runtime   ~56.0.21  56.0.15  
+@expo/ui              ~56.0.26  56.0.18  
+expo                  ~56.0.24  56.0.12  
+expo-constants        ~56.0.27  56.0.21  
+expo-dev-client       ~56.0.28  56.0.20  
+expo-image-picker     ~56.0.25  56.0.18  
+expo-linking          ~56.0.19  56.0.14  
+expo-notifications    ~56.0.26  56.0.21  
+expo-router           ~56.2.22  56.2.11  
+
+Changelogs:
+- expo-constants → https://github.com/expo/expo/blob/sdk-56/packages/expo-constants/CHANGELOG.md
+- expo-dev-client → https://github.com/expo/expo/blob/sdk-56/packages/expo-dev-client/CHANGELOG.md
+- expo-image-picker → https://github.com/expo/expo/blob/sdk-56/packages/expo-image-picker/CHANGELOG.md
+- expo-linking → https://github.com/expo/expo/blob/sdk-56/packages/expo-linking/CHANGELOG.md
+- expo-notifications → https://github.com/expo/expo/blob/sdk-56/packages/expo-notifications/CHANGELOG.md
+- expo-router → https://github.com/expo/expo/blob/sdk-56/packages/expo-router/CHANGELOG.md
+
+10 packages out of date.
+Advice:
+Use 'npx expo install --check' to review and upgrade your dependencies.
+To ignore specific packages, add them to "expo.install.exclude" in package.json. Learn more: https://expo.fyi/dependency-validation
+
+3 checks failed, indicating possible issues with the project.

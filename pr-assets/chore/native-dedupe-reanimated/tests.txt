@@ -1,0 +1,17 @@
+$ node --test scripts/fix-css-interop-dedupe.test.js
+✔ nativewind uses apps/native's react-native-css-interop (1.451292ms)
+✔ nativewind uses apps/native's react-native-reanimated (0.137917ms)
+✔ nativewind uses apps/native's react-native-worklets (0.12ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 66.626
+
+$ ls -l node_modules/nativewind/node_modules (after npm install)
+react-native-css-interop -> ../../../apps/native/node_modules/react-native-css-interop
+react-native-reanimated -> ../../../apps/native/node_modules/react-native-reanimated
+react-native-worklets -> ../../../apps/native/node_modules/react-native-worklets
