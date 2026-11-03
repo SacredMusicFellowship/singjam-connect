@@ -576,12 +576,12 @@ export default function SongDetailScreen() {
           <>
             <TouchableOpacity
               onPress={handleAddToRepertoire}
-              className="rounded-xl bg-indigo-500 px-4 py-2"
+              className="rounded-xl border border-indigo-500 bg-indigo-500 px-4 py-2"
             >
               <Text className="text-white text-sm font-medium">I know this song!</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleWantToLearn} className="px-1.5 py-2">
-              <Text className="text-indigo-600 text-sm">Want to learn it</Text>
+            <TouchableOpacity onPress={handleWantToLearn} className="rounded-xl border border-indigo-200 bg-white px-4 py-2">
+              <Text className="text-indigo-600 text-sm font-medium">Want to learn it</Text>
             </TouchableOpacity>
           </>
         )}

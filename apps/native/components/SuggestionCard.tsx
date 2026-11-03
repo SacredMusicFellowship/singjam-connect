@@ -146,11 +146,11 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
           </>
         ) : (
           <>
-            <TouchableOpacity onPress={handleAddTap} className="rounded-xl bg-indigo-500 px-3 py-1.5">
+            <TouchableOpacity onPress={handleAddTap} className="rounded-xl border border-indigo-500 bg-indigo-500 px-3 py-1.5">
               <Text className="text-sm font-medium text-white">I know this song!</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => onAdd(song, 'learn')} className="px-1.5 py-1.5">
-              <Text className="text-sm text-indigo-600">Want to learn it</Text>
+            <TouchableOpacity onPress={() => onAdd(song, 'learn')} className="rounded-xl border border-indigo-200 bg-white px-3 py-1.5">
+              <Text className="text-sm font-medium text-indigo-600">Want to learn it</Text>
             </TouchableOpacity>
           </>
         )}

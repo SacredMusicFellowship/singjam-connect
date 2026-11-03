@@ -20,9 +20,10 @@ export default function RunSweepButton() {
     }
     const r: EventAttendanceSweepResult = await res.json();
     setMessage(
-      r.importFailed
-        ? `Recorded ${r.recorded}. Couldn't read the older AC tags, so no one was tagged — try again.`
-        : `Recorded ${r.recorded}, imported ${r.imported}, tagged ${r.tagged}${r.failed ? `, ${r.failed} failed` : ""}.`
+      `Recorded ${r.recorded}, tagged ${r.tagged}` +
+        (r.failed ? `, ${r.failed} failed` : "") +
+        (r.deferred ? `, ${r.deferred} left — run again` : "") +
+        "."
     );
     router.refresh();
   }

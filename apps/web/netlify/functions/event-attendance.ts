@@ -1,6 +1,6 @@
 import { schedule } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
-import { runEventAttendanceSweep } from "../../lib/eventAttendance";
+import { notifyAdminOfAttendanceProblem, runEventAttendanceSweep } from "../../lib/eventAttendance";
 
 export const handler = schedule("0 4 * * *", async () => {
   const admin = createClient(
@@ -9,8 +9,18 @@ export const handler = schedule("0 4 * * *", async () => {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  const result = await runEventAttendanceSweep(admin);
-  if (result.importFailed) console.error("[event-attendance] AC tag import failed; skipped first-timer tagging");
-  console.log(`[event-attendance] done: ${JSON.stringify(result)}`);
+  try {
+    const result = await runEventAttendanceSweep(admin);
+    console.log(`[event-attendance] done: ${JSON.stringify(result)}`);
+    if (result.failed > 0) {
+      await notifyAdminOfAttendanceProblem(
+        `ActiveCampaign rejected the first-time attendee tag for ${result.failed} ${result.failed === 1 ? "person" : "people"}.`
+      );
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`[event-attendance] failed: ${message}`);
+    await notifyAdminOfAttendanceProblem(`The nightly sweep failed: ${message}`).catch(() => {});
+  }
   return { statusCode: 200 };
 });

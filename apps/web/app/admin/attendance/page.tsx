@@ -15,7 +15,7 @@ type AttendanceRow = {
   email: string;
   user_id: string | null;
   name: string | null;
-  source: "checkin" | "ac_import";
+  source: "checkin" | "ac_import" | "set_join";
   jams: AttendedEvent;
 };
 
@@ -66,7 +66,7 @@ export default async function AdminAttendancePage({
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Attendance</h1>
           <p className="text-sm text-slate-500">
-            Everyone checked in at an official event across {eventCount} {eventCount === 1 ? "event" : "events"}.
+            Everyone who checked in or joined the set list at an official event, across {eventCount} {eventCount === 1 ? "event" : "events"}.
             Updated nightly after each event ends; first-timers get the ActiveCampaign tag.
           </p>
         </div>
