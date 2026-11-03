@@ -629,6 +629,7 @@ export default function SongDetailScreen() {
         // component, and NativeWind's className handling for it is unproven.
         style={{ flex: 1, backgroundColor: 'white' }}
         contentContainerStyle={{ paddingBottom: 60 }}
+        keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -688,6 +689,7 @@ export default function SongDetailScreen() {
               ) : null}
             </View>
           ) : null}
+          {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} className="mt-3" /> : null}
           {song.chord_chart_url ? <UgBackTip className="mt-3" /> : null}
         </View>
 
@@ -709,8 +711,6 @@ export default function SongDetailScreen() {
             ) : null}
           </View>
         ) : null}
-
-        {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} /> : null}
 
         <KeyPicker
           visible={keyPickerVisible}

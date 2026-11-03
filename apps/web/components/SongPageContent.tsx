@@ -357,6 +357,7 @@ export default function SongPageContent() {
               )}
             </div>
           )}
+          {confidence && userId && <MySongNotes key={song.id} songId={song.id} userId={userId} className="mt-3" />}
           {song.chord_chart_url && <UgBackTip className="mt-3" />}
         </div>
 
@@ -376,10 +377,6 @@ export default function SongPageContent() {
           </div>
         )}
       </div>
-
-      {confidence && userId && (
-        <MySongNotes key={song.id} songId={song.id} userId={userId} />
-      )}
 
       {(recordingArtists.length > 0 || song.year_written) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
