@@ -876,7 +876,10 @@ export default function SongDetailScreen() {
           </TouchableOpacity>
           {myConfidence ? (
             <View className="mt-6 pt-4 pb-6 border-t border-slate-100">
-              <TouchableOpacity onPress={handleRemoveFromRepertoire} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} className="self-start">
+              <TouchableOpacity
+                onPress={handleRemoveFromRepertoire}
+                className="self-start rounded-xl border border-slate-200 bg-white px-2.5 py-1.5"
+              >
                 <Text className="text-xs text-slate-400">Remove from my repertoire</Text>
               </TouchableOpacity>
             </View>

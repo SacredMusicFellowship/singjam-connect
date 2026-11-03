@@ -609,7 +609,10 @@ export default function SongPageContent() {
               </div>
             </div>
           ) : (
-            <button onClick={() => setConfirmingRemove(true)} className="text-xs text-slate-400 hover:text-red-500">
+            <button
+              onClick={() => setConfirmingRemove(true)}
+              className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+            >
               Remove from my repertoire
             </button>
           )}
