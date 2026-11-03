@@ -56,9 +56,10 @@ async function importPreCheckinEvents(admin: SupabaseClient): Promise<number | n
   return imported;
 }
 
-// Records door check-ins for ended official events, then tags each person
-// whose first recorded event that was. The pre-check-in import must succeed
-// first: without it, spring regulars would look like first-timers.
+// Records door check-ins and open-link set list joins for ended official
+// events, then tags each person whose first recorded event that was. The
+// pre-check-in import must succeed first: without it, spring regulars would
+// look like first-timers.
 export async function runEventAttendanceSweep(admin: SupabaseClient): Promise<EventAttendanceSweepResult> {
   const result: EventAttendanceSweepResult = { imported: 0, recorded: 0, tagged: 0, failed: 0, importFailed: false };
 
