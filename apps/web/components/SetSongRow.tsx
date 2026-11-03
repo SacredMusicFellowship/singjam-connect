@@ -311,7 +311,7 @@ export default function SetSongRow({
                 >
                   I know this song!
                 </a>
-                <a href={signInUrl} className="text-xs text-indigo-600 hover:underline">
+                <a href={signInUrl} className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors">
                   Want to learn it
                 </a>
               </div>
@@ -339,7 +339,7 @@ export default function SetSongRow({
                 {!learning && (
                   <button
                     onClick={() => onAddToRepertoire(song.song_id, "learn")}
-                    className="text-xs text-indigo-600 hover:underline"
+                    className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors"
                   >
                     Want to learn it
                   </button>

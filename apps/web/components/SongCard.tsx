@@ -207,7 +207,7 @@ export default function SongCard({
             >
               I know this song!
             </button>
-            <button className="px-1.5 text-sm text-indigo-600 hover:underline" onClick={() => addSong(songId, "learn")}>
+            <button className="rounded-xl bg-white px-3 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors" onClick={() => addSong(songId, "learn")}>
               Want to learn it
             </button>
           </>

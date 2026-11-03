@@ -129,7 +129,7 @@ export default function RepertoireButton({
       <button
         onClick={() => save("learn")}
         disabled={saving}
-        className="text-sm text-indigo-600 hover:underline disabled:opacity-50"
+        className="rounded-xl bg-white px-4 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors disabled:opacity-50"
       >
         Want to learn it
       </button>
