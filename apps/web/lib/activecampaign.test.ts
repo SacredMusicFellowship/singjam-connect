@@ -9,11 +9,13 @@ vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } }, FROM_ADD
 // time, so env vars must be stubbed before the (dynamic) import happens.
 let deleteContact: typeof import("./activecampaign").deleteContact;
 let syncContact: typeof import("./activecampaign").syncContact;
+let tagFirstTimeAttendee: typeof import("./activecampaign").tagFirstTimeAttendee;
+let fetchContactsWithTag: typeof import("./activecampaign").fetchContactsWithTag;
 
 beforeAll(async () => {
   vi.stubEnv("AC_API_URL", "https://example.activehosted.com");
   vi.stubEnv("AC_API_KEY", "test-key");
-  ({ deleteContact, syncContact } = await import("./activecampaign"));
+  ({ deleteContact, syncContact, tagFirstTimeAttendee, fetchContactsWithTag } = await import("./activecampaign"));
 });
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -144,5 +146,49 @@ describe("deleteContact", () => {
     const result = await deleteContact("singer@example.com");
 
     expect(result).toBe(false);
+  });
+});
+
+describe("tagFirstTimeAttendee", () => {
+  it("upserts by email alone and applies the first-time attendee tag", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url.endsWith("/contact/sync") ? jsonResponse({ contact: { id: "7" } }) : jsonResponse({})
+    );
+
+    expect(await tagFirstTimeAttendee("singer@example.com")).toBe(true);
+    const [, syncInit] = callsTo("/contact/sync")[0];
+    expect(JSON.parse(syncInit.body)).toEqual({ contact: { email: "singer@example.com" } });
+    const [, tagInit] = callsTo("/contactTags")[0];
+    expect(JSON.parse(tagInit.body)).toEqual({ contactTag: { contact: "7", tag: "37" } });
+    expect(callsTo("/contactLists")).toHaveLength(0);
+  });
+
+  it("returns false when the tag call is rejected", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url.endsWith("/contact/sync") ? jsonResponse({ contact: { id: "7" } }) : jsonResponse({ error: "no" }, false, 422)
+    );
+
+    expect(await tagFirstTimeAttendee("singer@example.com")).toBe(false);
+  });
+});
+
+describe("fetchContactsWithTag", () => {
+  it("pages until a short page", async () => {
+    const full = Array.from({ length: 100 }, (_, i) => ({ email: `p${i}@example.com`, firstName: "", lastName: "" }));
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ contacts: full }))
+      .mockResolvedValueOnce(jsonResponse({ contacts: [{ email: "last@example.com", firstName: "", lastName: "" }] }));
+
+    expect(await fetchContactsWithTag("31")).toHaveLength(101);
+    expect(mockFetch.mock.calls[1][0]).toBe("https://example.activehosted.com/api/3/contacts?tagid=31&limit=100&offset=100");
+  });
+
+  it("returns null rather than a partial list when a page fails", async () => {
+    const full = Array.from({ length: 100 }, (_, i) => ({ email: `p${i}@example.com`, firstName: "", lastName: "" }));
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ contacts: full }))
+      .mockResolvedValueOnce(jsonResponse({ error: "bad" }, false, 400));
+
+    expect(await fetchContactsWithTag("31")).toBeNull();
   });
 });

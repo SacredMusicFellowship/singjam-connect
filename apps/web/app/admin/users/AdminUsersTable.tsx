@@ -17,19 +17,21 @@ export type AdminUser = {
   created_at: string | null;
   email: string | null;
   role: string;
+  events: number;
 };
 
-type SortCol = "name" | "email" | "neighborhood" | "joined" | "role";
+type SortCol = "name" | "email" | "neighborhood" | "joined" | "events" | "role";
 type SortDir = "asc" | "desc";
 
 // The page container is max-w-4xl, so the desktop table is laid out on fixed
 // percentages rather than letting long emails push the role picker off the edge.
 const COLUMNS: { key: SortCol; label: string; width: string }[] = [
-  { key: "name", label: "User", width: "26%" },
-  { key: "email", label: "Email", width: "24%" },
-  { key: "neighborhood", label: "Neighborhood", width: "17%" },
-  { key: "joined", label: "Joined", width: "14%" },
-  { key: "role", label: "Role", width: "19%" },
+  { key: "name", label: "User", width: "24%" },
+  { key: "email", label: "Email", width: "22%" },
+  { key: "neighborhood", label: "Neighborhood", width: "15%" },
+  { key: "joined", label: "Joined", width: "13%" },
+  { key: "events", label: "Events", width: "9%" },
+  { key: "role", label: "Role", width: "17%" },
 ];
 
 function fullName(u: AdminUser) {
@@ -43,6 +45,10 @@ function profileHref(u: AdminUser) {
 function formatDate(iso: string | null) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function attendanceHref(u: AdminUser) {
+  return `/admin/attendance?email=${encodeURIComponent(u.email ?? "")}`;
 }
 
 function Avatar({ user }: { user: AdminUser }) {
@@ -169,7 +175,7 @@ export default function AdminUsersTable({
     setSort((prev) =>
       prev.col === col
         ? { col, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { col, dir: col === "joined" ? "desc" : "asc" }
+        : { col, dir: col === "joined" || col === "events" ? "desc" : "asc" }
     );
   }
 
@@ -193,6 +199,7 @@ export default function AdminUsersTable({
       else if (col === "email") cmp = (a.email ?? "").localeCompare(b.email ?? "");
       else if (col === "neighborhood") cmp = (a.neighborhood ?? "").localeCompare(b.neighborhood ?? "");
       else if (col === "joined") cmp = (a.created_at ?? "").localeCompare(b.created_at ?? "");
+      else if (col === "events") cmp = a.events - b.events;
       else if (col === "role")
         cmp = USER_ROLES.indexOf(roles[a.id] as UserRole) - USER_ROLES.indexOf(roles[b.id] as UserRole);
       return cmp * mul || fullName(a).localeCompare(fullName(b));
@@ -262,6 +269,14 @@ export default function AdminUsersTable({
             )}
             <div className="mt-1.5 truncate text-xs text-slate-500">
               {[u.neighborhood, `Joined ${formatDate(u.created_at)}`].filter(Boolean).join(" · ")}
+              {u.events > 0 && (
+                <>
+                  {" · "}
+                  <Link href={attendanceHref(u)} className="hover:text-amber-600 hover:underline">
+                    {u.events} {u.events === 1 ? "event" : "events"}
+                  </Link>
+                </>
+              )}
             </div>
             <div className="mt-2">
               <RoleSelect
@@ -334,6 +349,15 @@ export default function AdminUsersTable({
                   )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">{formatDate(u.created_at)}</td>
+                <td className="px-4 py-2.5 text-slate-500">
+                  {u.events > 0 ? (
+                    <Link href={attendanceHref(u)} className="hover:text-amber-600 hover:underline">
+                      {u.events}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-4 py-2.5">
                   <RoleSelect
                     user={u}
