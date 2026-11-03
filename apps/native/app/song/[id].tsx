@@ -720,6 +720,31 @@ export default function SongDetailScreen() {
           onSelect={handleKeyChange}
         />
 
+        {/* Recordings — web groups the written year in here rather than the header */}
+        {(song.recordingArtists.length > 0 || song.year_written) ? (
+          <View className="px-4 py-4 border-b border-slate-100">
+            {song.year_written ? (
+              <Text className="text-sm text-slate-600 mb-3">
+                <Text className="font-medium text-slate-700">Written: </Text>
+                {song.year_written}
+              </Text>
+            ) : null}
+            {song.recordingArtists.length > 0 ? (
+              <>
+                <SectionHeader title="Recordings" />
+                <View className="flex-row flex-wrap">
+                  {song.recordingArtists.map((ra, i) => (
+                    <View key={i} className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5">
+                      <Text className="text-slate-700 text-sm">{ra.name}</Text>
+                      {ra.year ? <Text className="text-slate-400 text-sm">{ra.year}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Media — inline YouTube player plus hand-off buttons for both apps */}
         {hasMedia ? (
           <View className="px-4 py-4 border-b border-slate-100">
@@ -743,31 +768,6 @@ export default function SongDetailScreen() {
                 </View>
               </View>
             ))}
-          </View>
-        ) : null}
-
-        {/* Recordings — web groups the written year in here rather than the header */}
-        {(song.recordingArtists.length > 0 || song.year_written) ? (
-          <View className="px-4 py-4 border-b border-slate-100">
-            {song.year_written ? (
-              <Text className="text-sm text-slate-600 mb-3">
-                <Text className="font-medium text-slate-700">Written: </Text>
-                {song.year_written}
-              </Text>
-            ) : null}
-            {song.recordingArtists.length > 0 ? (
-              <>
-                <SectionHeader title="Recordings" />
-                <View className="flex-row flex-wrap">
-                  {song.recordingArtists.map((ra, i) => (
-                    <View key={i} className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5">
-                      <Text className="text-slate-700 text-sm">{ra.name}</Text>
-                      {ra.year ? <Text className="text-slate-400 text-sm">{ra.year}</Text> : null}
-                    </View>
-                  ))}
-                </View>
-              </>
-            ) : null}
           </View>
         ) : null}
 

@@ -381,6 +381,29 @@ export default function SongPageContent() {
         <MySongNotes key={song.id} songId={song.id} userId={userId} />
       )}
 
+      {(recordingArtists.length > 0 || song.year_written) && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+          {song.year_written && (
+            <p className="text-sm text-slate-600">
+              <span className="font-medium text-slate-700">Written:</span> {song.year_written}
+            </p>
+          )}
+          {recordingArtists.length > 0 && (
+            <>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recordings</h2>
+              <div className="flex flex-wrap gap-2">
+                {recordingArtists.map((a: any, i: number) => (
+                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                    {a.name}
+                    {a.year && <span className="text-slate-400">{a.year}</span>}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
       {(() => {
         type ArtistEmbed = { name: string; year: number | null; videoId: string | null; trackId: string | null };
 
@@ -454,29 +477,6 @@ export default function SongPageContent() {
           </div>
         );
       })()}
-
-      {(recordingArtists.length > 0 || song.year_written) && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-          {song.year_written && (
-            <p className="text-sm text-slate-600">
-              <span className="font-medium text-slate-700">Written:</span> {song.year_written}
-            </p>
-          )}
-          {recordingArtists.length > 0 && (
-            <>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recordings</h2>
-              <div className="flex flex-wrap gap-2">
-                {recordingArtists.map((a: any, i: number) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-                    {a.name}
-                    {a.year && <span className="text-slate-400">{a.year}</span>}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-      )}
 
       {(song.first_line || song.hook) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
