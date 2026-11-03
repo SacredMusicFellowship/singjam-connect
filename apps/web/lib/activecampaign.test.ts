@@ -10,12 +10,11 @@ vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } }, FROM_ADD
 let deleteContact: typeof import("./activecampaign").deleteContact;
 let syncContact: typeof import("./activecampaign").syncContact;
 let tagFirstTimeAttendee: typeof import("./activecampaign").tagFirstTimeAttendee;
-let fetchContactsWithTag: typeof import("./activecampaign").fetchContactsWithTag;
 
 beforeAll(async () => {
   vi.stubEnv("AC_API_URL", "https://example.activehosted.com");
   vi.stubEnv("AC_API_KEY", "test-key");
-  ({ deleteContact, syncContact, tagFirstTimeAttendee, fetchContactsWithTag } = await import("./activecampaign"));
+  ({ deleteContact, syncContact, tagFirstTimeAttendee } = await import("./activecampaign"));
 });
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -169,26 +168,5 @@ describe("tagFirstTimeAttendee", () => {
     );
 
     expect(await tagFirstTimeAttendee("singer@example.com")).toBe(false);
-  });
-});
-
-describe("fetchContactsWithTag", () => {
-  it("pages until a short page", async () => {
-    const full = Array.from({ length: 100 }, (_, i) => ({ email: `p${i}@example.com`, firstName: "", lastName: "" }));
-    mockFetch
-      .mockResolvedValueOnce(jsonResponse({ contacts: full }))
-      .mockResolvedValueOnce(jsonResponse({ contacts: [{ email: "last@example.com", firstName: "", lastName: "" }] }));
-
-    expect(await fetchContactsWithTag("31")).toHaveLength(101);
-    expect(mockFetch.mock.calls[1][0]).toBe("https://example.activehosted.com/api/3/contacts?tagid=31&limit=100&offset=100");
-  });
-
-  it("returns null rather than a partial list when a page fails", async () => {
-    const full = Array.from({ length: 100 }, (_, i) => ({ email: `p${i}@example.com`, firstName: "", lastName: "" }));
-    mockFetch
-      .mockResolvedValueOnce(jsonResponse({ contacts: full }))
-      .mockResolvedValueOnce(jsonResponse({ error: "bad" }, false, 400));
-
-    expect(await fetchContactsWithTag("31")).toBeNull();
   });
 });

@@ -230,22 +230,6 @@ export async function tagFirstTimeAttendee(email: string): Promise<boolean> {
   return result !== null;
 }
 
-export type TaggedContact = { email: string; firstName: string; lastName: string };
-
-// Every contact carrying a tag. Returns null rather than a partial list if any
-// page fails.
-export async function fetchContactsWithTag(tagId: string): Promise<TaggedContact[] | null> {
-  if (!AC_API_URL || !AC_API_KEY) return null;
-  const contacts: TaggedContact[] = [];
-  for (let offset = 0; ; offset += 100) {
-    const data = await acFetch(`/contacts?tagid=${tagId}&limit=100&offset=${offset}`, { method: "GET" });
-    if (!data) return null;
-    const batch: TaggedContact[] = data.contacts ?? [];
-    contacts.push(...batch);
-    if (batch.length < 100) return contacts;
-  }
-}
-
 // Permanently removes the contact from ActiveCampaign. Safe to call for
 // emails with no matching contact — treated as already-deleted, not a failure.
 export async function deleteContact(email: string): Promise<boolean> {
