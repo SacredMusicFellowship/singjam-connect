@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import { SET_SONG_NOTE_MAX } from "@singjam/core";
@@ -37,7 +37,6 @@ export default function SetSongRow({
   onLeadersChanged,
   onAddToRepertoire,
   onVoiceUpdated,
-  onTogglePlayed,
   onRemove,
   signInUrl,
 }: {
@@ -63,7 +62,6 @@ export default function SetSongRow({
   onLeadersChanged: (id: string, leaderUserIds: string[]) => void;
   onAddToRepertoire: (songId: string, confidence: string) => Promise<void>;
   onVoiceUpdated: (voice: string) => void;
-  onTogglePlayed: (id: string, played: boolean) => void;
   onRemove: (songId: string) => void;
   signInUrl?: string;
 }) {
@@ -74,7 +72,7 @@ export default function SetSongRow({
   const [urlInput, setUrlInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [changingPart, setChangingPart] = useState(false);
   const [notesInput, setNotesInput] = useState("");
   // Set when Cancel/Escape closes the editor, so the input's blur doesn't save.
   const discardNotesRef = useRef(false);
@@ -191,17 +189,25 @@ export default function SetSongRow({
   );
   const learning = myConfidence === "learn";
 
+  const menuItems: MenuItem[] = [];
+  // Learners already have "I know this song!" on the row to move up.
+  if (currentUserId && myConfidence && !learning) {
+    menuItems.push({ label: "Change my part", onSelect: () => setChangingPart(true) });
+  }
+  if (canManage && !song.notes) menuItems.push({ label: "Add note", onSelect: startEditingNotes });
+  if (canManage) menuItems.push({ label: "Remove from set", destructive: true, onSelect: () => onRemove(song.song_id) });
+
   return (
     <div className="flex-1 min-w-0 space-y-2">
       <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-start gap-2 min-w-0">
             {song.songs.slug ? (
-              <Link href={`/songs/${song.songs.slug}`} target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-900 hover:text-amber-600 truncate">
+              <Link href={`/songs/${song.songs.slug}`} target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-900 hover:text-amber-600 line-clamp-2">
                 {song.songs.title}
               </Link>
             ) : (
-              <p className="font-medium text-zinc-900 truncate">{song.songs.title}</p>
+              <p className="font-medium text-zinc-900 line-clamp-2">{song.songs.title}</p>
             )}
             {/* Green like "You're going" on a jam, so a song you're learning
                 stands out as you scroll the set. */}
@@ -211,33 +217,39 @@ export default function SetSongRow({
               </span>
             )}
           </div>
-          {song.songs.display_artist && (
-            <p className="text-xs text-zinc-500 truncate">{song.songs.display_artist}</p>
-          )}
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+            {song.songs.display_artist && (
+              <p className="min-w-0 truncate text-xs text-zinc-500">{song.songs.display_artist}</p>
+            )}
             {canManage ? (
-              <select
-                value={song.key_note ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value || null;
-                  if (val !== song.key_note) onKeyChanged(song.id, val);
-                }}
-                className={`text-xs rounded border border-zinc-300 px-1.5 py-0.5 focus:border-amber-400 focus:outline-none ${song.key_note ? "w-14" : "w-20"}`}
-              >
-                <option value="">key</option>
-                {MUSICAL_KEYS.map((k) => (
-                  <option key={k} value={k}>{k}</option>
-                ))}
-              </select>
+              // The visible chip is sized to its own text; the transparent select
+              // on top opens the native picker without its widest-option width.
+              <span className={`relative shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${song.key_note ? "bg-amber-100 text-amber-800" : "border border-dashed border-zinc-300 text-zinc-400"}`}>
+                {song.key_note ?? "+ key"}
+                <select
+                  value={song.key_note ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    if (val !== song.key_note) onKeyChanged(song.id, val);
+                  }}
+                  aria-label="Key"
+                  className="absolute inset-0 w-full cursor-pointer opacity-0"
+                >
+                  <option value="">No key</option>
+                  {MUSICAL_KEYS.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              </span>
             ) : (
               !isPublicViewer && song.key_note && (
-                <span className="text-xs font-medium bg-amber-100 text-amber-800 rounded px-1.5 py-0.5">
+                <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
                   {song.key_note}
                 </span>
               )
             )}
             {!isPublicViewer && song.songs.tonality && (
-              <span className="text-xs font-semibold text-zinc-900">{song.songs.tonality}</span>
+              <span className="shrink-0 text-xs text-zinc-600">{song.songs.tonality}</span>
             )}
           </div>
           {editingNotes ? (
@@ -296,13 +308,6 @@ export default function SetSongRow({
                 </button>
               )}
             </div>
-          ) : canManage ? (
-            <button
-              onClick={startEditingNotes}
-              className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5 text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-colors"
-            >
-              + Add note
-            </button>
           ) : null}
         </div>
 
@@ -387,8 +392,20 @@ export default function SetSongRow({
               <YoutubeIcon />
             </button>
           ) : null}
+
+          {menuItems.length > 0 && <SongMenu items={menuItems} />}
         </div>
       </div>
+
+      {changingPart && (
+        <ConfidencePicker
+          variant="compact"
+          singingVoice={currentUserSingingVoice}
+          onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setChangingPart(false); }}
+          onCancel={() => setChangingPart(false)}
+          onVoiceUpdated={onVoiceUpdated}
+        />
+      )}
 
       {/* Below the title row rather than inside it, so on a phone both buttons
           get the card's full width and sit side by side. */}
@@ -536,71 +553,6 @@ export default function SetSongRow({
         />
       )}
 
-      {(canManage || song.played) && (
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <div>
-            {canManage ? (
-              <button
-                onClick={() => onTogglePlayed(song.id, !song.played)}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                  song.played
-                    ? "bg-green-500 text-white hover:bg-green-400"
-                    : "border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50"
-                }`}
-              >
-                {song.played && (
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                )}
-                {song.played ? "Played" : "Mark as played"}
-              </button>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-medium text-white">
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
-                Played
-              </span>
-            )}
-          </div>
-          {canManage && (confirmingRemove ? (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setConfirmingRemove(false); onRemove(song.song_id); }}
-                className="rounded-xl bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-400 transition-colors"
-              >
-                Remove
-              </button>
-              <button
-                onClick={() => setConfirmingRemove(false)}
-                className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center">
-              <button
-                onClick={() => setConfirmingRemove(true)}
-                className="sm:hidden text-zinc-300 hover:text-red-400 transition-colors"
-                aria-label="Remove song"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setConfirmingRemove(true)}
-                className="hidden sm:inline-flex rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       {addingField && (
         <div className="space-y-2">
           {addingField === "youtube" && (
@@ -656,6 +608,82 @@ export default function SetSongRow({
               Cancel
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type MenuItem = { label: string; onSelect: () => void; destructive?: boolean };
+
+function SongMenu({ items }: { items: MenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  // A destructive item asks again in place before it runs.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  function close() {
+    setOpen(false);
+    setConfirming(null);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => (open ? close() : setOpen(true))}
+        className={`rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 ${open ? "bg-zinc-100 text-zinc-600" : ""}`}
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.75" />
+          <circle cx="12" cy="12" r="1.75" />
+          <circle cx="19" cy="12" r="1.75" />
+        </svg>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg">
+          {items.map((item) =>
+            confirming === item.label ? (
+              <div key={item.label} className="flex gap-1.5 px-2 py-1.5">
+                <button
+                  onClick={() => { close(); item.onSelect(); }}
+                  className="flex-1 rounded-lg bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-400 transition-colors"
+                >
+                  Remove
+                </button>
+                <button
+                  onClick={() => setConfirming(null)}
+                  className="flex-1 rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                key={item.label}
+                role="menuitem"
+                onClick={() => {
+                  if (item.destructive) { setConfirming(item.label); return; }
+                  close();
+                  item.onSelect();
+                }}
+                className={`block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-zinc-50 ${item.destructive ? "text-red-600" : "text-zinc-700"}`}
+              >
+                {item.label}
+              </button>
+            )
+          )}
         </div>
       )}
     </div>
