@@ -97,22 +97,22 @@ function RepertoireCard({
             </Text>
           )}
         </View>
-        {song.chord_chart_url ? (
-          // Same Chords link as the set list.
-          <TouchableOpacity
-            onPress={() => Linking.openURL(song.chord_chart_url!).catch(() => Alert.alert('Could not open link'))}
-            className="ml-2 flex-row items-center gap-1 px-2.5 py-1 rounded-full border border-zinc-200 bg-white"
-            accessibilityLabel="Chord chart"
-          >
-            <Text className="text-xs font-medium text-zinc-600">Chords</Text>
-            <Ionicons name="open-outline" size={11} color="#a1a1aa" />
-          </TouchableOpacity>
-        ) : null}
       </View>
 
       <View className="flex-row flex-wrap items-center gap-2 mt-3 ml-8">
         <RolePill level={song.confidence} onPress={handleConfidenceTap} size="md" />
         <MyKeyChip value={song.key_note} onPress={() => onKeyTap(song)} size="md" />
+        {song.chord_chart_url ? (
+          // Same Chords link as the set list.
+          <TouchableOpacity
+            onPress={() => Linking.openURL(song.chord_chart_url!).catch(() => Alert.alert('Could not open link'))}
+            className="flex-row items-center gap-1 px-3 py-1.5 rounded-full border border-zinc-200 bg-white"
+            accessibilityLabel="Chord chart"
+          >
+            <Text className="text-sm font-medium text-zinc-600">Chords</Text>
+            <Ionicons name="open-outline" size={11} color="#a1a1aa" />
+          </TouchableOpacity>
+        ) : null}
 
         <TouchableOpacity
           onPress={() => onAddToSet(song)}

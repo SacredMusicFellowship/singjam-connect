@@ -1041,7 +1041,7 @@ export default function RepertoirePage() {
                     selectedIds.has(it.song_id) ? "bg-amber-50/60" : ""
                   }`}
                 >
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <input
                       type="checkbox"
                       checked={selectedIds.has(it.song_id)}
@@ -1069,13 +1069,20 @@ export default function RepertoirePage() {
                       <div className="text-xs text-zinc-400">{it.popularity} {it.popularity === 1 ? "jammer" : "jammers"}</div>
                     )}
                   </div>
-                    {it.chord_chart_url && <div className="ml-auto -mt-1.5 flex shrink-0"><ChordsLink href={it.chord_chart_url} /></div>}
                   </div>
 
                   <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
                     <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" />
 
                     <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" />
+
+                    {/* A row without a chart keeps an empty slot, so Add to set
+                        lines up down the list. */}
+                    {it.chord_chart_url ? (
+                      <ChordsLink href={it.chord_chart_url} size="md" />
+                    ) : (
+                      <span className="invisible flex" aria-hidden="true"><ChordsLink href="#" size="md" /></span>
+                    )}
 
                     {userSets.length > 0 && (
                       <AddToSetPanel

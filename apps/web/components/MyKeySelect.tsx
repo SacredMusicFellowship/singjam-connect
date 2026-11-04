@@ -1,8 +1,10 @@
 import { MUSICAL_KEYS } from "@singjam/core";
 
 // The key the member plays the song in, shown to their set-mates next to their
-// name. A chip like the set list's key (amber once chosen, dashed while empty)
-// with the select laid over it invisibly, since phones force selects to 16px.
+// name. Styled like the pills beside it (thin border, white) so it doesn't read
+// as Lead's amber. Every possible label sits in one grid cell with only the
+// current one visible, so the pill keeps one width whatever the key. The select
+// lies over it invisibly, since phones force selects to 16px.
 export default function MyKeySelect({
   value,
   onChange,
@@ -12,20 +14,24 @@ export default function MyKeySelect({
   onChange: (key: string | null) => void;
   size?: "sm" | "md";
 }) {
+  const label = (key: string | null) =>
+    key ? (
+      <>
+        My key <span className="font-semibold text-zinc-900">{key}</span>
+      </>
+    ) : (
+      "+ My key"
+    );
   return (
     <span
-      className={`relative inline-flex shrink-0 items-center gap-1 rounded-full ${
+      className={`relative inline-flex shrink-0 items-center rounded-full border border-zinc-200 bg-white text-zinc-600 ${
         size === "md" ? "px-3 py-1 text-xs sm:py-1.5 sm:text-sm" : "px-2.5 py-1 text-xs"
-      } ${value ? "bg-amber-100 text-amber-800" : "border border-zinc-200 bg-white text-zinc-500"}`}
+      }`}
     >
-      {value ? (
-        <>
-          <span className="text-amber-700/80">My key</span>
-          <span className="font-semibold">{value}</span>
-        </>
-      ) : (
-        "+ My key"
-      )}
+      <span className="grid justify-items-center">
+        <span className="col-start-1 row-start-1">{label(value)}</span>
+        <span className="invisible col-start-1 row-start-1" aria-hidden="true">{label("C#")}</span>
+      </span>
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
