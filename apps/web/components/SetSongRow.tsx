@@ -566,7 +566,6 @@ export default function SetSongRow({
           </div>
           {canManage && (confirmingRemove ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-500">Remove from set?</span>
               <button
                 onClick={() => { setConfirmingRemove(false); onRemove(song.song_id); }}
                 className="rounded-xl bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-400 transition-colors"
