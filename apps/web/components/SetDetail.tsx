@@ -1094,40 +1094,8 @@ export default function SetDetail({
         </div>
       )}
 
-      {/* People: who's on the set, with Invite in the section's header */}
-      {!isPublicViewer && <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-zinc-500">People · {collaborators.length + 1}</p>
-          {canEdit && (
-            <button
-              onClick={() => setShowInvitePanel((v) => !v)}
-              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${showInvitePanel ? "border-amber-400 bg-amber-50 text-amber-800" : "border-amber-300 text-amber-700 hover:bg-amber-50"}`}
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
-              </svg>
-              Invite
-            </button>
-          )}
-        </div>
-        {canEdit && showInvitePanel && (
-          <div>
-            <SetInvitePanel
-              setId={set.id}
-              canAssignCoOwner={isOwner}
-              alreadyCollaboratorIds={collaborators.filter((c) => c.user_id).map((c) => c.user_id!)}
-              onCollaboratorAdded={(c) => setCollaborators((prev) => {
-                if (prev.some((existing) => existing.id === c.id)) return prev;
-                return [...prev, c].sort((a, b) => {
-                  const nameA = (a.profiles?.display_name ?? a.profiles?.username ?? "").toLowerCase();
-                  const nameB = (b.profiles?.display_name ?? b.profiles?.username ?? "").toLowerCase();
-                  return nameA.localeCompare(nameB);
-                });
-              })}
-            />
-          </div>
-        )}
-      <ul className="space-y-2">
+      {/* Collaborators — owner first, then accepted collaborators */}
+      {!isPublicViewer && <ul className="space-y-2">
         {/* Owner card */}
         <li className="flex items-center gap-2 rounded-xl border border-zinc-100 bg-white px-3 py-2">
           <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-200 text-xs font-medium text-zinc-600">
@@ -1253,8 +1221,39 @@ export default function SetDetail({
             </button>
           </li>
         )}
-      </ul>
-      </div>}
+      </ul>}
+
+      {/* Invite belongs with the collaborators above, not the song tools below. */}
+      {canEdit && (
+        <div className="space-y-2">
+            <button
+              onClick={() => setShowInvitePanel((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors ${showInvitePanel ? "bg-amber-600" : "bg-amber-500 hover:bg-amber-400"}`}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+              </svg>
+              Invite
+            </button>
+            {showInvitePanel && (
+              <div>
+                <SetInvitePanel
+                  setId={set.id}
+                  canAssignCoOwner={isOwner}
+                  alreadyCollaboratorIds={collaborators.filter((c) => c.user_id).map((c) => c.user_id!)}
+                  onCollaboratorAdded={(c) => setCollaborators((prev) => {
+                    if (prev.some((existing) => existing.id === c.id)) return prev;
+                    return [...prev, c].sort((a, b) => {
+                      const nameA = (a.profiles?.display_name ?? a.profiles?.username ?? "").toLowerCase();
+                      const nameB = (b.profiles?.display_name ?? b.profiles?.username ?? "").toLowerCase();
+                      return nameA.localeCompare(nameB);
+                    });
+                  })}
+                />
+              </div>
+            )}
+        </div>
+      )}
 
       {/* Song tools: playlists, chords, export */}
       <div className="flex flex-wrap gap-2">
