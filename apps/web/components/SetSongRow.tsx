@@ -37,6 +37,7 @@ export default function SetSongRow({
   onLeadersChanged,
   onAddToRepertoire,
   onVoiceUpdated,
+  onTogglePlayed,
   onRemove,
   signInUrl,
 }: {
@@ -62,6 +63,7 @@ export default function SetSongRow({
   onLeadersChanged: (id: string, leaderUserIds: string[]) => void;
   onAddToRepertoire: (songId: string, confidence: string) => Promise<void>;
   onVoiceUpdated: (voice: string) => void;
+  onTogglePlayed: (id: string, played: boolean) => void;
   onRemove: (songId: string) => void;
   signInUrl?: string;
 }) {
@@ -553,6 +555,25 @@ export default function SetSongRow({
         />
       )}
 
+      {canManage ? (
+        <button
+          onClick={() => onTogglePlayed(song.id, !song.played)}
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+            song.played
+              ? "bg-green-500 text-white hover:bg-green-400"
+              : "border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50"
+          }`}
+        >
+          {song.played && <CheckIcon />}
+          {song.played ? "Played" : "Mark as played"}
+        </button>
+      ) : song.played ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-medium text-white">
+          <CheckIcon />
+          Played
+        </span>
+      ) : null}
+
       {addingField && (
         <div className="space-y-2">
           {addingField === "youtube" && (
@@ -687,5 +708,13 @@ function SongMenu({ items }: { items: MenuItem[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
   );
 }

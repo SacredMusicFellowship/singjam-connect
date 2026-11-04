@@ -88,8 +88,6 @@ export default function SetDetail({
   const [descValue, setDescValue] = useState(set.description ?? "");
   const [songListFilter, setSongListFilter] = useState("");
   const [songSort, setSongSort] = useState<"custom" | "az" | "za" | "popularity">("custom");
-  // Drag handles only show in this mode, so scrolling a phone can't move songs.
-  const [reordering, setReordering] = useState(false);
   const [globalSongPopularity, setGlobalSongPopularity] = useState<Map<string, number>>(new Map());
   const [userRepertoire, setUserRepertoire] = useState(new Map<string, string>());
   const [showInvitePanel, setShowInvitePanel] = useState(false);
@@ -593,7 +591,39 @@ export default function SetDetail({
     })),
   ];
 
-  const canReorder = canManage && songSort === "custom" && !songListFilter && songs.length > 1;
+  function renderSongRow(song: Song, index: number) {
+    const knowledgeForSong = songKnowledgeMap.get(song.song_id) ?? new Map<string, string>();
+    const hasEligible = [...knowledgeForSong.values()].some((c) => c === "lead");
+    const rowParticipants = isPublicViewer
+      ? []
+      : participants.filter((p) => knowledgeForSong.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id));
+    return (
+      <SetSongRow
+        song={song}
+        index={index}
+        canManage={canManage}
+        isAdmin={isAdmin}
+        isSongEditor={isSongEditor}
+        isPublicViewer={isPublicViewer}
+        participants={rowParticipants}
+        hasEligible={hasEligible}
+        participantKnowledge={knowledgeForSong}
+        participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
+        currentUserId={currentUserId}
+        currentUserSingingVoice={userSingingVoice}
+        myConfidence={userRepertoire.get(song.song_id) ?? null}
+        onMediaAdded={handleMediaAdded}
+        onKeyChanged={handleKeyChanged}
+        onNotesChanged={handleNotesChanged}
+        onLeadersChanged={handleLeadersChanged}
+        onAddToRepertoire={handleAddToRepertoire}
+        onVoiceUpdated={setUserSingingVoice}
+        onTogglePlayed={handleTogglePlayed}
+        onRemove={handleRemoveSong}
+        signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
+      />
+    );
+  }
 
   const sortedSongs = useMemo(() => {
     if (songSort === "custom") return songs;
@@ -1472,8 +1502,7 @@ export default function SetDetail({
             onClear={() => setSongListFilter("")}
             placeholder="Filter songs…"
           />
-          <div className="flex items-center gap-2">
-          <div className="flex flex-1 gap-0.5 rounded-lg bg-zinc-100 p-0.5">
+          <div className="flex gap-0.5 rounded-lg bg-zinc-100 p-0.5">
             {([
               { value: "custom", label: "Custom" },
               { value: "az",     label: "A → Z" },
@@ -1493,15 +1522,6 @@ export default function SetDetail({
               </button>
             ))}
           </div>
-          {canReorder && (
-            <button
-              onClick={() => setReordering((r) => !r)}
-              className={`shrink-0 rounded-lg px-3 py-1 text-xs font-medium transition-colors ${reordering ? "bg-amber-500 text-white hover:bg-amber-400" : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"}`}
-            >
-              {reordering ? "Done" : "Reorder"}
-            </button>
-          )}
-          </div>
           {visibleSongs.length === 0 && (
             <p className="py-4 text-center text-sm text-zinc-400">No songs match &ldquo;{songListFilter}&rdquo;</p>
           )}
@@ -1509,62 +1529,21 @@ export default function SetDetail({
         )}
 
         {songs.length > 0 && (
-          reordering && canReorder ? (
+          canManage && !songListFilter && songSort === "custom" ? (
             <SetSortableSongList
               contextId={set.id}
               items={songs}
               onMove={handleMoveSong}
-              renderRow={(i) => (
-                <div className="flex-1 min-w-0 self-center">
-                  <p className="truncate font-medium text-zinc-900">{songs[i].songs.title}</p>
-                  {songs[i].songs.display_artist && (
-                    <p className="truncate text-xs text-zinc-500">{songs[i].songs.display_artist}</p>
-                  )}
-                </div>
-              )}
+              renderRow={(i) => renderSongRow(songs[i], i)}
             />
           ) : (
             visibleSongs.map((song, i) => {
               const originalIndex = songs.indexOf(song);
               const displayNumber = songSort === "custom" ? originalIndex + 1 : i + 1;
-              const knowledgeForSong = songKnowledgeMap.get(song.song_id) ?? new Map<string, string>();
-              const knowledgeUserIds = new Set(knowledgeForSong.keys());
-              const hasEligible = [...knowledgeForSong.values()].some((c) => c === "lead");
-              const rowParticipants = isPublicViewer
-                ? []
-                : participants.filter((p) =>
-                    knowledgeUserIds.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id)
-                  );
               return (
-                <div key={song.id} className={`flex items-start gap-2 sm:gap-3 rounded-xl border px-2 sm:px-4 py-2.5 sm:py-3 ${song.played ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
-                  <PlayedMarker
-                    number={displayNumber}
-                    played={song.played}
-                    onToggle={canManage ? () => handleTogglePlayed(song.id, !song.played) : undefined}
-                  />
-                  <SetSongRow
-                    song={song}
-                    index={originalIndex}
-                    canManage={canManage}
-                    isAdmin={isAdmin}
-                    isSongEditor={isSongEditor}
-                    isPublicViewer={isPublicViewer}
-                    participants={rowParticipants}
-                    hasEligible={hasEligible}
-                    participantKnowledge={knowledgeForSong}
-                    participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
-                    currentUserId={currentUserId}
-                    currentUserSingingVoice={userSingingVoice}
-                    myConfidence={userRepertoire.get(song.song_id) ?? null}
-                    onMediaAdded={handleMediaAdded}
-                    onKeyChanged={handleKeyChanged}
-                    onNotesChanged={handleNotesChanged}
-                    onLeadersChanged={handleLeadersChanged}
-                    onAddToRepertoire={handleAddToRepertoire}
-                    onVoiceUpdated={setUserSingingVoice}
-                    onRemove={handleRemoveSong}
-                    signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
-                  />
+                <div key={song.id} className={`flex items-start gap-2 sm:gap-3 rounded-xl border border-zinc-200 px-2 sm:px-4 py-2.5 sm:py-3 ${song.played ? "bg-zinc-50" : "bg-white"}`}>
+                  <span className="shrink-0 mt-0.5 w-6 sm:w-8 text-center text-[10px] sm:text-xs font-semibold text-zinc-300">{displayNumber}</span>
+                  {renderSongRow(song, originalIndex)}
                 </div>
               );
             })
@@ -1628,25 +1607,3 @@ export default function SetDetail({
   );
 }
 
-function PlayedMarker({ number, played, onToggle }: { number: number; played: boolean; onToggle?: () => void }) {
-  const face = played ? (
-    <svg className="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-    </svg>
-  ) : (
-    <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${onToggle ? "border border-zinc-300 text-zinc-500" : "text-zinc-400"}`}>
-      {number}
-    </span>
-  );
-  if (!onToggle) return <span className="shrink-0 flex w-6 sm:w-8 justify-center pt-0.5">{face}</span>;
-  return (
-    <button
-      onClick={onToggle}
-      className="shrink-0 flex w-6 sm:w-8 justify-center pt-0.5 transition-opacity hover:opacity-70"
-      aria-label={played ? `Song ${number}: played. Mark as not played` : `Song ${number}: mark as played`}
-      title={played ? "Played. Tap to undo" : "Mark as played"}
-    >
-      {face}
-    </button>
-  );
-}
