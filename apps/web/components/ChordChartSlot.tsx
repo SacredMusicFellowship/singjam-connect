@@ -26,7 +26,7 @@ export default function ChordChartSlot({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (url) return <ChordsLink href={url} size={size} />;
+  if (url) return <ChordsLink href={url} size={size} outlined />;
 
   if (!canAdd) return null;
 
@@ -59,7 +59,7 @@ export default function ChordChartSlot({
     <>
       <button
         onClick={() => (adding ? close() : setAdding(true))}
-        className={`sm:hidden rounded-lg p-1.5 transition-all ${adding ? "opacity-100" : "opacity-50 border border-dashed border-zinc-400 hover:opacity-80 hover:border-zinc-500"}`}
+        className={`sm:hidden shrink-0 rounded-full border p-0.5 transition-all ${adding ? "opacity-100 border-zinc-400" : "opacity-50 border-dashed border-zinc-400 hover:opacity-80 hover:border-zinc-500"}`}
         title="Add chord chart"
         aria-label="Add chord chart"
       >

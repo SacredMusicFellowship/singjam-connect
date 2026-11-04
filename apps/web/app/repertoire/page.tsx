@@ -767,7 +767,7 @@ export default function RepertoirePage() {
                 return (
                   <div key={result.song_id} className="rounded-md border flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <div className="truncate font-medium">
+                      <div className="line-clamp-2 font-medium">
                         <Link href={href} className="hover:text-amber-600">
                           {result.title}
                         </Link>
@@ -1053,7 +1053,7 @@ export default function RepertoirePage() {
                       aria-label={`Select ${it.title}`}
                     />
                     <div className="min-w-0">
-                    <div className="truncate font-medium">
+                    <div className="line-clamp-2 font-medium">
                       <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => saveScrollPosition()} className="hover:text-amber-600">
                         {it.title}
                       </Link>
