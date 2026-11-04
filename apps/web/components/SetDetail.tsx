@@ -1223,10 +1223,9 @@ export default function SetDetail({
         )}
       </ul>}
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        {canEdit && (
-          <>
+      {/* Invite belongs with the collaborators above, not the song tools below. */}
+      {canEdit && (
+        <div className="space-y-2">
             <button
               onClick={() => setShowInvitePanel((v) => !v)}
               className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
@@ -1237,7 +1236,7 @@ export default function SetDetail({
               Invite
             </button>
             {showInvitePanel && (
-              <div className="basis-full">
+              <div>
                 <SetInvitePanel
                   setId={set.id}
                   canAssignCoOwner={isOwner}
@@ -1253,9 +1252,11 @@ export default function SetDetail({
                 />
               </div>
             )}
-          </>
-        )}
+        </div>
+      )}
 
+      {/* Song tools: playlists, chords, export */}
+      <div className="flex flex-wrap gap-2">
         {isAdmin ? (
           !playlistLinks.youtube ? (
             <button
@@ -1267,7 +1268,7 @@ export default function SetDetail({
               {creatingPlaylist === "youtube" ? "Creating…" : "YouTube playlist"}
             </button>
           ) : youtubeOutdated ? (
-            <div className="flex items-center rounded-xl border border-red-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-red-200 overflow-hidden">
               <button
                 onClick={() => handleCreatePlaylist("youtube")}
                 disabled={!!creatingPlaylist}
@@ -1282,7 +1283,7 @@ export default function SetDetail({
               </a>
             </div>
           ) : (
-            <div className="flex items-center rounded-xl border border-red-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-red-200 overflow-hidden">
               <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
                 <YoutubeIcon />
                 Open playlist
@@ -1315,7 +1316,7 @@ export default function SetDetail({
               {creatingPlaylist === "spotify" ? "Creating…" : "Spotify playlist"}
             </button>
           ) : spotifyOutdated ? (
-            <div className="flex items-center rounded-xl border border-green-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-green-200 overflow-hidden">
               <button
                 onClick={() => handleCreatePlaylist("spotify")}
                 disabled={!!creatingPlaylist}
@@ -1330,7 +1331,7 @@ export default function SetDetail({
               </a>
             </div>
           ) : (
-            <div className="flex items-center rounded-xl border border-green-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-green-200 overflow-hidden">
               <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors">
                 <SpotifyIcon />
                 Open playlist
@@ -1355,7 +1356,7 @@ export default function SetDetail({
         {canManage ? (
           ugPlaylistUrl ? (
             <>
-              <div className="flex items-center rounded-xl border border-amber-200 overflow-hidden">
+              <div className="flex items-center rounded-full border border-amber-200 overflow-hidden">
                 <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
                   <UltimateGuitarIcon />
                   UG playlist

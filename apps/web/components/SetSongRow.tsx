@@ -235,7 +235,7 @@ export default function SetSongRow({
               // The visible chip is sized to its own text; the transparent select
               // on top opens the native picker without its widest-option width.
               <span className={`relative shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${song.key_note ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`}`}>
-                {song.key_note ?? "+ key"}
+                <span className="inline-grid justify-items-center"><span className="col-start-1 row-start-1">{song.key_note ?? "+ key"}</span><span className="invisible col-start-1 row-start-1" aria-hidden="true">C#</span></span>
                 <select
                   value={song.key_note ?? ""}
                   onChange={(e) => {
@@ -254,7 +254,7 @@ export default function SetSongRow({
             ) : (
               !isPublicViewer && song.key_note && (
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${KEY_STYLE.chip} ${KEY_STYLE.text}`}>
-                  {song.key_note}
+                  <span className="inline-grid justify-items-center"><span className="col-start-1 row-start-1">{song.key_note}</span><span className="invisible col-start-1 row-start-1" aria-hidden="true">C#</span></span>
                 </span>
               )
             )}

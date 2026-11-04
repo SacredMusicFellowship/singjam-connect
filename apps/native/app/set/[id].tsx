@@ -411,6 +411,8 @@ function SongRow({
                     onPress={() => setKeyPickerVisible(true)}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     className={`rounded-full px-2 py-0.5 mr-1 ${song.key_note ? KEY_STYLE.chip : KEY_STYLE.emptyChip}`}
+                    // Wide enough for a two-character key, so C and C# chips match.
+                    style={{ minWidth: 34, alignItems: 'center' }}
                     accessibilityLabel="Key"
                   >
                     <Text className={`text-xs font-semibold ${song.key_note ? KEY_STYLE.text : KEY_STYLE.emptyText}`}>
@@ -418,7 +420,7 @@ function SongRow({
                     </Text>
                   </TouchableOpacity>
                 ) : !isPublicViewer && song.key_note ? (
-                  <View className={`rounded-full px-2 py-0.5 mr-1 ${KEY_STYLE.chip}`}>
+                  <View className={`rounded-full px-2 py-0.5 mr-1 items-center ${KEY_STYLE.chip}`} style={{ minWidth: 34 }}>
                     <Text className={`text-xs font-semibold ${KEY_STYLE.text}`}>{song.key_note}</Text>
                   </View>
                 ) : null}
