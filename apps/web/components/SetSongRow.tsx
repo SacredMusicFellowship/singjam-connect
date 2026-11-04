@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
-import { CONFIDENCE_STYLES, hasLeadVoice, SET_SONG_NOTE_MAX } from "@singjam/core";
+import { CONFIDENCE_STYLES, hasLeadVoice, KEY_STYLE, SET_SONG_NOTE_MAX } from "@singjam/core";
 import RoleSelect from "@/components/RoleSelect";
 import ChordsLink from "@/components/ChordsLink";
 import {
@@ -234,7 +234,7 @@ export default function SetSongRow({
             {canManage ? (
               // The visible chip is sized to its own text; the transparent select
               // on top opens the native picker without its widest-option width.
-              <span className={`relative shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold ${song.key_note ? "bg-amber-100 text-amber-800" : "border border-zinc-200 bg-white text-zinc-400"}`}>
+              <span className={`relative shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${song.key_note ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`}`}>
                 {song.key_note ?? "+ key"}
                 <select
                   value={song.key_note ?? ""}
@@ -253,7 +253,7 @@ export default function SetSongRow({
               </span>
             ) : (
               !isPublicViewer && song.key_note && (
-                <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${KEY_STYLE.chip} ${KEY_STYLE.text}`}>
                   {song.key_note}
                 </span>
               )

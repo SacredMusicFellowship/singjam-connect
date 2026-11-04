@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CONFIDENCE_LEVEL_OPTIONS, CONFIDENCE_STYLES, confidenceLabel, confidenceStyle } from "./confidenceStyles";
+import { KEY_STYLE } from "./musicalKeys";
 
 describe("confidence styles", () => {
   it("gives every level its own colour family", () => {
@@ -23,5 +24,12 @@ describe("confidence styles", () => {
     expect(confidenceStyle(null)).toBe(CONFIDENCE_STYLES.learn);
     expect(confidenceLabel(undefined)).toBe("Learn");
     expect(confidenceLabel("support")).toBe("Support");
+  });
+});
+
+describe("key style", () => {
+  it("doesn't borrow any confidence level's colour", () => {
+    const levelColours = Object.values(CONFIDENCE_STYLES).map((s) => s.pill.match(/bg-(\w+)-/)![1]);
+    for (const colour of levelColours) expect(KEY_STYLE.chip).not.toContain(colour);
   });
 });

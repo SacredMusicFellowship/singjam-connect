@@ -12,7 +12,7 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, KEY_STYLE, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
@@ -410,16 +410,16 @@ function SongRow({
                   <TouchableOpacity
                     onPress={() => setKeyPickerVisible(true)}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    className={`rounded px-1.5 py-0.5 mr-1 ${song.key_note ? 'bg-amber-100' : 'border border-zinc-200 bg-white'}`}
+                    className={`rounded-full px-2 py-0.5 mr-1 ${song.key_note ? KEY_STYLE.chip : KEY_STYLE.emptyChip}`}
                     accessibilityLabel="Key"
                   >
-                    <Text className={`text-xs font-semibold ${song.key_note ? 'text-amber-800' : 'text-zinc-400'}`}>
+                    <Text className={`text-xs font-semibold ${song.key_note ? KEY_STYLE.text : KEY_STYLE.emptyText}`}>
                       {song.key_note ?? '+ key'}
                     </Text>
                   </TouchableOpacity>
                 ) : !isPublicViewer && song.key_note ? (
-                  <View className="rounded px-1.5 py-0.5 mr-1 bg-amber-100">
-                    <Text className="text-xs font-semibold text-amber-800">{song.key_note}</Text>
+                  <View className={`rounded-full px-2 py-0.5 mr-1 ${KEY_STYLE.chip}`}>
+                    <Text className={`text-xs font-semibold ${KEY_STYLE.text}`}>{song.key_note}</Text>
                   </View>
                 ) : null}
                 {!isPublicViewer && song.songs.tonality ? (

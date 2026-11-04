@@ -1,8 +1,8 @@
-import { MUSICAL_KEYS } from "@singjam/core";
+import { KEY_STYLE, MUSICAL_KEYS } from "@singjam/core";
 
 // The key the member plays the song in, shown to their set-mates next to their
-// name. Styled like the pills beside it (thin border, white) so it doesn't read
-// as Lead's amber. Every possible label sits in one grid cell with only the
+// name. The same outlined pill as its neighbours, in the key colour shared with
+// the set list's key (violet once chosen, neutral while empty). Every possible label sits in one grid cell with only the
 // current one visible, so the pill keeps one width whatever the key. The select
 // lies over it invisibly, since phones force selects to 16px.
 export default function MyKeySelect({
@@ -17,14 +17,14 @@ export default function MyKeySelect({
   const label = (key: string | null) =>
     key ? (
       <>
-        My key <span className="font-semibold text-zinc-900">{key}</span>
+        My key <span className="font-semibold">{key}</span>
       </>
     ) : (
       "+ My key"
     );
   return (
     <span
-      className={`relative inline-flex shrink-0 items-center rounded-full border border-zinc-200 bg-white text-zinc-600 ${
+      className={`relative inline-flex shrink-0 items-center rounded-full ${value ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`} ${
         size === "md" ? "px-3 py-1 text-xs sm:py-1.5 sm:text-sm" : "px-2.5 py-1 text-xs"
       }`}
     >
