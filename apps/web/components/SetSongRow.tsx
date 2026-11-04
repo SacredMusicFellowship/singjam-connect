@@ -191,13 +191,13 @@ export default function SetSongRow({
   );
   const learning = myConfidence === "learn";
 
-  const showRepertoireButtons = !!((!myConfidence || learning) && (currentUserId || signInUrl));
+  // Only for songs you don't have yet; once it's yours, ⋯ > Change my part moves it.
+  const showRepertoireButtons = !!(!myConfidence && (currentUserId || signInUrl));
   const showPeople = (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canManage && participants.length > 0));
   const showPlayed = canManage || song.played;
 
   const menuItems: MenuItem[] = [];
-  // Learners already have "I know this song!" on the row to move up.
-  if (currentUserId && myConfidence && !learning) {
+  if (currentUserId && myConfidence) {
     menuItems.push({ label: "Change my part", onSelect: () => setChangingPart(true) });
   }
   if (canManage && !song.notes) menuItems.push({ label: "Add note", onSelect: startEditingNotes });
@@ -215,10 +215,10 @@ export default function SetSongRow({
             ) : (
               <p className="font-medium text-zinc-900 line-clamp-2">{song.songs.title}</p>
             )}
-            {/* Green like "You're going" on a jam, so a song you're learning
-                stands out as you scroll the set. */}
+            {/* Indigo like "I know this song!" / "Want to learn it": it's about
+                your part. Green on this page means Played. */}
             {learning && (
-              <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+              <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200">
                 Learning
               </span>
             )}
@@ -451,16 +451,12 @@ export default function SetSongRow({
                     >
                       I know this song!
                     </button>
-                    {/* Already learning it: the badge by the title says so, and
-                        "I know this song!" is how they move up. */}
-                    {!learning && (
-                      <button
-                        onClick={() => onAddToRepertoire(song.song_id, "learn")}
-                        className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors"
-                      >
-                        Want to learn it
-                      </button>
-                    )}
+                    <button
+                      onClick={() => onAddToRepertoire(song.song_id, "learn")}
+                      className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors"
+                    >
+                      Want to learn it
+                    </button>
                   </div>
                 )
               )}
@@ -484,7 +480,7 @@ export default function SetSongRow({
                           const firstName = p.display_name ?? p.username ?? "?";
                           const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                           const personalKey = participantKeys.get(p.user_id);
-                          const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
+                          const pillStyle = `${isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700"} ${p.user_id === currentUserId ? (isLeader ? "ring-1 ring-inset ring-amber-700" : "ring-1 ring-inset ring-current") : ""}`;
                           return (
                             <button
                               key={p.user_id}
@@ -511,7 +507,7 @@ export default function SetSongRow({
                           return (
                             <span
                               key={p.user_id}
-                              className="rounded-full px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700"
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700 ${p.user_id === currentUserId ? "ring-1 ring-inset ring-current" : ""}`}
                             >
                               {label}
                             </span>
@@ -528,7 +524,7 @@ export default function SetSongRow({
                           const firstName = p.display_name ?? p.username ?? "?";
                           const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                           return (
-                            <span key={p.user_id} className="rounded-full px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-600">
+                            <span key={p.user_id} className={`rounded-full px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-600 ${p.user_id === currentUserId ? "ring-1 ring-inset ring-current" : ""}`}>
                               {label}
                             </span>
                           );
