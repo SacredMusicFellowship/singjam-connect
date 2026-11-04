@@ -75,11 +75,17 @@ type SongSearchResult = {
 function AddSongModal({
   visible,
   existingIds,
+  userId,
+  singingVoice,
+  onVoiceUpgraded,
   onClose,
   onAdded,
 }: {
   visible: boolean;
   existingIds: Set<string>;
+  userId: string | null;
+  singingVoice: string | null;
+  onVoiceUpgraded: (voice: string) => void;
   onClose: () => void;
   onAdded: (song: SetSong) => void;
 }) {
@@ -112,9 +118,32 @@ function AddSongModal({
     setSearching(false);
   }
 
+  // As on web, a song that isn't in your songs yet asks your part first and joins your songs at that part.
+  function askPart(title: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      Alert.alert("What's your part?", `"${title}" will be added to your songs.`, [
+        { text: 'Lead', onPress: () => resolve('lead') },
+        { text: 'Support', onPress: () => resolve('support') },
+        { text: 'Learn', onPress: () => resolve('learn') },
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+      ], { cancelable: true, onDismiss: () => resolve(null) });
+    });
+  }
+
   async function addSong(song: SongSearchResult) {
     setPendingId(song.song_id);
-    const { ok, json } = await setApi(`/api/sets/${setId}/songs`, 'POST', { songId: song.song_id });
+    const { data: mine } = userId
+      ? await supabase.from('user_songs').select('confidence').eq('user_id', userId).eq('song_id', song.song_id).maybeSingle()
+      : { data: null };
+    let confidence: string | null = null;
+    if (!mine) {
+      confidence = await askPart(song.title);
+      if (!confidence || !(await ensureLeadVoice(confidence, singingVoice, userId, onVoiceUpgraded))) {
+        setPendingId(null);
+        return;
+      }
+    }
+    const { ok, json } = await setApi(`/api/sets/${setId}/songs`, 'POST', confidence ? { songId: song.song_id, confidence } : { songId: song.song_id });
     setPendingId(null);
     if (!ok) { Alert.alert('Error', json?.error ?? 'Could not add song.'); return; }
     onAdded(json.song as SetSong);
@@ -1374,6 +1403,9 @@ export default function SetDetailScreen() {
       <AddSongModal
         visible={addModalVisible}
         existingIds={existingIds}
+        userId={myUserId}
+        singingVoice={singingVoice}
+        onVoiceUpgraded={setSingingVoice}
         onClose={() => setAddModalVisible(false)}
         onAdded={handleSongAdded}
       />
