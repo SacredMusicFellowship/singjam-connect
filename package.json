@@ -9,10 +9,11 @@
     "apps/native",
     "packages/*"
   ],
-  "scripts": {
-    "postinstall": "node scripts/fix-css-interop-dedupe.js"
-  },
   "overrides": {
-    "react-native-css-interop": "0.2.6"
+    "react-native-css-interop": "0.2.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "@types/react": "~19.3.0",
+    "@types/react-dom": "~19.3.0"
   }
 }

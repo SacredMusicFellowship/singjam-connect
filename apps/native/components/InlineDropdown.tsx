@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable, Dimensions } from 'react-native';
+import { View, type ViewInstance, Text, TouchableOpacity, Modal, Pressable, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export type DropdownOption<T extends string> = { key: T; label: string };
@@ -26,7 +26,7 @@ export default function InlineDropdown<T extends string>({
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
-  const triggerRef = useRef<View>(null);
+  const triggerRef = useRef<ViewInstance>(null);
 
   const current = options.find(o => o.key === value);
 
