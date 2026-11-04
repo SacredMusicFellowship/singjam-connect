@@ -6,9 +6,8 @@ import { UltimateGuitarIcon } from "@/components/setDetailShared";
 
 // A song's chord chart in a row of controls: the Chords link when there is one;
 // for admins and song editors, the set list's dashed "add chart" button and URL
-// field when there isn't; otherwise an empty slot of the same width so the rest
-// of the row lines up. Meant for a flex-wrap row: the URL field takes a line of
-// its own beneath it.
+// field when there isn't; otherwise nothing. Meant for the end of a flex-wrap
+// row: the URL field takes a line of its own beneath it.
 export default function ChordChartSlot({
   songId,
   url,
