@@ -5,12 +5,12 @@ import { UltimateGuitarIcon } from "@/components/setDetailShared";
 export default function ChordsLink({
   href,
   size = "sm",
-  outlined = false,
+  pill = false,
 }: {
   href: string;
   size?: "sm" | "md";
-  /** On phones, ring the icon like the pills beside it (rows of pill controls). */
-  outlined?: boolean;
+  /** On phones, a black pill that stretches to fill the rest of a row of pills. */
+  pill?: boolean;
 }) {
   return (
     <>
@@ -18,7 +18,7 @@ export default function ChordsLink({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className={`sm:hidden shrink-0 transition-opacity hover:opacity-80 ${outlined ? "rounded-full border border-zinc-200 bg-white p-0.5" : "rounded-lg p-1.5"}`}
+        className={`sm:hidden shrink-0 transition-opacity hover:opacity-80 ${pill ? "flex flex-1 items-center justify-center rounded-full border border-[#111] bg-[#111] px-3 py-0.5" : "rounded-lg p-1.5"}`}
         title="Chord chart"
         aria-label="Chord chart"
       >
