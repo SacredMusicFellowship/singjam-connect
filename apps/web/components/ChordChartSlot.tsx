@@ -29,13 +29,7 @@ export default function ChordChartSlot({
 
   if (url) return <ChordsLink href={url} size={size} />;
 
-  if (!canAdd) {
-    return (
-      <span className="invisible flex" aria-hidden="true">
-        <ChordsLink href="#" size={size} />
-      </span>
-    );
-  }
+  if (!canAdd) return null;
 
   function close() {
     setAdding(false);

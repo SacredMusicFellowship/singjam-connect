@@ -1079,14 +1079,6 @@ export default function RepertoirePage() {
 
                     <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" />
 
-                    <ChordChartSlot
-                      songId={it.song_id}
-                      url={it.chord_chart_url}
-                      canAdd={canAddCharts}
-                      size="md"
-                      onAdded={(url) => setItems((prev) => prev.map((x) => (x.song_id === it.song_id ? { ...x, chord_chart_url: url } : x)))}
-                    />
-
                     {userSets.length > 0 && (
                       <AddToSetPanel
                         songId={it.song_id}
@@ -1097,6 +1089,14 @@ export default function RepertoirePage() {
                         onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
                       />
                     )}
+
+                    <ChordChartSlot
+                      songId={it.song_id}
+                      url={it.chord_chart_url}
+                      canAdd={canAddCharts}
+                      size="md"
+                      onAdded={(url) => setItems((prev) => prev.map((x) => (x.song_id === it.song_id ? { ...x, chord_chart_url: url } : x)))}
+                    />
 
                   </div>
                 </div>
