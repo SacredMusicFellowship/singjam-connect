@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, Modal, FlatList, TextInput,
-  KeyboardAvoidingView, Platform, Linking,
+  KeyboardAvoidingView, Platform, Linking, useWindowDimensions,
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { WIDE_BREAKPOINT } from '@/components/BrandHeader';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
@@ -304,15 +305,18 @@ function SongRow({
   const isMyLead = myConfidence === 'lead';
   const showPlayed = canManage || song.played;
   const showFooter = !!myConfidence || showPlayed || canManage || canRemove;
+  // Removing their own song is the only action a guest has, so it gets a direct button instead of a ⋯ menu.
+  const guestRemove = canRemove && !canManage;
+  const wide = useWindowDimensions().width >= WIDE_BREAKPOINT;
 
-  // Same items as web's ⋯ menu: notes are for the owner and co-owners; an editor may also remove a song they added.
+  // Same items as web's ⋯ menu, which only the owner and co-owners get.
   function openMenu(event: GestureResponderEvent) {
     showOptionsSheet({
       title: song.songs.title,
       anchor: anchorFrom(event),
       options: [
-        ...(canManage && !song.notes ? [{ label: 'Add note', onPress: startEditingNotes }] : []),
-        ...(canRemove ? [{ label: 'Remove from set', destructive: true, onPress: confirmRemove }] : []),
+        ...(!song.notes ? [{ label: 'Add note', onPress: startEditingNotes }] : []),
+        { label: 'Remove from set', destructive: true, onPress: confirmRemove },
       ],
     });
   }
@@ -554,10 +558,20 @@ function SongRow({
                   </View>
                 ) : null}
               </View>
-              {canManage || canRemove ? (
+              {canManage ? (
                 <TouchableOpacity onPress={openMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="More options">
                   <Ionicons name="ellipsis-horizontal" size={20} color="#a1a1aa" />
                 </TouchableOpacity>
+              ) : guestRemove ? (
+                wide ? (
+                  <TouchableOpacity onPress={confirmRemove} className="rounded-xl border border-zinc-200 px-2 py-1">
+                    <Text className="text-xs text-zinc-400">Remove</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={confirmRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Remove song">
+                    <Ionicons name="trash-outline" size={18} color="#d4d4d8" />
+                  </TouchableOpacity>
+                )
               ) : null}
             </View>
           ) : null}
