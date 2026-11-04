@@ -1,6 +1,6 @@
 "use client";
 
-import { CONFIDENCE_LEVEL_OPTIONS, confidenceLabel, confidenceStyle } from "@singjam/core";
+import { CONFIDENCE_LEVEL_OPTIONS, confidenceStyle } from "@singjam/core";
 
 // The member's own Lead / Support / Learn for a song, coloured by level. A
 // visible pill with the real select laid over it invisibly: phones force selects
@@ -23,7 +23,15 @@ export default function RoleSelect({
         size === "md" ? "px-3 py-1 text-xs sm:py-1.5 sm:text-sm" : "px-2.5 py-1 text-xs"
       } ${style.control} ${style.controlText} ${disabled ? "opacity-40" : ""}`}
     >
-      {confidenceLabel(value)}
+      {/* Every label stacked in one grid cell, only the chosen one visible, so
+          the pill is always as wide as "Support" and rows don't shift. */}
+      <span className="grid">
+        {CONFIDENCE_LEVEL_OPTIONS.map((l) => (
+          <span key={l.key} className={`col-start-1 row-start-1 ${l.key === value ? "" : "invisible"}`} aria-hidden={l.key !== value}>
+            {l.label}
+          </span>
+        ))}
+      </span>
       <svg className="h-3 w-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
       </svg>

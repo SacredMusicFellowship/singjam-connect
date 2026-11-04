@@ -5,6 +5,7 @@ import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import { CONFIDENCE_STYLES, hasLeadVoice, SET_SONG_NOTE_MAX } from "@singjam/core";
 import RoleSelect from "@/components/RoleSelect";
+import ChordsLink from "@/components/ChordsLink";
 import {
   MUSICAL_KEYS,
   YoutubeIcon,
@@ -233,7 +234,7 @@ export default function SetSongRow({
             {canManage ? (
               // The visible chip is sized to its own text; the transparent select
               // on top opens the native picker without its widest-option width.
-              <span className={`relative shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold ${song.key_note ? "bg-amber-100 text-amber-800" : "border border-dashed border-zinc-300 text-zinc-400"}`}>
+              <span className={`relative shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold ${song.key_note ? "bg-amber-100 text-amber-800" : "border border-zinc-200 bg-white text-zinc-400"}`}>
                 {song.key_note ?? "+ key"}
                 <select
                   value={song.key_note ?? ""}
@@ -325,27 +326,7 @@ export default function SetSongRow({
         <div className="shrink-0 flex items-center gap-0.5">
           {/* Ultimate Guitar chord chart */}
           {chord_chart_url ? (
-            <>
-              <a
-                href={chord_chart_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="sm:hidden rounded-lg p-1.5 transition-opacity hover:opacity-80"
-                title="Chord chart"
-              >
-                <UltimateGuitarIcon />
-              </a>
-              <a
-                href={chord_chart_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-200 pl-1.5 pr-3 py-1 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-                title="Chord chart"
-              >
-                <UltimateGuitarIcon />
-                <span className="text-xs font-medium text-zinc-600">Chords</span>
-              </a>
-            </>
+            <ChordsLink href={chord_chart_url} />
           ) : isAdmin || isSongEditor ? (
             <>
               <button

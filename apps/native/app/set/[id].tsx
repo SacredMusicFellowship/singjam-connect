@@ -410,7 +410,7 @@ function SongRow({
                   <TouchableOpacity
                     onPress={() => setKeyPickerVisible(true)}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    className={`rounded px-1.5 py-0.5 mr-1 ${song.key_note ? 'bg-amber-100' : 'border border-dashed border-zinc-300'}`}
+                    className={`rounded px-1.5 py-0.5 mr-1 ${song.key_note ? 'bg-amber-100' : 'border border-zinc-200 bg-white'}`}
                     accessibilityLabel="Key"
                   >
                     <Text className={`text-xs font-semibold ${song.key_note ? 'text-amber-800' : 'text-zinc-400'}`}>

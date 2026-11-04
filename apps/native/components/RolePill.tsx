@@ -18,7 +18,9 @@ export default function RolePill({
   return (
     <TouchableOpacity
       onPress={onPress}
-      className={`flex-row items-center rounded-full border ${size === 'md' ? 'px-3 py-1.5' : 'px-2.5 py-1'} ${style.control}`}
+      className={`flex-row items-center justify-between rounded-full border ${size === 'md' ? 'px-3 py-1.5' : 'px-2.5 py-1'} ${style.control}`}
+      // Wide enough for "Support", so the pill doesn't change size between levels.
+      style={{ minWidth: size === 'md' ? 96 : 82 }}
       accessibilityLabel="Role"
     >
       <Text className={`${size === 'md' ? 'text-sm' : 'text-xs'} ${style.controlText}`}>{confidenceLabel(level)}</Text>

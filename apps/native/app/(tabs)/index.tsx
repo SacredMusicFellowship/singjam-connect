@@ -23,6 +23,7 @@ import PromptCard from '@/components/PromptCard';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RichUserSong = UserSong & {
+  chord_chart_url?: string | null;
   genres: string[];
   languages: string[];
   themes: string[];
@@ -100,6 +101,7 @@ async function fetchRichUserSongs(): Promise<RichUserSong[]> {
     meter: row.meter ?? null,
     year: row.year ?? null,
     popularity: Number(row.popularity ?? 0),
+    chord_chart_url: row.chord_chart_url ?? null,
   }));
 }
 

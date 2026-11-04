@@ -1,7 +1,7 @@
 import { Text, TouchableOpacity } from 'react-native';
 
 // The key you play a song in, as on web's MyKeySelect: amber once chosen,
-// dashed while empty. The caller opens KeyPicker on press.
+// a plain hairline pill while empty. The caller opens KeyPicker on press.
 export default function MyKeyChip({
   value,
   onPress,
@@ -16,7 +16,7 @@ export default function MyKeyChip({
     <TouchableOpacity
       onPress={onPress}
       className={`flex-row items-center rounded-full ${size === 'md' ? 'px-3 py-1.5' : 'px-2.5 py-1'} ${
-        value ? 'bg-amber-100' : 'border border-dashed border-zinc-300'
+        value ? 'bg-amber-100' : 'border border-zinc-200 bg-white'
       }`}
       accessibilityLabel="My key"
     >

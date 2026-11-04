@@ -16,7 +16,7 @@ export default function MyKeySelect({
     <span
       className={`relative inline-flex shrink-0 items-center gap-1 rounded-full ${
         size === "md" ? "px-3 py-1 text-xs sm:py-1.5 sm:text-sm" : "px-2.5 py-1 text-xs"
-      } ${value ? "bg-amber-100 text-amber-800" : "border border-dashed border-zinc-300 text-zinc-500"}`}
+      } ${value ? "bg-amber-100 text-amber-800" : "border border-zinc-200 bg-white text-zinc-500"}`}
     >
       {value ? (
         <>

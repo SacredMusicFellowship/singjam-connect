@@ -20,6 +20,7 @@ import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
 import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
+import ChordsLink from "@/components/ChordsLink";
 import SearchInput from "@/components/SearchInput";
 
 const CONFIDENCE_LEVELS = [
@@ -58,6 +59,7 @@ type Item = {
   meter: string | null;
   year: number | null;
   popularity?: number;
+  chord_chart_url?: string | null;
 };
 
 const CACHE_KEY = "cache:/repertoire";
@@ -326,6 +328,7 @@ export default function RepertoirePage() {
           languages: r.languages ?? [],
           themes: r.themes ?? [],
           popularity: r.popularity ?? 0,
+          chord_chart_url: r.chord_chart_url ?? null,
         }));
 
         if (!itemsMutatedRef.current) {
@@ -1038,7 +1041,7 @@ export default function RepertoirePage() {
                     selectedIds.has(it.song_id) ? "bg-amber-50/60" : ""
                   }`}
                 >
-                  <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
                     <input
                       type="checkbox"
                       checked={selectedIds.has(it.song_id)}
@@ -1066,6 +1069,7 @@ export default function RepertoirePage() {
                       <div className="text-xs text-zinc-400">{it.popularity} {it.popularity === 1 ? "jammer" : "jammers"}</div>
                     )}
                   </div>
+                    {it.chord_chart_url && <div className="ml-auto -mt-1.5 flex shrink-0"><ChordsLink href={it.chord_chart_url} /></div>}
                   </div>
 
                   <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
