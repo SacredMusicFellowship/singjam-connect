@@ -243,15 +243,57 @@ describe("DELETE /api/sets/[id]/songs/[songId]", () => {
   const params = { params: Promise.resolve({ id: "set-1", songId: "song-1" }) };
   const del = () => new Request("http://localhost/api/sets/set-1/songs/song-1", { method: "DELETE" });
 
-  it("refuses anyone who isn't the owner or a co-owner, without deleting", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "guest-1" } } });
-    const coOwnerCheck = chain({ data: null });
+  // A refused delete leaves its queued delete mock unconsumed; drop it so it can't leak.
+  beforeEach(() => mockAdminFrom.mockReset());
+
+  function deleteChain() {
+    const c: any = {};
+    c.delete = vi.fn().mockReturnValue(c);
+    c.eq = vi.fn().mockReturnValue(c);
+    c.then = (resolve: any, reject: any) => Promise.resolve({ error: null }).then(resolve, reject);
+    return c;
+  }
+
+  function mockDelete(opts: { owner?: boolean; role?: string | null; addedBy: string | null }) {
+    const remover = deleteChain();
     mockAdminFrom
-      .mockReturnValueOnce(chain({ data: null }))
-      .mockReturnValueOnce(coOwnerCheck);
+      .mockReturnValueOnce(chain({ data: opts.owner ? { id: "set-1" } : null }))
+      .mockReturnValueOnce(chain({ data: opts.role ? { role: opts.role } : null }))
+      .mockReturnValueOnce(chain({ data: { added_by_user_id: opts.addedBy } }))
+      .mockReturnValueOnce(remover);
+    return remover;
+  }
+
+  it("refuses an editor removing a song someone else added, without deleting", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "guest-1" } } });
+    const remover = mockDelete({ role: "editor", addedBy: "host-1" });
     const res = await DELETE(del(), params);
     expect(res.status).toBe(403);
-    expect(coOwnerCheck.eq).toHaveBeenCalledWith("role", "co-owner");
-    expect(mockAdminFrom).toHaveBeenCalledTimes(2);
+    expect(remover.delete).not.toHaveBeenCalled();
+  });
+
+  it("lets an editor remove a song they added themselves", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "guest-1" } } });
+    const remover = mockDelete({ role: "editor", addedBy: "guest-1" });
+    const res = await DELETE(del(), params);
+    expect(res.status).toBe(200);
+    expect(remover.delete).toHaveBeenCalled();
+    expect(remover.eq).toHaveBeenCalledWith("song_id", "song-1");
+  });
+
+  it("refuses a viewer even for a song recorded as theirs", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "viewer-1" } } });
+    const remover = mockDelete({ role: "viewer", addedBy: "viewer-1" });
+    const res = await DELETE(del(), params);
+    expect(res.status).toBe(403);
+    expect(remover.delete).not.toHaveBeenCalled();
+  });
+
+  it("lets a co-owner remove anyone's song", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "co-1" } } });
+    const remover = mockDelete({ role: "co-owner", addedBy: "guest-1" });
+    const res = await DELETE(del(), params);
+    expect(res.status).toBe(200);
+    expect(remover.delete).toHaveBeenCalled();
   });
 });

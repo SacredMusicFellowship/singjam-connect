@@ -22,3 +22,14 @@ export function setsAcceptingSongs<T extends { role?: string | null }>(sets: T[]
 export function canManageSet(isOwner: boolean, role: string | null | undefined): boolean {
   return isOwner || role === "co-owner";
 }
+
+// Guests can undo their own additions without touching anyone else's songs.
+export function canRemoveSetSong(
+  isOwner: boolean,
+  role: string | null | undefined,
+  addedByUserId: string | null | undefined,
+  userId: string | null | undefined,
+): boolean {
+  if (canManageSet(isOwner, role)) return true;
+  return role === "editor" && !!userId && addedByUserId === userId;
+}

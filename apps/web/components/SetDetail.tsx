@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
+import { canRemoveSetSong, jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -81,6 +81,7 @@ export default function SetDetail({
   const [songKnowledge, setSongKnowledge] = useState(initialSongKnowledge);
   const [userSingingVoice, setUserSingingVoice] = useState(currentUserSingingVoice ?? null);
   const [collaborators, setCollaborators] = useState(initialCollaborators);
+  const myRole = collaborators.find((c: any) => c.user_id === currentUserId && c.status === "accepted")?.role;
   const [accessRequests, setAccessRequests] = useState(initialAccessRequests);
   const [editingName, setEditingName] = useState(false);
   const editingNameRef = useRef(editingName);
@@ -338,7 +339,7 @@ export default function SetDetail({
             supabase
               .from("set_songs")
               .select(
-                "id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
+                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
               )
               .eq("id", row.id)
               .single(),
@@ -602,6 +603,7 @@ export default function SetDetail({
         song={song}
         index={index}
         canManage={canManage}
+        canRemove={canRemoveSetSong(isOwner, myRole, song.added_by_user_id, currentUserId)}
         isAdmin={isAdmin}
         isSongEditor={isSongEditor}
         isPublicViewer={isPublicViewer}

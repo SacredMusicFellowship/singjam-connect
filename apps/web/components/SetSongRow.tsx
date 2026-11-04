@@ -22,6 +22,7 @@ type AddingField = "youtube" | "spotify" | "chord" | null;
 export default function SetSongRow({
   song,
   canManage,
+  canRemove,
   isAdmin,
   isSongEditor = false,
   isPublicViewer,
@@ -46,6 +47,8 @@ export default function SetSongRow({
   index: number;
   /** Owner or co-owner: reorder, remove, key, played, notes, choosing leaders. */
   canManage: boolean;
+  /** Managers, or an editor removing a song they added. */
+  canRemove: boolean;
   isAdmin: boolean;
   isSongEditor?: boolean;
   isPublicViewer: boolean;
@@ -204,7 +207,7 @@ export default function SetSongRow({
 
   const menuItems: MenuItem[] = [];
   if (canManage && !song.notes) menuItems.push({ label: "Add note", onSelect: startEditingNotes });
-  if (canManage) menuItems.push({ label: "Remove from set", destructive: true, onSelect: () => onRemove(song.song_id) });
+  if (canRemove) menuItems.push({ label: "Remove from set", destructive: true, onSelect: () => onRemove(song.song_id) });
 
   return (
     <div className="flex-1 min-w-0 space-y-2">

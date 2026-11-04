@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canContributeToSet, canManageSet, setsAcceptingSongs } from "./setRoles";
+import { canContributeToSet, canManageSet, canRemoveSetSong, setsAcceptingSongs } from "./setRoles";
 
 describe("canContributeToSet", () => {
   it("allows editors and co-owners", () => {
@@ -49,5 +49,28 @@ describe("canManageSet", () => {
     expect(canManageSet(false, "editor")).toBe(false);
     expect(canManageSet(false, "viewer")).toBe(false);
     expect(canManageSet(false, null)).toBe(false);
+  });
+});
+
+describe("canRemoveSetSong", () => {
+  it("lets the owner and co-owners remove any song", () => {
+    expect(canRemoveSetSong(true, undefined, "someone-else", "me")).toBe(true);
+    expect(canRemoveSetSong(false, "co-owner", "someone-else", "me")).toBe(true);
+  });
+
+  it("lets an editor remove only a song they added", () => {
+    expect(canRemoveSetSong(false, "editor", "me", "me")).toBe(true);
+    expect(canRemoveSetSong(false, "editor", "someone-else", "me")).toBe(false);
+    expect(canRemoveSetSong(false, "editor", null, "me")).toBe(false);
+  });
+
+  it("never matches a missing user to a missing adder", () => {
+    expect(canRemoveSetSong(false, "editor", null, null)).toBe(false);
+    expect(canRemoveSetSong(false, "editor", undefined, undefined)).toBe(false);
+  });
+
+  it("keeps viewers and outsiders out", () => {
+    expect(canRemoveSetSong(false, "viewer", "me", "me")).toBe(false);
+    expect(canRemoveSetSong(false, null, "me", "me")).toBe(false);
   });
 });

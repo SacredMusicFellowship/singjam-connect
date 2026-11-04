@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { resolveApiUser } from "@/lib/supabase/apiUser";
-import { canManageSet, keyForNewLeaders, normalizeSetSongNote, SET_SONG_NOTE_MAX } from "@singjam/core";
+import { canManageSet, canRemoveSetSong, keyForNewLeaders, normalizeSetSongNote, SET_SONG_NOTE_MAX } from "@singjam/core";
 
 export async function PATCH(
   req: Request,
@@ -97,11 +97,14 @@ export async function DELETE(
 
   const admin = supabaseAdmin();
 
-  const [ownerRes, collabRes] = await Promise.all([
+  const [ownerRes, collabRes, rowRes] = await Promise.all([
     admin.from("sets").select("id").eq("id", setId).eq("owner_user_id", user.id).maybeSingle(),
-    admin.from("set_collaborators").select("id").eq("set_id", setId).eq("user_id", user.id).eq("status", "accepted").eq("role", "co-owner").maybeSingle(),
+    admin.from("set_collaborators").select("role").eq("set_id", setId).eq("user_id", user.id).eq("status", "accepted").maybeSingle(),
+    admin.from("set_songs").select("added_by_user_id").eq("set_id", setId).eq("song_id", songId).maybeSingle(),
   ]);
-  if (!ownerRes.data && !collabRes.data) {
+  const role = (collabRes.data as { role: string } | null)?.role;
+  const addedBy = (rowRes.data as { added_by_user_id: string | null } | null)?.added_by_user_id;
+  if (!canRemoveSetSong(!!ownerRes.data, role, addedBy, user.id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -11,7 +11,7 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { formatComposers, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
+import { canRemoveSetSong, formatComposers, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
@@ -55,6 +55,7 @@ type SetSong = {
   notes: string | null;
   played: boolean;
   leader_user_ids: string[];
+  added_by_user_id?: string | null;
   songs: {
     title: string;
     display_artist: string | null;
@@ -200,6 +201,7 @@ function AddSongModal({
 function SongRow({
   song,
   canManage,
+  canRemove,
   myUserId,
   displayPosition,
   drag,
@@ -220,6 +222,7 @@ function SongRow({
   song: SetSong;
   /** Owner or co-owner: reorder, remove, key, played, notes, choosing leaders. */
   canManage: boolean;
+  canRemove: boolean;
   myUserId: string | null;
   displayPosition: number;
   drag?: () => void;
@@ -300,16 +303,16 @@ function SongRow({
   const myRoleLabel = myConfidence ? ROLE_LABEL[myConfidence] ?? myConfidence : null;
   const isMyLead = myConfidence === 'lead';
   const showPlayed = canManage || song.played;
-  const showFooter = !!myConfidence || showPlayed || canManage;
+  const showFooter = !!myConfidence || showPlayed || canManage || canRemove;
 
-  // Same items as web's ⋯ menu: notes and removal are for the owner and co-owners.
+  // Same items as web's ⋯ menu: notes are for the owner and co-owners; an editor may also remove a song they added.
   function openMenu(event: GestureResponderEvent) {
     showOptionsSheet({
       title: song.songs.title,
       anchor: anchorFrom(event),
       options: [
-        ...(!song.notes ? [{ label: 'Add note', onPress: startEditingNotes }] : []),
-        { label: 'Remove from set', destructive: true, onPress: confirmRemove },
+        ...(canManage && !song.notes ? [{ label: 'Add note', onPress: startEditingNotes }] : []),
+        ...(canRemove ? [{ label: 'Remove from set', destructive: true, onPress: confirmRemove }] : []),
       ],
     });
   }
@@ -551,7 +554,7 @@ function SongRow({
                   </View>
                 ) : null}
               </View>
-              {canManage ? (
+              {canManage || canRemove ? (
                 <TouchableOpacity onPress={openMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="More options">
                   <Ionicons name="ellipsis-horizontal" size={20} color="#a1a1aa" />
                 </TouchableOpacity>
@@ -823,6 +826,7 @@ export default function SetDetailScreen() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [isCoOwner, setIsCoOwner] = useState(false);
+  const [myRole, setMyRole] = useState<string | null>(null);
   const [isCollaborator, setIsCollaborator] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -848,7 +852,7 @@ export default function SetDetailScreen() {
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, chord_chart_url, tonality, song_composers(people(name)))';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, chord_chart_url, tonality, song_composers(people(name)))';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -964,7 +968,7 @@ export default function SetDetailScreen() {
         .single(),
       supabase
         .from('set_songs')
-        .select('id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, chord_chart_url, tonality, song_composers(people(name)))')
+        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, chord_chart_url, tonality, song_composers(people(name)))')
         .eq('set_id', id)
         .order('position', { ascending: true }),
       user
@@ -994,6 +998,7 @@ export default function SetDetailScreen() {
     const coOwner = myRole === 'co-owner';
     setCanEdit(isOwner || myRole === 'editor' || coOwner);
     setIsCoOwner(coOwner);
+    setMyRole(myRole);
     setIsCollaborator(!!collabRes.data);
 
     // Visibility gate, mirroring web set/[id]/page.tsx. RLS on `sets` is
@@ -1438,6 +1443,7 @@ export default function SetDetailScreen() {
                 <SongRow
                   song={item}
                   canManage={canManage}
+                  canRemove={canRemoveSetSong(isOwner, myRole, item.added_by_user_id, myUserId)}
                   myUserId={myUserId}
                   displayPosition={(getIndex() ?? 0) + 1}
                   drag={drag}
@@ -1467,6 +1473,7 @@ export default function SetDetailScreen() {
               <SongRow
                 song={item}
                 canManage={canManage}
+                canRemove={canRemoveSetSong(isOwner, myRole, item.added_by_user_id, myUserId)}
                 myUserId={myUserId}
                 displayPosition={index + 1}
                 {...leaderProps(item)}
