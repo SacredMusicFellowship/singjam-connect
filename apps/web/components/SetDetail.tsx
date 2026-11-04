@@ -549,22 +549,34 @@ export default function SetDetail({
   }
 
   function handleLeadersChanged(id: string, leaderUserIds: string[]) {
-    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: leaderUserIds } : s));
     const entry = songs.find((s) => s.id === id);
     if (!entry) return;
+    const previousLeaderIds = entry.leader_user_ids ?? [];
+    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: leaderUserIds } : s));
     if (currentUserId && leaderUserIds.includes(currentUserId) && !userRepertoire.has(entry.song_id)) {
       setUserRepertoire((prev) => new Map(prev).set(entry.song_id, "lead"));
     }
+    // Guests can only add or remove themselves; the server merges that into the
+    // current leaders so it can't undo a change someone else just made.
+    const body = canManage
+      ? { leader_user_ids: leaderUserIds }
+      : { self_leader: !!currentUserId && leaderUserIds.includes(currentUserId) };
     fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ leader_user_ids: leaderUserIds }),
+      body: JSON.stringify(body),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
-        if (json && "key_note" in json) {
-          setSongs((prev) => prev.map((s) => s.id === id ? { ...s, key_note: json.key_note } : s));
+        if (!json) {
+          setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: previousLeaderIds } : s));
+          return;
         }
+        setSongs((prev) => prev.map((s) => s.id === id ? {
+          ...s,
+          ...("leader_user_ids" in json ? { leader_user_ids: json.leader_user_ids } : {}),
+          ...("key_note" in json ? { key_note: json.key_note } : {}),
+        } : s));
       });
   }
 
@@ -1483,7 +1495,7 @@ export default function SetDetail({
         )}
 
         {songs.length > 0 && (
-          canEdit && !songListFilter && songSort === "custom" ? (
+          canManage && !songListFilter && songSort === "custom" ? (
             <SetSortableSongList
               contextId={set.id}
               items={songs}
@@ -1500,7 +1512,7 @@ export default function SetDetail({
                   <SetSongRow
                     song={song}
                     index={i}
-                    canEdit={canEdit}
+                    canManage={canManage}
                     isAdmin={isAdmin}
                     isSongEditor={isSongEditor}
                     isPublicViewer={isPublicViewer}
@@ -1542,7 +1554,7 @@ export default function SetDetail({
                   <SetSongRow
                     song={song}
                     index={originalIndex}
-                    canEdit={canEdit}
+                    canManage={canManage}
                     isAdmin={isAdmin}
                     isSongEditor={isSongEditor}
                     isPublicViewer={isPublicViewer}

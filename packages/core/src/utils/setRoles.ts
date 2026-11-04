@@ -1,8 +1,8 @@
 export type SetCollaboratorRole = "editor" | "viewer" | "co-owner";
 
-// Roles allowed to change a set's songs. Viewers may open a set and read it,
-// but not add, remove, reorder or edit — enforced in the web API's set routes,
-// which are the single source of set authorization for both apps.
+// Roles allowed to add songs to a set. Viewers may open a set and read it, but
+// not add — enforced in the web API's set routes, which are the single source
+// of set authorization for both apps.
 const CONTRIBUTOR_ROLES: readonly string[] = ["editor", "co-owner"];
 
 // `role` is undefined for a set the user owns outright.
@@ -14,4 +14,11 @@ export function canContributeToSet(role: string | null | undefined): boolean {
 // to, so we never offer a target the API is going to reject with a 403.
 export function setsAcceptingSongs<T extends { role?: string | null }>(sets: T[]): T[] {
   return sets.filter((s) => canContributeToSet(s.role));
+}
+
+// Reordering, removing, keys, played, notes and choosing other people as leader
+// are for the owner and co-owners. Event ticket holders join as editors, so an
+// editor is usually a guest in the crowd, not someone running the set.
+export function canManageSet(isOwner: boolean, role: string | null | undefined): boolean {
+  return isOwner || role === "co-owner";
 }

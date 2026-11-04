@@ -17,7 +17,7 @@ export async function PATCH(
 
   const [ownerRes, collabRes] = await Promise.all([
     admin.from("sets").select("id").eq("id", setId).eq("owner_user_id", user.id).maybeSingle(),
-    admin.from("set_collaborators").select("id").eq("set_id", setId).eq("user_id", user.id).eq("status", "accepted").in("role", ["editor", "co-owner"]).maybeSingle(),
+    admin.from("set_collaborators").select("id").eq("set_id", setId).eq("user_id", user.id).eq("status", "accepted").eq("role", "co-owner").maybeSingle(),
   ]);
   if (!ownerRes.data && !collabRes.data) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

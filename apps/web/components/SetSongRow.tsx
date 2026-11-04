@@ -20,7 +20,7 @@ type AddingField = "youtube" | "spotify" | "chord" | null;
 
 export default function SetSongRow({
   song,
-  canEdit,
+  canManage,
   isAdmin,
   isSongEditor = false,
   isPublicViewer,
@@ -43,7 +43,8 @@ export default function SetSongRow({
 }: {
   song: Song;
   index: number;
-  canEdit: boolean;
+  /** Owner or co-owner: reorder, remove, key, played, notes, choosing leaders. */
+  canManage: boolean;
   isAdmin: boolean;
   isSongEditor?: boolean;
   isPublicViewer: boolean;
@@ -73,6 +74,7 @@ export default function SetSongRow({
   const [urlInput, setUrlInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [notesInput, setNotesInput] = useState("");
   // Set when Cancel/Escape closes the editor, so the input's blur doesn't save.
   const discardNotesRef = useRef(false);
@@ -213,7 +215,7 @@ export default function SetSongRow({
             <p className="text-xs text-zinc-500 truncate">{song.songs.display_artist}</p>
           )}
           <div className="flex items-center gap-2 mt-1">
-            {canEdit ? (
+            {canManage ? (
               <select
                 value={song.key_note ?? ""}
                 onChange={(e) => {
@@ -288,13 +290,13 @@ export default function SetSongRow({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
               <p className="flex-1 min-w-0 text-xs text-zinc-700 break-words">{song.notes}</p>
-              {canEdit && (
+              {canManage && (
                 <button onClick={startEditingNotes} className="shrink-0 text-xs font-medium text-amber-600 hover:text-amber-500">
                   Edit
                 </button>
               )}
             </div>
-          ) : canEdit ? (
+          ) : canManage ? (
             <button
               onClick={startEditingNotes}
               className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5 text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-colors"
@@ -436,20 +438,22 @@ export default function SetSongRow({
         )
       )}
 
-      {(leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0)) && (
+      {(leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canManage && participants.length > 0)) && (
         <div className="space-y-1">
-          {(leadParticipants.length > 0 || (canEdit && participants.length > 0)) && (
+          {(leadParticipants.length > 0 || (canManage && participants.length > 0)) && (
             <div className="flex items-start gap-1.5">
               <span className="shrink-0 text-[10px] text-amber-500 font-medium pt-0.5">Lead</span>
               <div className="flex flex-wrap gap-1 flex-1">
-                {canEdit && leaderIds.length === 0 && !hasEligible && (
+                {canManage && leaderIds.length === 0 && !hasEligible && (
                   <span className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-500">
                     No leader
                   </span>
                 )}
                 {leadParticipants.map((p) => {
                   const isLeader = leaderIds.includes(p.user_id);
-                  const isClickable = canEdit && participantKnowledge.get(p.user_id) === "lead";
+                  // Anyone who has joined the set can put themselves forward; choosing
+                  // someone else is for the owner and co-owners.
+                  const isClickable = participantKnowledge.get(p.user_id) === "lead" && (canManage || p.user_id === currentUserId);
                   const firstName = p.display_name ?? p.username ?? "?";
                   const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                   const personalKey = participantKeys.get(p.user_id);
@@ -532,10 +536,10 @@ export default function SetSongRow({
         />
       )}
 
-      {(canEdit || song.played) && (
+      {(canManage || song.played) && (
         <div className="flex items-center justify-between gap-2 pt-1">
           <div>
-            {canEdit ? (
+            {canManage ? (
               <button
                 onClick={() => onTogglePlayed(song.id, !song.played)}
                 className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
@@ -560,10 +564,26 @@ export default function SetSongRow({
               </span>
             )}
           </div>
-          {canEdit && (
+          {canManage && (confirmingRemove ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-500">Remove from set?</span>
+              <button
+                onClick={() => { setConfirmingRemove(false); onRemove(song.song_id); }}
+                className="rounded-xl bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-400 transition-colors"
+              >
+                Remove
+              </button>
+              <button
+                onClick={() => setConfirmingRemove(false)}
+                className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
             <div className="flex items-center">
               <button
-                onClick={() => onRemove(song.song_id)}
+                onClick={() => setConfirmingRemove(true)}
                 className="sm:hidden text-zinc-300 hover:text-red-400 transition-colors"
                 aria-label="Remove song"
               >
@@ -572,13 +592,13 @@ export default function SetSongRow({
                 </svg>
               </button>
               <button
-                onClick={() => onRemove(song.song_id)}
+                onClick={() => setConfirmingRemove(true)}
                 className="hidden sm:inline-flex rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
               >
                 Remove
               </button>
             </div>
-          )}
+          ))}
         </div>
       )}
 

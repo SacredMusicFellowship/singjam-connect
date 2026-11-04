@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canContributeToSet, setsAcceptingSongs } from "./setRoles";
+import { canContributeToSet, canManageSet, setsAcceptingSongs } from "./setRoles";
 
 describe("canContributeToSet", () => {
   it("allows editors and co-owners", () => {
@@ -36,5 +36,18 @@ describe("setsAcceptingSongs", () => {
 
   it("returns an empty list rather than throwing on no input", () => {
     expect(setsAcceptingSongs([])).toEqual([]);
+  });
+});
+
+describe("canManageSet", () => {
+  it("lets the owner and co-owners manage", () => {
+    expect(canManageSet(true, undefined)).toBe(true);
+    expect(canManageSet(false, "co-owner")).toBe(true);
+  });
+
+  it("keeps editors and viewers out, since event guests join as editors", () => {
+    expect(canManageSet(false, "editor")).toBe(false);
+    expect(canManageSet(false, "viewer")).toBe(false);
+    expect(canManageSet(false, null)).toBe(false);
   });
 });

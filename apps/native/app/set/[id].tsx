@@ -195,7 +195,8 @@ function AddSongModal({
 
 function SongRow({
   song,
-  canEdit,
+  canManage,
+  myUserId,
   displayPosition,
   drag,
   isActive,
@@ -211,7 +212,9 @@ function SongRow({
   onTogglePlayed,
 }: {
   song: SetSong;
-  canEdit: boolean;
+  /** Owner or co-owner: reorder, remove, key, played, notes, choosing leaders. */
+  canManage: boolean;
+  myUserId: string | null;
   displayPosition: number;
   drag?: () => void;
   isActive?: boolean;
@@ -250,7 +253,7 @@ function SongRow({
   );
   const showLeaderBlock =
     !isPublicViewer &&
-    (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0));
+    (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canManage && participants.length > 0));
 
   // Set when Cancel closes the editor, so the input's blur doesn't save.
   const discardNotesRef = useRef(false);
@@ -295,7 +298,7 @@ function SongRow({
       />
       <View className={`px-4 py-3 border-b border-zinc-100 ${isActive ? 'bg-amber-50' : 'bg-white'}`}>
         <View className="flex-row items-center">
-          {canEdit && drag ? (
+          {canManage && drag ? (
             <TouchableOpacity
               onLongPress={drag}
               delayLongPress={150}
@@ -325,7 +328,7 @@ function SongRow({
               <Ionicons name="open-outline" size={11} color="#a1a1aa" />
             </TouchableOpacity>
           ) : null}
-          {canEdit ? (
+          {canManage ? (
             <TouchableOpacity
               onPress={onTogglePlayed}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -342,7 +345,7 @@ function SongRow({
               <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
             </View>
           ) : null}
-          {canEdit ? (
+          {canManage ? (
             <TouchableOpacity
               onPress={() => setKeyPickerVisible(true)}
               className={`mr-3 px-2.5 py-1 rounded-lg border ${song.key_note ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'}`}
@@ -356,7 +359,7 @@ function SongRow({
               <Text className="text-xs font-medium text-amber-700">{song.key_note}</Text>
             </View>
           ) : null}
-          {canEdit ? (
+          {canManage ? (
             <TouchableOpacity onPress={confirmRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="trash-outline" size={16} color="#a1a1aa" />
             </TouchableOpacity>
@@ -396,13 +399,13 @@ function SongRow({
           <View className="mt-2 ml-9 flex-row items-start rounded-lg bg-zinc-50 px-2.5 py-1.5">
             <Ionicons name="document-text-outline" size={14} color="#a1a1aa" style={{ marginTop: 1, marginRight: 6 }} />
             <Text className="flex-1 text-sm text-zinc-700">{song.notes}</Text>
-            {canEdit ? (
+            {canManage ? (
               <TouchableOpacity onPress={startEditingNotes} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} className="ml-2">
                 <Text className="text-xs font-medium text-amber-600">Edit</Text>
               </TouchableOpacity>
             ) : null}
           </View>
-        ) : canEdit ? (
+        ) : canManage ? (
           <TouchableOpacity
             onPress={startEditingNotes}
             className="mt-2 ml-9 self-start rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5"
@@ -414,18 +417,20 @@ function SongRow({
 
         {showLeaderBlock ? (
           <View className="mt-2 pl-9 gap-1">
-            {(leadParticipants.length > 0 || (canEdit && participants.length > 0)) ? (
+            {(leadParticipants.length > 0 || (canManage && participants.length > 0)) ? (
               <View className="flex-row items-start">
                 <Text className="text-amber-500 text-[10px] font-medium mr-1.5 mt-1">Lead</Text>
                 <View className="flex-row flex-wrap flex-1">
-                  {canEdit && leaderIds.length === 0 && !hasEligible ? (
+                  {canManage && leaderIds.length === 0 && !hasEligible ? (
                     <View className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 mr-1 mb-1">
                       <Text className="text-amber-500 text-xs font-medium">No leader</Text>
                     </View>
                   ) : null}
                   {leadParticipants.map((p) => {
                     const isLeader = leaderIds.includes(p.user_id);
-                    const clickable = canEdit && participantKnowledge.get(p.user_id) === 'lead';
+                    // As on web: anyone who has joined can put themselves forward; choosing
+                    // someone else is for the owner and co-owners.
+                    const clickable = participantKnowledge.get(p.user_id) === 'lead' && (canManage || p.user_id === myUserId);
                     return (
                       <TouchableOpacity
                         key={p.user_id}
@@ -956,11 +961,21 @@ export default function SetDetailScreen() {
   async function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
     const previous = songs;
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, leader_user_ids: newLeaderIds } : s));
-    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { leader_user_ids: newLeaderIds });
+    // Guests can only add or remove themselves; the API merges that into the
+    // current leaders so it can't undo a change someone else just made.
+    const manage = set?.owner_user_id === myUserId || isCoOwner;
+    const body = manage
+      ? { leader_user_ids: newLeaderIds }
+      : { self_leader: !!myUserId && newLeaderIds.includes(myUserId) };
+    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', body);
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update leaders.'); return; }
     // A newly selected leader brings their own key (decided by the API).
-    if (json && 'key_note' in json) {
-      setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, key_note: json.key_note } : s));
+    if (json && ('key_note' in json || 'leader_user_ids' in json)) {
+      setSongs((prev) => prev.map((s) => s.song_id === songId ? {
+        ...s,
+        ...('leader_user_ids' in json ? { leader_user_ids: json.leader_user_ids } : {}),
+        ...('key_note' in json ? { key_note: json.key_note } : {}),
+      } : s));
     }
   }
 
@@ -1174,7 +1189,7 @@ export default function SetDetailScreen() {
   const isPublicViewer = !isOwner && !isCollaborator;
   const canManage = isOwner || isCoOwner;
   const existingIds = new Set(songs.map((s) => s.song_id));
-  const canDrag = canEdit && sortBy === 'custom' && !filterQuery.trim();
+  const canDrag = canManage && sortBy === 'custom' && !filterQuery.trim();
 
   // Per-song leader/support inputs, mirroring web SetDetail's row wiring.
   const leaderProps = (song: SetSong) => {
@@ -1295,7 +1310,8 @@ export default function SetDetailScreen() {
               <ScaleDecorator>
                 <SongRow
                   song={item}
-                  canEdit={canEdit}
+                  canManage={canManage}
+                  myUserId={myUserId}
                   displayPosition={(getIndex() ?? 0) + 1}
                   drag={drag}
                   isActive={isActive}
@@ -1323,7 +1339,8 @@ export default function SetDetailScreen() {
             renderItem={({ item, index }) => (
               <SongRow
                 song={item}
-                canEdit={canEdit}
+                canManage={canManage}
+                myUserId={myUserId}
                 displayPosition={index + 1}
                 {...leaderProps(item)}
                 onRemove={() => handleRemoveSong(item.song_id)}
