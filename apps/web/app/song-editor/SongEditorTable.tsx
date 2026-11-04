@@ -17,11 +17,12 @@ type Song = {
 
 type EditState = { chord_chart_url: string; genius_url: string };
 
-export default function SongEditorTable() {
+export default function SongEditorTable({ initialQuery = "" }: { initialQuery?: string }) {
   const supabase = supabaseBrowser();
   const [songs, setSongs] = useState<Song[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  // A song page's Edit link opens the table already searched to that song.
+  const [query, setQuery] = useState(initialQuery);
   const [editing, setEditing] = useState<Record<string, EditState>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});

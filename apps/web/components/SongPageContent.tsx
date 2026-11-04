@@ -11,6 +11,7 @@ import MySongNotes from "@/components/MySongNotes";
 import MyKeySelect from "@/components/MyKeySelect";
 import UgBackTip from "@/components/UgBackTip";
 import AddToSetPanel from "@/components/AddToSetPanel";
+import ChordChartSlot from "@/components/ChordChartSlot";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
   return (
@@ -47,6 +48,7 @@ function JammerRow({ level, label, jammers }: { level: ConfidenceLevel; label: s
 type SongData = {
   song: any;
   isAdmin: boolean;
+  isSongEditor: boolean;
   isLoggedIn: boolean;
   singingVoice: string | null;
   userSongConfidence: string | null;
@@ -166,6 +168,7 @@ export default function SongPageContent() {
 
       const loadedConfidence = (userSongRes.data as any)?.confidence ?? null;
       const isAdmin = (profileRes.data as any)?.role === "admin";
+      const isSongEditor = (profileRes.data as any)?.role === "song_editor";
       const isLoggedIn = user !== null;
       if (profileRes.data) {
         const p = profileRes.data as any;
@@ -180,6 +183,7 @@ export default function SongPageContent() {
       setData({
         song,
         isAdmin,
+        isSongEditor,
         isLoggedIn,
         singingVoice: (profileRes.data as any)?.singing_voice ?? null,
         userSongConfidence: loadedConfidence,
@@ -271,7 +275,7 @@ export default function SongPageContent() {
     );
   }
 
-  const { song, isAdmin, isLoggedIn, singingVoice, userSongConfidence, popularity } = data;
+  const { song, isAdmin, isSongEditor, isLoggedIn, singingVoice, userSongConfidence, popularity } = data;
 
   const composers = sortByLastName((song.song_composers as any[]).map((x: any) => x.people?.name).filter(Boolean));
   const lyricists = sortByLastName((song.song_lyricists as any[]).map((x: any) => x.people?.name).filter(Boolean));
@@ -298,12 +302,28 @@ export default function SongPageContent() {
   const tonalityPills = song.tonality ? song.tonality.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
   const meterPills = song.meter ? song.meter.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
 
+  function handleChartAdded(url: string) {
+    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url } } : prev));
+  }
+
   return (
     <div className="space-y-6 pb-16">
       <div>
         <div>
           <div className="flex items-start justify-between gap-4">
-            <h1 className="text-2xl font-bold text-slate-900">{song.title}</h1>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-bold text-slate-900">{song.title}</h1>
+              {(isAdmin || isSongEditor) && (
+                // Admins open the full song editor; song editors manage chart and
+                // lyrics links from the Song Links table, opened on this song.
+                <Link
+                  href={isAdmin ? `/admin/songs/${song.slug ?? song.id}` : `/song-editor?q=${encodeURIComponent(song.title)}`}
+                  className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Edit
+                </Link>
+              )}
+            </div>
             <div className="flex shrink-0 items-center gap-3">
               {popularity > 0 && (
                 <span className="text-sm text-slate-400">{popularity} {popularity === 1 ? "jammer" : "jammers"}</span>
@@ -335,30 +355,26 @@ export default function SongPageContent() {
                   onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
                 />
               )}
+              {confidence && (
+                <ChordChartSlot
+                  songId={song.id}
+                  url={song.chord_chart_url}
+                  canAdd={isAdmin || isSongEditor}
+                  size="md"
+                  onAdded={handleChartAdded}
+                />
+              )}
             </RepertoireButton>
-            {isAdmin && (
-              <Link href={`/admin/songs/${song.slug ?? song.id}`}
-                className="rounded-full border border-slate-300 px-3 py-1 text-xs sm:py-1.5 sm:text-sm font-medium text-slate-600 hover:bg-slate-50">
-                Edit
-              </Link>
+            {!confidence && (
+              <ChordChartSlot
+                songId={song.id}
+                url={song.chord_chart_url}
+                canAdd={isAdmin || isSongEditor}
+                size="md"
+                onAdded={handleChartAdded}
+              />
             )}
           </div>
-          {(song.chord_chart_url || song.genius_url) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {song.chord_chart_url && (
-                <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs sm:py-1.5 sm:text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Chords ↗
-                </a>
-              )}
-              {song.genius_url && (
-                <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs sm:py-1.5 sm:text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Lyrics ↗
-                </a>
-              )}
-            </div>
-          )}
           {confidence && userId && <MySongNotes key={song.id} songId={song.id} userId={userId} className="mt-3" />}
           {song.chord_chart_url && <UgBackTip className="mt-3" />}
         </div>
@@ -477,9 +493,17 @@ export default function SongPageContent() {
         );
       })()}
 
-      {(song.first_line || song.hook) && (
+      {(song.first_line || song.hook || song.genius_url) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
+            {song.genius_url && (
+              <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
+                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+                Full lyrics ↗
+              </a>
+            )}
+          </div>
           {song.first_line && (
             <p className="text-sm text-slate-700">
               <span className="font-medium text-slate-500">Opens: </span>
@@ -573,12 +597,24 @@ export default function SongPageContent() {
                 onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
               />
             )}
+            {confidence && (
+              <ChordChartSlot
+                songId={song.id}
+                url={song.chord_chart_url}
+                canAdd={isAdmin || isSongEditor}
+                size="md"
+                onAdded={handleChartAdded}
+              />
+            )}
           </RepertoireButton>
-          {isAdmin && (
-            <Link href={`/admin/songs/${song.slug ?? song.id}`}
-              className="rounded-full border border-slate-300 px-3 py-1 text-xs sm:py-1.5 sm:text-sm font-medium text-slate-600 hover:bg-slate-50">
-              Edit
-            </Link>
+          {!confidence && (
+            <ChordChartSlot
+              songId={song.id}
+              url={song.chord_chart_url}
+              canAdd={isAdmin || isSongEditor}
+              size="md"
+              onAdded={handleChartAdded}
+            />
           )}
         </div>
         <Link href={confidence ? "/repertoire" : "/search"}
