@@ -495,15 +495,7 @@ export default function SongPageContent() {
 
       {(song.first_line || song.hook || song.genius_url) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
-            {song.genius_url && (
-              <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                Full lyrics ↗
-              </a>
-            )}
-          </div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
           {song.first_line && (
             <p className="text-sm text-slate-700">
               <span className="font-medium text-slate-500">Opens: </span>
@@ -515,6 +507,12 @@ export default function SongPageContent() {
               <span className="font-medium text-slate-500">Hook: </span>
               <em>{song.hook}</em>
             </p>
+          )}
+          {song.genius_url && (
+            <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
+              className="inline-block rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+              Full lyrics ↗
+            </a>
           )}
         </section>
       )}
