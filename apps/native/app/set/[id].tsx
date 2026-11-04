@@ -12,18 +12,18 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, formatComposers, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
 import { ensureLeadVoice } from '@/lib/leadVoice';
+import RolePill from '@/components/RolePill';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
 type SetSortOrder = 'custom' | 'title_asc' | 'title_desc';
 
-const ROLE_LABEL: Record<string, string> = { lead: 'Lead', support: 'Support', learn: 'Learn' };
 
 type SetData = {
   id: string;
@@ -330,8 +330,6 @@ function SongRow({
     );
   }
 
-  const myRoleLabel = myConfidence ? ROLE_LABEL[myConfidence] ?? myConfidence : null;
-  const isMyLead = myConfidence === 'lead';
   const showPlayed = canManage || song.played;
   const showFooter = !!myConfidence || showPlayed || canManage || canRemove;
   // Removing their own song is the only action a guest has, so it gets a direct button instead of a ⋯ menu.
@@ -496,7 +494,7 @@ function SongRow({
             <View className="mt-2 gap-1">
               {(leadParticipants.length > 0 || (canManage && participants.length > 0)) ? (
                 <View className="flex-row items-start">
-                  <Text className="text-amber-500 text-[10px] font-medium mr-1.5 mt-1">Lead</Text>
+                  <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.lead.label}`}>Lead</Text>
                   <View className="flex-row flex-wrap flex-1">
                     {canManage && leaderIds.length === 0 && !hasEligible ? (
                       <View className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 mr-1 mb-1">
@@ -518,9 +516,9 @@ function SongRow({
                               : [...leaderIds, p.user_id];
                             onLeaderToggle(next);
                           }}
-                          className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${isLeader ? 'bg-amber-400' : 'bg-amber-100'}`}
+                          className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${isLeader ? 'bg-amber-400' : CONFIDENCE_STYLES.lead.pill}`}
                         >
-                          <Text className={`text-xs ${nameWeight(p.user_id)} ${isLeader ? 'text-white' : 'text-amber-700'}`}>
+                          <Text className={`text-xs ${nameWeight(p.user_id)} ${isLeader ? 'text-white' : CONFIDENCE_STYLES.lead.pillText}`}>
                             {participantLabel(p)}
                             {participantKeys.get(p.user_id) ? ` (${participantKeys.get(p.user_id)})` : null}
                           </Text>
@@ -532,11 +530,11 @@ function SongRow({
               ) : null}
               {supportParticipants.length > 0 ? (
                 <View className="flex-row items-start">
-                  <Text className="text-sky-500 text-[10px] font-medium mr-1.5 mt-1">Support</Text>
+                  <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.support.label}`}>Support</Text>
                   <View className="flex-row flex-wrap flex-1">
                     {supportParticipants.map((p) => (
-                      <View key={p.user_id} className="rounded-full px-2 py-0.5 mr-1 mb-1 bg-sky-100">
-                        <Text className={`text-sky-700 text-xs ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
+                      <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.support.pill}`}>
+                        <Text className={`text-xs ${CONFIDENCE_STYLES.support.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
                       </View>
                     ))}
                   </View>
@@ -544,11 +542,11 @@ function SongRow({
               ) : null}
               {learnParticipants.length > 0 ? (
                 <View className="flex-row items-start">
-                  <Text className="text-zinc-400 text-[10px] font-medium mr-1.5 mt-1">Learning</Text>
+                  <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.learn.label}`}>Learning</Text>
                   <View className="flex-row flex-wrap flex-1">
                     {learnParticipants.map((p) => (
-                      <View key={p.user_id} className="rounded-full px-2 py-0.5 mr-1 mb-1 bg-zinc-100">
-                        <Text className={`text-zinc-600 text-xs ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
+                      <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.learn.pill}`}>
+                        <Text className={`text-xs ${CONFIDENCE_STYLES.learn.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
                       </View>
                     ))}
                   </View>
@@ -560,16 +558,7 @@ function SongRow({
           {showFooter ? (
             <View className="flex-row items-center mt-2">
               <View className="flex-1 flex-row flex-wrap items-center gap-2">
-                {myRoleLabel ? (
-                  <TouchableOpacity
-                    onPress={openRolePicker}
-                    className={`flex-row items-center rounded-full border px-2.5 py-1 ${isMyLead ? 'border-amber-400 bg-amber-100' : 'border-zinc-200 bg-white'}`}
-                    accessibilityLabel="Role"
-                  >
-                    <Text className={`text-xs ${isMyLead ? 'text-amber-800 font-semibold' : 'text-zinc-700'}`}>{myRoleLabel}</Text>
-                    <Ionicons name="chevron-down" size={11} color={isMyLead ? '#92400e' : '#71717a'} style={{ marginLeft: 3 }} />
-                  </TouchableOpacity>
-                ) : null}
+                {myConfidence ? <RolePill level={myConfidence} onPress={openRolePicker} /> : null}
                 {canManage ? (
                   <TouchableOpacity
                     onPress={onTogglePlayed}

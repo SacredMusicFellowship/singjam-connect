@@ -13,6 +13,8 @@ import {
   fetchSongJammers,
   type SongJammer,
   type SongJammers,
+  CONFIDENCE_STYLES,
+  type ConfidenceLevel,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
@@ -23,6 +25,8 @@ import PromptCard from '@/components/PromptCard';
 import MySongNotes from '@/components/MySongNotes';
 import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
+import RolePill from '@/components/RolePill';
+import MyKeyChip from '@/components/MyKeyChip';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -102,7 +106,8 @@ function TagRow({ label, tags }: { label: string; tags: string[] }) {
   );
 }
 
-function JammerRow({ label, jammers, onTap }: {
+function JammerRow({ level, label, jammers, onTap }: {
+  level: ConfidenceLevel;
   label: string;
   jammers: SongJammers['lead'];
   onTap: (userId: string) => void;
@@ -110,15 +115,15 @@ function JammerRow({ label, jammers, onTap }: {
   if (jammers.length === 0) return null;
   return (
     <View className="flex-row items-start mb-2">
-      <Text className="text-xs font-medium text-slate-500 w-16 shrink-0 mt-1">{label}</Text>
+      <Text className={`text-xs font-medium w-16 shrink-0 mt-1 ${CONFIDENCE_STYLES[level].label}`}>{label}</Text>
       <View className="flex-1 flex-row flex-wrap">
         {jammers.map(j => (
           <TouchableOpacity
             key={j.userId}
             onPress={() => onTap(j.userId)}
-            className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5"
+            className={`rounded-full px-3 py-1 mr-1.5 mb-1.5 ${CONFIDENCE_STYLES[level].pill}`}
           >
-            <Text className="text-slate-600 text-sm">{j.name}</Text>
+            <Text className={`text-sm font-medium ${CONFIDENCE_STYLES[level].pillText}`}>{j.name}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -488,8 +493,6 @@ export default function SongDetailScreen() {
     );
   }
 
-  const CONFIDENCE_LABEL: Record<string, string> = { lead: 'Lead', support: 'Support', learn: 'Learn' };
-  const isLead = myConfidence === 'lead';
 
   const tonalityPills = song.tonality ? song.tonality.split(',').map(s => s.trim()).filter(Boolean) : [];
   const meterPills = song.meter ? song.meter.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -533,40 +536,11 @@ export default function SongDetailScreen() {
       <View className="flex-row flex-wrap items-center gap-2 mt-4">
         {myConfidence ? (
           <>
-            <TouchableOpacity
-              onPress={handleChangeConfidence}
-              className={`flex-row items-center rounded-xl border px-3 py-2 ${
-                isLead ? 'border-amber-400 bg-amber-100' : 'border-slate-200 bg-white'
-              }`}
-            >
-              <Text className={`text-sm ${isLead ? 'text-amber-800 font-semibold' : 'text-slate-700'}`}>
-                {CONFIDENCE_LABEL[myConfidence]}
-              </Text>
-              <Ionicons
-                name="chevron-down"
-                size={12}
-                color={isLead ? '#92400e' : '#64748b'}
-                style={{ marginLeft: 4 }}
-              />
-            </TouchableOpacity>
-            <View className="flex-row items-center gap-1.5">
-              <Text className="text-sm text-slate-700">My key</Text>
-              <TouchableOpacity
-                onPress={() => setKeyPickerVisible(true)}
-                className={`flex-row items-center rounded-xl border px-3 py-2 ${
-                  myKey ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'
-                }`}
-                accessibilityLabel="My key"
-              >
-                <Text className={`text-sm ${myKey ? 'text-amber-800' : 'text-slate-700'}`}>
-                  {myKey ?? '—'}
-                </Text>
-                <Ionicons name="chevron-down" size={12} color={myKey ? '#92400e' : '#64748b'} style={{ marginLeft: 4 }} />
-              </TouchableOpacity>
-            </View>
+            <RolePill level={myConfidence} onPress={handleChangeConfidence} size="md" />
+            <MyKeyChip value={myKey} onPress={() => setKeyPickerVisible(true)} size="md" />
             <TouchableOpacity
               onPress={() => setAddToSetVisible(true)}
-              className="flex-row items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
+              className="flex-row items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5"
             >
               <Ionicons name="list-outline" size={14} color="#64748b" />
               <Text className="text-slate-600 text-sm">Add to set</Text>
@@ -576,11 +550,11 @@ export default function SongDetailScreen() {
           <>
             <TouchableOpacity
               onPress={handleAddToRepertoire}
-              className="rounded-xl border border-indigo-500 bg-indigo-500 px-4 py-2"
+              className="rounded-full border border-indigo-500 bg-indigo-500 px-4 py-1.5"
             >
               <Text className="text-white text-sm font-medium">I know this song!</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleWantToLearn} className="rounded-xl border border-indigo-200 bg-white px-4 py-2">
+            <TouchableOpacity onPress={handleWantToLearn} className="rounded-full border border-indigo-200 bg-white px-4 py-1.5">
               <Text className="text-indigo-600 text-sm font-medium">Want to learn it</Text>
             </TouchableOpacity>
           </>
@@ -589,7 +563,7 @@ export default function SongDetailScreen() {
           // The song editor is web-only, so admins hand off to the browser.
           <TouchableOpacity
             onPress={() => openUrl(`${WEB_URL}/admin/songs/${song!.slug ?? song!.id}`)}
-            className="flex-row items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2"
+            className="flex-row items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5"
           >
             <Text className="text-slate-600 text-sm">Edit</Text>
             <Ionicons name="open-outline" size={13} color="#94a3b8" />
@@ -828,17 +802,20 @@ export default function SongDetailScreen() {
             ) : hasJammers ? (
               <>
                 <JammerRow
+                  level="lead"
                   label="Lead"
                   jammers={jammers.lead}
                   onTap={(userId) => router.push(`/profile/${userId}` as any)}
                 />
                 <JammerRow
+                  level="support"
                   label="Support"
                   jammers={jammers.support}
                   onTap={(userId) => router.push(`/profile/${userId}` as any)}
                 />
                 <JammerRow
-                  label="Learn"
+                  level="learn"
+                  label="Learning"
                   jammers={jammers.learn}
                   onTap={(userId) => router.push(`/profile/${userId}` as any)}
                 />
