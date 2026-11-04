@@ -21,7 +21,7 @@ export default function ApproveButton({ songId }: { songId: string }) {
     <button
       onClick={approve}
       disabled={busy}
-      className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-500 disabled:opacity-50 transition-colors"
+      className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-500 disabled:opacity-50 transition-colors"
     >
       {busy ? "Approving…" : "Approve"}
     </button>

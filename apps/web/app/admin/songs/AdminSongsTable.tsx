@@ -326,14 +326,14 @@ export default function AdminSongsTable() {
           <button
             onClick={handleBulkDelete}
             disabled={deleting}
-            className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-40"
+            className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-40"
           >
             {deleting ? "Deleting…" : `Delete ${selected.size} selected`}
           </button>
         ) : <div />}
         <button
           onClick={() => setWrap((w) => !w)}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
+          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
         >
           {wrap ? "Clip cells" : "Wrap cells"}
         </button>

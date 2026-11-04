@@ -273,7 +273,7 @@ export default function ImportCSVPage() {
         {rows.length > 0 && !running && (
           <button
             onClick={runImport}
-            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400"
           >
             Import {rows.length} songs
           </button>

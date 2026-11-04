@@ -33,7 +33,7 @@ export default function RunSweepButton() {
       <button
         onClick={run}
         disabled={running}
-        className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+        className="rounded-full bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
       >
         {running ? "Running…" : "Run now"}
       </button>

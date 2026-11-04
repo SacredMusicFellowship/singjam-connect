@@ -233,14 +233,14 @@ export default function SongEditorTable({ initialQuery = "" }: { initialQuery?: 
                     <button
                       onClick={() => saveEdit(song)}
                       disabled={isSaving}
-                      className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-40"
+                      className="rounded-full bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-40"
                     >
                       {isSaving ? "Saving…" : "Save"}
                     </button>
                     <button
                       onClick={() => cancelEdit(song.id)}
                       disabled={isSaving}
-                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
                     >
                       Cancel
                     </button>

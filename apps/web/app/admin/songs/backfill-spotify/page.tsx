@@ -129,7 +129,7 @@ export default function BackfillSpotifyPage() {
           <button
             onClick={runBackfill}
             disabled={running || pending.length === 0}
-            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
           >
             {running ? `Running… ${progress}/${pending.length}` : `Run backfill`}
           </button>

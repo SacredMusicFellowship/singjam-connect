@@ -151,7 +151,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={revalidateJams}
             disabled={revalidating}
-            className="text-sm px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+            className="text-sm px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
           >
             {revalidating ? "Refreshing…" : "Refresh now"}
           </button>
@@ -170,7 +170,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={sendReminders}
             disabled={reminderSending}
-            className="text-sm px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+            className="text-sm px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
           >
             {reminderSending ? "Sending…" : "Send now"}
           </button>
@@ -190,7 +190,7 @@ export default function AdminSettingsPage() {
               <button
                 onClick={() => resync(usersWithIssues)}
                 disabled={resyncing.size > 0}
-                className="text-sm px-3 py-1.5 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
+                className="text-sm px-3 py-1.5 rounded-full bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
               >
                 Resync all ({usersWithIssues.length})
               </button>
@@ -198,7 +198,7 @@ export default function AdminSettingsPage() {
             <button
               onClick={checkACStatus}
               disabled={acLoading}
-              className="text-sm px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+              className="text-sm px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
             >
               {acLoading ? "Checking…" : acStatus === null ? "Check status" : "Refresh"}
             </button>
@@ -267,7 +267,7 @@ export default function AdminSettingsPage() {
                           <button
                             onClick={() => resync([s])}
                             disabled={isSyncing}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-amber-500 text-white font-medium hover:bg-amber-600 disabled:opacity-50"
+                            className="text-xs px-2.5 py-1 rounded-full bg-amber-500 text-white font-medium hover:bg-amber-600 disabled:opacity-50"
                           >
                             {isSyncing ? "Syncing…" : "Resync"}
                           </button>
