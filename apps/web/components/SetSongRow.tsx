@@ -227,12 +227,9 @@ export default function SetSongRow({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 min-w-0 mt-0.5">
+          <div className="flex items-center gap-3 min-w-0 mt-0.5">
             {song.songs.display_artist && (
               <p className="min-w-0 truncate text-xs text-zinc-500">{song.songs.display_artist}</p>
-            )}
-            {showKeyLine && song.songs.display_artist && (
-              <span aria-hidden="true" className="shrink-0 text-xs text-zinc-400">·</span>
             )}
             {showKeyLine && (
             <span className="flex shrink-0 items-center gap-1">
