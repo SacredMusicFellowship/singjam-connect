@@ -191,6 +191,10 @@ export default function SetSongRow({
   );
   const learning = myConfidence === "learn";
 
+  const showRepertoireButtons = !!((!myConfidence || learning) && (currentUserId || signInUrl));
+  const showPeople = (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canManage && participants.length > 0));
+  const showPlayed = canManage || song.played;
+
   const menuItems: MenuItem[] = [];
   // Learners already have "I know this song!" on the row to move up.
   if (currentUserId && myConfidence && !learning) {
@@ -395,7 +399,6 @@ export default function SetSongRow({
             </button>
           ) : null}
 
-          {menuItems.length > 0 && <SongMenu items={menuItems} />}
         </div>
       </div>
 
@@ -409,125 +412,152 @@ export default function SetSongRow({
         />
       )}
 
-      {/* Below the title row rather than inside it, so on a phone both buttons
-          get the card's full width and sit side by side. */}
-      {(!myConfidence || learning) && (currentUserId || signInUrl) && (
-        !currentUserId ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={signInUrl}
-              className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
-            >
-              I know this song!
-            </a>
-            <a href={signInUrl} className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors">
-              Want to learn it
-            </a>
-          </div>
-        ) : pickingRepertoire ? (
-          <div>
-            <ConfidencePicker
-              variant="compact"
-              singingVoice={currentUserSingingVoice}
-              onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setPickingRepertoire(false); }}
-              onCancel={() => setPickingRepertoire(false)}
-              offerLearn={false}
-              onVoiceUpdated={onVoiceUpdated}
-            />
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setPickingRepertoire(true)}
-              className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
-            >
-              I know this song!
-            </button>
-            {/* Already learning it: the badge by the title says so, and
-                "I know this song!" is how they move up. */}
-            {!learning && (
-              <button
-                onClick={() => onAddToRepertoire(song.song_id, "learn")}
-                className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors"
-              >
-                Want to learn it
-              </button>
-            )}
-          </div>
-        )
-      )}
-
-      {(leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canManage && participants.length > 0)) && (
-        <div className="space-y-1">
-          {(leadParticipants.length > 0 || (canManage && participants.length > 0)) && (
-            <div className="flex items-start gap-1.5">
-              <span className="shrink-0 text-[10px] text-amber-500 font-medium pt-0.5">Lead</span>
-              <div className="flex flex-wrap gap-1 flex-1">
-                {canManage && leaderIds.length === 0 && !hasEligible && (
-                  <span className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-500">
-                    No leader
-                  </span>
-                )}
-                {leadParticipants.map((p) => {
-                  const isLeader = leaderIds.includes(p.user_id);
-                  // Anyone who has joined the set can put themselves forward; choosing
-                  // someone else is for the owner and co-owners.
-                  const isClickable = participantKnowledge.get(p.user_id) === "lead" && (canManage || p.user_id === currentUserId);
-                  const firstName = p.display_name ?? p.username ?? "?";
-                  const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
-                  const personalKey = participantKeys.get(p.user_id);
-                  const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
-                  return (
+      {(showRepertoireButtons || showPeople || showPlayed || menuItems.length > 0) && (
+        // The ⋯ sits in the card's bottom-right corner, on whatever row is last,
+        // so it never adds a line of its own.
+        <div className="flex items-end gap-2">
+          <div className="flex-1 min-w-0 space-y-2">
+              {/* Below the title row rather than inside it, so on a phone both buttons
+                  get the card's full width and sit side by side. */}
+              {showRepertoireButtons && (
+                !currentUserId ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={signInUrl}
+                      className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
+                    >
+                      I know this song!
+                    </a>
+                    <a href={signInUrl} className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors">
+                      Want to learn it
+                    </a>
+                  </div>
+                ) : pickingRepertoire ? (
+                  <div>
+                    <ConfidencePicker
+                      variant="compact"
+                      singingVoice={currentUserSingingVoice}
+                      onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setPickingRepertoire(false); }}
+                      onCancel={() => setPickingRepertoire(false)}
+                      offerLearn={false}
+                      onVoiceUpdated={onVoiceUpdated}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
-                      key={p.user_id}
-                      type="button"
-                      onClick={() => isClickable && handleToggleLeader(p.user_id)}
-                      disabled={!isClickable}
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
+                      onClick={() => setPickingRepertoire(true)}
+                      className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
                     >
-                      {name}
-                      {personalKey && ` (${personalKey})`}
+                      I know this song!
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {supportParticipants.length > 0 && (
-            <div className="flex items-start gap-1.5">
-              <span className="shrink-0 text-[10px] text-sky-500 font-medium pt-0.5">Support</span>
-              <div className="flex flex-wrap gap-1 flex-1">
-                {supportParticipants.map((p) => {
-                  const firstName = p.display_name ?? p.username ?? "?";
-                  const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
-                  return (
-                    <span
-                      key={p.user_id}
-                      className="rounded-full px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700"
-                    >
-                      {label}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {learnParticipants.length > 0 && (
-            <div className="flex items-start gap-1.5">
-              <span className="shrink-0 text-[10px] text-zinc-400 font-medium pt-0.5">Learning</span>
-              <div className="flex flex-wrap gap-1 flex-1">
-                {learnParticipants.map((p) => {
-                  const firstName = p.display_name ?? p.username ?? "?";
-                  const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
-                  return (
-                    <span key={p.user_id} className="rounded-full px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-600">
-                      {label}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                    {/* Already learning it: the badge by the title says so, and
+                        "I know this song!" is how they move up. */}
+                    {!learning && (
+                      <button
+                        onClick={() => onAddToRepertoire(song.song_id, "learn")}
+                        className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors"
+                      >
+                        Want to learn it
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
+
+              {showPeople && (
+                <div className="space-y-1">
+                  {(leadParticipants.length > 0 || (canManage && participants.length > 0)) && (
+                    <div className="flex items-start gap-1.5">
+                      <span className="shrink-0 text-[10px] text-amber-500 font-medium pt-0.5">Lead</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {canManage && leaderIds.length === 0 && !hasEligible && (
+                          <span className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-500">
+                            No leader
+                          </span>
+                        )}
+                        {leadParticipants.map((p) => {
+                          const isLeader = leaderIds.includes(p.user_id);
+                          // Anyone who has joined the set can put themselves forward; choosing
+                          // someone else is for the owner and co-owners.
+                          const isClickable = participantKnowledge.get(p.user_id) === "lead" && (canManage || p.user_id === currentUserId);
+                          const firstName = p.display_name ?? p.username ?? "?";
+                          const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                          const personalKey = participantKeys.get(p.user_id);
+                          const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
+                          return (
+                            <button
+                              key={p.user_id}
+                              type="button"
+                              onClick={() => isClickable && handleToggleLeader(p.user_id)}
+                              disabled={!isClickable}
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
+                            >
+                              {name}
+                              {personalKey && ` (${personalKey})`}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {supportParticipants.length > 0 && (
+                    <div className="flex items-start gap-1.5">
+                      <span className="shrink-0 text-[10px] text-sky-500 font-medium pt-0.5">Support</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {supportParticipants.map((p) => {
+                          const firstName = p.display_name ?? p.username ?? "?";
+                          const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                          return (
+                            <span
+                              key={p.user_id}
+                              className="rounded-full px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700"
+                            >
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {learnParticipants.length > 0 && (
+                    <div className="flex items-start gap-1.5">
+                      <span className="shrink-0 text-[10px] text-zinc-400 font-medium pt-0.5">Learning</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {learnParticipants.map((p) => {
+                          const firstName = p.display_name ?? p.username ?? "?";
+                          const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                          return (
+                            <span key={p.user_id} className="rounded-full px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-600">
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {canManage ? (
+                <button
+                  onClick={() => onTogglePlayed(song.id, !song.played)}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                    song.played
+                      ? "bg-green-500 text-white hover:bg-green-400"
+                      : "border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50"
+                  }`}
+                >
+                  {song.played && <CheckIcon />}
+                  {song.played ? "Played" : "Mark as played"}
+                </button>
+              ) : song.played ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-medium text-white">
+                  <CheckIcon />
+                  Played
+                </span>
+              ) : null}
+          </div>
+          {menuItems.length > 0 && <SongMenu items={menuItems} />}
         </div>
       )}
 
@@ -554,25 +584,6 @@ export default function SetSongRow({
           loading="lazy"
         />
       )}
-
-      {canManage ? (
-        <button
-          onClick={() => onTogglePlayed(song.id, !song.played)}
-          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-            song.played
-              ? "bg-green-500 text-white hover:bg-green-400"
-              : "border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50"
-          }`}
-        >
-          {song.played && <CheckIcon />}
-          {song.played ? "Played" : "Mark as played"}
-        </button>
-      ) : song.played ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-medium text-white">
-          <CheckIcon />
-          Played
-        </span>
-      ) : null}
 
       {addingField && (
         <div className="space-y-2">
@@ -673,7 +684,7 @@ function SongMenu({ items }: { items: MenuItem[] }) {
         </svg>
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg">
+        <div role="menu" className="absolute right-0 bottom-full z-20 mb-1 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg">
           {items.map((item) =>
             confirming === item.label ? (
               <div key={item.label} className="flex gap-1.5 px-2 py-1.5">
