@@ -191,7 +191,6 @@ export default function SetSongRow({
   const learnParticipants = visibleParticipants.filter(
     (p) => !leaderIds.includes(p.user_id) && participantKnowledge.get(p.user_id) === "learn"
   );
-  const learning = myConfidence === "learn";
 
   // Only for songs you don't have yet; once it's yours, the Role dropdown moves it.
   const showRepertoireButtons = !!(!myConfidence && (currentUserId || signInUrl));
@@ -218,13 +217,6 @@ export default function SetSongRow({
               </Link>
             ) : (
               <p className="font-medium text-zinc-900 line-clamp-2">{song.songs.title}</p>
-            )}
-            {/* Indigo like "I know this song!" / "Want to learn it": it's about
-                your part. Green on this page means Played. */}
-            {learning && (
-              <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200">
-                Learning
-              </span>
             )}
           </div>
           <div className="flex items-center gap-3 min-w-0 mt-0.5">
