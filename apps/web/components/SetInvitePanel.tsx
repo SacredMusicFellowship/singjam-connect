@@ -1,5 +1,7 @@
 "use client";
 
+import { SET_ROLE_DESCRIPTIONS } from "@singjam/core";
+
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import SearchInput from "@/components/SearchInput";
@@ -231,11 +233,7 @@ export default function SetInvitePanel({
           ))}
         </div>
         <p className="mt-1.5 text-xs text-zinc-400">
-          {role === "co-owner"
-            ? "Co-owners can do everything you can except delete the set or assign other co-owners."
-            : role === "editor"
-            ? "Editors can add, remove, and reorder songs, mark leaders, and invite others."
-            : "Viewers can see the set but cannot change songs."}
+          {SET_ROLE_DESCRIPTIONS[role]}
         </p>
       </div>
 

@@ -33,3 +33,12 @@ export function canRemoveSetSong(
   if (canManageSet(isOwner, role)) return true;
   return role === "editor" && !!userId && addedByUserId === userId;
 }
+
+// What each collaborator role can do, shown when inviting. Keep in step with
+// canContributeToSet, canManageSet and canRemoveSetSong above and the
+// self-leader rule in the set song API.
+export const SET_ROLE_DESCRIPTIONS: Record<SetCollaboratorRole, string> = {
+  "co-owner": "Co-owners can do everything you can except delete the set or assign other co-owners.",
+  editor: "Editors can add songs, remove songs they added, put themselves forward to lead, and invite others.",
+  viewer: "Viewers can see the set and put themselves forward to lead songs they know, but can't add or change songs.",
+};

@@ -12,7 +12,7 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, KEY_STYLE, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, KEY_STYLE, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
@@ -809,6 +809,7 @@ function SetSettingsModal({
                     </TouchableOpacity>
                   ))}
                 </View>
+                <Text className="text-xs text-zinc-400 mb-2">{SET_ROLE_DESCRIPTIONS[inviteRole]}</Text>
                 <View className="flex-row items-center bg-zinc-100 rounded-xl px-3 py-2 mb-2">
                   <Ionicons name="search" size={14} color="#a1a1aa" style={{ marginRight: 6 }} />
                   <TextInput

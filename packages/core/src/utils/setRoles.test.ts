@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canContributeToSet, canManageSet, canRemoveSetSong, setsAcceptingSongs } from "./setRoles";
+import { canContributeToSet, canManageSet, canRemoveSetSong, SET_ROLE_DESCRIPTIONS, setsAcceptingSongs } from "./setRoles";
 
 describe("canContributeToSet", () => {
   it("allows editors and co-owners", () => {
@@ -72,5 +72,11 @@ describe("canRemoveSetSong", () => {
   it("keeps viewers and outsiders out", () => {
     expect(canRemoveSetSong(false, "viewer", "me", "me")).toBe(false);
     expect(canRemoveSetSong(false, null, "me", "me")).toBe(false);
+  });
+});
+
+describe("SET_ROLE_DESCRIPTIONS", () => {
+  it("doesn't promise editors the owner-only song controls", () => {
+    expect(SET_ROLE_DESCRIPTIONS.editor).not.toMatch(/reorder|key|played|notes|mark leaders/i);
   });
 });
