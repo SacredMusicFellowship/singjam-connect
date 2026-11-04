@@ -195,6 +195,10 @@ export default function SetSongRow({
   const showRepertoireButtons = !!(!myConfidence && (currentUserId || signInUrl));
   const showPeople = (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canManage && participants.length > 0));
   const showPlayed = canManage || song.played;
+  const showKeyLine = canManage || (!isPublicViewer && !!(song.key_note || song.songs.tonality));
+
+  // Your own name is bolder so you can find yourself on a busy card.
+  const ownWeight = (userId: string) => (userId === currentUserId ? "font-bold" : "font-medium");
 
   const menuItems: MenuItem[] = [];
   if (currentUserId && myConfidence) {
@@ -223,14 +227,19 @@ export default function SetSongRow({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+          <div className="flex items-center gap-2 min-w-0 mt-0.5">
             {song.songs.display_artist && (
               <p className="min-w-0 truncate text-xs text-zinc-500">{song.songs.display_artist}</p>
             )}
+            {showKeyLine && song.songs.display_artist && (
+              <span aria-hidden="true" className="shrink-0 text-xs text-zinc-400">·</span>
+            )}
+            {showKeyLine && (
+            <span className="flex shrink-0 items-center gap-1">
             {canManage ? (
               // The visible chip is sized to its own text; the transparent select
               // on top opens the native picker without its widest-option width.
-              <span className={`relative shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${song.key_note ? "bg-amber-100 text-amber-800" : "border border-dashed border-zinc-300 text-zinc-400"}`}>
+              <span className={`relative shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold ${song.key_note ? "bg-amber-100 text-amber-800" : "border border-dashed border-zinc-300 text-zinc-400"}`}>
                 {song.key_note ?? "+ key"}
                 <select
                   value={song.key_note ?? ""}
@@ -249,13 +258,15 @@ export default function SetSongRow({
               </span>
             ) : (
               !isPublicViewer && song.key_note && (
-                <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
                   {song.key_note}
                 </span>
               )
             )}
             {!isPublicViewer && song.songs.tonality && (
-              <span className="shrink-0 text-xs text-zinc-600">{song.songs.tonality}</span>
+              <span className="text-xs text-zinc-500">{song.songs.tonality}</span>
+            )}
+            </span>
             )}
           </div>
           {editingNotes ? (
@@ -480,14 +491,14 @@ export default function SetSongRow({
                           const firstName = p.display_name ?? p.username ?? "?";
                           const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                           const personalKey = participantKeys.get(p.user_id);
-                          const pillStyle = `${isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700"} ${p.user_id === currentUserId ? (isLeader ? "ring-1 ring-inset ring-amber-700" : "ring-1 ring-inset ring-current") : ""}`;
+                          const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
                           return (
                             <button
                               key={p.user_id}
                               type="button"
                               onClick={() => isClickable && handleToggleLeader(p.user_id)}
                               disabled={!isClickable}
-                              className={`rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
+                              className={`rounded-full px-2 py-0.5 text-xs transition-all ${ownWeight(p.user_id)} ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
                             >
                               {name}
                               {personalKey && ` (${personalKey})`}
@@ -507,7 +518,7 @@ export default function SetSongRow({
                           return (
                             <span
                               key={p.user_id}
-                              className={`rounded-full px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700 ${p.user_id === currentUserId ? "ring-1 ring-inset ring-current" : ""}`}
+                              className={`rounded-full px-2 py-0.5 text-xs bg-sky-100 text-sky-700 ${ownWeight(p.user_id)}`}
                             >
                               {label}
                             </span>
@@ -524,7 +535,7 @@ export default function SetSongRow({
                           const firstName = p.display_name ?? p.username ?? "?";
                           const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                           return (
-                            <span key={p.user_id} className={`rounded-full px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-600 ${p.user_id === currentUserId ? "ring-1 ring-inset ring-current" : ""}`}>
+                            <span key={p.user_id} className={`rounded-full px-2 py-0.5 text-xs bg-zinc-100 text-zinc-600 ${ownWeight(p.user_id)}`}>
                               {label}
                             </span>
                           );
