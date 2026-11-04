@@ -20,7 +20,7 @@ import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
 import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
-import ChordsLink from "@/components/ChordsLink";
+import ChordChartSlot from "@/components/ChordChartSlot";
 import SearchInput from "@/components/SearchInput";
 
 const CONFIDENCE_LEVELS = [
@@ -185,6 +185,8 @@ export default function RepertoirePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null);
+  // Admins and song editors can attach a missing chord chart, as on the set list.
+  const [canAddCharts, setCanAddCharts] = useState(false);
   const [singingVoice, setSingingVoice] = useState<string | null>(null);
 
   const [items, setItems] = useState<Item[]>([]);
@@ -290,7 +292,7 @@ export default function RepertoirePage() {
         }
 
         const [{ data: p }, repertoireRes, setsJson, suggestionsRes] = await Promise.all([
-          supabase.from("profiles").select("singing_voice").eq("id", uid).single(),
+          supabase.from("profiles").select("singing_voice, role").eq("id", uid).single(),
           supabase.rpc("my_repertoire"),
           fetch("/api/sets").then((r) => (r.ok ? r.json() : { owned: [], collaborating: [] })),
           supabase.rpc("suggest_songs_for_user", { p_user_id: uid, p_limit: 20 }),
@@ -298,6 +300,7 @@ export default function RepertoirePage() {
         if (repertoireRes.error) throw repertoireRes.error;
 
         setSingingVoice((p as any)?.singing_voice ?? null);
+        setCanAddCharts(["admin", "song_editor"].includes((p as any)?.role));
         setUserSets(setsAcceptingSongs([...(setsJson.owned ?? []), ...(setsJson.collaborating ?? [])]));
         const initialSuggestions = (suggestionsRes.data ?? []) as SuggestionResult[];
         setSuggestions(initialSuggestions);
@@ -1076,13 +1079,13 @@ export default function RepertoirePage() {
 
                     <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" />
 
-                    {/* A row without a chart keeps an empty slot, so Add to set
-                        lines up down the list. */}
-                    {it.chord_chart_url ? (
-                      <ChordsLink href={it.chord_chart_url} size="md" />
-                    ) : (
-                      <span className="invisible flex" aria-hidden="true"><ChordsLink href="#" size="md" /></span>
-                    )}
+                    <ChordChartSlot
+                      songId={it.song_id}
+                      url={it.chord_chart_url}
+                      canAdd={canAddCharts}
+                      size="md"
+                      onAdded={(url) => setItems((prev) => prev.map((x) => (x.song_id === it.song_id ? { ...x, chord_chart_url: url } : x)))}
+                    />
 
                     {userSets.length > 0 && (
                       <AddToSetPanel
