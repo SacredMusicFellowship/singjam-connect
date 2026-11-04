@@ -4,6 +4,7 @@ import { hasLeadVoice } from "@singjam/core";
 import { useState } from "react";
 import Link from "next/link";
 import { formatComposers } from "@/lib/formatComposers";
+import RoleSelect from "@/components/RoleSelect";
 import ConfidencePicker from "@/components/ConfidencePicker";
 
 export const LEVELS = [
@@ -166,29 +167,17 @@ export default function SongCard({
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {inRepertoire && !askingLeadVoice ? (
           <>
-            <div className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-sm text-amber-700">
-              ✓ In your repertoire
-            </div>
-            <select
-              value={confidence}
-              onChange={(e) => {
-                if (e.target.value === "lead" && !hasLeadVoice(singingVoice)) {
+            <RoleSelect
+              value={confidence ?? "learn"}
+              size="md"
+              onChange={(level) => {
+                if (level === "lead" && !hasLeadVoice(singingVoice)) {
                   setAskingLeadVoice(true);
                 } else {
-                  addSong(songId, e.target.value);
+                  addSong(songId, level);
                 }
               }}
-              className={`rounded-xl border px-2 py-1.5 text-sm ${
-                confidence === "lead"
-                  ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-                  : "border-zinc-200"
-              }`}
-              aria-label="Role"
-            >
-              {LEVELS.map((l) => (
-                <option key={l.key} value={l.key}>{l.label}</option>
-              ))}
-            </select>
+            />
           </>
         ) : (inRepertoire && askingLeadVoice) || picking ? (
           <ConfidencePicker
@@ -202,18 +191,18 @@ export default function SongCard({
         ) : (
           <>
             <button
-              className="rounded-xl bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 transition-colors"
+              className="rounded-full bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 transition-colors"
               onClick={() => onAdd(songId, slug)}
             >
               I know this song!
             </button>
-            <button className="rounded-xl bg-white px-3 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors" onClick={() => addSong(songId, "learn")}>
+            <button className="rounded-full bg-white px-3 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors" onClick={() => addSong(songId, "learn")}>
               Want to learn it
             </button>
           </>
         )}
         {!picking && !askingLeadVoice && (
-          <Link href={href} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50">
+          <Link href={href} target="_blank" rel="noopener noreferrer" className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50">
             View
           </Link>
         )}

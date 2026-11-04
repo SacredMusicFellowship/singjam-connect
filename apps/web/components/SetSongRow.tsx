@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
-import { hasLeadVoice, SET_SONG_NOTE_MAX } from "@singjam/core";
-import { LEVELS } from "@/components/SongCard";
+import { CONFIDENCE_STYLES, hasLeadVoice, SET_SONG_NOTE_MAX } from "@singjam/core";
+import RoleSelect from "@/components/RoleSelect";
 import {
   MUSICAL_KEYS,
   YoutubeIcon,
@@ -472,7 +472,7 @@ export default function SetSongRow({
                 <div className="space-y-1">
                   {(leadParticipants.length > 0 || (canManage && participants.length > 0)) && (
                     <div className="flex items-start gap-1.5">
-                      <span className="shrink-0 text-[10px] text-amber-500 font-medium pt-0.5">Lead</span>
+                      <span className={`shrink-0 text-[10px] font-medium pt-0.5 ${CONFIDENCE_STYLES.lead.label}`}>Lead</span>
                       <div className="flex flex-wrap gap-1 flex-1">
                         {canManage && leaderIds.length === 0 && !hasEligible && (
                           <span className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-500">
@@ -487,7 +487,7 @@ export default function SetSongRow({
                           const firstName = p.display_name ?? p.username ?? "?";
                           const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                           const personalKey = participantKeys.get(p.user_id);
-                          const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
+                          const pillStyle = isLeader ? "bg-amber-400 text-white" : `${CONFIDENCE_STYLES.lead.pill} ${CONFIDENCE_STYLES.lead.pillText}`;
                           return (
                             <button
                               key={p.user_id}
@@ -506,7 +506,7 @@ export default function SetSongRow({
                   )}
                   {supportParticipants.length > 0 && (
                     <div className="flex items-start gap-1.5">
-                      <span className="shrink-0 text-[10px] text-sky-500 font-medium pt-0.5">Support</span>
+                      <span className={`shrink-0 text-[10px] font-medium pt-0.5 ${CONFIDENCE_STYLES.support.label}`}>Support</span>
                       <div className="flex flex-wrap gap-1 flex-1">
                         {supportParticipants.map((p) => {
                           const firstName = p.display_name ?? p.username ?? "?";
@@ -514,7 +514,7 @@ export default function SetSongRow({
                           return (
                             <span
                               key={p.user_id}
-                              className={`rounded-full px-2 py-0.5 text-xs bg-sky-100 text-sky-700 ${ownWeight(p.user_id)}`}
+                              className={`rounded-full px-2 py-0.5 text-xs ${CONFIDENCE_STYLES.support.pill} ${CONFIDENCE_STYLES.support.pillText} ${ownWeight(p.user_id)}`}
                             >
                               {label}
                             </span>
@@ -525,13 +525,13 @@ export default function SetSongRow({
                   )}
                   {learnParticipants.length > 0 && (
                     <div className="flex items-start gap-1.5">
-                      <span className="shrink-0 text-[10px] text-zinc-400 font-medium pt-0.5">Learning</span>
+                      <span className={`shrink-0 text-[10px] font-medium pt-0.5 ${CONFIDENCE_STYLES.learn.label}`}>Learning</span>
                       <div className="flex flex-wrap gap-1 flex-1">
                         {learnParticipants.map((p) => {
                           const firstName = p.display_name ?? p.username ?? "?";
                           const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                           return (
-                            <span key={p.user_id} className={`rounded-full px-2 py-0.5 text-xs bg-zinc-100 text-zinc-600 ${ownWeight(p.user_id)}`}>
+                            <span key={p.user_id} className={`rounded-full px-2 py-0.5 text-xs ${CONFIDENCE_STYLES.learn.pill} ${CONFIDENCE_STYLES.learn.pillText} ${ownWeight(p.user_id)}`}>
                               {label}
                             </span>
                           );
@@ -544,33 +544,13 @@ export default function SetSongRow({
               {(showRole || showPlayed) && (
               <div className="flex flex-wrap items-center gap-2">
               {showRole && (
-                // Same Role dropdown as the song page and My songs. The visible
-                // label keeps it pill-sized; phones force selects to 16px.
-                <span
-                  className={`relative inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs ${
-                    myConfidence === "lead"
-                      ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-                      : "border-zinc-200 bg-white text-zinc-700"
-                  }`}
-                >
-                  {LEVELS.find((l) => l.key === myConfidence)?.label ?? myConfidence}
-                  <svg className="h-3 w-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                  </svg>
-                  <select
-                    value={myConfidence!}
-                    onChange={(e) => {
-                      if (e.target.value === "lead" && !hasLeadVoice(currentUserSingingVoice)) setAskingLeadVoice(true);
-                      else onAddToRepertoire(song.song_id, e.target.value);
-                    }}
-                    aria-label="Role"
-                    className="absolute inset-0 w-full cursor-pointer opacity-0"
-                  >
-                    {LEVELS.map((l) => (
-                      <option key={l.key} value={l.key}>{l.label}</option>
-                    ))}
-                  </select>
-                </span>
+                <RoleSelect
+                  value={myConfidence!}
+                  onChange={(level) => {
+                    if (level === "lead" && !hasLeadVoice(currentUserSingingVoice)) setAskingLeadVoice(true);
+                    else onAddToRepertoire(song.song_id, level);
+                  }}
+                />
               )}
               {canManage ? (
                 <button

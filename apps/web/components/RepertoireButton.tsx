@@ -4,6 +4,7 @@ import { hasLeadVoice } from "@singjam/core";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import RoleSelect from "@/components/RoleSelect";
 import ConfidencePicker from "@/components/ConfidencePicker";
 
 type Level = "lead" | "support" | "learn";
@@ -85,28 +86,19 @@ export default function RepertoireButton({
   if (confidence !== null) {
     return (
       <div className="relative flex flex-wrap items-center gap-2">
-        <select
+        <RoleSelect
           value={confidence}
           disabled={saving}
-          onChange={(e) => {
-            if (e.target.value === "lead" && !hasLeadVoice(singingVoice)) {
+          size="md"
+          onChange={(level) => {
+            if (level === "lead" && !hasLeadVoice(singingVoice)) {
               setVoiceCheckPending(true);
               setPicking(true);
             } else {
-              save(e.target.value as Level);
+              save(level as Level);
             }
           }}
-          className={`rounded-xl border px-2 py-1.5 text-sm disabled:opacity-40 ${
-            confidence === "lead"
-              ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-              : "border-slate-300"
-          }`}
-          aria-label="Role"
-        >
-          {LEVELS.map((l) => (
-            <option key={l.key} value={l.key}>{l.label}</option>
-          ))}
-        </select>
+        />
         {children}
       </div>
     );

@@ -82,7 +82,7 @@ export default function AddToSetPanel({
     return (
       <button
         onClick={() => { setOpen(true); onOpen?.(); }}
-        className="rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs sm:px-3 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+        className="rounded-full border border-zinc-200 px-3 py-1 text-xs sm:py-1.5 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
       >
         Add to set
       </button>

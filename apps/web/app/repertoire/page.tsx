@@ -19,6 +19,7 @@ import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
 import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
+import RoleSelect from "@/components/RoleSelect";
 import SearchInput from "@/components/SearchInput";
 
 const CONFIDENCE_LEVELS = [
@@ -780,26 +781,8 @@ export default function RepertoirePage() {
                     <div className="relative flex flex-wrap items-center gap-2 sm:shrink-0">
                       {inRep ? (
                         <>
-                          <select
-                            value={(inRep.confidence ?? "") as ConfidenceKey}
-                            onChange={(e) => updateConfidence(inRep.song_id, e.target.value)}
-                            className={`rounded-xl border px-2 py-1.5 text-sm ${
-                              inRep.confidence === "lead"
-                                ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-                                : "border-zinc-200"
-                            }`}
-                            aria-label="Role"
-                          >
-                            {CONFIDENCE_LEVELS.map((l) => (
-                              <option
-                                key={l.key}
-                                value={l.key}
-                              >
-                                {l.label}
-                              </option>
-                            ))}
-                          </select>
-                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} />
+                          <RoleSelect value={inRep.confidence ?? "learn"} onChange={(level) => updateConfidence(inRep.song_id, level)} size="md" />
+                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} size="md" />
                           {userSets.length > 0 && (
                             <AddToSetPanel
                               songId={result.song_id}
@@ -810,9 +793,6 @@ export default function RepertoirePage() {
                               onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
                             />
                           )}
-                          <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
-                            View
-                          </Link>
                         </>
                       ) : isPicking ? (
                         <ConfidencePicker
@@ -1089,27 +1069,9 @@ export default function RepertoirePage() {
                   </div>
 
                   <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
-                    <select
-                      value={(it.confidence ?? "") as ConfidenceKey}
-                      onChange={(e) => updateConfidence(it.song_id, e.target.value)}
-                      className={`rounded-xl border px-2 py-1.5 text-xs sm:text-sm ${
-                        it.confidence === "lead"
-                          ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-                          : "border-zinc-200"
-                      }`}
-                      aria-label="Confidence"
-                    >
-                      {CONFIDENCE_LEVELS.map((l) => (
-                        <option
-                          key={l.key}
-                          value={l.key}
-                        >
-                          {l.label}
-                        </option>
-                      ))}
-                    </select>
+                    <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" />
 
-                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} />
+                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" />
 
                     {userSets.length > 0 && (
                       <AddToSetPanel
@@ -1122,13 +1084,6 @@ export default function RepertoirePage() {
                       />
                     )}
 
-                    <Link
-                      href={`/songs/${it.slug ?? it.song_id}`}
-                      onClick={() => saveScrollPosition()}
-                      className="rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs sm:px-3 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
-                    >
-                      View
-                    </Link>
                   </div>
                 </div>
               ))}

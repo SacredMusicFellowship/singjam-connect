@@ -1,5 +1,6 @@
 "use client";
 
+import { CONFIDENCE_STYLES, type ConfidenceLevel } from "@singjam/core";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -26,14 +27,15 @@ function TagRow({ label, tags }: { label: string; tags: string[] }) {
   );
 }
 
-function JammerRow({ label, jammers }: { label: string; jammers: { name: string; username: string }[] }) {
+function JammerRow({ level, label, jammers }: { level: ConfidenceLevel; label: string; jammers: { name: string; username: string }[] }) {
+  const style = CONFIDENCE_STYLES[level];
   return (
     <div className="flex flex-wrap items-baseline gap-2">
-      <span className="text-xs font-medium text-slate-500 w-16 shrink-0">{label}</span>
+      <span className={`text-xs font-medium w-16 shrink-0 ${style.label}`}>{label}</span>
       <div className="flex flex-wrap gap-1.5">
         {jammers.map((j, i) => (
           <Link key={i} href={`/u/${j.username}`}
-            className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-slate-200">
+            className={`rounded-full px-2.5 py-0.5 text-xs font-medium hover:opacity-80 ${style.pill} ${style.pillText}`}>
             {j.name}
           </Link>
         ))}
@@ -321,7 +323,7 @@ export default function SongPageContent() {
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
-              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
+              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
               {confidence && (
                 <AddToSetPanel
                   songId={song.id}
@@ -336,7 +338,7 @@ export default function SongPageContent() {
             </RepertoireButton>
             {isAdmin && (
               <Link href={`/admin/songs/${song.slug ?? song.id}`}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                className="rounded-full border border-slate-300 px-3 py-1 text-xs sm:py-1.5 sm:text-sm font-medium text-slate-600 hover:bg-slate-50">
                 Edit
               </Link>
             )}
@@ -345,13 +347,13 @@ export default function SongPageContent() {
             <div className="mt-3 flex flex-wrap gap-2">
               {song.chord_chart_url && (
                 <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs sm:py-1.5 sm:text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
                   Chords ↗
                 </a>
               )}
               {song.genius_url && (
                 <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs sm:py-1.5 sm:text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
                   Lyrics ↗
                 </a>
               )}
@@ -529,9 +531,9 @@ export default function SongPageContent() {
             </div>
           ) : songUsers && (songUsers.lead.length > 0 || songUsers.support.length > 0 || songUsers.learn.length > 0) ? (
             <div className="space-y-2">
-              {songUsers.lead.length > 0 && <JammerRow label="Lead" jammers={songUsers.lead} />}
-              {songUsers.support.length > 0 && <JammerRow label="Support" jammers={songUsers.support} />}
-              {songUsers.learn.length > 0 && <JammerRow label="Learn" jammers={songUsers.learn} />}
+              {songUsers.lead.length > 0 && <JammerRow level="lead" label="Lead" jammers={songUsers.lead} />}
+              {songUsers.support.length > 0 && <JammerRow level="support" label="Support" jammers={songUsers.support} />}
+              {songUsers.learn.length > 0 && <JammerRow level="learn" label="Learning" jammers={songUsers.learn} />}
             </div>
           ) : (
             <p className="text-sm text-slate-400">No jammers have added this song yet.</p>
@@ -559,7 +561,7 @@ export default function SongPageContent() {
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
-            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
+            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
             {confidence && (
               <AddToSetPanel
                 songId={song.id}
@@ -574,7 +576,7 @@ export default function SongPageContent() {
           </RepertoireButton>
           {isAdmin && (
             <Link href={`/admin/songs/${song.slug ?? song.id}`}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
+              className="rounded-full border border-slate-300 px-3 py-1 text-xs sm:py-1.5 sm:text-sm font-medium text-slate-600 hover:bg-slate-50">
               Edit
             </Link>
           )}
