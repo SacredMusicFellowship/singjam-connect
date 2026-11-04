@@ -338,7 +338,7 @@ export default function JamsScreen() {
                   No jams yet. Be the first to post one!
                 </Text>
               </View>
-            ) : null
+            ) : undefined
           }
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: 24 }}

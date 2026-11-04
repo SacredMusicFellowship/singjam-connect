@@ -124,7 +124,7 @@ export default function InviteToJamModal({ visible, inviteeUserId, inviteeName, 
                 <View className="mx-4 my-2 bg-red-50 border border-red-200 rounded-xl p-3">
                   <Text className="text-red-600 text-sm">{error}</Text>
                 </View>
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => {
               const isSent = sent.has(item.id);
