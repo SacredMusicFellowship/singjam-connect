@@ -9,7 +9,8 @@ export default function ChordsLink({
 }: {
   href: string;
   size?: "sm" | "md";
-  /** On phones, a black pill that stretches to fill the rest of a row of pills. */
+  /** On phones, a black pill that stretches to fill the rest of a row of pills (up to
+   *  a pill's width, so it doesn't span a whole line if the row wraps). */
   pill?: boolean;
 }) {
   return (
@@ -18,7 +19,7 @@ export default function ChordsLink({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className={`sm:hidden shrink-0 transition-opacity hover:opacity-80 ${pill ? "flex flex-1 items-center justify-center rounded-full border border-[#111] bg-[#111] px-3 py-0.5" : "rounded-lg p-1.5"}`}
+        className={`sm:hidden shrink-0 transition-opacity hover:opacity-80 ${pill ? "flex flex-1 max-w-20 items-center justify-center rounded-full border border-[#111] bg-[#111] px-3 py-0.5" : "rounded-lg p-1.5"}`}
         title="Chord chart"
         aria-label="Chord chart"
       >
