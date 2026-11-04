@@ -222,14 +222,14 @@ export default function EditJamForm({
         <div className="flex gap-3">
           <button
             onClick={() => setPreviewing(false)}
-            className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+            className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
           >
             ← Edit
           </button>
           <button
             onClick={save}
             disabled={busy || resolvingTimezone || !timezone}
-            className="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
           >
             {busy ? "Saving…" : "Save changes"}
           </button>
@@ -371,7 +371,7 @@ export default function EditJamForm({
           </ul>
         )}
 
-        <button onClick={goToPreview} disabled={resolvingTimezone || !timezone} className="w-full rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors">
+        <button onClick={goToPreview} disabled={resolvingTimezone || !timezone} className="w-full rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors">
           Preview changes
         </button>
       </div>

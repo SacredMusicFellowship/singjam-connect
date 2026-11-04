@@ -110,7 +110,7 @@ function CheckInButton({
       onClick={() => onToggle(guest)}
       aria-pressed={inHouse}
       title={inHouse ? "Tap to undo" : "Check in"}
-      className={`min-h-[44px] w-[5.5rem] shrink-0 rounded-lg px-3 text-xs font-medium transition-colors sm:min-h-0 sm:w-auto sm:py-1.5 ${
+      className={`min-h-[44px] w-[5.5rem] shrink-0 rounded-full px-3 text-xs font-medium transition-colors sm:min-h-0 sm:w-auto sm:py-1.5 ${
         inHouse
           ? "bg-green-100 text-green-700 hover:bg-green-200"
           : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
@@ -519,7 +519,7 @@ export default function TicketTierManager({
             <button
               type="submit"
               disabled={busy || limitDraft.trim() === (ticketLimit ? String(ticketLimit.quantity) : "")}
-              className="shrink-0 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+              className="shrink-0 rounded-full border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
             >
               Save
             </button>
@@ -555,14 +555,14 @@ export default function TicketTierManager({
                 <button
                   type="submit"
                   disabled={busy || !editDraft.name.trim() || editDraft.price.trim() === ""}
-                  className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
                 >
                   {busy ? "Saving…" : "Save"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditingId(null)}
-                  className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -604,7 +604,7 @@ export default function TicketTierManager({
                   onClick={() => startEditing(t)}
                   disabled={busy}
                   title="Edit name, price, cap and sales window"
-                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+                  className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
                 >
                   Edit
                 </button>
@@ -618,7 +618,7 @@ export default function TicketTierManager({
                       ? "Someone is checking out — this may fail until their hold clears"
                       : "Delete tier"
                   }
-                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+                  className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
                 >
                   Delete
                 </button>
@@ -636,7 +636,7 @@ export default function TicketTierManager({
           <button
             type="submit"
             disabled={busy || !draft.name.trim() || draft.price.trim() === ""}
-            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             Add tier
           </button>
@@ -670,7 +670,7 @@ export default function TicketTierManager({
               onClick={() => removePromo(p.id)}
               disabled={busy}
               title="Stops new redemptions. Existing orders keep their discount."
-              className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+              className="shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
             >
               Remove
             </button>
@@ -709,7 +709,7 @@ export default function TicketTierManager({
           <button
             type="submit"
             disabled={busy || !promoCode.trim() || promoValue.trim() === ""}
-            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             Add code
           </button>
@@ -733,7 +733,7 @@ export default function TicketTierManager({
           {guests.length > 0 && (
             <button
               onClick={downloadCsv}
-              className="hidden shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 sm:inline-flex"
+              className="hidden shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 sm:inline-flex"
             >
               Download CSV
             </button>

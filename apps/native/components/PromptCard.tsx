@@ -27,7 +27,7 @@ export default function PromptCard({ variant, title, body, actionLabel, onAction
           <Text className="text-sm font-medium text-amber-600">{action.label}</Text>
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity onPress={action.onPress} className="mt-4 rounded-xl bg-amber-500 px-5 py-2.5">
+        <TouchableOpacity onPress={action.onPress} className="mt-4 rounded-full bg-amber-500 px-5 py-2.5">
           <Text className="text-sm font-semibold text-white">{action.label}</Text>
         </TouchableOpacity>
       )}

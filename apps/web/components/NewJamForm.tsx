@@ -242,14 +242,14 @@ export default function NewJamForm({
           <div className="flex gap-3">
             <button
               onClick={() => setPreviewing(false)}
-              className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+              className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
             >
               ← Edit
             </button>
             <button
               onClick={publish}
               disabled={busy || resolvingTimezone || !timezone}
-              className="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+              className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
             >
               {busy ? "Publishing…" : "Publish jam"}
             </button>
@@ -438,7 +438,7 @@ export default function NewJamForm({
         <button
           onClick={goToPreview}
           disabled={resolvingTimezone || !timezone}
-          className="w-full rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+          className="w-full rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
         >
           Preview
         </button>

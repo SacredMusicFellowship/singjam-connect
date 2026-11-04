@@ -79,7 +79,7 @@ export default function MySongNotes({ songId, userId, className = "" }: { songId
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => save()}
-            className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
+            className="rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             Save
           </button>

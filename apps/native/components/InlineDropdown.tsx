@@ -54,7 +54,7 @@ export default function InlineDropdown<T extends string>({
       <TouchableOpacity
         ref={triggerRef}
         onPress={openMenu}
-        className="h-7 flex-row items-center gap-1 rounded-lg border border-zinc-200 px-3"
+        className="h-7 flex-row items-center gap-1 rounded-full border border-zinc-200 px-3"
         accessibilityLabel={accessibilityLabel}
       >
         <Ionicons name="chevron-down" size={11} color="#71717a" />

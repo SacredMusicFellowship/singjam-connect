@@ -284,7 +284,7 @@ export default function SetSongRow({
                 <button
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => saveNotes()}
-                  className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
+                  className="rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
                 >
                   Save
                 </button>
@@ -620,7 +620,7 @@ export default function SetSongRow({
                       <button
                         onClick={() => saveMedia("youtube", r.url)}
                         disabled={saving}
-                        className="shrink-0 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-50 transition-colors"
+                        className="shrink-0 rounded-full border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-50 transition-colors"
                       >
                         Select
                       </button>
@@ -646,7 +646,7 @@ export default function SetSongRow({
             <button
               onClick={handleSave}
               disabled={saving || !urlInput.trim()}
-              className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+              className="rounded-full bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -673,13 +673,13 @@ function RemoveButton({ onRemove }: { onRemove: () => void }) {
       <div className="flex shrink-0 items-center gap-2">
         <button
           onClick={() => { setConfirming(false); onRemove(); }}
-          className="rounded-xl bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-400 transition-colors"
+          className="rounded-full bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-400 transition-colors"
         >
           Remove
         </button>
         <button
           onClick={() => setConfirming(false)}
-          className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
+          className="rounded-full border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
         >
           Cancel
         </button>
@@ -700,7 +700,7 @@ function RemoveButton({ onRemove }: { onRemove: () => void }) {
       </button>
       <button
         onClick={() => setConfirming(true)}
-        className="hidden sm:inline-flex rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+        className="hidden sm:inline-flex rounded-full border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
       >
         Remove
       </button>
@@ -751,13 +751,13 @@ function SongMenu({ items }: { items: MenuItem[] }) {
               <div key={item.label} className="flex gap-2 px-3 py-2">
                 <button
                   onClick={() => setConfirming(null)}
-                  className="flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  className="flex-1 rounded-full border border-zinc-300 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => { close(); item.onSelect(); }}
-                  className="flex-1 rounded-lg bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors"
+                  className="flex-1 rounded-full bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors"
                 >
                   Remove
                 </button>

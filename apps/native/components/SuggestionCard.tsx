@@ -134,7 +134,7 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
             </View>
             <TouchableOpacity
               onPress={handleAddTap}
-              className={`flex-row items-center rounded-xl border px-2.5 py-1.5 ${
+              className={`flex-row items-center rounded-full border px-2.5 py-1.5 ${
                 isLead ? 'border-amber-400 bg-amber-100' : 'border-zinc-200 bg-white'
               }`}
             >
@@ -146,15 +146,15 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
           </>
         ) : (
           <>
-            <TouchableOpacity onPress={handleAddTap} className="rounded-xl border border-indigo-500 bg-indigo-500 px-3 py-1.5">
+            <TouchableOpacity onPress={handleAddTap} className="rounded-full border border-indigo-500 bg-indigo-500 px-3 py-1.5">
               <Text className="text-sm font-medium text-white">I know this song!</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => onAdd(song, 'learn')} className="rounded-xl border border-indigo-200 bg-white px-3 py-1.5">
+            <TouchableOpacity onPress={() => onAdd(song, 'learn')} className="rounded-full border border-indigo-200 bg-white px-3 py-1.5">
               <Text className="text-sm font-medium text-indigo-600">Want to learn it</Text>
             </TouchableOpacity>
           </>
         )}
-        <TouchableOpacity onPress={() => onView(song)} className="rounded-xl border border-zinc-200 px-3 py-1.5">
+        <TouchableOpacity onPress={() => onView(song)} className="rounded-full border border-zinc-200 px-3 py-1.5">
           <Text className="text-sm text-zinc-600">View</Text>
         </TouchableOpacity>
       </View>

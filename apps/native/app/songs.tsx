@@ -330,7 +330,7 @@ export default function SongLibraryScreen() {
         />
         <TouchableOpacity
           onPress={() => setFilterModalVisible(true)}
-          className={`h-7 flex-row items-center gap-1.5 rounded-lg border px-3 ${
+          className={`h-7 flex-row items-center gap-1.5 rounded-full border px-3 ${
             activeFilterCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200'
           }`}
         >
@@ -342,7 +342,7 @@ export default function SongLibraryScreen() {
         {userId && myConfidence.size > 0 && (
           <TouchableOpacity
             onPress={() => setHideMySongs(v => !v)}
-            className="h-7 flex-row items-center gap-1.5 rounded-lg border border-zinc-200 px-3"
+            className="h-7 flex-row items-center gap-1.5 rounded-full border border-zinc-200 px-3"
           >
             <Ionicons
               name={hideMySongs ? 'checkbox' : 'square-outline'}
@@ -376,7 +376,7 @@ export default function SongLibraryScreen() {
           <Text className="text-sm text-zinc-500">Can't find your song?</Text>
           <TouchableOpacity
             onPress={() => setSubmitOpen(true)}
-            className="mt-3 rounded-xl bg-zinc-800 px-4 py-2.5"
+            className="mt-3 rounded-full bg-zinc-800 px-4 py-2.5"
           >
             <Text className="text-sm font-semibold text-white">Add a missing song</Text>
           </TouchableOpacity>

@@ -114,14 +114,14 @@ export default function RepertoireButton({
     <div className="flex flex-wrap items-center gap-3">
       <button
         onClick={handleAddClick}
-        className="rounded-xl bg-indigo-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 transition-colors"
+        className="rounded-full bg-indigo-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 transition-colors"
       >
         I know this song!
       </button>
       <button
         onClick={() => save("learn")}
         disabled={saving}
-        className="rounded-xl bg-white px-4 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+        className="rounded-full bg-white px-4 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors disabled:opacity-50"
       >
         Want to learn it
       </button>

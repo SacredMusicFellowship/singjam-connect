@@ -484,7 +484,7 @@ export default function RepertoireScreen() {
           />
           <TouchableOpacity
             onPress={() => setFilterModalVisible(true)}
-            className={`h-7 flex-row items-center gap-1.5 rounded-lg border px-3 ${
+            className={`h-7 flex-row items-center gap-1.5 rounded-full border px-3 ${
               extFilterCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200'
             }`}
           >
@@ -504,13 +504,13 @@ export default function RepertoireScreen() {
             <Text className="text-xs text-amber-700 underline">Deselect all</Text>
           </TouchableOpacity>
           <View className="flex-row items-center gap-2 ml-auto">
-            <TouchableOpacity onPress={handleBulkAddToSet} className="rounded-xl border border-zinc-300 bg-white px-2 py-1.5">
+            <TouchableOpacity onPress={handleBulkAddToSet} className="rounded-full border border-zinc-300 bg-white px-2 py-1.5">
               <Text className="text-xs text-zinc-700">Add to set…</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleBulkConfidence} className="rounded-xl border border-zinc-300 bg-white px-2 py-1.5">
+            <TouchableOpacity onPress={handleBulkConfidence} className="rounded-full border border-zinc-300 bg-white px-2 py-1.5">
               <Text className="text-xs text-zinc-700">Change role…</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleBulkRemove} className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5">
+            <TouchableOpacity onPress={handleBulkRemove} className="rounded-full border border-zinc-200 bg-white px-3 py-1.5">
               <Text className="text-xs text-zinc-500">Remove</Text>
             </TouchableOpacity>
           </View>
@@ -557,7 +557,7 @@ export default function RepertoireScreen() {
             <Text className="text-sm text-zinc-500">Can't find your song?</Text>
             <TouchableOpacity
               onPress={() => setSubmitOpen(true)}
-              className="mt-3 rounded-xl bg-zinc-800 px-4 py-2.5"
+              className="mt-3 rounded-full bg-zinc-800 px-4 py-2.5"
             >
               <Text className="text-sm font-semibold text-white">Add a missing song</Text>
             </TouchableOpacity>

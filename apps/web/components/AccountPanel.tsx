@@ -55,7 +55,7 @@ function InstrumentSearch({
               key={i}
               type="button"
               onClick={() => onSelect(i)}
-              className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50"
+              className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50"
             >
               + {i}
             </button>
@@ -117,7 +117,7 @@ function GenreSearch({
             const isSelected = selected.includes(g);
             return (
               <button key={g} type="button" onClick={() => onToggle(g)}
-                className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${isSelected ? "bg-zinc-900 text-white border-zinc-900" : "border-zinc-200 hover:bg-zinc-50"}`}>
+                className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${isSelected ? "bg-zinc-900 text-white border-zinc-900" : "border-zinc-200 hover:bg-zinc-50"}`}>
                 {isSelected ? `✓ ${g}` : `+ ${g}`}
               </button>
             );
@@ -534,7 +534,7 @@ export default function AccountPanel() {
               <button
                 type="button"
                 onClick={() => { setChangingEmail((v) => !v); setEmailStatus(null); setNewEmail(""); }}
-                className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
+                className="shrink-0 rounded-full border border-zinc-200 px-3 py-2 text-xs hover:bg-zinc-50"
               >
                 Change
               </button>
@@ -553,13 +553,13 @@ export default function AccountPanel() {
                   <button
                     onClick={changeEmail}
                     disabled={!newEmail.trim() || emailBusy}
-                    className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+                    className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
                   >
                     {emailBusy ? "Sending…" : "Send confirmation"}
                   </button>
                   <button
                     onClick={() => { setChangingEmail(false); setNewEmail(""); setEmailStatus(null); }}
-                    className="rounded-xl border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50"
+                    className="rounded-full border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50"
                   >
                     Cancel
                   </button>
@@ -653,7 +653,7 @@ export default function AccountPanel() {
                       );
                     }
                   }}
-                  className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${selected ? "bg-zinc-900 text-white border-zinc-900" : "border-zinc-200 hover:bg-zinc-50"}`}
+                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${selected ? "bg-zinc-900 text-white border-zinc-900" : "border-zinc-200 hover:bg-zinc-50"}`}
                 >
                   {o.label}
                 </button>
@@ -717,7 +717,7 @@ export default function AccountPanel() {
                       setInstrumentLevels({ ...instrumentLevels, [pendingInstrument]: l });
                       setPendingInstrument(null);
                     }}
-                    className="rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-700 transition-colors hover:bg-indigo-100"
+                    className="rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-700 transition-colors hover:bg-indigo-100"
                   >
                     {l}
                   </button>
@@ -725,7 +725,7 @@ export default function AccountPanel() {
                 <button
                   type="button"
                   onClick={() => setPendingInstrument(null)}
-                  className="rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:bg-indigo-100"
+                  className="rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:bg-indigo-100"
                 >
                   ✕
                 </button>
@@ -782,7 +782,7 @@ export default function AccountPanel() {
         <button
           onClick={save}
           disabled={busy}
-          className="w-full rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+          className="w-full rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
         >
           {busy ? "Saving..." : "Save"}
         </button>
@@ -791,13 +791,13 @@ export default function AccountPanel() {
 
       {/* Sign out */}
       <div className="rounded-2xl border border-zinc-200 p-5 shadow-sm flex items-center gap-3">
-        <button onClick={signOut} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50">
+        <button onClick={signOut} className="rounded-full border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50">
           Sign out
         </button>
         {isAdmin && (
           <Link
             href="/admin"
-            className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200 transition-colors"
+            className="rounded-full bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200 transition-colors"
           >
             Admin panel
           </Link>
@@ -813,7 +813,7 @@ export default function AccountPanel() {
         {!showDelete ? (
           <button
             onClick={() => setShowDelete(true)}
-            className="mt-3 rounded-xl border border-red-300 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+            className="mt-3 rounded-full border border-red-300 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
           >
             Delete my account
           </button>
@@ -830,13 +830,13 @@ export default function AccountPanel() {
               <button
                 onClick={deleteAccount}
                 disabled={deleteConfirm !== "DELETE" || deleting}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-40"
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-40"
               >
                 {deleting ? "Deleting…" : "Confirm delete"}
               </button>
               <button
                 onClick={() => { setShowDelete(false); setDeleteConfirm(""); }}
-                className="rounded-xl border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50"
               >
                 Cancel
               </button>

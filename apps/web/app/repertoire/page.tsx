@@ -804,12 +804,12 @@ export default function RepertoirePage() {
                         />
                       ) : (
                         <>
-                          <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
+                          <Link href={href} className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
                             View
                           </Link>
                           <button
                             onClick={() => setPendingAddId(result.song_id)}
-                            className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+                            className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
                           >
                             Add
                           </button>
@@ -855,7 +855,7 @@ export default function RepertoirePage() {
               <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
               <button
                 onClick={() => setFiltersOpen((o) => !o)}
-                className={`h-7 flex items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors ${
+                className={`h-7 flex items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                   activeFilterCount > 0
                     ? "border-amber-400 bg-amber-50 text-amber-700"
                     : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
@@ -908,7 +908,7 @@ export default function RepertoirePage() {
                       <button
                         onClick={() => { if (newSetName.trim()) createSetAndBulkAdd(newSetName.trim()); }}
                         disabled={!newSetName.trim()}
-                        className="rounded-xl border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
                       >
                         Create
                       </button>
@@ -958,13 +958,13 @@ export default function RepertoirePage() {
                     </span>
                     <button
                       onClick={bulkRemove}
-                      className="rounded-xl border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                      className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
                     >
                       Confirm
                     </button>
                     <button
                       onClick={() => setBulkRemoveConfirm(false)}
-                      className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
+                      className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
                     >
                       Cancel
                     </button>
@@ -972,7 +972,7 @@ export default function RepertoirePage() {
                 ) : (
                   <button
                     onClick={() => setBulkRemoveConfirm(true)}
-                    className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
+                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
                   >
                     Remove
                   </button>

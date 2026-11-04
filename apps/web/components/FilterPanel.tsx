@@ -62,7 +62,7 @@ export function FilterPanel({
       {activeFilterCount > 0 && (
         <button
           onClick={clearFilters}
-          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+          className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
         >
           ✕ Clear {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"}
         </button>
@@ -225,7 +225,7 @@ export function FilterPanel({
       {activeFilterCount > 0 && (
         <button
           onClick={clearFilters}
-          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+          className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
         >
           ✕ Clear {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"}
         </button>

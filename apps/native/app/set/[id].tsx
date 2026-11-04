@@ -454,7 +454,7 @@ function SongRow({
               className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-900"
             />
             <View className="flex-row items-center gap-3 mt-2">
-              <TouchableOpacity onPress={() => saveNotes()} className="rounded-lg bg-amber-500 px-3 py-1.5">
+              <TouchableOpacity onPress={() => saveNotes()} className="rounded-full bg-amber-500 px-3 py-1.5">
                 <Text className="text-xs font-semibold text-white">Save</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={cancelNotes} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
@@ -582,7 +582,7 @@ function SongRow({
                 </TouchableOpacity>
               ) : guestRemove ? (
                 wide ? (
-                  <TouchableOpacity onPress={confirmRemove} className="rounded-xl border border-zinc-200 px-2 py-1">
+                  <TouchableOpacity onPress={confirmRemove} className="rounded-full border border-zinc-200 px-2 py-1">
                     <Text className="text-xs text-zinc-400">Remove</Text>
                   </TouchableOpacity>
                 ) : (

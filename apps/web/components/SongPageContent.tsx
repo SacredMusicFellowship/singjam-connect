@@ -598,7 +598,7 @@ export default function SongPageContent() {
                 <button
                   onClick={handleRemoveFromRepertoire}
                   disabled={removing}
-                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
                 >
                   {removing ? "Removing…" : "Remove"}
                 </button>
@@ -610,7 +610,7 @@ export default function SongPageContent() {
           ) : (
             <button
               onClick={() => setConfirmingRemove(true)}
-              className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+              className="rounded-full border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
             >
               Remove from my repertoire
             </button>

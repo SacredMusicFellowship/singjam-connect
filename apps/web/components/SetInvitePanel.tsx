@@ -220,7 +220,7 @@ export default function SetInvitePanel({
             <button
               key={r}
               onClick={() => setRole(r)}
-              className={`rounded-xl border px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                 role === r
                   ? "border-amber-500 bg-amber-50 text-amber-700"
                   : "border-zinc-300 text-zinc-600 hover:bg-zinc-50"
@@ -273,7 +273,7 @@ export default function SetInvitePanel({
                       <button
                         onClick={() => inviteUser(u.id)}
                         disabled={isAdded || inviting === u.id}
-                        className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                        className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                           isAdded
                             ? "bg-green-100 text-green-700 cursor-default"
                             : "bg-amber-500 text-white hover:bg-amber-400 disabled:opacity-50"
@@ -308,7 +308,7 @@ export default function SetInvitePanel({
               <button
                 onClick={inviteEmail}
                 disabled={emailBusy || !emailInput.trim()}
-                className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                className="rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
               >
                 {emailBusy ? "Sending…" : "Send"}
               </button>
@@ -327,7 +327,7 @@ export default function SetInvitePanel({
           <button
             onClick={() => shareLink()}
             disabled={shareBusy}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
           >
             {shareBusy ? "Opening…" : (
               <>
@@ -345,7 +345,7 @@ export default function SetInvitePanel({
             <button
               onClick={() => shareLink("sms")}
               disabled={shareBusy}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
               {shareBusy ? "Opening…" : (
                 <>
@@ -360,7 +360,7 @@ export default function SetInvitePanel({
             <button
               onClick={() => shareLink("whatsapp")}
               disabled={shareBusy}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-[#25D366] bg-white px-4 py-2.5 text-sm font-medium text-[#128C7E] hover:bg-green-50 disabled:opacity-50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 rounded-full border border-[#25D366] bg-white px-4 py-2.5 text-sm font-medium text-[#128C7E] hover:bg-green-50 disabled:opacity-50 transition-colors"
             >
               {shareBusy ? "Opening…" : (
                 <>
@@ -388,7 +388,7 @@ export default function SetInvitePanel({
             <button
               key={r}
               onClick={() => setLinkRole(r)}
-              className={`rounded-xl border px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+              className={`rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
                 linkRole === r
                   ? "border-amber-500 bg-amber-50 text-amber-700"
                   : "border-zinc-300 text-zinc-600 hover:bg-zinc-50"
@@ -402,7 +402,7 @@ export default function SetInvitePanel({
           <button
             onClick={copyInviteLink}
             disabled={copyBusy}
-            className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
           >
             {copyBusy ? "Copying…" : (
               <>
@@ -417,7 +417,7 @@ export default function SetInvitePanel({
           <button
             onClick={showQR}
             disabled={qrBusy}
-            className="flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+            className="flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
           >
             {qrBusy ? "Generating…" : (
               <>
@@ -477,7 +477,7 @@ export default function SetInvitePanel({
             </div>
             <button
               onClick={() => setQrDataUrl(null)}
-              className="relative rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-400 transition-colors md:px-8 md:py-3 md:text-base"
+              className="relative rounded-full bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-400 transition-colors md:px-8 md:py-3 md:text-base"
             >
               Done
             </button>

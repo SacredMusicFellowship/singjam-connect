@@ -198,7 +198,7 @@ function OpenInAppButton({ service, url }: { service: 'youtube' | 'spotify'; url
   return (
     <TouchableOpacity
       onPress={() => openUrl(url)}
-      className="flex-row items-center gap-1.5 border border-slate-200 rounded-xl px-3 py-2"
+      className="flex-row items-center gap-1.5 border border-slate-200 rounded-full px-3 py-2"
       accessibilityLabel={youtube ? 'Watch on YouTube' : 'Play on Spotify'}
     >
       {youtube
@@ -646,7 +646,7 @@ export default function SongDetailScreen() {
               {song.chord_chart_url ? (
                 <TouchableOpacity
                   onPress={() => openUrl(song.chord_chart_url!)}
-                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-full px-4 py-2"
                 >
                   <Text className="text-slate-600 text-sm font-medium">Chords</Text>
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
@@ -655,7 +655,7 @@ export default function SongDetailScreen() {
               {song.genius_url ? (
                 <TouchableOpacity
                   onPress={() => openUrl(song.genius_url!)}
-                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-full px-4 py-2"
                 >
                   <Text className="text-slate-600 text-sm font-medium">Lyrics</Text>
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
@@ -855,7 +855,7 @@ export default function SongDetailScreen() {
             <View className="mt-6 pt-4 pb-6 border-t border-slate-100">
               <TouchableOpacity
                 onPress={handleRemoveFromRepertoire}
-                className="self-start rounded-xl border border-slate-200 bg-white px-2.5 py-1.5"
+                className="self-start rounded-full border border-slate-200 bg-white px-2.5 py-1.5"
               >
                 <Text className="text-xs text-slate-400">Remove from my repertoire</Text>
               </TouchableOpacity>
