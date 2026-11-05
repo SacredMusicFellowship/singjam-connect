@@ -69,3 +69,11 @@ describe("landmarkYear", () => {
     expect(landmarkYear(1940, 1943, 1960)).toBeNull();
   });
 });
+
+describe("leadArtist on hostile input", () => {
+  it("stays fast on long runs of spaces", () => {
+    const start = Date.now();
+    expect(leadArtist("a" + " ".repeat(50000) + "and b")).toBe("a");
+    expect(Date.now() - start).toBeLessThan(100);
+  });
+});

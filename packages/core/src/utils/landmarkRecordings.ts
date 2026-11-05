@@ -33,7 +33,9 @@ export function sameArtist(a: string, b: string): boolean {
 
 // The first-named artist, for searching: "Bing Crosby & Connee Boswell" → "Bing Crosby".
 export function leadArtist(name: string): string {
-  return name.split(/\s+(?:&|and|with|featuring|feat\.?|ft\.?)\s+|,\s*/i)[0].trim();
+  // Spaces collapsed first (and the length bounded) so the split can't backtrack.
+  const flat = name.slice(0, 300).replace(/\s+/g, " ");
+  return flat.split(/ (?:&|and|with|featuring|feat\.?|ft\.?) |, ?/i)[0].trim();
 }
 
 // Recordings both models listed (matched by artist), minus artists the song
