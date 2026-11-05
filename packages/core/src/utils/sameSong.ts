@@ -14,8 +14,11 @@ const words = (s: string) =>
 // "The Sounds of Silence" and "Sound of Silence" share a key; so do
 // "(Sittin' On) The Dock of the Bay" and "Dock of the Bay".
 export function songTitleKeys(title: string): string[] {
-  const full = words(title);
-  const bare = words(title.replace(/\([^)]*\)|\[[^\]]*\]/g, " "));
+  // Bounded, and the bracket classes exclude their own opener, so a title like
+  // "((((…" can't make the replace scan quadratically.
+  const t = title.slice(0, 300);
+  const full = words(t);
+  const bare = words(t.replace(/\([^()]*\)|\[[^[\]]*\]/g, " "));
   const key = (w: string[]) => (w[0] === "the" ? w.slice(1) : w).join(" ");
   return [...new Set([key(full), key(bare)].filter(Boolean))];
 }

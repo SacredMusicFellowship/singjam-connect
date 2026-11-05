@@ -12,6 +12,12 @@ describe("isSameTitle", () => {
   it("forgives a small typo in a longer title", () => {
     expect(isSameTitle("With A Litte Help From My Friends", "With a Little Help from My Friends")).toBe(true);
   });
+  it("stays fast on pathological input", () => {
+    const t0 = Date.now();
+    isSameTitle("(".repeat(50000), "(".repeat(50000) + "x");
+    expect(Date.now() - t0).toBeLessThan(500);
+  });
+
   it("keeps genuinely different titles apart", () => {
     expect(isSameTitle("Sweet Dreams", "Dreams")).toBe(false);
     expect(isSameTitle("Hey Jude", "Hey You")).toBe(false);
