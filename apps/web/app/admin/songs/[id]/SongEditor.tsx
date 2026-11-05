@@ -23,6 +23,16 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 type Lookup = { id: string; name: string };
+type ProductionLookup = Lookup & { year: number | null };
+
+function productionLabel(p: ProductionLookup) {
+  return p.year ? `${p.name} (${p.year})` : p.name;
+}
+
+function parseYear(v: string | undefined): number | null {
+  const n = parseInt(v ?? "", 10);
+  return Number.isFinite(n) ? n : null;
+}
 type AltTitle = { id: string; title: string };
 
 function toTitleCase(s: string) {
@@ -95,7 +105,7 @@ type Props = {
   allLanguages: Lookup[];
   allPeople: Lookup[];
   allArtists: Lookup[];
-  allProductions: Lookup[];
+  allProductions: ProductionLookup[];
 };
 
 function toSet(ids: string[]) {
@@ -157,6 +167,16 @@ export default function SongEditor({
   const [productions, setProductions] = useState<Set<string>>(new Set(initialProductionIds));
   const [pendingProductionNames, setPendingProductionNames] = useState<string[]>([]);
   const [productionQuery, setProductionQuery] = useState("");
+  const [productionYears, setProductionYears] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      initialProductionIds.map((id) => [id, String(allProductions.find((p) => p.id === id)?.year ?? "")])
+    )
+  );
+  const productionLookups: Lookup[] = allProductions.map((p) => ({ id: p.id, name: productionLabel(p) }));
+  const productionYearRows = [
+    ...[...productions].map((id) => ({ key: id, name: allProductions.find((p) => p.id === id)?.name ?? "" })),
+    ...pendingProductionNames.map((name) => ({ key: `new:${name}`, name })),
+  ];
 
   // Tag pill arrays
   const [genres, setGenres] = useState<string[]>(() =>
@@ -779,9 +799,18 @@ export default function SongEditor({
 
       // Sync productions
       const resolvedProductionIds = new Set<string>([...productions]);
+      for (const id of productions) {
+        const year = parseYear(productionYears[id]);
+        if (year !== (allProductions.find((p) => p.id === id)?.year ?? null)) {
+          await supabase.from("productions").update({ year }).eq("id", id);
+        }
+      }
       for (const name of pendingProductionNames) {
-        const { data } = await supabase.from("productions").upsert({ name }, { onConflict: "name" }).select("id").single();
-        if (data?.id) resolvedProductionIds.add(data.id);
+        const year = parseYear(productionYears[`new:${name}`]);
+        const lookup = supabase.from("productions").select("id").eq("name", name);
+        const { data: existing } = await (year === null ? lookup.is("year", null) : lookup.eq("year", year)).maybeSingle();
+        const id = existing?.id ?? (await supabase.from("productions").insert({ name, year }).select("id").single()).data?.id;
+        if (id) resolvedProductionIds.add(id);
       }
       const originalProductionIds = (song?.song_productions ?? []).map((x) => x.production_id);
       await syncJoinTable(songId!, "song_productions", "production_id", resolvedProductionIds, originalProductionIds);
@@ -949,16 +978,19 @@ export default function SongEditor({
                   {isFromProduction && (
                     <PeopleField
                       label="Production"
-                      items={[...productions].map((id) => allProductions.find((p) => p.id === id)).filter((p): p is Lookup => !!p)}
+                      items={[...productions].map((id) => productionLookups.find((p) => p.id === id)).filter((p): p is Lookup => !!p)}
                       query={productionQuery}
                       onQueryChange={setProductionQuery}
-                      suggestions={allProductions.filter((p) => p.name.toLowerCase().includes(productionQuery.toLowerCase()) && !productions.has(p.id))}
-                      onAdd={(p) => { setProductions((prev) => new Set([...prev, p.id])); setProductionQuery(""); }}
+                      suggestions={productionLookups.filter((p) => p.name.toLowerCase().includes(productionQuery.toLowerCase()) && !productions.has(p.id))}
+                      onAdd={(p) => { setProductions((prev) => new Set([...prev, p.id])); setProductionYears((prev) => ({ ...prev, [p.id]: String(allProductions.find((x) => x.id === p.id)?.year ?? "") })); setProductionQuery(""); }}
                       onRemove={(id) => setProductions((prev) => { const s = new Set(prev); s.delete(id); return s; })}
                       onAddNew={(name) => { setPendingProductionNames((prev) => [...prev, name]); setProductionQuery(""); }}
                       pendingItems={pendingProductionNames}
                       onRemovePending={(name) => setPendingProductionNames((prev) => prev.filter((n) => n !== name))}
                     />
+                  )}
+                  {isFromProduction && productionYearRows.length > 0 && (
+                    <ProductionYearInputs rows={productionYearRows} years={productionYears} onChange={(key, v) => setProductionYears((prev) => ({ ...prev, [key]: v }))} />
                   )}
                 </div>
               </section>
@@ -1327,18 +1359,21 @@ export default function SongEditor({
           {isFromProduction && (
             <PeopleField
               label="Production"
-              items={[...productions].map((id) => allProductions.find((p) => p.id === id)).filter((p): p is Lookup => !!p)}
+              items={[...productions].map((id) => productionLookups.find((p) => p.id === id)).filter((p): p is Lookup => !!p)}
               query={productionQuery}
               onQueryChange={setProductionQuery}
-              suggestions={allProductions.filter(
+              suggestions={productionLookups.filter(
                 (p) => p.name.toLowerCase().includes(productionQuery.toLowerCase()) && !productions.has(p.id)
               )}
-              onAdd={(p) => { setProductions((prev) => new Set([...prev, p.id])); setProductionQuery(""); }}
+              onAdd={(p) => { setProductions((prev) => new Set([...prev, p.id])); setProductionYears((prev) => ({ ...prev, [p.id]: String(allProductions.find((x) => x.id === p.id)?.year ?? "") })); setProductionQuery(""); }}
               onRemove={(id) => setProductions((prev) => { const s = new Set(prev); s.delete(id); return s; })}
               onAddNew={(name) => { setPendingProductionNames((prev) => [...prev, name]); setProductionQuery(""); }}
               pendingItems={pendingProductionNames}
               onRemovePending={(name) => setPendingProductionNames((prev) => prev.filter((n) => n !== name))}
             />
+          )}
+          {isFromProduction && productionYearRows.length > 0 && (
+            <ProductionYearInputs rows={productionYearRows} years={productionYears} onChange={(key, v) => setProductionYears((prev) => ({ ...prev, [key]: v }))} />
           )}
         </div>
 
@@ -1855,6 +1890,31 @@ function RecordingArtistField({
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+// A production's year belongs to the production, so changing it here changes it
+// for every song from that production.
+function ProductionYearInputs({ rows, years, onChange }: {
+  rows: { key: string; name: string }[];
+  years: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {rows.map((r) => (
+        <label key={r.key} className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="min-w-0 flex-1 truncate">{r.name} — year</span>
+          <input
+            type="number"
+            value={years[r.key] ?? ""}
+            onChange={(e) => onChange(r.key, e.target.value)}
+            className="input w-24"
+            placeholder="e.g. 1939"
+          />
+        </label>
+      ))}
     </div>
   );
 }

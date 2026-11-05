@@ -1,4 +1,4 @@
-import type { RecordingArtistCredit } from "@singjam/core";
+import type { ProductionCredit, RecordingArtistCredit } from "@singjam/core";
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -24,6 +24,7 @@ export type SongSearchResult = {
   youtube_id: string | null;
   spotify_track_id: string | null;
   recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
 };
 
 export function useSongSearch(

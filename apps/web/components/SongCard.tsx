@@ -1,7 +1,7 @@
 "use client";
 
-import { formatRecordingArtists, hasLeadVoice, type RecordingArtistCredit } from "@singjam/core";
-import { useState } from "react";
+import { formatRecordingArtists, hasLeadVoice, productionCredits, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { formatComposers } from "@/lib/formatComposers";
 import RoleSelect from "@/components/RoleSelect";
@@ -37,6 +37,7 @@ export default function SongCard({
   composers,
   cultures,
   productions,
+  productionCredits: productionCreditsProp,
   recordingArtists,
   aka,
   genres,
@@ -59,6 +60,7 @@ export default function SongCard({
   composers: string[];
   cultures: string[];
   productions: string[];
+  productionCredits?: ProductionCredit[] | null;
   recordingArtists?: RecordingArtistCredit[] | null;
   aka: string[] | null;
   genres: string[];
@@ -83,6 +85,7 @@ export default function SongCard({
   const picking = pendingAddId === songId;
   const href = `/songs/${slug ?? songId}`;
   const artistsLine = formatRecordingArtists(recordingArtists, displayArtist);
+  const shows = productionCredits(productionCreditsProp, productions);
 
   return (
     <div className="rounded-2xl border border-zinc-200 p-4 shadow-sm">
@@ -98,9 +101,17 @@ export default function SongCard({
               </span>
             )}
           </div>
-          {productions && productions.length > 0 ? (
+          {shows.length > 0 ? (
             <div className="text-sm text-zinc-500">
-              from <em>{productions.join(", ")}</em>{artistsLine ? ` · ${artistsLine}` : null}
+              from{" "}
+              {shows.map((p, i) => (
+                <Fragment key={`${p.name}-${p.year}`}>
+                  {i > 0 && ", "}
+                  <em>{p.name}</em>
+                  {p.year ? ` (${p.year})` : null}
+                </Fragment>
+              ))}
+              {artistsLine ? ` · ${artistsLine}` : null}
             </div>
           ) : artistsLine ? (
             <div className="text-sm text-zinc-500">{artistsLine}</div>

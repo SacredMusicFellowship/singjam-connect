@@ -5,6 +5,7 @@ export * from './utils/deriveNeighborhood';
 export * from './utils/fetchAllRows';
 export * from './utils/formatComposers';
 export * from './utils/formatRecordingArtists';
+export * from './utils/productionCredits';
 export * from './utils/formatJamTime';
 export * from './utils/formatVenueAddress';
 export * from './utils/generateSlug';

@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { formatComposers, formatRecordingArtists, type RecordingArtistCredit } from '@singjam/core';
+import { formatComposers, formatRecordingArtists, productionCredits, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 
 export type Suggestion = {
@@ -21,6 +21,7 @@ export type Suggestion = {
   youtube_id: string | null;
   spotify_track_id: string | null;
   recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
 };
 
 const CONFIDENCE_LABELS: Record<string, string> = {
@@ -69,6 +70,7 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
     ? formatComposers(song.composers, song.cultures)
     : null;
   const artistsLine = formatRecordingArtists(song.recording_artists, song.display_artist);
+  const shows = productionCredits(song.production_credits, song.productions);
   const genres = [...song.genres].sort();
   const isLead = confidence === 'lead';
 
@@ -82,9 +84,17 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
               <Text className="text-zinc-400"> ({composersLabel})</Text>
             ) : null}
           </Text>
-          {song.productions.length > 0 ? (
+          {shows.length > 0 ? (
             <Text className="text-sm text-zinc-500">
-              from <Text className="italic">{song.productions.join(', ')}</Text>{artistsLine ? ` · ${artistsLine}` : null}
+              from{' '}
+              {shows.map((p, i) => (
+                <Text key={`${p.name}-${p.year}`}>
+                  {i > 0 ? ', ' : null}
+                  <Text className="italic">{p.name}</Text>
+                  {p.year ? ` (${p.year})` : null}
+                </Text>
+              ))}
+              {artistsLine ? ` · ${artistsLine}` : null}
             </Text>
           ) : artistsLine ? (
             <Text className="text-sm text-zinc-500">{artistsLine}</Text>

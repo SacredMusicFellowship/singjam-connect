@@ -71,6 +71,7 @@ type SongSearchResult = {
   song_id: string;
   title: string;
   display_artist: string | null;
+  productions: string[];
 };
 
 function AddSongModal({
@@ -109,13 +110,8 @@ function AddSongModal({
 
   async function search(q: string) {
     setSearching(true);
-    const { data } = await supabase
-      .from('songs')
-      .select('song_id, title, display_artist')
-      .or(`title.ilike.%${q}%,display_artist.ilike.%${q}%`)
-      .order('title')
-      .limit(30);
-    setResults(data ?? []);
+    const { data } = await supabase.rpc('search_songs', { q, limit_n: 30 });
+    setResults((data ?? []) as SongSearchResult[]);
     setSearching(false);
   }
 
@@ -198,7 +194,11 @@ function AddSongModal({
                 <View className="flex-row items-center px-4 py-3 border-b border-zinc-100">
                   <View className="flex-1 mr-3">
                     <Text className="text-zinc-900 font-medium" numberOfLines={1}>{item.title}</Text>
-                    {item.display_artist ? (
+                    {item.productions?.length ? (
+                      <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>
+                        from <Text className="italic">{item.productions.join(', ')}</Text>
+                      </Text>
+                    ) : item.display_artist ? (
                       <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>{item.display_artist}</Text>
                     ) : null}
                   </View>
