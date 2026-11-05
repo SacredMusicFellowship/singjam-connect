@@ -108,7 +108,7 @@ function RoleSelect({
         disabled={isSelf || saving}
         aria-label={`Role for ${fullName(user)}`}
         title={isSelf ? "You can't change your own role — ask another admin." : undefined}
-        className="w-full rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
+        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
       >
         {/* A role outside the grantable set (e.g. a retired enum label) still needs an option to show */}
         {!isUserRole(role) && <option value={role}>{roleLabel(role)}</option>}
