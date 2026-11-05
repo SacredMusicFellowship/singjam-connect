@@ -128,7 +128,7 @@ function LocationText({ query, children }: { query: string | null; children: Rea
 
 /**
  * The event image for the two-column layout: the host's square desktop crop
- * from md up, their 3:2 mobile crop below it. A <picture> rather than two
+ * from sm up, their 3:2 mobile crop below it. A <picture> rather than two
  * images, so a phone never downloads the desktop file. Events with no baked
  * crops show the main image cover-cropped around its focal point instead.
  */
@@ -151,10 +151,10 @@ export function JamPoster({ jam }: { jam: JamCardData }) {
   });
   return (
     <picture>
-      <source media="(min-width: 768px)" srcSet={desktopSrcSet} sizes={desktopSizes} />
+      <source media="(min-width: 640px)" srcSet={desktopSrcSet} sizes={desktopSizes} />
       <img
         {...mobileProps}
-        className="aspect-[3/2] w-full rounded-2xl object-cover object-[var(--pos-mobile)] md:aspect-square md:object-[var(--pos-desktop)]"
+        className="aspect-[3/2] w-full rounded-2xl object-cover object-[var(--pos-mobile)] sm:aspect-square sm:object-[var(--pos-desktop)]"
         style={{ "--pos-mobile": mobile.position, "--pos-desktop": desktop.position } as CSSProperties}
       />
     </picture>
@@ -173,7 +173,7 @@ function JamDateTile({ jam }: { jam: JamCardData }) {
   const accent = isOfficial ? "text-amber-500" : "text-zinc-400";
   return (
     <div
-      className={`hidden aspect-square w-full flex-col items-center justify-center rounded-2xl border md:flex ${isOfficial ? "border-amber-200 bg-amber-50" : "border-zinc-200 bg-zinc-50"}`}
+      className={`hidden aspect-square w-full flex-col items-center justify-center rounded-2xl border sm:flex ${isOfficial ? "border-amber-200 bg-amber-50" : "border-zinc-200 bg-zinc-50"}`}
     >
       <span className={`text-sm font-semibold uppercase tracking-wide ${accent}`}>
         <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "long" }} />
@@ -189,7 +189,7 @@ function JamDateTile({ jam }: { jam: JamCardData }) {
 }
 
 /**
- * The event page's two columns from md up, after Luma: the poster (and
+ * The event page's two columns from sm up, after Luma: the poster (and
  * whatever goes under it) on the left, the details on the right. One column
  * on a phone: poster, details, then `asideBelow`, which on desktop sits in
  * the left column under the poster. Its row takes up whatever height the
@@ -199,10 +199,10 @@ function JamDateTile({ jam }: { jam: JamCardData }) {
  */
 export function JamSplit({ aside, asideBelow, children }: { aside: ReactNode; asideBelow?: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:grid-rows-[auto_1fr] md:items-start md:gap-x-10 md:gap-y-6">
-      <div className="space-y-6 md:col-start-1 md:row-start-1">{aside}</div>
-      <div className="min-w-0 md:col-start-2 md:row-span-2 md:row-start-1">{children}</div>
-      {asideBelow && <div className="min-w-0 md:col-start-1 md:row-start-2">{asideBelow}</div>}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:grid-rows-[auto_1fr] sm:items-start sm:gap-x-10 sm:gap-y-6">
+      <div className="space-y-6 sm:col-start-1 sm:row-start-1">{aside}</div>
+      <div className="min-w-0 sm:col-start-2 sm:row-span-2 sm:row-start-1">{children}</div>
+      {asideBelow && <div className="min-w-0 sm:col-start-1 sm:row-start-2">{asideBelow}</div>}
     </div>
   );
 }
