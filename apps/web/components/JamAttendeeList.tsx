@@ -242,21 +242,26 @@ export default function JamAttendeeList({
         )}
         {attending.map((r: any) => {
           const isCohost = cohostIds.has(r.user_id);
-          const isMyLeaderRow = myLeader?.userId === r.user_id;
+          const isLeader = myLeader?.userId === r.user_id || leaderIds.includes(r.user_id);
           return (
             <AttendeeRow
               key={r.user_id}
               profile={profileMap.get(r.user_id)}
               extra={memberExtras.get(r.user_id) ?? 0}
               badge={
-                isMyLeaderRow || leaderIds.includes(r.user_id) ? (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                    Leader
-                  </span>
-                ) : isCohost ? (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                    Co-host
-                  </span>
+                isLeader || isCohost ? (
+                  <>
+                    {isLeader && (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                        Leader
+                      </span>
+                    )}
+                    {isCohost && (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                        Co-host
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
                     Going
