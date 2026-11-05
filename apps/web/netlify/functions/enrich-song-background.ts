@@ -12,8 +12,8 @@ export const handler = async (event: { httpMethod: string; headers: Record<strin
     auth: { autoRefreshToken: false, persistSession: false },
   });
   try {
-    const { decision } = await enrichSong(admin, songId, { spotifyReleaseYear });
-    console.log(`[enrich-song] ${songId}: ${Object.keys(decision).join(", ") || "nothing new"}`);
+    const { decision, usage } = await enrichSong(admin, songId, { spotifyReleaseYear });
+    console.log(`[enrich-song] ${songId}: ${Object.keys(decision).join(", ") || "nothing new"} | usage ${JSON.stringify(usage)}`);
   } catch (e) {
     console.error(`[enrich-song] ${songId} failed: ${e instanceof Error ? e.message : String(e)}`);
   }

@@ -19,6 +19,7 @@ const norm = (s: string) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
 
 type Field = keyof ModelAnswer;
+export type ModelUsage = { model: string; input: number; output: number; reasoning?: number };
 type SongContext = { title: string; artist: string | null; production: string | null; wanted: Field[] };
 
 const FIELD_RULES: Record<Field, string> = {
@@ -78,7 +79,7 @@ function schemaFor(wanted: Field[]) {
   };
 }
 
-async function askGpt(song: SongContext): Promise<ModelAnswer | null> {
+async function askGpt(song: SongContext, usage: ModelUsage[]): Promise<ModelAnswer | null> {
   if (!process.env.OPENAI_API_KEY) return null;
   try {
     const { system, user } = prompt(song);
@@ -91,6 +92,12 @@ async function askGpt(song: SongContext): Promise<ModelAnswer | null> {
         { role: "user", content: user },
       ],
     });
+    usage.push({
+      model: res.model,
+      input: res.usage?.prompt_tokens ?? 0,
+      output: res.usage?.completion_tokens ?? 0,
+      reasoning: res.usage?.completion_tokens_details?.reasoning_tokens ?? 0,
+    });
     return JSON.parse(res.choices[0].message.content ?? "{}").fields ?? null;
   } catch (e) {
     console.error("[song-enrichment] gpt failed:", e instanceof Error ? e.message : e);
@@ -98,7 +105,7 @@ async function askGpt(song: SongContext): Promise<ModelAnswer | null> {
   }
 }
 
-async function askClaude(song: SongContext): Promise<ModelAnswer | null> {
+async function askClaude(song: SongContext, usage: ModelUsage[]): Promise<ModelAnswer | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
   try {
     const { system, user } = prompt(song);
@@ -111,6 +118,7 @@ async function askClaude(song: SongContext): Promise<ModelAnswer | null> {
       system,
       messages: [{ role: "user", content: user }],
     });
+    usage.push({ model: res.model, input: res.usage.input_tokens, output: res.usage.output_tokens });
     if (res.stop_reason === "refusal") return null;
     const text = res.content.find((b) => b.type === "text");
     return text && text.type === "text" ? JSON.parse(text.text).fields ?? null : null;
@@ -225,7 +233,7 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   if (!(s.song_cultures ?? []).some((c: any) => !c.context)) wanted.push("cultures");
   if (!s.first_line) wanted.push("first_line");
   if (!s.hook) wanted.push("hook");
-  if (!wanted.length) return { songId, decision: {} as EnrichmentDecision };
+  if (!wanted.length) return { songId, decision: {} as EnrichmentDecision, usage: [] as ModelUsage[] };
 
   const context: SongContext = {
     title: s.title,
@@ -235,15 +243,16 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   };
   const needsMb = artist && (wanted.includes("recording_year") || wanted.includes("composers"));
   const needsLyrics = artist && (wanted.includes("first_line") || wanted.includes("hook"));
+  const usage: ModelUsage[] = [];
   const [gpt, claude, mb, lyrics] = await Promise.all([
-    askGpt(context),
-    askClaude(context),
+    askGpt(context, usage),
+    askClaude(context, usage),
     needsMb ? lookUpMusicBrainz(s.title, artist!) : Promise.resolve(null),
     needsLyrics ? lookUpLyrics(s.title, artist!) : Promise.resolve(null),
   ]);
   const sources: EnrichmentSources = { gpt, claude, musicbrainz: mb, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics };
   const decision = decideEnrichment(sources);
-  if (opts.dryRun) return { songId, decision, sources: { gpt: !!gpt, claude: !!claude, musicbrainz: !!mb, lyrics: !!lyrics } };
+  if (opts.dryRun) return { songId, decision, usage, sources: { gpt: !!gpt, claude: !!claude, musicbrainz: !!mb, lyrics: !!lyrics } };
 
   const scalar: Record<string, unknown> = {};
   for (const f of ["year_written", "tonality", "meter", "vibe", "first_line", "hook"] as const)
@@ -275,5 +284,5 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
     const ids = await idsFor(admin, "languages", decision.languages);
     if (ids.length) await admin.from("song_languages").insert(ids.map((language_id) => ({ song_id: songId, language_id })));
   }
-  return { songId, decision };
+  return { songId, decision, usage };
 }
