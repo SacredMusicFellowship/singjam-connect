@@ -1,15 +1,22 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getServerUser, getServerUserRole } from "@/lib/supabase/cached";
 import Link from "next/link";
+import AdminPageSkeleton from "@/components/AdminPageSkeleton";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+// The nav renders at once; the role check streams in behind a skeleton so
+// opening the panel never waits on the auth round trip.
+async function RoleGate({ children }: { children: React.ReactNode }) {
   const user = await getServerUser();
 
   if (!user) redirect("/auth?next=/admin");
 
   if ((await getServerUserRole()) !== "admin") redirect("/");
 
+  return <>{children}</>;
+}
 
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div>
       <div className="mb-6 flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:gap-4">
@@ -43,7 +50,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
         </nav>
       </div>
-      {children}
+      <Suspense fallback={<AdminPageSkeleton />}>
+        <RoleGate>{children}</RoleGate>
+      </Suspense>
     </div>
   );
 }

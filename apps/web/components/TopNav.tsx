@@ -46,7 +46,7 @@ export default function TopNav() {
           )}
           {profile?.role === "admin" && (
             <Link
-              href="/admin"
+              href="/admin/songs"
               className="rounded-full bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 transition-colors"
             >
               Admin

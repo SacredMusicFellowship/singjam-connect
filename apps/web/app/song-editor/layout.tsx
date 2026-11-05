@@ -1,8 +1,12 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getServerUser, getServerUserRole } from "@/lib/supabase/cached";
 import Link from "next/link";
+import AdminPageSkeleton from "@/components/AdminPageSkeleton";
 
-export default async function SongEditorLayout({ children }: { children: React.ReactNode }) {
+// The nav renders at once; the role check streams in behind a skeleton so
+// opening the panel never waits on the auth round trip.
+async function RoleGate({ children }: { children: React.ReactNode }) {
   const user = await getServerUser();
 
   if (!user) redirect("/auth?next=/song-editor");
@@ -10,6 +14,10 @@ export default async function SongEditorLayout({ children }: { children: React.R
   const role = await getServerUserRole();
   if (role !== "song_editor" && role !== "admin") redirect("/");
 
+  return <>{children}</>;
+}
+
+export default function SongEditorLayout({ children }: { children: React.ReactNode }) {
   return (
     <div>
       <div className="mb-6 flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:gap-4">
@@ -31,7 +39,9 @@ export default async function SongEditorLayout({ children }: { children: React.R
           </Link>
         </nav>
       </div>
-      {children}
+      <Suspense fallback={<AdminPageSkeleton />}>
+        <RoleGate>{children}</RoleGate>
+      </Suspense>
     </div>
   );
 }

@@ -27,13 +27,13 @@ type SortDir = "asc" | "desc";
 // The page container is max-w-4xl, so the desktop table is laid out on fixed
 // percentages rather than letting long emails push the role picker off the edge.
 const COLUMNS: { key: SortCol; label: string; width: string }[] = [
-  { key: "name", label: "User", width: "24%" },
-  { key: "email", label: "Email", width: "22%" },
-  { key: "neighborhood", label: "Neighborhood", width: "15%" },
-  { key: "joined", label: "Joined", width: "13%" },
+  { key: "name", label: "User", width: "21%" },
+  { key: "email", label: "Email", width: "18%" },
+  { key: "neighborhood", label: "Neighborhood", width: "12%" },
+  { key: "joined", label: "Joined", width: "12%" },
   { key: "events", label: "Events", width: "8%" },
   { key: "songs", label: "Songs added", width: "9%" },
-  { key: "role", label: "Role", width: "17%" },
+  { key: "role", label: "Role", width: "20%" },
 ];
 
 function fullName(u: AdminUser) {
@@ -378,7 +378,7 @@ export default function AdminUsersTable({
                     "—"
                   )}
                 </td>
-                <td className="px-4 py-2.5">
+                <td className="py-2.5 pl-2 pr-4">
                   <RoleSelect
                     user={u}
                     role={roles[u.id]}
