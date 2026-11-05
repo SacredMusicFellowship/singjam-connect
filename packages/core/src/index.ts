@@ -9,6 +9,7 @@ export * from './utils/productionCredits';
 export * from './utils/songVocabulary';
 export * from './utils/officialYouTube';
 export * from './utils/songEnrichmentRules';
+export * from './utils/sameSong';
 export * from './utils/formatJamTime';
 export * from './utils/formatVenueAddress';
 export * from './utils/generateSlug';

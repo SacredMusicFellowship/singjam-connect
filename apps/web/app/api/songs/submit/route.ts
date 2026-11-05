@@ -3,7 +3,7 @@ import { supabaseAdmin as admin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { generateSlug } from "@/lib/generateSlug";
-import { findOnSpotify } from "@/lib/songLookup";
+import { findExistingSong, findOnSpotify } from "@/lib/songLookup";
 import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
 
 async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): Promise<string | null> {
@@ -42,10 +42,8 @@ export async function POST(req: Request) {
   }
 
   const db = admin();
-  let dupeQuery = db.from("songs").select("id, slug").ilike("title", title);
-  dupeQuery = artist ? dupeQuery.ilike("display_artist", artist) : dupeQuery.is("display_artist", null);
-  const { data: existing } = await dupeQuery.limit(1).maybeSingle();
-  if (existing) {
+  const existing = await findExistingSong(db, [title, body.title.trim()], artist);
+  if (existing && (existing.match === "same" || !body.add_anyway)) {
     return NextResponse.json({ error: "This song is already in our library.", id: existing.id, slug: existing.slug }, { status: 409 });
   }
 

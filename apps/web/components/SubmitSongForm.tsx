@@ -11,7 +11,7 @@ type Match = {
   release_year: number | null;
   youtube_id: string | null;
   youtube_official: boolean;
-  existing: { id: string; slug: string } | null;
+  existing: { id: string; slug: string | null; title: string; display_artist: string | null; match: "same" | "possible" } | null;
 };
 
 type Step =
@@ -56,13 +56,13 @@ export default function SubmitSongForm() {
     }
   }
 
-  async function submit(match: Match) {
+  async function submit(match: Match, addAnyway = false) {
     setError(null);
     setStep({ type: "submitting" });
     const res = await fetch("/api/songs/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...match, confirmed: true }),
+      body: JSON.stringify({ ...match, confirmed: true, add_anyway: addAnyway }),
     });
     const json = await res.json();
     if (res.status === 409) {
@@ -154,6 +154,15 @@ export default function SubmitSongForm() {
               </button>
             )}
 
+            {step.type === "preview" && step.match.existing?.match === "possible" && (
+              <button
+                onClick={() => submit(step.match, true)}
+                className="rounded-full border border-zinc-200 px-5 py-2 text-sm text-zinc-500 hover:bg-zinc-50 transition-colors"
+              >
+                It&apos;s a different song — add it
+              </button>
+            )}
+
             {step.type === "preview" && !step.match.existing && (
               <>
                 <button
@@ -190,16 +199,20 @@ function MatchPreview({ match }: { match: Match }) {
   const trackId = spotifyTrackId(match.spotify_url);
   return (
     <div className="space-y-2">
-      <p className="text-sm text-zinc-700">
-        {match.existing ? "Already in the library: " : "Is this the song? "}
-        <span className="font-medium">{match.title}</span>
-        {match.artist && <span className="text-zinc-500"> — {match.artist}</span>}
-        {match.existing && (
-          <Link href={`/songs/${match.existing.slug}`} className="ml-2 font-medium text-amber-600 hover:text-amber-500">
+      {match.existing ? (
+        <p className="text-sm text-zinc-700">
+          Already in the library: <span className="font-medium">{match.existing.title}</span>
+          {match.existing.display_artist && <span className="text-zinc-500"> — {match.existing.display_artist}</span>}
+          <Link href={`/songs/${match.existing.slug ?? match.existing.id}`} className="ml-2 font-medium text-amber-600 hover:text-amber-500">
             Open it
           </Link>
-        )}
-      </p>
+        </p>
+      ) : (
+        <p className="text-sm text-zinc-700">
+          Is this the song? <span className="font-medium">{match.title}</span>
+          {match.artist && <span className="text-zinc-500"> — {match.artist}</span>}
+        </p>
+      )}
       {match.youtube_id ? (
         <div className="overflow-hidden rounded-xl border border-zinc-200">
           <iframe
