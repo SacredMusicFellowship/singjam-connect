@@ -1,7 +1,7 @@
 "use client";
 
 import { CONFIDENCE_STYLES, type ConfidenceLevel } from "@singjam/core";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { formatComposersLong, sortByLastName, setsAcceptingSongs } from "@singjam/core";
@@ -141,7 +141,7 @@ export default function SongPageContent() {
           song_themes(themes(name)),
           song_cultures(context, cultures(name)),
           song_languages(languages(name)),
-          song_productions(productions(name))
+          song_productions(productions(name, year))
         `);
       const [{ data: { user } }, songRes] = await Promise.all([
         supabase.auth.getUser(),
@@ -296,7 +296,9 @@ export default function SongPageContent() {
   const themes = (song.song_themes as any[]).map((x: any) => x.themes?.name as string).filter(Boolean).sort();
   const cultures = [...new Set((song.song_cultures as any[]).map((x: any) => x.cultures?.name as string).filter(Boolean))];
   const languages = (song.song_languages as any[]).map((x: any) => x.languages?.name as string).filter(Boolean);
-  const songProductions = (song.song_productions as any[]).map((x: any) => x.productions?.name as string).filter(Boolean);
+  const songProductions = (song.song_productions as any[])
+    .map((x: any) => x.productions)
+    .filter((p: any): p is { name: string; year: number | null } => !!p?.name);
   const allYears = [song.year_written, song.year, ...recordingArtists.map((a: any) => a.year)].filter(Boolean) as number[];
   const earliestYear = allYears.length > 0 ? Math.min(...allYears) : null;
   const tonalityPills = song.tonality ? song.tonality.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
@@ -334,7 +336,16 @@ export default function SongPageContent() {
             </div>
           </div>
           {songProductions.length > 0 ? (
-            <p className="mt-0.5 text-base text-slate-500">from <em>{songProductions.join(", ")}</em></p>
+            <p className="mt-0.5 text-base text-slate-500">
+              from{" "}
+              {songProductions.map((p, i) => (
+                <Fragment key={`${p.name}-${p.year}`}>
+                  {i > 0 && ", "}
+                  <em>{p.name}</em>
+                  {p.year ? ` (${p.year})` : null}
+                </Fragment>
+              ))}
+            </p>
           ) : song.display_artist ? (
             <p className="mt-0.5 text-base text-slate-500">{song.display_artist}</p>
           ) : null}
