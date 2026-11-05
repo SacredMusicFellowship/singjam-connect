@@ -181,6 +181,7 @@ export default function SongCard({
             <RoleSelect
               value={confidence ?? "learn"}
               size="md"
+              label={`Role for ${title}`}
               onChange={(level) => {
                 if (level === "lead" && !hasLeadVoice(singingVoice)) {
                   setAskingLeadVoice(true);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { setPath } from "@singjam/core";
+import Select from "@/components/Select";
 
 type LinkedSet = { id: string; short_code?: string | null; name: string };
 type OwnedSet = { id: string; name: string };
@@ -104,16 +105,16 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
           ) : availableSets.length === 0 ? (
             <p className="text-sm text-zinc-500">No set lists found.</p>
           ) : (
-            <select
+            <Select
               value={selectedSetId}
               onChange={(e) => setSelectedSetId(e.target.value)}
-              className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 bg-white"
+              wrapperClassName="w-full"
             >
               <option value="">Choose a set list…</option>
               {availableSets.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
-            </select>
+            </Select>
           )}
           <div className="flex gap-2">
             <button

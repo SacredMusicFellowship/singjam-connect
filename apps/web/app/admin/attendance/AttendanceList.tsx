@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { formatJamDate } from "@singjam/core";
 
+import Select from "@/components/Select";
 export type AttendedEvent = { id: string; name: string | null; starts_at: string; timezone: string | null };
 
 export type Attendee = {
@@ -105,18 +106,20 @@ export default function AttendanceList({ people, linkedEmail }: { people: Attend
         <label htmlFor="attendance-sort" className="text-xs font-medium text-slate-500">
           Sort by
         </label>
-        <select
+        <Select
           id="attendance-sort"
           value={sort.col}
           onChange={(e) => toggleSort(e.target.value as SortCol)}
-          className="flex-1 rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-700"
+          shape="pill"
+          size="sm"
+          wrapperClassName="flex-1"
         >
           {COLUMNS.map((col) => (
             <option key={col.key} value={col.key}>
               {col.label}
             </option>
           ))}
-        </select>
+        </Select>
         <button
           onClick={() => setSort((prev) => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
           className="rounded-full border border-slate-200 px-2 py-1 text-sm text-slate-500"

@@ -15,6 +15,11 @@ export type SongCompleteness = {
   song_languages: unknown[];
 };
 
+export const SONG_COMPLETENESS_FIELDS = [
+  "composer", "lyricist", "artist", "recording", "first line", "hook", "genius",
+  "tonality", "meter", "genre", "language", "vibe", "chord chart", "video",
+] as const;
+
 // What a person would still have to fill in by hand — the admin Songs table and
 // "Recently added" both show this.
 export function songMissingFields(s: SongCompleteness): string[] {

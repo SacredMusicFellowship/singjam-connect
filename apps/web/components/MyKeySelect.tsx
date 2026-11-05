@@ -1,20 +1,21 @@
 import { KEY_STYLE, MUSICAL_KEYS } from "@singjam/core";
+import PillSelect, { StackedLabels } from "@/components/PillSelect";
 
 // The key the member plays the song in, shown to their set-mates next to their
-// name. The same outlined pill as its neighbours, in the key colour shared with
-// the set list's key (violet once chosen, neutral while empty). Every possible label sits in one grid cell with only the
-// current one visible, so the pill keeps one width whatever the key. The select
-// lies over it invisibly, since phones force selects to 16px.
+// name, in the key colour shared with the set list's key (violet once chosen,
+// neutral while empty). Sized for the widest key so the pill never changes width.
 export default function MyKeySelect({
   value,
   onChange,
   size = "sm",
+  label = "My key",
 }: {
   value: string | null;
   onChange: (key: string | null) => void;
   size?: "sm" | "md";
+  label?: string;
 }) {
-  const label = (key: string | null) =>
+  const text = (key: string | null) =>
     key ? (
       <>
         My key <span className="font-semibold">{key}</span>
@@ -23,26 +24,19 @@ export default function MyKeySelect({
       "+ My key"
     );
   return (
-    <span
-      className={`relative inline-flex shrink-0 items-center rounded-full ${value ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`} ${
+    <PillSelect
+      face={<StackedLabels center labels={[{ key: "current", label: text(value) }, { key: "widest", label: text("C#") }]} current="current" />}
+      pillClassName={`${value ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`} ${
         size === "md" ? "px-3 py-1 text-xs sm:py-1.5 sm:text-sm" : "px-2.5 py-1 text-xs"
       }`}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+      aria-label={label}
     >
-      <span className="grid justify-items-center">
-        <span className="col-start-1 row-start-1">{label(value)}</span>
-        <span className="invisible col-start-1 row-start-1" aria-hidden="true">{label("C#")}</span>
-      </span>
-      <select
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        aria-label="My key"
-        className="absolute inset-0 w-full cursor-pointer opacity-0"
-      >
-        <option value="">No key</option>
-        {MUSICAL_KEYS.map((k) => (
-          <option key={k} value={k}>{k}</option>
-        ))}
-      </select>
-    </span>
+      <option value="">No key</option>
+      {MUSICAL_KEYS.map((k) => (
+        <option key={k} value={k}>{k}</option>
+      ))}
+    </PillSelect>
   );
 }

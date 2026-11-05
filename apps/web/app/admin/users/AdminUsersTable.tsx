@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import SearchInput from "@/components/SearchInput";
+import PillSelect, { StackedLabels } from "@/components/PillSelect";
+import Select from "@/components/Select";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import { ROLE_LABELS, USER_ROLES, isUserRole, roleLabel, type UserRole } from "@/lib/userRoles";
 
@@ -102,13 +104,20 @@ function RoleSelect({
 }) {
   return (
     <div>
-      <select
+      <PillSelect
+        face={
+          <StackedLabels
+            labels={[...(isUserRole(role) ? [] : [{ key: role, label: roleLabel(role) }]), ...USER_ROLES.map((r) => ({ key: r, label: ROLE_LABELS[r] }))]}
+            current={role}
+          />
+        }
+        chevron
+        pillClassName={`border px-3 py-1 text-sm ${isSelf || saving ? "border-slate-200 bg-slate-50 text-slate-400" : "border-zinc-300 bg-white text-zinc-700"}`}
         value={role}
         onChange={(e) => onChange(e.target.value as UserRole)}
         disabled={isSelf || saving}
         aria-label={`Role for ${fullName(user)}`}
         title={isSelf ? "You can't change your own role — ask another admin." : undefined}
-        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
       >
         {/* A role outside the grantable set (e.g. a retired enum label) still needs an option to show */}
         {!isUserRole(role) && <option value={role}>{roleLabel(role)}</option>}
@@ -117,7 +126,7 @@ function RoleSelect({
             {ROLE_LABELS[r]}
           </option>
         ))}
-      </select>
+      </PillSelect>
       {saving && <p className="mt-1 text-xs text-slate-400">Saving…</p>}
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
@@ -235,18 +244,20 @@ export default function AdminUsersTable({
         <label htmlFor="admin-users-sort" className="text-xs font-medium text-slate-500">
           Sort by
         </label>
-        <select
+        <Select
           id="admin-users-sort"
           value={sort.col}
           onChange={(e) => toggleSort(e.target.value as SortCol)}
-          className="flex-1 rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-700"
+          shape="pill"
+          size="sm"
+          wrapperClassName="flex-1"
         >
           {COLUMNS.map((col) => (
             <option key={col.key} value={col.key}>
               {col.label}
             </option>
           ))}
-        </select>
+        </Select>
         <button
           onClick={() => setSort((prev) => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
           className="rounded-full border border-slate-200 px-2 py-1 text-sm text-slate-500"

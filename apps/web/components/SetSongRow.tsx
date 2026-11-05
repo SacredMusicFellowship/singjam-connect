@@ -5,6 +5,7 @@ import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import { CONFIDENCE_STYLES, hasLeadVoice, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_SONG_NOTE_MAX, shownPeopleCount } from "@singjam/core";
 import RoleSelect from "@/components/RoleSelect";
+import PillSelect, { StackedLabels } from "@/components/PillSelect";
 import ChordsLink from "@/components/ChordsLink";
 import {
   MUSICAL_KEYS,
@@ -289,25 +290,21 @@ export default function SetSongRow({
             {showKeyLine && (
             <span className="flex shrink-0 items-center gap-1">
             {canManage ? (
-              // The visible chip is sized to its own text; the transparent select
-              // on top opens the native picker without its widest-option width.
-              <span className={`relative shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${song.key_note ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`}`}>
-                <span className="inline-grid justify-items-center"><span className="col-start-1 row-start-1">{song.key_note ?? "+ key"}</span><span className="invisible col-start-1 row-start-1" aria-hidden="true">C#</span></span>
-                <select
-                  value={song.key_note ?? ""}
-                  onChange={(e) => {
-                    const val = e.target.value || null;
-                    if (val !== song.key_note) onKeyChanged(song.id, val);
-                  }}
-                  aria-label="Key"
-                  className="absolute inset-0 w-full cursor-pointer opacity-0"
-                >
-                  <option value="">No key</option>
-                  {MUSICAL_KEYS.map((k) => (
-                    <option key={k} value={k}>{k}</option>
-                  ))}
-                </select>
-              </span>
+              <PillSelect
+                face={<StackedLabels center labels={[{ key: "current", label: song.key_note ?? "+ key" }, { key: "widest", label: "C#" }]} current="current" />}
+                pillClassName={`px-2 py-0.5 text-xs font-semibold ${song.key_note ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`}`}
+                value={song.key_note ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  if (val !== song.key_note) onKeyChanged(song.id, val);
+                }}
+                aria-label={`Key for ${song.songs.title}`}
+              >
+                <option value="">No key</option>
+                {MUSICAL_KEYS.map((k) => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </PillSelect>
             ) : (
               !isPublicViewer && song.key_note && (
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${KEY_STYLE.chip} ${KEY_STYLE.text}`}>
@@ -592,6 +589,7 @@ export default function SetSongRow({
               {showRole && (
                 <RoleSelect
                   value={myConfidence!}
+                  label={`Role for ${song.songs.title}`}
                   onChange={(level) => {
                     if (level === "lead" && !hasLeadVoice(currentUserSingingVoice)) setAskingLeadVoice(true);
                     else onAddToRepertoire(song.song_id, level);

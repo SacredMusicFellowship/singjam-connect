@@ -2,7 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  agreedLandmarks,
   decideEnrichment,
+  landmarkYear,
+  leadArtist,
+  MAX_RECORDINGS,
+  sameArtist,
   SONG_CULTURES,
   SONG_GENRES,
   SONG_METERS,
@@ -10,6 +15,7 @@ import {
   SONG_TONALITIES,
   type EnrichmentDecision,
   type EnrichmentSources,
+  type LandmarkCandidate,
   type ModelAnswer,
 } from "@singjam/core";
 
@@ -189,7 +195,135 @@ async function lookUpLyrics(title: string, artist: string): Promise<string | nul
   }
 }
 
-async function idsFor(admin: SupabaseClient, table: "people" | "languages", names: string[]) {
+// ---- Other recordings worth listing (landmarkRecordings in core decides) ----
+
+const LANDMARK_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["recordings"],
+  properties: {
+    recordings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["artist", "year", "why"],
+        properties: { artist: { type: "string" }, year: { type: "integer" }, why: { type: "string", enum: ["original", "iconic"] } },
+      },
+    },
+  },
+};
+
+function landmarkPrompt(title: string, artists: string[]) {
+  const system = "You are a careful music researcher. Accuracy matters more than coverage: a wrong recording is far worse than a missing one.";
+  const user = `Song: "${title}". The database already has recordings by: ${artists.join(", ")}.
+List OTHER recordings only if they are iconic: a version many people would name as THE version of this song, or a No. 1 hit or million-selling signature recording in its own era that is still remembered as such. The original recording counts only when it passes the same test.
+Never list: artists already in the database (under any name they have recorded as), chart hits that are no longer remembered, talent-show or charity singles, novelty or parody covers, live recordings, or covers that are acclaimed but not widely known.
+Most songs have exactly one iconic recording, so an empty list is the expected answer for most songs. At most 3. Use the artist's credited name and the year that recording was first released.
+Return JSON: {"recordings": [{"artist", "year", "why"}]} where why is "original" or "iconic".`;
+  return { system, user };
+}
+
+async function askGptLandmarks(title: string, artists: string[], usage: ModelUsage[]): Promise<LandmarkCandidate[] | null> {
+  if (!process.env.OPENAI_API_KEY) return null;
+  try {
+    const { system, user } = landmarkPrompt(title, artists);
+    const res = await new OpenAI().chat.completions.create({
+      model: "gpt-5.5",
+      reasoning_effort: "low",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    });
+    usage.push({ model: res.model, input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0, reasoning: res.usage?.completion_tokens_details?.reasoning_tokens ?? 0 });
+    return JSON.parse(res.choices[0].message.content ?? "{}").recordings ?? null;
+  } catch (e) {
+    console.error("[song-enrichment] gpt landmarks failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function askClaudeLandmarks(title: string, artists: string[], usage: ModelUsage[]): Promise<LandmarkCandidate[] | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const { system, user } = landmarkPrompt(title, artists);
+    const res = await new Anthropic().beta.messages.create({
+      model: "claude-opus-5-5",
+      max_tokens: 4000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: "low", format: { type: "json_schema", schema: LANDMARK_SCHEMA } },
+      system,
+      messages: [{ role: "user", content: user }],
+    });
+    usage.push({ model: res.model, input: res.usage.input_tokens, output: res.usage.output_tokens });
+    if (res.stop_reason === "refusal") return null;
+    const text = res.content.find((b) => b.type === "text");
+    return text && text.type === "text" ? JSON.parse(text.text).recordings ?? null : null;
+  } catch (e) {
+    console.error("[song-enrichment] claude landmarks failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// Does MusicBrainz have this artist's studio recording of the song? Returns the
+// credit naming the same act (else the name the models used) and the earliest
+// dated album/single/EP year.
+async function musicBrainzRecording(title: string, artist: string) {
+  const lead = leadArtist(artist);
+  const q = `recording:"${title.replace(/"/g, "")}" AND artist:"${lead.replace(/"/g, "")}"`;
+  const json = await musicbrainz(`recording?fmt=json&limit=100&query=${encodeURIComponent(q)}`);
+  let found = false;
+  let credit: string | null = null;
+  const years: number[] = [];
+  for (const r of (json?.recordings ?? []) as any[]) {
+    const name = (r["artist-credit"] ?? []).map((c: any) => c.name + (c.joinphrase ?? "")).join("");
+    if (norm(r.title) !== norm(title) || !norm(name).includes(norm(lead))) continue;
+    if (/\b(live|demo|remix|instrumental|karaoke)\b/i.test(`${r.disambiguation ?? ""} ${r.title}`)) continue;
+    found = true;
+    if (!credit && sameArtist(name, artist)) credit = name;
+    for (const rel of r.releases ?? []) {
+      const rg = rel["release-group"] ?? {};
+      const y = parseInt((rel.date ?? "").slice(0, 4));
+      if (["Album", "Single", "EP"].includes(rg["primary-type"]) && !(rg["secondary-types"] ?? []).length && y >= 1890) years.push(y);
+    }
+  }
+  return found ? { credit: credit ?? artist, year: years.length ? Math.min(...years) : null } : null;
+}
+
+export type LandmarkResult = { artist: string; year: number | null };
+
+// Adds the iconic other recordings of a song: both models must name the artist,
+// and MusicBrainz must have the recording. Most songs get none.
+export async function addLandmarkRecordings(admin: SupabaseClient, songId: string, opts: { dryRun?: boolean } = {}) {
+  const usage: ModelUsage[] = [];
+  const { data: song } = await admin
+    .from("songs")
+    .select("title, song_recording_artists(position, artists(name))")
+    .eq("id", songId)
+    .single();
+  const existing = ((song as any)?.song_recording_artists ?? []).map((r: any) => r.artists?.name).filter(Boolean) as string[];
+  if (!song || !existing.length || existing.length >= MAX_RECORDINGS) return { added: [] as LandmarkResult[], usage };
+
+  const [gpt, claude] = await Promise.all([askGptLandmarks(song.title, existing, usage), askClaudeLandmarks(song.title, existing, usage)]);
+  const added: LandmarkResult[] = [];
+  let position = Math.max(...((song as any).song_recording_artists ?? []).map((r: any) => r.position ?? 0)) + 1;
+  for (const pick of agreedLandmarks(gpt, claude, existing)) {
+    const found = await musicBrainzRecording(song.title, pick.artist.length >= pick.altArtist.length ? pick.artist : pick.altArtist);
+    if (!found) continue;
+    const year = landmarkYear(pick.gptYear, pick.claudeYear, found.year);
+    added.push({ artist: found.credit, year });
+    if (opts.dryRun) continue;
+    const [artistId] = await idsFor(admin, "artists", [found.credit]);
+    if (!artistId) continue;
+    await admin.from("song_recording_artists").insert({ song_id: songId, artist_id: artistId, year, position: position++ });
+  }
+  return { added, usage };
+}
+
+async function idsFor(admin: SupabaseClient, table: "people" | "languages" | "artists", names: string[]) {
   const ids: string[] = [];
   for (const name of names) {
     const { data: found } = await admin.from(table).select("id").ilike("name", name).limit(1).maybeSingle();
@@ -237,7 +371,12 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
 
   if (!opts.dryRun) await admin.from("songs").update({ enrichment_started_at: new Date().toISOString() }).eq("id", songId);
   try {
-    return await fillSong(admin, songId, s, primary, artist, wanted, opts);
+    const filled = await fillSong(admin, songId, s, primary, artist, wanted, opts);
+    const landmarks = await addLandmarkRecordings(admin, songId, opts).catch((e) => {
+      console.error("[song-enrichment] landmark recordings failed:", e instanceof Error ? e.message : e);
+      return { added: [] as LandmarkResult[], usage: [] as ModelUsage[] };
+    });
+    return { ...filled, usage: [...filled.usage, ...landmarks.usage], landmarks: landmarks.added };
   } finally {
     if (!opts.dryRun) await admin.from("songs").update({ enrichment_finished_at: new Date().toISOString() }).eq("id", songId);
   }

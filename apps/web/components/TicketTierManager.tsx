@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { isoToZonedInput, zonedInputToIso, zoneAbbreviation } from "@singjam/core";
 import { guestListToCsv, guestListFilename } from "@/lib/guestListCsv";
 import { promoUses } from "@/lib/promoUses";
+import Select from "@/components/Select";
 
 type Tier = {
   id: string;
@@ -687,15 +688,15 @@ export default function TicketTierManager({
               required
               className="rounded-xl border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
             />
-            <select
+            <Select
               aria-label="Discount type"
               value={promoKind}
               onChange={(e) => setPromoKind(e.target.value as "percent" | "amount")}
-              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+              wrapperClassName="shrink-0"
             >
               <option value="percent">% off</option>
               <option value="amount">$ off</option>
-            </select>
+            </Select>
             <input
               aria-label={promoKind === "percent" ? "Percent off" : "Amount off in dollars"}
               value={promoValue}

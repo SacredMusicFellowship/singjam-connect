@@ -45,3 +45,4 @@ export * from './utils/sortRepertoireSearchResults';
 export * from './utils/userSong';
 export * from './utils/username';
 export * from './utils/zonedDateTime';
+export * from './utils/landmarkRecordings';
