@@ -411,7 +411,13 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
                 <td className="px-3 py-2.5 tabular-nums text-slate-500">{s.firstYear ?? <span className="text-slate-300">—</span>}</td>
                 <td className="px-3 py-2.5 tabular-nums text-slate-500">{s.popularity}</td>
                 <td className="px-3 py-2.5 text-xs">
-                  <div className="truncate text-slate-500">{s.adder ?? <span className="text-slate-300">before tracking</span>}</div>
+                  <div className="truncate text-slate-500">
+                    {s.adder && s.profiles?.username ? (
+                      <Link href={`/u/${s.profiles.username}`} className="hover:text-amber-600 hover:underline">{s.adder}</Link>
+                    ) : (
+                      s.adder ?? <span className="text-slate-300">before tracking</span>
+                    )}
+                  </div>
                   <div className="tabular-nums text-slate-400">{s.created_at.slice(0, 10)}</div>
                 </td>
                 <td className="px-3 py-2.5"><MissingSummary missing={s.missing} /></td>
