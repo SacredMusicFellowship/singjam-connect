@@ -1349,7 +1349,7 @@ export default function SongEditor({
             value={yearWritten}
             onChange={(e) => setYearWritten(e.target.value)}
             placeholder="e.g. 1929"
-            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-32 rounded-xl border border-slate-300 px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
           />
           <p className="mt-1 text-xs text-slate-400">Only set if different from the first recording year</p>
         </div>
@@ -1580,7 +1580,7 @@ function SortableArtistRow({
             value={e.year ?? ""}
             onChange={(ev) => onYearChange(e.id, ev.target.value ? parseInt(ev.target.value) : null)}
             placeholder="year"
-            className="w-16 rounded border border-slate-200 bg-white px-2 py-0.5 text-xs focus:border-amber-400 focus:outline-none"
+            className="w-16 rounded-xl border border-slate-200 bg-white px-2 py-0.5 text-xs focus:border-amber-400 focus:outline-none"
           />
           <button onClick={() => onRemove(e.id)} className="text-slate-400 hover:text-red-500 shrink-0">×</button>
         </div>
@@ -1659,7 +1659,7 @@ function SortableArtistRow({
             value={pasteSpotifyValue}
             onChange={(ev) => onPasteSpotifyChange(ev.target.value)}
             placeholder="https://open.spotify.com/track/…"
-            className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs focus:border-green-400 focus:outline-none"
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-2 py-1 text-xs focus:border-green-400 focus:outline-none"
           />
           <button
             type="button"

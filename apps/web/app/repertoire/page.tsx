@@ -932,7 +932,7 @@ export default function RepertoirePage() {
                         if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
                         else if (e.target.value) bulkAddToSet(e.target.value);
                       }}
-                      className="rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
+                      className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm"
                     >
                       <option value="">Add to set…</option>
                       {userSets.map((s) => (
@@ -945,7 +945,7 @@ export default function RepertoirePage() {
                 <select
                   value={bulkConfidenceLevel}
                   onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
-                  className="rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm"
                 >
                   <option value="">Change role…</option>
                   {CONFIDENCE_LEVELS.map((l) => (

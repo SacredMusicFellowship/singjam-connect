@@ -97,7 +97,7 @@ export function FilterPanel({
               value={yearMin}
               onChange={(e) => setYearMin(e.target.value)}
               placeholder={yearBounds ? String(yearBounds.min) : "From"}
-              className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-full rounded-xl border border-zinc-300 px-2 py-1.5 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
             <span className="text-xs text-zinc-400 shrink-0">–</span>
             <input
@@ -105,7 +105,7 @@ export function FilterPanel({
               value={yearMax}
               onChange={(e) => setYearMax(e.target.value)}
               placeholder={String(new Date().getFullYear())}
-              className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-full rounded-xl border border-zinc-300 px-2 py-1.5 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
         </div>
@@ -116,7 +116,7 @@ export function FilterPanel({
             <select
               value={selectedVibe}
               onChange={(e) => setSelectedVibe(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
+              className="w-full rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
             >
               <option value="">Any</option>
               {filterOptions.vibes.map((v) => (
@@ -132,7 +132,7 @@ export function FilterPanel({
             <select
               value={selectedTonality}
               onChange={(e) => setSelectedTonality(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
+              className="w-full rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
             >
               <option value="">Any</option>
               {filterOptions.tonalities.map((t) => (
@@ -148,7 +148,7 @@ export function FilterPanel({
             <select
               value={selectedMeter}
               onChange={(e) => setSelectedMeter(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
+              className="w-full rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
             >
               <option value="">Any</option>
               {filterOptions.meters.map((m) => (

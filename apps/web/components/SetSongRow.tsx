@@ -278,7 +278,7 @@ export default function SetSongRow({
                 placeholder="e.g. Capo 3, start soft"
                 aria-label="Note for this song"
                 autoFocus
-                className="w-full rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="w-full rounded-xl border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
               />
               {/* onMouseDown keeps the input from blurring (and saving) before the click lands. */}
               <div className="flex items-center gap-2">
@@ -620,7 +620,7 @@ export default function SetSongRow({
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
               placeholder={placeholders[addingField]}
-              className="flex-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+              className="flex-1 rounded-xl border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setAddingField(null); setUrlInput(""); setYoutubeSearchResults([]); } }}
               autoFocus={addingField !== "youtube"}
             />

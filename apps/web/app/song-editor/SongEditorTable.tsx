@@ -210,7 +210,7 @@ export default function SongEditorTable({ initialQuery = "" }: { initialQuery?: 
                         }))
                       }
                       placeholder="https://..."
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
                     />
                   </div>
                   <div>
@@ -226,7 +226,7 @@ export default function SongEditorTable({ initialQuery = "" }: { initialQuery?: 
                         }))
                       }
                       placeholder="https://genius.com/..."
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
                     />
                   </div>
                   <div className="flex gap-2 pt-1">

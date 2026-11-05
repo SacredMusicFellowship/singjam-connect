@@ -685,13 +685,13 @@ export default function TicketTierManager({
               onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
               placeholder="EARLYBIRD"
               required
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
             />
             <select
               aria-label="Discount type"
               value={promoKind}
               onChange={(e) => setPromoKind(e.target.value as "percent" | "amount")}
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             >
               <option value="percent">% off</option>
               <option value="amount">$ off</option>
@@ -703,7 +703,7 @@ export default function TicketTierManager({
               placeholder={promoKind === "percent" ? "25" : "5.00"}
               inputMode="decimal"
               required
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             />
           </div>
           <button
@@ -762,7 +762,7 @@ export default function TicketTierManager({
                 autoCorrect="off"
                 spellCheck={false}
                 enterKeyHint="search"
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
               />
             </div>
             {/* A phone showed the Name column and nothing else — tier, door

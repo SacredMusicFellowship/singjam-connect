@@ -329,7 +329,7 @@ export default function TicketPurchasePanel({
             autoComplete="name"
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             placeholder="Your name"
           />
           <label className="block text-xs font-medium text-zinc-600" htmlFor="guest-email">
@@ -342,7 +342,7 @@ export default function TicketPurchasePanel({
             required
             value={guestEmail}
             onChange={(e) => setGuestEmail(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             placeholder="you@example.com"
           />
           <p className="text-xs text-zinc-400">
@@ -410,7 +410,7 @@ export default function TicketPurchasePanel({
                 }}
                 placeholder="Promo code"
                 autoCapitalize="characters"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
+                className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
               />
               <button
                 type="button"

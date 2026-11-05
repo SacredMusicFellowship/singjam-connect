@@ -80,7 +80,7 @@ export default function ChordChartSlot({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Paste chord chart URL…"
-            className="flex-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+            className="flex-1 rounded-xl border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
             onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") close(); }}
             autoFocus
           />

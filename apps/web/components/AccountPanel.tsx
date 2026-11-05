@@ -681,7 +681,7 @@ export default function AccountPanel() {
                   <select
                     value={level}
                     onChange={(e) => setInstrumentLevels({ ...instrumentLevels, [name]: e.target.value })}
-                    className="rounded border-0 bg-transparent text-xs text-zinc-500 focus:outline-none cursor-pointer"
+                    className="rounded-xl border-0 bg-transparent text-xs text-zinc-500 focus:outline-none cursor-pointer"
                   >
                     {INSTRUMENT_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
                   </select>

@@ -952,7 +952,7 @@ export default function SetDetail({
                 type="text"
                 value={nameValue}
                 onChange={(e) => setNameValue(e.target.value)}
-                className="w-full text-xl font-semibold rounded-lg border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="w-full text-xl font-semibold rounded-xl border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 autoFocus
               />
               <textarea
@@ -960,7 +960,7 @@ export default function SetDetail({
                 onChange={(e) => setDescValue(e.target.value)}
                 placeholder="Description (optional)"
                 rows={2}
-                className="w-full text-sm rounded-lg border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
+                className="w-full text-sm rounded-xl border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
               />
               <div className="flex gap-2">
                 <button
