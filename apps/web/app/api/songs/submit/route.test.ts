@@ -1,10 +1,15 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetUser, mockBearerGetUser, mockFrom } = vi.hoisted(() => ({
+const { mockGetUser, mockBearerGetUser, mockFrom, mockFindOnSpotify, mockTrigger } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockBearerGetUser: vi.fn(),
   mockFrom: vi.fn(),
+  mockFindOnSpotify: vi.fn(),
+  mockTrigger: vi.fn(),
 }));
+
+vi.mock("@/lib/songLookup", () => ({ findOnSpotify: mockFindOnSpotify }));
+vi.mock("@/lib/triggerSongEnrichment", () => ({ triggerSongEnrichment: mockTrigger }));
 
 vi.mock("@/lib/supabase/server", () => ({
   supabaseServer: vi.fn().mockResolvedValue({ auth: { getUser: mockGetUser } }),
@@ -38,13 +43,9 @@ function req(body: Record<string, unknown>, headers: Record<string, string> = {}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Enrichment call — return empty so canonical values fall back to the input.
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
+  mockFindOnSpotify.mockResolvedValue(null);
 });
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
 
 describe("POST /api/songs/submit", () => {
   it("returns 401 when neither cookie session nor bearer token authenticates", async () => {
@@ -69,5 +70,59 @@ describe("POST /api/songs/submit", () => {
     const res = await POST(req({ title: "Proud Mary", artist: "CCR" }, { Authorization: "Bearer tok" }));
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ id: "song-1", slug: "proud-mary" });
+  });
+
+  it("adds a confirmed song, keeps an official YouTube link, and starts enrichment", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const inserts: Record<string, any> = {};
+    mockFrom.mockImplementation((table: string) => {
+      const c: any = {};
+      for (const m of ["select", "ilike", "is", "limit", "eq"]) c[m] = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: null });
+      c.insert = vi.fn((row: any) => {
+        inserts[table] = row;
+        return { select: () => ({ single: async () => ({ data: table === "songs" ? { id: "s1", slug: "proud-mary" } : { id: "a1" } }) }) };
+      });
+      return c;
+    });
+
+    const res = await POST(req({ title: "Proud Mary", artist: "Creedence Clearwater Revival", confirmed: true, spotify_url: "https://open.spotify.com/track/x", release_year: 1969, youtube_id: "5hid10y4bWs", youtube_official: true }));
+
+    expect(res.status).toBe(200);
+    expect(mockFindOnSpotify).not.toHaveBeenCalled();
+    expect(inserts.songs).toMatchObject({ title: "Proud Mary", display_artist: "Creedence Clearwater Revival", submitted_by: "u1" });
+    expect(inserts.songs).not.toHaveProperty("needs_review");
+    expect(inserts.song_recording_artists).toMatchObject({ spotify_url: "https://open.spotify.com/track/x", youtube_url: "https://www.youtube.com/watch?v=5hid10y4bWs", youtube_ok: true });
+    expect(mockTrigger).toHaveBeenCalledWith("s1", 1969);
+  });
+
+  it("doesn't store a preview video that isn't an official upload", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const inserts: Record<string, any> = {};
+    mockFrom.mockImplementation((table: string) => {
+      const c: any = {};
+      for (const m of ["select", "ilike", "is", "limit", "eq"]) c[m] = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: null });
+      c.insert = vi.fn((row: any) => {
+        inserts[table] = row;
+        return { select: () => ({ single: async () => ({ data: table === "songs" ? { id: "s1", slug: "x" } : { id: "a1" } }) }) };
+      });
+      return c;
+    });
+
+    await POST(req({ title: "Ripple", artist: "Grateful Dead", confirmed: true, youtube_id: "abcdefghijk", youtube_official: false }));
+
+    expect(inserts.song_recording_artists.youtube_url).toBeNull();
+  });
+
+  it("matches an unconfirmed title on Spotify first (older clients)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockFindOnSpotify.mockResolvedValue({ title: "Proud Mary", artist: "Creedence Clearwater Revival", spotify_url: "u", release_year: 1969 });
+    mockFrom.mockReturnValue(dupeChain({ id: "song-1", slug: "proud-mary" }));
+
+    const res = await POST(req({ title: "proud mary", artist: "ccr" }));
+
+    expect(mockFindOnSpotify).toHaveBeenCalledWith("proud mary", "ccr");
+    expect(res.status).toBe(409);
   });
 });
