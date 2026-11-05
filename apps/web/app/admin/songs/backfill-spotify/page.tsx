@@ -117,7 +117,7 @@ export default function BackfillSpotifyPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="space-y-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Backfill Spotify links</h1>
           <p className="mt-1 text-sm text-slate-500">

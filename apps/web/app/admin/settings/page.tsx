@@ -151,7 +151,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={revalidateJams}
             disabled={revalidating}
-            className="text-sm px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+            className="shrink-0 min-w-[8.5rem] whitespace-nowrap text-sm px-4 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
           >
             {revalidating ? "Refreshing…" : "Refresh now"}
           </button>
@@ -170,7 +170,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={sendReminders}
             disabled={reminderSending}
-            className="text-sm px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+            className="shrink-0 min-w-[8.5rem] whitespace-nowrap text-sm px-4 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
           >
             {reminderSending ? "Sending…" : "Send now"}
           </button>
@@ -198,7 +198,7 @@ export default function AdminSettingsPage() {
             <button
               onClick={checkACStatus}
               disabled={acLoading}
-              className="text-sm px-3 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+              className="shrink-0 min-w-[8.5rem] whitespace-nowrap text-sm px-4 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
             >
               {acLoading ? "Checking…" : acStatus === null ? "Check status" : "Refresh"}
             </button>
