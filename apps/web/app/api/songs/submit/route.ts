@@ -53,7 +53,7 @@ export async function POST(req: Request) {
 
   const { data: song, error: songErr } = await db
     .from("songs")
-    .insert({ title, display_artist: artist, slug, submitted_by: user.id, updated_at: new Date().toISOString() })
+    .insert({ title, display_artist: artist, slug, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString() })
     .select("id, slug")
     .single();
   if (songErr || !song) {

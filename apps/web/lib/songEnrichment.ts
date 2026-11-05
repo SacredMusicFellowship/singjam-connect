@@ -235,6 +235,23 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   if (!s.hook) wanted.push("hook");
   if (!wanted.length) return { songId, decision: {} as EnrichmentDecision, usage: [] as ModelUsage[] };
 
+  if (!opts.dryRun) await admin.from("songs").update({ enrichment_started_at: new Date().toISOString() }).eq("id", songId);
+  try {
+    return await fillSong(admin, songId, s, primary, artist, wanted, opts);
+  } finally {
+    if (!opts.dryRun) await admin.from("songs").update({ enrichment_finished_at: new Date().toISOString() }).eq("id", songId);
+  }
+}
+
+async function fillSong(
+  admin: SupabaseClient,
+  songId: string,
+  s: any,
+  primary: any,
+  artist: string | null,
+  wanted: Field[],
+  opts: { spotifyReleaseYear?: number | null; dryRun?: boolean },
+) {
   const context: SongContext = {
     title: s.title,
     artist,

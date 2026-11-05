@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatRecordingArtists } from "./formatRecordingArtists";
+import { formatRecordingArtists, sortRecordingsByYear } from "./formatRecordingArtists";
 
 describe("formatRecordingArtists", () => {
   it("follows each artist with their own recording year, in order", () => {
@@ -34,5 +34,21 @@ describe("formatRecordingArtists", () => {
   it("returns null when there is nothing to show", () => {
     expect(formatRecordingArtists(null, null)).toBeNull();
     expect(formatRecordingArtists([], "")).toBeNull();
+  });
+});
+
+describe("sortRecordingsByYear", () => {
+  it("puts the earliest recording first and undated ones last, ties in editor order", () => {
+    const sorted = sortRecordingsByYear([
+      { name: "Jeff Buckley", year: 1994, position: 0 },
+      { name: "Leonard Cohen", year: 1984, position: 1 },
+      { name: "Unknown", year: null, position: 2 },
+      { name: "Second 1994", year: 1994, position: 3 },
+    ]);
+    expect(sorted.map((r) => r.name)).toEqual(["Leonard Cohen", "Jeff Buckley", "Second 1994", "Unknown"]);
+  });
+
+  it("orders the formatted credits the same way", () => {
+    expect(formatRecordingArtists([{ name: "Joe Cocker", year: 1968 }, { name: "Beatles", year: 1967 }], null)).toBe("Beatles (1967), Joe Cocker (1968)");
   });
 });

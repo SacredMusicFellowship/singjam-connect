@@ -7,6 +7,7 @@ import type { GestureResponderEvent, LayoutChangeEvent } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import YouTubePlayer from '@/components/YouTubePlayer';
+import ChordChartControls from '@/components/ChordChartControls';
 import {
   formatComposersLong,
   sortByLastName,
@@ -17,6 +18,9 @@ import {
   type ConfidenceLevel,
   productionCredits,
   type ProductionCredit,
+  sortRecordingsByYear,
+  enrichmentInProgress,
+  ENRICHMENT_WAIT_MS,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
@@ -51,6 +55,9 @@ type SongDetail = {
   notes: string | null;
   genius_url: string | null;
   chord_chart_url: string | null;
+  chord_chart_pending: boolean;
+  enrichment_started_at?: string | null;
+  enrichment_finished_at?: string | null;
   youtube_url: string | null;
   year: number | null;
   year_written: number | null;
@@ -218,6 +225,26 @@ export default function SongDetailScreen() {
     load();
   }, [songId]);
 
+  // A just-added song fills itself in over the next 10–30 seconds (mirrors web):
+  // watch its row and reload when the enrichment job finishes or gives up.
+  const fillingIn = !!song && enrichmentInProgress(song);
+  useEffect(() => {
+    if (!song?.id || !fillingIn) return;
+    const channel = supabase
+      .channel(`song-fill-${song.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'songs', filter: `id=eq.${song.id}` }, (payload: any) => {
+        if (payload.new?.enrichment_finished_at) load();
+      })
+      .subscribe();
+    const started = Date.parse(song.enrichment_started_at ?? '');
+    const giveUp = setTimeout(load, Math.max(0, started + ENRICHMENT_WAIT_MS - Date.now()) + 500);
+    return () => {
+      clearTimeout(giveUp);
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song?.id, fillingIn]);
+
   async function load() {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
@@ -227,8 +254,8 @@ export default function SongDetailScreen() {
         .from('songs')
         .select(`
           id, slug, title, display_artist, first_line, hook, notes,
-          genius_url, chord_chart_url, youtube_url,
-          year, year_written, tonality, meter, vibe,
+          genius_url, chord_chart_url, chord_chart_pending, youtube_url,
+          year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_alternate_titles(title),
           song_composers(people(name)),
           song_lyricists(people(name)),
@@ -282,6 +309,9 @@ export default function SongDetailScreen() {
       notes: s.notes ?? null,
       genius_url: s.genius_url ?? null,
       chord_chart_url: s.chord_chart_url ?? null,
+      chord_chart_pending: !!s.chord_chart_pending,
+      enrichment_started_at: s.enrichment_started_at ?? null,
+      enrichment_finished_at: s.enrichment_finished_at ?? null,
       youtube_url: s.youtube_url ?? null,
       year: s.year ?? null,
       year_written: s.year_written ?? null,
@@ -293,10 +323,11 @@ export default function SongDetailScreen() {
       lyricists: sortByLastName((s.song_lyricists ?? []).map((x: any) => x.people?.name).filter(Boolean)),
       musicCultures: (musicRows.length ? musicRows : noCtx).map((x: any) => x.cultures?.name).filter(Boolean),
       lyricsCultures: (lyricsRows.length ? lyricsRows : noCtx).map((x: any) => x.cultures?.name).filter(Boolean),
-      recordingArtists: (s.song_recording_artists ?? [])
-        .map((x: any) => ({ name: x.artists?.name, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
-        .filter((x: any) => x.name)
-        .sort((a: any, b: any) => (a.position ?? 999) - (b.position ?? 999)),
+      recordingArtists: sortRecordingsByYear(
+        (s.song_recording_artists ?? [])
+          .map((x: any) => ({ name: x.artists?.name, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
+          .filter((x: any) => x.name)
+      ),
       genres: (s.song_genres ?? []).map((x: any) => x.genres?.name).filter(Boolean).sort(),
       themes: (s.song_themes ?? []).map((x: any) => x.themes?.name).filter(Boolean).sort(),
       cultures: [...new Set((cultureRows).map((x: any) => x.cultures?.name).filter(Boolean) as string[])],
@@ -640,6 +671,24 @@ export default function SongDetailScreen() {
               ) : null}
             </View>
           ) : null}
+          {fillingIn ? (
+            <View className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <Text className="text-sm text-zinc-600">Finding the songwriters, key, lyrics and tags…</Text>
+              {['w-1/2', 'w-1/3', 'w-2/3'].map(w => (
+                <View key={w} className="mt-2 flex-row items-center gap-3">
+                  <View className="h-3 w-20 rounded bg-zinc-200" />
+                  <View className={`h-3 ${w} rounded bg-zinc-100`} />
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <ChordChartControls
+            songId={song.id}
+            url={song.chord_chart_url}
+            pending={song.chord_chart_pending}
+            signedIn={!!myUserId}
+            onChanged={({ url, pending }) => setSong((prev) => (prev ? { ...prev, chord_chart_url: url, chord_chart_pending: pending } : prev))}
+          />
           {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} className="mt-3" /> : null}
           {song.chord_chart_url ? <UgBackTip className="mt-3" /> : null}
         </View>

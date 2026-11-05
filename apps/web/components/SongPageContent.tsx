@@ -4,7 +4,7 @@ import { CONFIDENCE_STYLES, type ConfidenceLevel } from "@singjam/core";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { formatComposersLong, sortByLastName, setsAcceptingSongs } from "@singjam/core";
+import { formatComposersLong, sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, ENRICHMENT_WAIT_MS } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
@@ -12,6 +12,7 @@ import MyKeySelect from "@/components/MyKeySelect";
 import UgBackTip from "@/components/UgBackTip";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import ChordChartSlot from "@/components/ChordChartSlot";
+import ReportChartButton from "@/components/ReportChartButton";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
   return (
@@ -101,6 +102,19 @@ function usePinToTopOnLoad(loaded: boolean) {
   }, [loaded]);
 }
 
+const SONG_SELECT = `
+          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          song_composers(people(name)),
+          song_lyricists(people(name)),
+          song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
+          song_alternate_titles(title),
+          song_genres(genres(name)),
+          song_themes(themes(name)),
+          song_cultures(context, cultures(name)),
+          song_languages(languages(name)),
+          song_productions(productions(name, year))
+        `;
+
 export default function SongPageContent() {
   const params = useParams();
   const slug = params.slug as string;
@@ -131,18 +145,7 @@ export default function SongPageContent() {
 
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
-      const songQuery = supabase.from("songs").select(`
-          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, youtube_url, year, year_written, tonality, meter, vibe,
-          song_composers(people(name)),
-          song_lyricists(people(name)),
-          song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
-          song_alternate_titles(title),
-          song_genres(genres(name)),
-          song_themes(themes(name)),
-          song_cultures(context, cultures(name)),
-          song_languages(languages(name)),
-          song_productions(productions(name, year))
-        `);
+      const songQuery = supabase.from("songs").select(SONG_SELECT);
       const [{ data: { user } }, songRes] = await Promise.all([
         supabase.auth.getUser(),
         (isUuid ? songQuery.eq("id", slug) : songQuery.or(`slug.eq.${slug},former_slug.eq.${slug}`)).single(),
@@ -202,6 +205,31 @@ export default function SongPageContent() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // A just-added song fills itself in over the next 10–30 seconds. Watch its row
+  // and reload the details when the enrichment job finishes (or gives up).
+  const songId = data?.song?.id as string | undefined;
+  const fillingIn = !!data && enrichmentInProgress(data.song);
+  useEffect(() => {
+    if (!songId || !fillingIn) return;
+    const reload = async () => {
+      const { data: fresh } = await supabase.from("songs").select(SONG_SELECT).eq("id", songId).single();
+      if (fresh) setData((prev) => (prev ? { ...prev, song: fresh } : prev));
+    };
+    const channel = supabase
+      .channel(`song-fill-${songId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "songs", filter: `id=eq.${songId}` }, (payload: any) => {
+        if (payload.new?.enrichment_finished_at) reload();
+      })
+      .subscribe();
+    const started = Date.parse(data!.song.enrichment_started_at);
+    const giveUp = setTimeout(reload, Math.max(0, started + ENRICHMENT_WAIT_MS - Date.now()) + 500);
+    return () => {
+      clearTimeout(giveUp);
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songId, fillingIn]);
 
   // Deleting the user_songs row takes the key with it; migration 179's trigger
   // deletes the private notes.
@@ -287,10 +315,11 @@ export default function SongPageContent() {
     .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
   const lyricsCultures = (lyricsSpecificRows.length ? lyricsSpecificRows : noContextRows)
     .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
-  const recordingArtists = (song.song_recording_artists as any[])
-    .map((x: any) => ({ name: x.artists?.name as string, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
-    .filter((x: any) => x.name)
-    .sort((a: any, b: any) => (a.position ?? 999) - (b.position ?? 999));
+  const recordingArtists = sortRecordingsByYear(
+    (song.song_recording_artists as any[])
+      .map((x: any) => ({ name: x.artists?.name as string, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
+      .filter((x: any) => x.name)
+  );
   const altTitles = (song.song_alternate_titles as any[]).map((x: any) => x.title as string).filter(Boolean);
   const genres = (song.song_genres as any[]).map((x: any) => x.genres?.name as string).filter(Boolean).sort();
   const themes = (song.song_themes as any[]).map((x: any) => x.themes?.name as string).filter(Boolean).sort();
@@ -305,7 +334,7 @@ export default function SongPageContent() {
   const meterPills = song.meter ? song.meter.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
 
   function handleChartAdded(url: string) {
-    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url } } : prev));
+    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url, chord_chart_pending: true } } : prev));
   }
 
   return (
@@ -368,7 +397,8 @@ export default function SongPageContent() {
                 <ChordChartSlot
                   songId={song.id}
                   url={song.chord_chart_url}
-                  canAdd={isAdmin || isSongEditor}
+                pending={song.chord_chart_pending}
+                  canAdd={isLoggedIn}
                   size="md"
                   onAdded={handleChartAdded}
                 />
@@ -378,7 +408,8 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                canAdd={isAdmin || isSongEditor}
+                pending={song.chord_chart_pending}
+                canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
               />
@@ -386,6 +417,27 @@ export default function SongPageContent() {
           </div>
           {confidence && userId && <MySongNotes key={song.id} songId={song.id} userId={userId} className="mt-3" />}
           {song.chord_chart_url && <UgBackTip className="mt-3" />}
+          {song.chord_chart_url && isLoggedIn && (
+            <div className="mt-2">
+              <ReportChartButton
+                songId={song.id}
+                onReported={() => setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_pending: true } } : prev))}
+              />
+            </div>
+          )}
+          {fillingIn && (
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4" aria-live="polite">
+              <p className="text-sm text-zinc-600">Finding the songwriters, key, lyrics and tags…</p>
+              <div className="mt-3 space-y-2">
+                {["w-1/2", "w-1/3", "w-2/3"].map((w) => (
+                  <div key={w} className="flex items-center gap-3">
+                    <div className="h-3 w-20 shrink-0 animate-pulse rounded bg-zinc-200" />
+                    <div className={`h-3 ${w} animate-pulse rounded bg-zinc-100`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {(composers.length > 0 || lyricists.length > 0) && (
@@ -608,7 +660,8 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                canAdd={isAdmin || isSongEditor}
+                pending={song.chord_chart_pending}
+                canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
               />
@@ -618,7 +671,8 @@ export default function SongPageContent() {
             <ChordChartSlot
               songId={song.id}
               url={song.chord_chart_url}
-              canAdd={isAdmin || isSongEditor}
+                pending={song.chord_chart_pending}
+              canAdd={isLoggedIn}
               size="md"
               onAdded={handleChartAdded}
             />

@@ -75,6 +75,7 @@ export default function SetSongRow({
   const [youtubeOpen, setYoutubeOpen] = useState(false);
   const [spotifyOpen, setSpotifyOpen] = useState(false);
   const [addingField, setAddingField] = useState<AddingField>(null);
+  const [chartError, setChartError] = useState<string | null>(null);
   const [pickingRepertoire, setPickingRepertoire] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [saving, setSaving] = useState(false);
@@ -105,7 +106,7 @@ export default function SetSongRow({
   const placeholders: Record<NonNullable<AddingField>, string> = {
     youtube: "Paste YouTube URL…",
     spotify: "Paste Spotify track URL…",
-    chord: "Paste chord chart URL…",
+    chord: "Paste an Ultimate Guitar link…",
   };
 
   async function handleYoutubeSearch() {
@@ -138,11 +139,21 @@ export default function SetSongRow({
 
   async function saveMedia(field: NonNullable<AddingField>, url: string) {
     setSaving(true);
-    const res = await fetch(`/api/songs/${song.song_id}/media`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [fieldMap[field]]: url }),
-    });
+    setChartError(null);
+    // Chord charts go through review (anyone can add one); video links are a
+    // song-editor fix.
+    const res = field === "chord"
+      ? await fetch(`/api/songs/${song.song_id}/charts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        })
+      : await fetch(`/api/songs/${song.song_id}/media`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [fieldMap[field]]: url }),
+        });
+    if (!res.ok && field === "chord") setChartError((await res.json().catch(() => ({}))).error ?? "Couldn't save the chart");
     if (res.ok) {
       onMediaAdded(song.song_id, fieldMap[field], url);
       setAddingField(null);
@@ -372,8 +383,13 @@ export default function SetSongRow({
         <div className="shrink-0 flex items-center gap-0.5">
           {/* Ultimate Guitar chord chart */}
           {chord_chart_url ? (
-            <ChordsLink href={chord_chart_url} />
-          ) : isAdmin || isSongEditor ? (
+            <>
+              <ChordsLink href={chord_chart_url} />
+              {song.songs.chord_chart_pending && (
+                <span title="Added recently — not yet checked by a song editor" className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">unreviewed</span>
+              )}
+            </>
+          ) : (
             <>
               <button
                 onClick={() => toggleAdding("chord")}
@@ -391,7 +407,7 @@ export default function SetSongRow({
                 <span className="text-xs font-medium text-zinc-600">Chords</span>
               </button>
             </>
-          ) : null}
+          )}
 
           {/* Spotify */}
           {spotify_url ? (
@@ -680,6 +696,7 @@ export default function SetSongRow({
             >
               {saving ? "Saving…" : "Save"}
             </button>
+            {chartError && addingField === "chord" && <span className="text-xs text-red-500">{chartError}</span>}
             <button
               onClick={() => { setAddingField(null); setUrlInput(""); setYoutubeSearchResults([]); }}
               className="text-xs text-zinc-400 hover:text-zinc-600"

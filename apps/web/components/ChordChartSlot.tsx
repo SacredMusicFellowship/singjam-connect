@@ -4,19 +4,22 @@ import { useState } from "react";
 import ChordsLink from "@/components/ChordsLink";
 import { UltimateGuitarIcon } from "@/components/setDetailShared";
 
-// A song's chord chart in a row of controls: the Chords link when there is one;
-// for admins and song editors, the set list's dashed "add chart" button and URL
-// field when there isn't; otherwise nothing. Meant for the end of a flex-wrap
-// row: the URL field takes a line of its own beneath it.
+// A song's chord chart in a row of controls: the Chords link when there is one
+// (marked "unreviewed" until someone other than the person who added it checks
+// it); for anyone signed in, the dashed "add chart" button and URL field when
+// there isn't. Meant for the end of a flex-wrap row: the URL field takes a line
+// of its own beneath it.
 export default function ChordChartSlot({
   songId,
   url,
+  pending = false,
   canAdd,
   onAdded,
   size = "sm",
 }: {
   songId: string;
   url: string | null | undefined;
+  pending?: boolean;
   canAdd: boolean;
   onAdded: (url: string) => void;
   size?: "sm" | "md";
@@ -26,7 +29,22 @@ export default function ChordChartSlot({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (url) return <ChordsLink href={url} size={size} pill />;
+  const [notice, setNotice] = useState<string | null>(null);
+
+  if (url) {
+    return (
+      <>
+        <ChordsLink href={url} size={size} pill />
+        {pending && (
+          <span title="Added recently — not yet checked by a song editor" className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+            unreviewed
+          </span>
+        )}
+      </>
+    );
+  }
+
+  if (notice) return <span className="text-xs text-zinc-500">{notice}</span>;
 
   if (!canAdd) return null;
 
@@ -41,18 +59,20 @@ export default function ChordChartSlot({
     if (!next) return;
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/songs/${songId}/media`, {
-      method: "PATCH",
+    const res = await fetch(`/api/songs/${songId}/charts`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chord_chart_url: next }),
+      body: JSON.stringify({ url: next }),
     });
+    const json = await res.json().catch(() => ({}));
     setSaving(false);
     if (!res.ok) {
-      setError("Couldn't save the chart");
+      setError(json.error ?? "Couldn't save the chart");
       return;
     }
-    onAdded(next);
     close();
+    if (json.live) onAdded(next);
+    else setNotice("Thanks — a song editor will check it before it replaces the current chart.");
   }
 
   return (
@@ -79,7 +99,7 @@ export default function ChordChartSlot({
             type="url"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Paste chord chart URL…"
+            placeholder="Paste an Ultimate Guitar link…"
             className="flex-1 rounded-xl border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
             onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") close(); }}
             autoFocus
