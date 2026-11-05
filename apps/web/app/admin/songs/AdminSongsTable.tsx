@@ -10,6 +10,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import SearchInput from "@/components/SearchInput";
 
+import Select from "@/components/Select";
 type Song = {
   id: string;
   title: string;
@@ -286,16 +287,17 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <label htmlFor="added-by" className="text-xs font-medium text-zinc-600">Added by</label>
-          <select
+          <Select
             id="added-by"
             value={adderFilter}
             onChange={(e) => setAdderFilter(e.target.value)}
-            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700"
+            shape="pill"
+            size="sm"
           >
             <option value="">Anyone</option>
             {adders.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             <option value={BEFORE_TRACKING}>Before tracking</option>
-          </select>
+          </Select>
         </div>
         {(query.trim() || adderFilter) && (
           <p className="mt-2 text-xs text-zinc-500">{filtered.length} of {songs.length} songs</p>

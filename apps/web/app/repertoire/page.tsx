@@ -22,6 +22,7 @@ import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
 import ChordChartSlot from "@/components/ChordChartSlot";
 import SearchInput from "@/components/SearchInput";
+import Select from "@/components/Select";
 
 const CONFIDENCE_LEVELS = [
   { key: "lead", label: "Lead" },
@@ -710,16 +711,16 @@ export default function RepertoirePage() {
           </div>
 
           {!searching && (
-            <select
+            <Select
               value={confidenceFilter}
               onChange={(e) => setConfidenceFilter(e.target.value)}
-              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm sm:w-56"
+              wrapperClassName="w-full sm:w-56"
             >
               <option value="all">Any role</option>
               {CONFIDENCE_LEVELS.map((l) => (
                 <option key={l.key} value={l.key}>{l.label}</option>
               ))}
-            </select>
+            </Select>
           )}
         </div>
       </div>
@@ -791,8 +792,8 @@ export default function RepertoirePage() {
                     <div className="relative flex flex-wrap items-center gap-2 sm:shrink-0">
                       {inRep ? (
                         <>
-                          <RoleSelect value={inRep.confidence ?? "learn"} onChange={(level) => updateConfidence(inRep.song_id, level)} size="md" />
-                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} size="md" />
+                          <RoleSelect value={inRep.confidence ?? "learn"} onChange={(level) => updateConfidence(inRep.song_id, level)} size="md" label={`Role for ${result.title}`} />
+                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} size="md" label={`My key for ${result.title}`} />
                           {userSets.length > 0 && (
                             <AddToSetPanel
                               songId={result.song_id}
@@ -930,26 +931,28 @@ export default function RepertoirePage() {
                       </button>
                     </div>
                   ) : (
-                    <select
+                    <Select
                       value={bulkSetId}
                       onChange={(e) => {
                         if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
                         else if (e.target.value) bulkAddToSet(e.target.value);
                       }}
-                      className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm"
+                      shape="pill"
+                      size="sm"
                     >
                       <option value="">Add to set…</option>
                       {userSets.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                       <option value="__new__">+ New set…</option>
-                    </select>
+                    </Select>
                   )
                 )}
-                <select
+                <Select
                   value={bulkConfidenceLevel}
                   onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
-                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm"
+                  shape="pill"
+                  size="sm"
                 >
                   <option value="">Change role…</option>
                   {CONFIDENCE_LEVELS.map((l) => (
@@ -960,7 +963,7 @@ export default function RepertoirePage() {
                       {l.label}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {bulkRemoveConfirm ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-red-700">
@@ -1079,9 +1082,9 @@ export default function RepertoirePage() {
                   </div>
 
                   <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
-                    <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" />
+                    <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
 
-                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" />
+                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
 
                     {userSets.length > 0 && (
                       <AddToSetPanel

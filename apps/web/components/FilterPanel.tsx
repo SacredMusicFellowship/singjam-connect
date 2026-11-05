@@ -1,5 +1,7 @@
 "use client";
 
+import Select from "@/components/Select";
+
 type FilterOptions = {
   genres: string[];
   languages: string[];
@@ -113,48 +115,51 @@ export function FilterPanel({
         {filterOptions.vibes.length > 0 && (
           <div className="flex-1 min-w-[120px]">
             <label className="mb-1 block text-xs font-medium text-zinc-500 uppercase tracking-wide">Vibe</label>
-            <select
+            <Select
               value={selectedVibe}
               onChange={(e) => setSelectedVibe(e.target.value)}
-              className="w-full rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
+              size="sm"
+              wrapperClassName="w-full"
             >
               <option value="">Any</option>
               {filterOptions.vibes.map((v) => (
                 <option key={v} value={v}>{v}</option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
 
         {filterOptions.tonalities.length > 0 && (
           <div className="flex-1 min-w-[120px]">
             <label className="mb-1 block text-xs font-medium text-zinc-500 uppercase tracking-wide">Tonality</label>
-            <select
+            <Select
               value={selectedTonality}
               onChange={(e) => setSelectedTonality(e.target.value)}
-              className="w-full rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
+              size="sm"
+              wrapperClassName="w-full"
             >
               <option value="">Any</option>
               {filterOptions.tonalities.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
 
         {filterOptions.meters.length > 0 && (
           <div className="flex-1 min-w-[120px]">
             <label className="mb-1 block text-xs font-medium text-zinc-500 uppercase tracking-wide">Meter</label>
-            <select
+            <Select
               value={selectedMeter}
               onChange={(e) => setSelectedMeter(e.target.value)}
-              className="w-full rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
+              size="sm"
+              wrapperClassName="w-full"
             >
               <option value="">Any</option>
               {filterOptions.meters.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
       </div>
