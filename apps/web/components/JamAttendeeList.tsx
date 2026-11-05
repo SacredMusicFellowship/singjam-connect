@@ -192,7 +192,7 @@ export default function JamAttendeeList({
 }: {
   jamId: string;
   hostId: string | null;
-  /** The host, or an official host on an official event (the same people who can edit it). */
+  /** A community jam's host. Official events have no co-hosts (migration 185). */
   canAppointCohosts: boolean;
   /** Members leading the music who are listed publicly. */
   leaderIds?: string[];

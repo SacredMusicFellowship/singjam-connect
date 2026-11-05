@@ -220,7 +220,7 @@ export default function JamView({
     <JamAttendeeList
       jamId={jamId}
       hostId={isOfficial ? null : jam.host_user_id}
-      canAppointCohosts={canEdit}
+      canAppointCohosts={isHost && !isOfficial}
       leaderIds={leaders.map((l) => l.user_id).filter((id): id is string => !!id)}
       myLeader={myLeader}
       version={attendeesVersion}
