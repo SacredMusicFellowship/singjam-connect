@@ -7,6 +7,7 @@ import type { GestureResponderEvent, LayoutChangeEvent } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import YouTubePlayer from '@/components/YouTubePlayer';
+import ChordChartControls from '@/components/ChordChartControls';
 import {
   formatComposersLong,
   sortByLastName,
@@ -52,6 +53,7 @@ type SongDetail = {
   notes: string | null;
   genius_url: string | null;
   chord_chart_url: string | null;
+  chord_chart_pending: boolean;
   youtube_url: string | null;
   year: number | null;
   year_written: number | null;
@@ -228,7 +230,7 @@ export default function SongDetailScreen() {
         .from('songs')
         .select(`
           id, slug, title, display_artist, first_line, hook, notes,
-          genius_url, chord_chart_url, youtube_url,
+          genius_url, chord_chart_url, chord_chart_pending, youtube_url,
           year, year_written, tonality, meter, vibe,
           song_alternate_titles(title),
           song_composers(people(name)),
@@ -283,6 +285,7 @@ export default function SongDetailScreen() {
       notes: s.notes ?? null,
       genius_url: s.genius_url ?? null,
       chord_chart_url: s.chord_chart_url ?? null,
+      chord_chart_pending: !!s.chord_chart_pending,
       youtube_url: s.youtube_url ?? null,
       year: s.year ?? null,
       year_written: s.year_written ?? null,
@@ -642,6 +645,13 @@ export default function SongDetailScreen() {
               ) : null}
             </View>
           ) : null}
+          <ChordChartControls
+            songId={song.id}
+            url={song.chord_chart_url}
+            pending={song.chord_chart_pending}
+            signedIn={!!myUserId}
+            onChanged={({ url, pending }) => setSong((prev) => (prev ? { ...prev, chord_chart_url: url, chord_chart_pending: pending } : prev))}
+          />
           {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} className="mt-3" /> : null}
           {song.chord_chart_url ? <UgBackTip className="mt-3" /> : null}
         </View>

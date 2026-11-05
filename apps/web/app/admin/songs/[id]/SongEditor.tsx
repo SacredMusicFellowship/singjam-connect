@@ -686,7 +686,8 @@ export default function SongEditor({
           return;
         }
 
-        const { data, error } = await supabase.from("songs").insert(payload).select("id").single();
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data, error } = await supabase.from("songs").insert({ ...payload, submitted_by: user?.id ?? null }).select("id").single();
         if (error) throw error;
         songId = data.id;
       } else {

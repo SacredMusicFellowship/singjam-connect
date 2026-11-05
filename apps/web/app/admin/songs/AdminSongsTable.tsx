@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import DeleteSongButton from "./DeleteSongButton";
-import { fetchAllRows } from "@singjam/core";
+import { fetchAllRows, songMissingFields } from "@singjam/core";
 import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -31,9 +31,19 @@ type Song = {
   song_genres: { genre_id: string }[];
   song_languages: { language_id: string }[];
   user_songs: { count: number }[];
+  created_at: string;
+  submitted_by: string | null;
+  profiles: { display_name: string | null; last_name: string | null; username: string | null } | null;
 };
 
-type SortCol = "title" | "songwriters" | "artist" | "year" | "popularity" | "missing";
+type SortCol = "title" | "songwriters" | "artist" | "year" | "popularity" | "added" | "missing";
+
+export const BEFORE_TRACKING = "before-tracking";
+
+function adderName(p: Song["profiles"]): string | null {
+  if (!p) return null;
+  return [p.display_name, p.last_name].filter(Boolean).join(" ") || p.username || null;
+}
 type SortDir = "asc" | "desc";
 
 const COLUMNS: { key: SortCol | "actions"; label: string; defaultWidth: number; sortable: boolean }[] = [
@@ -42,30 +52,14 @@ const COLUMNS: { key: SortCol | "actions"; label: string; defaultWidth: number; 
   { key: "artist",      label: "Artist(s)",            defaultWidth: 110, sortable: true },
   { key: "year",        label: "Year",                 defaultWidth: 80,  sortable: true },
   { key: "popularity",  label: "SingJam popularity",   defaultWidth: 80,  sortable: true },
+  { key: "added",       label: "Added",                defaultWidth: 120, sortable: true },
   { key: "missing",     label: "Missing",              defaultWidth: 220, sortable: true },
   { key: "actions",     label: "Actions",              defaultWidth: 100, sortable: false },
 ];
 
-function missingFields(s: Song): string[] {
-  const missing: string[] = [];
-  if (!s.song_composers.length) missing.push("composer");
-  if (!s.song_lyricists.length) missing.push("lyricist");
-  if (!s.display_artist) missing.push("artist");
-  if (!s.song_recording_artists.length) missing.push("recording");
-  if (!s.first_line) missing.push("first line");
-  if (!s.hook) missing.push("hook");
-  if (!s.genius_url) missing.push("genius");
-  if (!s.tonality) missing.push("tonality");
-  if (!s.meter) missing.push("meter");
-  if (!s.song_genres.length) missing.push("genre");
-  if (!s.song_languages.length) missing.push("language");
-  if (!s.vibe) missing.push("vibe");
-  if (!s.chord_chart_url) missing.push("chord chart");
-  if (!s.youtube_url && !s.song_recording_artists.some((a) => a.youtube_url)) missing.push("video");
-  return missing;
-}
-
-export default function AdminSongsTable() {
+// The Songs table for admins and song editors. Song editors get everything but
+// deleting; `addedBy` presets the "Added by" filter (?added_by= from the Users page).
+export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = true, addedBy = "" }: { basePath?: string; isAdmin?: boolean; addedBy?: string }) {
   const supabase = supabaseBrowser();
   const router = useRouter();
   const equalWidth = 100 / COLUMNS.length;
@@ -74,6 +68,7 @@ export default function AdminSongsTable() {
   const [widths, setWidths] = useState<number[]>(COLUMNS.map(() => equalWidth));
   const [wrap, setWrap] = useState(true);
   const [query, setQuery] = useState("");
+  const [adderFilter, setAdderFilter] = useState(addedBy);
   const [sort, setSort] = useState<{ col: SortCol; dir: SortDir }>({ col: "missing", dir: "desc" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -91,7 +86,9 @@ export default function AdminSongsTable() {
           song_genres(genre_id),
           song_languages(language_id),
           song_cultures(cultures(name)),
-          user_songs(count)
+          user_songs(count),
+          created_at, submitted_by,
+          profiles!submitted_by(display_name, last_name, username)
         `)
         .order("title")
         .order("id")
@@ -132,7 +129,7 @@ export default function AdminSongsTable() {
     setSort((prev) =>
       prev.col === col
         ? { col, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { col, dir: col === "missing" ? "desc" : "asc" }
+        : { col, dir: col === "missing" || col === "added" ? "desc" : "asc" }
     );
   }
 
@@ -153,17 +150,24 @@ export default function AdminSongsTable() {
       const firstRecording = years.length ? Math.min(...years) : null;
       const yw = s.year_written ?? null;
       const firstYear = yw && firstRecording ? Math.min(yw, firstRecording) : yw ?? firstRecording ?? null;
-      const missing = missingFields(s);
+      const missing = songMissingFields(s);
       return { ...s, songwriters, songwriterNamesRaw, firstYear, missing };
     }),
   [songs]);
 
+  const adders = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const s of songs ?? []) if (s.submitted_by) byId.set(s.submitted_by, adderName(s.profiles) ?? "Unknown user");
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [songs]);
+
   const filtered = useMemo(() => {
     return enriched.filter((s) => {
+      if (adderFilter === BEFORE_TRACKING ? s.submitted_by : adderFilter && s.submitted_by !== adderFilter) return false;
       const hay = [s.title, s.display_artist ?? "", s.songwriterNamesRaw, s.first_line ?? "", s.hook ?? ""].join(" ");
       return matchesSearch(hay, query);
     });
-  }, [enriched, query]);
+  }, [enriched, query, adderFilter]);
 
   const sorted = useMemo(() => {
     const { col, dir } = sort;
@@ -178,6 +182,7 @@ export default function AdminSongsTable() {
       }
       else if (col === "year")   cmp = (a.firstYear ?? Infinity) - (b.firstYear ?? Infinity);
       else if (col === "popularity") cmp = (a.user_songs[0]?.count ?? 0) - (b.user_songs[0]?.count ?? 0);
+      else if (col === "added") cmp = a.created_at.localeCompare(b.created_at);
       else if (col === "missing") cmp = a.missing.length - b.missing.length;
       return cmp * mul || a.title.localeCompare(b.title);
     });
@@ -279,7 +284,20 @@ export default function AdminSongsTable() {
           placeholder="Search by title, songwriter, artist, first line, or hook…"
           autoComplete="off"
         />
-        {query.trim() && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label htmlFor="added-by" className="text-xs font-medium text-zinc-600">Added by</label>
+          <select
+            id="added-by"
+            value={adderFilter}
+            onChange={(e) => setAdderFilter(e.target.value)}
+            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700"
+          >
+            <option value="">Anyone</option>
+            {adders.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            <option value={BEFORE_TRACKING}>Before tracking</option>
+          </select>
+        </div>
+        {(query.trim() || adderFilter) && (
           <p className="mt-2 text-xs text-zinc-500">{filtered.length} of {songs.length} songs</p>
         )}
       </div>
@@ -287,7 +305,7 @@ export default function AdminSongsTable() {
       {/* Mobile card list */}
       <div className="sm:hidden space-y-2">
         {sorted.map((s) => {
-          const editHref = `/admin/songs/${s.slug ?? s.id}`;
+          const editHref = `${basePath}/${s.slug ?? s.id}`;
           return (
             <div key={s.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
               <div className="flex items-start justify-between gap-2">
@@ -296,6 +314,9 @@ export default function AdminSongsTable() {
                   {s.songwriters !== "—" && (
                     <div className="mt-0.5 text-xs text-slate-500 truncate">{s.songwriters}</div>
                   )}
+                  <div className="mt-0.5 text-xs text-slate-400 truncate">
+                    Added {s.created_at.slice(0, 10)}{s.submitted_by ? ` by ${adderName(s.profiles) ?? "Unknown user"}` : ""}
+                  </div>
                   {s.missing.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {s.missing.map((m) => (
@@ -322,7 +343,7 @@ export default function AdminSongsTable() {
 
       {/* Desktop table */}
       <div className="hidden sm:flex items-center justify-between">
-        {selected.size > 0 ? (
+        {isAdmin && selected.size > 0 ? (
           <button
             onClick={handleBulkDelete}
             disabled={deleting}
@@ -346,7 +367,7 @@ export default function AdminSongsTable() {
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium text-slate-500">
               <th className="w-8 px-3 py-3">
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-amber-500" />
+                {isAdmin && <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-amber-500" />}
               </th>
               {COLUMNS.map((col, i) => (
                 <th
@@ -380,12 +401,12 @@ export default function AdminSongsTable() {
           <tbody className="divide-y divide-slate-100">
             {sorted.map((s) => {
               const viewHref = `/songs/${s.slug ?? s.id}`;
-              const editHref = `/admin/songs/${s.slug ?? s.id}`;
+              const editHref = `${basePath}/${s.slug ?? s.id}`;
 
               return (
                 <tr key={s.id} className={`hover:bg-slate-50 ${selected.has(s.id) ? "bg-amber-50" : ""}`}>
                   <td className="w-8 px-3 py-2.5">
-                    <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} className="accent-amber-500" />
+                    {isAdmin && <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} className="accent-amber-500" />}
                   </td>
                   <td className={`${cellClass} font-medium`}>
                     <Link href={viewHref} className={`text-slate-900 hover:text-amber-600 hover:underline ${wrap ? "" : "truncate"} block`}>
@@ -396,6 +417,10 @@ export default function AdminSongsTable() {
                   <td className={`${cellClass} text-slate-500`}>{s.display_artist ?? "—"}</td>
                   <td className={`${cellClass} text-slate-500`}>{s.firstYear ?? "—"}</td>
                   <td className={`${cellClass} text-slate-500`}>{s.user_songs[0]?.count ?? 0}</td>
+                  <td className={`${cellClass} text-xs text-slate-500`}>
+                    <div>{s.submitted_by ? adderName(s.profiles) ?? "Unknown user" : <span className="text-slate-300">before tracking</span>}</div>
+                    <div className="text-slate-400">{s.created_at.slice(0, 10)}</div>
+                  </td>
                   <td className={cellClass}>
                     {s.missing.length === 0 ? (
                       <span className="text-xs text-slate-300">✓</span>
@@ -414,7 +439,7 @@ export default function AdminSongsTable() {
                       <Link href={editHref} className="text-amber-600 hover:text-amber-500">
                         Edit
                       </Link>
-                      <DeleteSongButton id={s.id} />
+                      {isAdmin && <DeleteSongButton id={s.id} />}
                     </div>
                   </td>
                 </tr>
@@ -422,7 +447,7 @@ export default function AdminSongsTable() {
             })}
             {!sorted.length && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
                   {query.trim() ? "No songs match that search." : "No songs yet."}
                 </td>
               </tr>

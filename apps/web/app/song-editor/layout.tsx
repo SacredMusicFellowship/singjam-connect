@@ -20,6 +20,12 @@ export default async function SongEditorLayout({ children }: { children: React.R
           <Link href="/song-editor" className="text-slate-600 hover:text-slate-900">
             Songs
           </Link>
+          <Link href="/song-editor/recent" className="text-slate-600 hover:text-slate-900">
+            Recently added
+          </Link>
+          <Link href="/song-editor/charts" className="text-slate-600 hover:text-slate-900">
+            Charts to review
+          </Link>
           <Link href="/song-editor/history" className="text-slate-600 hover:text-slate-900">
             Song History
           </Link>

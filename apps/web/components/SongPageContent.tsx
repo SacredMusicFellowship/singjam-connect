@@ -12,6 +12,7 @@ import MyKeySelect from "@/components/MyKeySelect";
 import UgBackTip from "@/components/UgBackTip";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import ChordChartSlot from "@/components/ChordChartSlot";
+import ReportChartButton from "@/components/ReportChartButton";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
   return (
@@ -132,7 +133,7 @@ export default function SongPageContent() {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
       const songQuery = supabase.from("songs").select(`
-          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, youtube_url, year, year_written, tonality, meter, vibe,
+          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe,
           song_composers(people(name)),
           song_lyricists(people(name)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
@@ -306,7 +307,7 @@ export default function SongPageContent() {
   const meterPills = song.meter ? song.meter.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
 
   function handleChartAdded(url: string) {
-    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url } } : prev));
+    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url, chord_chart_pending: true } } : prev));
   }
 
   return (
@@ -369,7 +370,8 @@ export default function SongPageContent() {
                 <ChordChartSlot
                   songId={song.id}
                   url={song.chord_chart_url}
-                  canAdd={isAdmin || isSongEditor}
+                pending={song.chord_chart_pending}
+                  canAdd={isLoggedIn}
                   size="md"
                   onAdded={handleChartAdded}
                 />
@@ -379,7 +381,8 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                canAdd={isAdmin || isSongEditor}
+                pending={song.chord_chart_pending}
+                canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
               />
@@ -387,6 +390,14 @@ export default function SongPageContent() {
           </div>
           {confidence && userId && <MySongNotes key={song.id} songId={song.id} userId={userId} className="mt-3" />}
           {song.chord_chart_url && <UgBackTip className="mt-3" />}
+          {song.chord_chart_url && isLoggedIn && (
+            <div className="mt-2">
+              <ReportChartButton
+                songId={song.id}
+                onReported={() => setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_pending: true } } : prev))}
+              />
+            </div>
+          )}
         </div>
 
         {(composers.length > 0 || lyricists.length > 0) && (
@@ -609,7 +620,8 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                canAdd={isAdmin || isSongEditor}
+                pending={song.chord_chart_pending}
+                canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
               />
@@ -619,7 +631,8 @@ export default function SongPageContent() {
             <ChordChartSlot
               songId={song.id}
               url={song.chord_chart_url}
-              canAdd={isAdmin || isSongEditor}
+                pending={song.chord_chart_pending}
+              canAdd={isLoggedIn}
               size="md"
               onAdded={handleChartAdded}
             />

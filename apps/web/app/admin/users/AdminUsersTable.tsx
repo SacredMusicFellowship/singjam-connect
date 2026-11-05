@@ -18,9 +18,10 @@ export type AdminUser = {
   email: string | null;
   role: string;
   events: number;
+  songsAdded: number;
 };
 
-type SortCol = "name" | "email" | "neighborhood" | "joined" | "events" | "role";
+type SortCol = "name" | "email" | "neighborhood" | "joined" | "events" | "songs" | "role";
 type SortDir = "asc" | "desc";
 
 // The page container is max-w-4xl, so the desktop table is laid out on fixed
@@ -30,7 +31,8 @@ const COLUMNS: { key: SortCol; label: string; width: string }[] = [
   { key: "email", label: "Email", width: "22%" },
   { key: "neighborhood", label: "Neighborhood", width: "15%" },
   { key: "joined", label: "Joined", width: "13%" },
-  { key: "events", label: "Events", width: "9%" },
+  { key: "events", label: "Events", width: "8%" },
+  { key: "songs", label: "Songs added", width: "9%" },
   { key: "role", label: "Role", width: "17%" },
 ];
 
@@ -175,7 +177,7 @@ export default function AdminUsersTable({
     setSort((prev) =>
       prev.col === col
         ? { col, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { col, dir: col === "joined" || col === "events" ? "desc" : "asc" }
+        : { col, dir: col === "joined" || col === "events" || col === "songs" ? "desc" : "asc" }
     );
   }
 
@@ -200,6 +202,7 @@ export default function AdminUsersTable({
       else if (col === "neighborhood") cmp = (a.neighborhood ?? "").localeCompare(b.neighborhood ?? "");
       else if (col === "joined") cmp = (a.created_at ?? "").localeCompare(b.created_at ?? "");
       else if (col === "events") cmp = a.events - b.events;
+      else if (col === "songs") cmp = a.songsAdded - b.songsAdded;
       else if (col === "role")
         cmp = USER_ROLES.indexOf(roles[a.id] as UserRole) - USER_ROLES.indexOf(roles[b.id] as UserRole);
       return cmp * mul || fullName(a).localeCompare(fullName(b));
@@ -274,6 +277,14 @@ export default function AdminUsersTable({
                   {" · "}
                   <Link href={attendanceHref(u)} className="hover:text-amber-600 hover:underline">
                     {u.events} {u.events === 1 ? "event" : "events"}
+                  </Link>
+                </>
+              )}
+              {u.songsAdded > 0 && (
+                <>
+                  {" · "}
+                  <Link href={`/admin/songs?added_by=${u.id}`} className="hover:text-amber-600 hover:underline">
+                    {u.songsAdded} {u.songsAdded === 1 ? "song" : "songs"} added
                   </Link>
                 </>
               )}
@@ -353,6 +364,15 @@ export default function AdminUsersTable({
                   {u.events > 0 ? (
                     <Link href={attendanceHref(u)} className="hover:text-amber-600 hover:underline">
                       {u.events}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-slate-500">
+                  {u.songsAdded > 0 ? (
+                    <Link href={`/admin/songs?added_by=${u.id}`} className="hover:text-amber-600 hover:underline">
+                      {u.songsAdded}
                     </Link>
                   ) : (
                     "—"

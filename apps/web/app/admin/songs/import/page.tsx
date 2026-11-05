@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/client";
-import { generateSlug } from "@/lib/generateSlug";
+import { useRef, useState } from "react";
 
 type ParsedRow = { title: string; artist: string };
 
@@ -12,19 +10,6 @@ type RowResult =
   | { status: "skipped"; reason: string }
   | { status: "added"; detail: string }
   | { status: "error"; reason: string };
-
-type Lookup = { id: string; name: string };
-
-// ISO 639-2 code → English name (common subset)
-const LANG_CODE_MAP: Record<string, string> = {
-  eng: "English", fra: "French", spa: "Spanish", deu: "German",
-  ita: "Italian", por: "Portuguese", rus: "Russian", jpn: "Japanese",
-  zho: "Chinese", kor: "Korean", nld: "Dutch", pol: "Polish",
-  swe: "Swedish", nor: "Norwegian", fin: "Finnish", heb: "Hebrew",
-  ara: "Arabic", hin: "Hindi", lat: "Latin", cat: "Catalan",
-  tur: "Turkish", vie: "Vietnamese", tha: "Thai", ind: "Indonesian",
-};
-
 
 function parseCSV(text: string): ParsedRow[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
@@ -48,30 +33,11 @@ function parseCSV(text: string): ParsedRow[] {
 }
 
 export default function ImportCSVPage() {
-  const supabase = supabaseBrowser();
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [results, setResults] = useState<RowResult[]>([]);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
-
-  // Preloaded DB lookups
-  const [allGenres, setAllGenres] = useState<Lookup[]>([]);
-  const [allLanguages, setAllLanguages] = useState<Lookup[]>([]);
-  const [allArtists, setAllArtists] = useState<Lookup[]>([]);
-
-  useEffect(() => {
-    Promise.all([
-      supabase.from("genres").select("id, name"),
-      supabase.from("languages").select("id, name"),
-      supabase.from("artists").select("id, name").limit(10000),
-    ]).then(([g, l, a]) => {
-      setAllGenres(g.data ?? []);
-      setAllLanguages(l.data ?? []);
-      setAllArtists(a.data ?? []);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -86,168 +52,36 @@ export default function ImportCSVPage() {
     reader.readAsText(file);
   }
 
-  async function findOrCreatePerson(name: string, table: "people" | "artists", cache: Lookup[]): Promise<string | null> {
-    const cached = cache.find((p) => p.name.toLowerCase() === name.toLowerCase());
-    if (cached) return cached.id;
-    // Check DB before inserting to avoid unique constraint failures
-    const { data: found } = await supabase.from(table).select("id, name").ilike("name", name).maybeSingle();
-    if (found) { cache.push(found); return found.id; }
-    const { data: created } = await supabase.from(table).insert({ name }).select("id, name").single();
-    if (created) cache.push(created);
-    return created?.id ?? null;
-  }
-
+  // Each row goes through the same path as a user adding a song: Spotify match,
+  // the same-song duplicate check, "added by" recorded, then background
+  // enrichment (about 4¢ a song).
   async function runImport() {
     setRunning(true);
     const current: RowResult[] = rows.map(() => ({ status: "pending" }));
     setResults([...current]);
 
-    // Mutable copies of lookup caches so new entries persist across rows
-    const artistCache = [...allArtists];
-    const peopleCache: Lookup[] = [];
-
     for (let i = 0; i < rows.length; i++) {
       const { title, artist } = rows[i];
       current[i] = { status: "running" };
       setResults([...current]);
-
       try {
-        // Fast pre-check on raw input — avoids enrichment cost for obvious duplicates
-        const rawNormArtist = artist?.trim() ?? "";
-        let preQuery = supabase.from("songs").select("id").ilike("title", title);
-        preQuery = rawNormArtist
-          ? preQuery.ilike("display_artist", rawNormArtist)
-          : preQuery.is("display_artist", null);
-        const { data: preExisting } = await preQuery.limit(1).maybeSingle();
-
-        if (preExisting) {
-          current[i] = { status: "skipped", reason: "Already in database" };
-          setResults([...current]);
-          setProgress(i + 1);
-          continue;
-        }
-
-        // Enrich
-        const res = await fetch(
-          `/api/enrich?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&mode=import`
-        );
-        const data = await res.json();
-        const mb = data.musicbrainz;
-        const genius = data.genius;
-        const spotifyGenres: string[] = data.spotify?.genres ?? [];
-        const lastfmTags: string[] = data.lastfm?.tags ?? [];
-
-        const finalTitle: string = mb?.title ?? title;
-        const composerNames: string[] = mb?.composers ?? [];
-        const lyricistNames: string[] = mb?.lyricists ?? [];
-        const primaryYear: number | null = mb?.year ?? null;
-        const langCodes: string[] = mb?.languages ?? [];
-
-        // Primary display_artist: first topArtist name, or passed-in artist
-        const primaryArtistName = mb?.display_artist ?? artist ?? null;
-
-        // Post-enrichment check: match on title_normalized (punctuation-stripped) so that
-        // "Johnny B. Goode" matches "Johnny B Goode", "Don't Think Twice, It's Alright" matches
-        // "Don't Think Twice It's Alright", etc.
-        const normalizedTitle = finalTitle.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-        const { data: postExisting } = await supabase
-          .from("songs")
-          .select("id, title, display_artist")
-          .eq("title_normalized", normalizedTitle)
-          .limit(1)
-          .maybeSingle();
-
-        if (postExisting) {
-          const matchDesc = postExisting.display_artist
-            ? `"${postExisting.title}" — ${postExisting.display_artist}`
-            : `"${postExisting.title}"`;
-          current[i] = { status: "skipped", reason: `Possible duplicate of ${matchDesc}` };
-          setResults([...current]);
-          setProgress(i + 1);
-          continue;
-        }
-        let slug = generateSlug(finalTitle, [...composerNames, ...lyricistNames]);
-        const { data: slugConflict } = await supabase.from("songs").select("id").eq("slug", slug).maybeSingle();
-        if (slugConflict) slug = `${slug}-${Date.now()}`;
-
-        // Create song
-        const { data: song, error: songErr } = await supabase
-          .from("songs")
-          .insert({
-            title: finalTitle,
-            display_artist: primaryArtistName || null,
-            slug,
-            genius_url: genius?.lyrics_url ?? null,
-            updated_at: new Date().toISOString(),
-          })
-          .select("id")
-          .single();
-
-        if (songErr || !song) throw new Error(songErr?.message ?? "Failed to insert song");
-
-        // Recording artist — just the primary (standardized) artist with year
-        if (primaryArtistName) {
-          const artistId = await findOrCreatePerson(primaryArtistName, "artists", artistCache);
-          if (artistId) {
-            await supabase.from("song_recording_artists").insert({
-              song_id: song.id,
-              artist_id: artistId,
-              year: primaryYear,
-              position: 0,
-              spotify_url: data.spotify?.spotify_url ?? null,
-            });
-          }
-        }
-
-        // Composers & lyricists
-        const composerIds = (await Promise.all(composerNames.map((n) => findOrCreatePerson(n, "people", peopleCache)))).filter(Boolean) as string[];
-        const lyricistIds = (await Promise.all(lyricistNames.map((n) => findOrCreatePerson(n, "people", peopleCache)))).filter(Boolean) as string[];
-        if (composerIds.length) {
-          await supabase.from("song_composers").insert(composerIds.map((id) => ({ song_id: song.id, person_id: id })));
-        }
-        if (lyricistIds.length) {
-          await supabase.from("song_lyricists").insert(lyricistIds.map((id) => ({ song_id: song.id, person_id: id })));
-        }
-
-        // Genres — only match existing DB genres (case-insensitive)
-        const allGenreNames = [...new Set([...spotifyGenres, ...lastfmTags].map((g) => g.toLowerCase()))];
-        const matchedGenreIds = allGenres
-          .filter((g) => allGenreNames.includes(g.name.toLowerCase()))
-          .map((g) => g.id);
-        if (matchedGenreIds.length) {
-          await supabase.from("song_genres").insert(matchedGenreIds.map((id) => ({ song_id: song.id, genre_id: id })));
-        }
-
-        // Languages — map ISO 639 codes to DB language names
-        const langIds = langCodes
-          .map((code) => {
-            const name = LANG_CODE_MAP[code.toLowerCase()];
-            if (!name) return null;
-            return allLanguages.find((l) => l.name.toLowerCase() === name.toLowerCase())?.id ?? null;
-          })
-          .filter((id): id is string => !!id);
-        const uniqueLangIds = [...new Set(langIds)];
-        if (uniqueLangIds.length) {
-          await supabase.from("song_languages").insert(uniqueLangIds.map((id) => ({ song_id: song.id, language_id: id })));
-        }
-
-        const detail = [
-          composerNames.length ? `composers: ${composerNames.join(", ")}` : null,
-          primaryArtistName ? `artist: ${primaryArtistName}` : null,
-          matchedGenreIds.length ? `${matchedGenreIds.length} genre(s)` : null,
-          uniqueLangIds.length ? `language` : null,
-          genius?.lyrics_url ? `genius` : null,
-        ].filter(Boolean).join(" · ");
-
-        current[i] = { status: "added", detail: detail || "no enrichment data" };
-        setResults([...current]);
+        const res = await fetch("/api/songs/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, artist }),
+        });
+        const json = await res.json().catch(() => ({}));
+        current[i] =
+          res.status === 409
+            ? { status: "skipped", reason: "Already in the library" }
+            : res.ok
+              ? { status: "added", detail: "added — details fill in within a minute" }
+              : { status: "error", reason: json.error ?? `HTTP ${res.status}` };
       } catch (err: any) {
         current[i] = { status: "error", reason: err?.message ?? "Unknown error" };
-        setResults([...current]);
       }
-
+      setResults([...current]);
       setProgress(i + 1);
-      if (i < rows.length - 1) await new Promise((r) => setTimeout(r, 1100));
     }
 
     setRunning(false);

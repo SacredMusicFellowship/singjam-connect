@@ -303,7 +303,7 @@ export default function RepertoirePage() {
         if (repertoireRes.error) throw repertoireRes.error;
 
         setSingingVoice((p as any)?.singing_voice ?? null);
-        setCanAddCharts(["admin", "song_editor"].includes((p as any)?.role));
+        setCanAddCharts(true);
         setUserSets(setsAcceptingSongs([...(setsJson.owned ?? []), ...(setsJson.collaborating ?? [])]));
         const initialSuggestions = (suggestionsRes.data ?? []) as SuggestionResult[];
         setSuggestions(initialSuggestions);
