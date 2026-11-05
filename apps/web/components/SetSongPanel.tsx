@@ -362,14 +362,14 @@ export default function SetSongPanel({
                   <button
                     onClick={submitMissingSong}
                     disabled={missingSongBusy || !missingSongTitle.trim()}
-                    className="rounded-xl bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                    className="rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
                   >
                     {missingSongBusy ? "Adding…" : "Add song"}
                   </button>
                   <button
                     onClick={() => setShowMissingSong(false)}
                     disabled={missingSongBusy}
-                    className="rounded-xl border border-zinc-200 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
+                    className="rounded-full border border-zinc-200 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
                   >
                     Cancel
                   </button>

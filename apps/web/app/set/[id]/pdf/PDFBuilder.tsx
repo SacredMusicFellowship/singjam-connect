@@ -532,7 +532,7 @@ export default function PDFBuilder({ setName, songs }: { setName: string; songs:
             href={pdfInstance.url ?? "#"}
             download={`${setName}.pdf`}
             onClick={(e) => { if (!pdfInstance.url) e.preventDefault(); }}
-            className={`w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors ${pdfInstance.url && !pdfInstance.loading ? "hover:bg-amber-400" : "opacity-50 pointer-events-none"}`}
+            className={`w-full flex items-center justify-center gap-2 rounded-full bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors ${pdfInstance.url && !pdfInstance.loading ? "hover:bg-amber-400" : "opacity-50 pointer-events-none"}`}
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -546,7 +546,7 @@ export default function PDFBuilder({ setName, songs }: { setName: string; songs:
               win?.addEventListener("load", () => win.print());
             }}
             disabled={!pdfInstance.url || pdfInstance.loading}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-30 transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-30 transition-colors"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />

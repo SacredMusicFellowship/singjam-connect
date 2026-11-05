@@ -106,7 +106,7 @@ function RoleSelect({
         disabled={isSelf || saving}
         aria-label={`Role for ${fullName(user)}`}
         title={isSelf ? "You can't change your own role — ask another admin." : undefined}
-        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
+        className="w-full rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
       >
         {/* A role outside the grantable set (e.g. a retired enum label) still needs an option to show */}
         {!isUserRole(role) && <option value={role}>{roleLabel(role)}</option>}
@@ -236,7 +236,7 @@ export default function AdminUsersTable({
           id="admin-users-sort"
           value={sort.col}
           onChange={(e) => toggleSort(e.target.value as SortCol)}
-          className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-700"
+          className="flex-1 rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-700"
         >
           {COLUMNS.map((col) => (
             <option key={col.key} value={col.key}>
@@ -246,7 +246,7 @@ export default function AdminUsersTable({
         </select>
         <button
           onClick={() => setSort((prev) => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
-          className="rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-500"
+          className="rounded-full border border-slate-200 px-2 py-1 text-sm text-slate-500"
           aria-label={sort.dir === "asc" ? "Sort ascending" : "Sort descending"}
         >
           {sort.dir === "asc" ? "↑" : "↓"}

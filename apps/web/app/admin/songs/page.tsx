@@ -13,7 +13,7 @@ export default function AdminSongsPage() {
         <h1 className="text-xl font-semibold text-slate-900">Songs</h1>
         <Link
           href="/admin/songs/new"
-          className="rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-400"
+          className="rounded-full bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-400"
         >
           + Add song
         </Link>

@@ -50,7 +50,7 @@ export default function SetRequestAccess({
         {!isLoggedIn ? (
           <Link
             href={`/auth?next=${encodeURIComponent(setPath)}`}
-            className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+            className="inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             {inviteToken ? "Sign in" : "Sign in to request access"}
           </Link>
@@ -64,7 +64,7 @@ export default function SetRequestAccess({
           <button
             onClick={handleRequest}
             disabled={status === "sending"}
-            className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {status === "sending" ? "Requesting…" : "Request access"}
           </button>

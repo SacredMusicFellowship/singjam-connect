@@ -312,7 +312,7 @@ export default function JamCard({
           href={jam.tickets_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+          className="rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
         >
           Get tickets ↗
         </a>

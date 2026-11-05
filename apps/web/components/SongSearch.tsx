@@ -222,7 +222,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
             <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} align="left" />
             <button
               onClick={() => setFiltersOpen((o) => !o)}
-              className={`h-7 flex items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors ${
+              className={`h-7 flex items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                 activeFilterCount > 0
                   ? "border-amber-400 bg-amber-50 text-amber-700"
                   : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"

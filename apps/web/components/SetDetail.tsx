@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
+import { canRemoveSetSong, jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -81,6 +81,7 @@ export default function SetDetail({
   const [songKnowledge, setSongKnowledge] = useState(initialSongKnowledge);
   const [userSingingVoice, setUserSingingVoice] = useState(currentUserSingingVoice ?? null);
   const [collaborators, setCollaborators] = useState(initialCollaborators);
+  const myRole = collaborators.find((c: any) => c.user_id === currentUserId && c.status === "accepted")?.role;
   const [accessRequests, setAccessRequests] = useState(initialAccessRequests);
   const [editingName, setEditingName] = useState(false);
   const editingNameRef = useRef(editingName);
@@ -338,7 +339,7 @@ export default function SetDetail({
             supabase
               .from("set_songs")
               .select(
-                "id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
+                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
               )
               .eq("id", row.id)
               .single(),
@@ -549,22 +550,34 @@ export default function SetDetail({
   }
 
   function handleLeadersChanged(id: string, leaderUserIds: string[]) {
-    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: leaderUserIds } : s));
     const entry = songs.find((s) => s.id === id);
     if (!entry) return;
+    const previousLeaderIds = entry.leader_user_ids ?? [];
+    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: leaderUserIds } : s));
     if (currentUserId && leaderUserIds.includes(currentUserId) && !userRepertoire.has(entry.song_id)) {
       setUserRepertoire((prev) => new Map(prev).set(entry.song_id, "lead"));
     }
+    // Guests can only add or remove themselves; the server merges that into the
+    // current leaders so it can't undo a change someone else just made.
+    const body = canManage
+      ? { leader_user_ids: leaderUserIds }
+      : { self_leader: !!currentUserId && leaderUserIds.includes(currentUserId) };
     fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ leader_user_ids: leaderUserIds }),
+      body: JSON.stringify(body),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
-        if (json && "key_note" in json) {
-          setSongs((prev) => prev.map((s) => s.id === id ? { ...s, key_note: json.key_note } : s));
+        if (!json) {
+          setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: previousLeaderIds } : s));
+          return;
         }
+        setSongs((prev) => prev.map((s) => s.id === id ? {
+          ...s,
+          ...("leader_user_ids" in json ? { leader_user_ids: json.leader_user_ids } : {}),
+          ...("key_note" in json ? { key_note: json.key_note } : {}),
+        } : s));
       });
   }
 
@@ -578,6 +591,41 @@ export default function SetDetail({
       avatar_url: c.profiles?.avatar_url ?? null,
     })),
   ];
+
+  function renderSongRow(song: Song, index: number) {
+    const knowledgeForSong = songKnowledgeMap.get(song.song_id) ?? new Map<string, string>();
+    const hasEligible = [...knowledgeForSong.values()].some((c) => c === "lead");
+    const rowParticipants = isPublicViewer
+      ? []
+      : participants.filter((p) => knowledgeForSong.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id));
+    return (
+      <SetSongRow
+        song={song}
+        index={index}
+        canManage={canManage}
+        canRemove={canRemoveSetSong(isOwner, myRole, song.added_by_user_id, currentUserId)}
+        isAdmin={isAdmin}
+        isSongEditor={isSongEditor}
+        isPublicViewer={isPublicViewer}
+        participants={rowParticipants}
+        hasEligible={hasEligible}
+        participantKnowledge={knowledgeForSong}
+        participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
+        currentUserId={currentUserId}
+        currentUserSingingVoice={userSingingVoice}
+        myConfidence={userRepertoire.get(song.song_id) ?? null}
+        onMediaAdded={handleMediaAdded}
+        onKeyChanged={handleKeyChanged}
+        onNotesChanged={handleNotesChanged}
+        onLeadersChanged={handleLeadersChanged}
+        onAddToRepertoire={handleAddToRepertoire}
+        onVoiceUpdated={setUserSingingVoice}
+        onTogglePlayed={handleTogglePlayed}
+        onRemove={handleRemoveSong}
+        signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
+      />
+    );
+  }
 
   const sortedSongs = useMemo(() => {
     if (songSort === "custom") return songs;
@@ -904,7 +952,7 @@ export default function SetDetail({
                 type="text"
                 value={nameValue}
                 onChange={(e) => setNameValue(e.target.value)}
-                className="w-full text-xl font-semibold rounded-lg border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="w-full text-xl font-semibold rounded-xl border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 autoFocus
               />
               <textarea
@@ -912,19 +960,19 @@ export default function SetDetail({
                 onChange={(e) => setDescValue(e.target.value)}
                 placeholder="Description (optional)"
                 rows={2}
-                className="w-full text-sm rounded-lg border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
+                className="w-full text-sm rounded-xl border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleSaveName}
                   disabled={savingName || !nameValue.trim()}
-                  className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
                 >
                   {savingName ? "Saving…" : "Save"}
                 </button>
                 <button
                   onClick={() => { setEditingName(false); setNameValue(set.name); setDescValue(set.description ?? ""); }}
-                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -956,14 +1004,14 @@ export default function SetDetail({
             <button
               onClick={handleCopySet}
               disabled={copying}
-              className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
               {copying ? "Copying…" : "Copy to my sets"}
             </button>
           ) : (
             <a
               href={`/auth?next=${setPath(set)}`}
-              className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+              className="shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
             >
               Sign in to copy
             </a>
@@ -1175,21 +1223,20 @@ export default function SetDetail({
         )}
       </ul>}
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        {canEdit && (
-          <>
+      {/* Invite belongs with the collaborators above, not the song tools below. */}
+      {canEdit && (
+        <div className="space-y-2">
             <button
               onClick={() => setShowInvitePanel((v) => !v)}
-              className="flex items-center gap-1.5 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+              className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${showInvitePanel ? "border-zinc-400 bg-zinc-50 text-zinc-900" : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"}`}
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
               </svg>
-              Invite
+              Invite collaborators
             </button>
             {showInvitePanel && (
-              <div className="basis-full">
+              <div>
                 <SetInvitePanel
                   setId={set.id}
                   canAssignCoOwner={isOwner}
@@ -1205,21 +1252,23 @@ export default function SetDetail({
                 />
               </div>
             )}
-          </>
-        )}
+        </div>
+      )}
 
+      {/* Song tools: playlists, chords, export */}
+      <div className="flex flex-wrap gap-2">
         {isAdmin ? (
           !playlistLinks.youtube ? (
             <button
               onClick={() => handleCreatePlaylist("youtube")}
               disabled={!!creatingPlaylist}
-              className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
             >
               <YoutubeIcon />
               {creatingPlaylist === "youtube" ? "Creating…" : "YouTube playlist"}
             </button>
           ) : youtubeOutdated ? (
-            <div className="flex items-center rounded-xl border border-red-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-red-200 overflow-hidden">
               <button
                 onClick={() => handleCreatePlaylist("youtube")}
                 disabled={!!creatingPlaylist}
@@ -1227,14 +1276,14 @@ export default function SetDetail({
               >
                 <YoutubeIcon />
                 <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
-                {creatingPlaylist === "youtube" ? "Updating…" : "Update playlist"}
+                {creatingPlaylist === "youtube" ? "Updating…" : "Update"}
               </button>
               <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors border-l border-red-200">
                 Open →
               </a>
             </div>
           ) : (
-            <div className="flex items-center rounded-xl border border-red-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-red-200 overflow-hidden">
               <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
                 <YoutubeIcon />
                 Open playlist
@@ -1250,7 +1299,7 @@ export default function SetDetail({
             </div>
           )
         ) : playlistLinks.youtube ? (
-          <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
+          <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
             <YoutubeIcon />
             YouTube playlist →
           </a>
@@ -1261,13 +1310,13 @@ export default function SetDetail({
             <button
               onClick={() => handleCreatePlaylist("spotify")}
               disabled={!!creatingPlaylist}
-              className="flex items-center gap-1.5 rounded-xl border border-green-200 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-green-200 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors"
             >
               <SpotifyIcon />
               {creatingPlaylist === "spotify" ? "Creating…" : "Spotify playlist"}
             </button>
           ) : spotifyOutdated ? (
-            <div className="flex items-center rounded-xl border border-green-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-green-200 overflow-hidden">
               <button
                 onClick={() => handleCreatePlaylist("spotify")}
                 disabled={!!creatingPlaylist}
@@ -1275,14 +1324,14 @@ export default function SetDetail({
               >
                 <SpotifyIcon />
                 <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
-                {creatingPlaylist === "spotify" ? "Updating…" : "Update playlist"}
+                {creatingPlaylist === "spotify" ? "Updating…" : "Update"}
               </button>
               <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-green-500 hover:bg-green-50 transition-colors border-l border-green-200">
                 Open →
               </a>
             </div>
           ) : (
-            <div className="flex items-center rounded-xl border border-green-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-green-200 overflow-hidden">
               <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors">
                 <SpotifyIcon />
                 Open playlist
@@ -1298,7 +1347,7 @@ export default function SetDetail({
             </div>
           )
         ) : playlistLinks.spotify ? (
-          <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-xl border border-green-200 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors">
+          <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-green-200 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors">
             <SpotifyIcon />
             Spotify playlist →
           </a>
@@ -1307,7 +1356,7 @@ export default function SetDetail({
         {canManage ? (
           ugPlaylistUrl ? (
             <>
-              <div className="flex items-center rounded-xl border border-amber-200 overflow-hidden">
+              <div className="flex items-center rounded-full border border-amber-200 overflow-hidden">
                 <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
                   <UltimateGuitarIcon />
                   UG playlist
@@ -1332,13 +1381,13 @@ export default function SetDetail({
                   <button
                     onClick={handleSaveUgPlaylist}
                     disabled={!ugPlaylistInput.trim()}
-                    className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                    className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
                   >
                     Save
                   </button>
                   <button
                     onClick={() => { setEditingUgPlaylist(false); setUgPlaylistInput(""); }}
-                    className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                    className="shrink-0 rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                   >
                     Cancel
                   </button>
@@ -1357,13 +1406,13 @@ export default function SetDetail({
               <button
                 onClick={handleSaveUgPlaylist}
                 disabled={!ugPlaylistInput.trim()}
-                className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
               >
                 Save
               </button>
               <button
                 onClick={() => { setEditingUgPlaylist(false); setUgPlaylistInput(""); }}
-                className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                className="shrink-0 rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
               >
                 Cancel
               </button>
@@ -1371,14 +1420,14 @@ export default function SetDetail({
           ) : (
             <button
               onClick={() => setEditingUgPlaylist(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
             >
               <UltimateGuitarIcon />
               UG playlist
             </button>
           )
         ) : ugPlaylistUrl ? (
-          <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-xl border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
+          <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
             <UltimateGuitarIcon />
             UG playlist →
           </a>
@@ -1386,7 +1435,7 @@ export default function SetDetail({
 
         <button
           onClick={() => setShowCsvOptions((v) => !v)}
-          className={`hidden md:flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${showCsvOptions ? "border-zinc-400 bg-zinc-50 text-zinc-900" : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"}`}
+          className={`hidden md:flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${showCsvOptions ? "border-zinc-400 bg-zinc-50 text-zinc-900" : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"}`}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1412,13 +1461,13 @@ export default function SetDetail({
             <div className="flex gap-2">
               <button
                 onClick={handleCSVDownload}
-                className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
+                className="rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
               >
                 Download
               </button>
               <button
                 onClick={() => setShowCsvOptions(false)}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
               >
                 Cancel
               </button>
@@ -1429,7 +1478,7 @@ export default function SetDetail({
           href={`/set/${set.id}/pdf${songSort !== "custom" ? `?order=${sortedSongs.map((s) => s.song_id).join(",")}` : ""}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="hidden md:flex items-center gap-1.5 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+          className="hidden md:flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
@@ -1483,86 +1532,21 @@ export default function SetDetail({
         )}
 
         {songs.length > 0 && (
-          canEdit && !songListFilter && songSort === "custom" ? (
+          canManage && !songListFilter && songSort === "custom" ? (
             <SetSortableSongList
               contextId={set.id}
               items={songs}
               onMove={handleMoveSong}
-              renderRow={(i) => {
-                const song = songs[i];
-                const knowledgeForSong = songKnowledgeMap.get(song.song_id) ?? new Map<string, string>();
-                const knowledgeUserIds = new Set(knowledgeForSong.keys());
-                const hasEligible = [...knowledgeForSong.values()].some((c) => c === "lead");
-                const rowParticipants = participants.filter((p) =>
-                  knowledgeUserIds.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id)
-                );
-                return (
-                  <SetSongRow
-                    song={song}
-                    index={i}
-                    canEdit={canEdit}
-                    isAdmin={isAdmin}
-                    isSongEditor={isSongEditor}
-                    isPublicViewer={isPublicViewer}
-                    participants={rowParticipants}
-                    hasEligible={hasEligible}
-                    participantKnowledge={knowledgeForSong}
-                    participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
-                    currentUserId={currentUserId}
-                    currentUserSingingVoice={userSingingVoice}
-                    myConfidence={userRepertoire.get(song.song_id) ?? null}
-                    onRemove={handleRemoveSong}
-                    onTogglePlayed={handleTogglePlayed}
-                    onMediaAdded={handleMediaAdded}
-                    onKeyChanged={handleKeyChanged}
-                    onNotesChanged={handleNotesChanged}
-                    onLeadersChanged={handleLeadersChanged}
-                    onAddToRepertoire={handleAddToRepertoire}
-                    onVoiceUpdated={setUserSingingVoice}
-                    signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
-                  />
-                );
-              }}
+              renderRow={(i) => renderSongRow(songs[i], i)}
             />
           ) : (
             visibleSongs.map((song, i) => {
               const originalIndex = songs.indexOf(song);
               const displayNumber = songSort === "custom" ? originalIndex + 1 : i + 1;
-              const knowledgeForSong = songKnowledgeMap.get(song.song_id) ?? new Map<string, string>();
-              const knowledgeUserIds = new Set(knowledgeForSong.keys());
-              const hasEligible = [...knowledgeForSong.values()].some((c) => c === "lead");
-              const rowParticipants = isPublicViewer
-                ? []
-                : participants.filter((p) =>
-                    knowledgeUserIds.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id)
-                  );
               return (
-                <div key={song.id} className="flex items-start gap-2 sm:gap-3 rounded-xl border border-zinc-200 bg-white px-2 sm:px-4 py-2.5 sm:py-3">
+                <div key={song.id} className={`flex items-start gap-2 sm:gap-3 rounded-xl border border-zinc-200 px-2 sm:px-4 py-2.5 sm:py-3 ${song.played ? "bg-zinc-50" : "bg-white"}`}>
                   <span className="shrink-0 mt-0.5 w-6 sm:w-8 text-center text-[10px] sm:text-xs font-semibold text-zinc-300">{displayNumber}</span>
-                  <SetSongRow
-                    song={song}
-                    index={originalIndex}
-                    canEdit={canEdit}
-                    isAdmin={isAdmin}
-                    isSongEditor={isSongEditor}
-                    isPublicViewer={isPublicViewer}
-                    participants={rowParticipants}
-                    hasEligible={hasEligible}
-                    participantKnowledge={knowledgeForSong}
-                    participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
-                    currentUserId={currentUserId}
-                    currentUserSingingVoice={userSingingVoice}
-                    myConfidence={userRepertoire.get(song.song_id) ?? null}
-                    onMediaAdded={handleMediaAdded}
-                    onKeyChanged={handleKeyChanged}
-                    onNotesChanged={handleNotesChanged}
-                    onLeadersChanged={handleLeadersChanged}
-                    onAddToRepertoire={handleAddToRepertoire}
-                    onVoiceUpdated={setUserSingingVoice}
-                    onTogglePlayed={handleTogglePlayed}
-                    onRemove={handleRemoveSong}
-                    signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
-                  />
+                  {renderSongRow(song, originalIndex)}
                 </div>
               );
             })
@@ -1599,13 +1583,13 @@ export default function SetDetail({
                 <button
                   onClick={handleDeleteSet}
                   disabled={deleting}
-                  className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-50 transition-colors"
                 >
                   {deleting ? "Deleting…" : "Yes, delete"}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -1625,3 +1609,4 @@ export default function SetDetail({
     </div>
   );
 }
+

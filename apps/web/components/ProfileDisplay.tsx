@@ -217,7 +217,7 @@ export default function ProfileDisplay({
           <>
             <Link
               href="/account"
-              className="flex-1 rounded-xl border border-zinc-200 px-4 py-2.5 text-center text-sm text-zinc-600 hover:bg-zinc-50 sm:flex-none"
+              className="flex-1 rounded-full border border-zinc-200 px-4 py-2.5 text-center text-sm text-zinc-600 hover:bg-zinc-50 sm:flex-none"
             >
               Edit profile
             </Link>

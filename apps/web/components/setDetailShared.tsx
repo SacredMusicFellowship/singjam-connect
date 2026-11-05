@@ -11,6 +11,7 @@ export type Song = {
   notes: string | null;
   played: boolean;
   leader_user_ids: string[];
+  added_by_user_id?: string | null;
   songs: {
     title: string;
     display_artist: string | null;

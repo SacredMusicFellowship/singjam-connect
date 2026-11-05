@@ -1,5 +1,6 @@
 "use client";
 
+import { CONFIDENCE_STYLES, type ConfidenceLevel } from "@singjam/core";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -10,6 +11,7 @@ import MySongNotes from "@/components/MySongNotes";
 import MyKeySelect from "@/components/MyKeySelect";
 import UgBackTip from "@/components/UgBackTip";
 import AddToSetPanel from "@/components/AddToSetPanel";
+import ChordChartSlot from "@/components/ChordChartSlot";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
   return (
@@ -26,14 +28,15 @@ function TagRow({ label, tags }: { label: string; tags: string[] }) {
   );
 }
 
-function JammerRow({ label, jammers }: { label: string; jammers: { name: string; username: string }[] }) {
+function JammerRow({ level, label, jammers }: { level: ConfidenceLevel; label: string; jammers: { name: string; username: string }[] }) {
+  const style = CONFIDENCE_STYLES[level];
   return (
     <div className="flex flex-wrap items-baseline gap-2">
-      <span className="text-xs font-medium text-slate-500 w-16 shrink-0">{label}</span>
+      <span className={`text-xs font-medium w-16 shrink-0 ${style.label}`}>{label}</span>
       <div className="flex flex-wrap gap-1.5">
         {jammers.map((j, i) => (
           <Link key={i} href={`/u/${j.username}`}
-            className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-slate-200">
+            className={`rounded-full px-2.5 py-0.5 text-xs font-medium hover:opacity-80 ${style.pill} ${style.pillText}`}>
             {j.name}
           </Link>
         ))}
@@ -45,6 +48,7 @@ function JammerRow({ label, jammers }: { label: string; jammers: { name: string;
 type SongData = {
   song: any;
   isAdmin: boolean;
+  isSongEditor: boolean;
   isLoggedIn: boolean;
   singingVoice: string | null;
   userSongConfidence: string | null;
@@ -164,6 +168,7 @@ export default function SongPageContent() {
 
       const loadedConfidence = (userSongRes.data as any)?.confidence ?? null;
       const isAdmin = (profileRes.data as any)?.role === "admin";
+      const isSongEditor = (profileRes.data as any)?.role === "song_editor";
       const isLoggedIn = user !== null;
       if (profileRes.data) {
         const p = profileRes.data as any;
@@ -178,6 +183,7 @@ export default function SongPageContent() {
       setData({
         song,
         isAdmin,
+        isSongEditor,
         isLoggedIn,
         singingVoice: (profileRes.data as any)?.singing_voice ?? null,
         userSongConfidence: loadedConfidence,
@@ -269,7 +275,7 @@ export default function SongPageContent() {
     );
   }
 
-  const { song, isAdmin, isLoggedIn, singingVoice, userSongConfidence, popularity } = data;
+  const { song, isAdmin, isSongEditor, isLoggedIn, singingVoice, userSongConfidence, popularity } = data;
 
   const composers = sortByLastName((song.song_composers as any[]).map((x: any) => x.people?.name).filter(Boolean));
   const lyricists = sortByLastName((song.song_lyricists as any[]).map((x: any) => x.people?.name).filter(Boolean));
@@ -296,12 +302,28 @@ export default function SongPageContent() {
   const tonalityPills = song.tonality ? song.tonality.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
   const meterPills = song.meter ? song.meter.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
 
+  function handleChartAdded(url: string) {
+    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url } } : prev));
+  }
+
   return (
     <div className="space-y-6 pb-16">
       <div>
         <div>
           <div className="flex items-start justify-between gap-4">
-            <h1 className="text-2xl font-bold text-slate-900">{song.title}</h1>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-bold text-slate-900">{song.title}</h1>
+              {(isAdmin || isSongEditor) && (
+                // Admins open the full song editor; song editors manage chart and
+                // lyrics links from the Song Links table, opened on this song.
+                <Link
+                  href={isAdmin ? `/admin/songs/${song.slug ?? song.id}` : `/song-editor?q=${encodeURIComponent(song.title)}`}
+                  className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Edit
+                </Link>
+              )}
+            </div>
             <div className="flex shrink-0 items-center gap-3">
               {popularity > 0 && (
                 <span className="text-sm text-slate-400">{popularity} {popularity === 1 ? "jammer" : "jammers"}</span>
@@ -321,7 +343,7 @@ export default function SongPageContent() {
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
-              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
+              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
               {confidence && (
                 <AddToSetPanel
                   songId={song.id}
@@ -333,30 +355,26 @@ export default function SongPageContent() {
                   onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
                 />
               )}
+              {confidence && (
+                <ChordChartSlot
+                  songId={song.id}
+                  url={song.chord_chart_url}
+                  canAdd={isAdmin || isSongEditor}
+                  size="md"
+                  onAdded={handleChartAdded}
+                />
+              )}
             </RepertoireButton>
-            {isAdmin && (
-              <Link href={`/admin/songs/${song.slug ?? song.id}`}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
-                Edit
-              </Link>
+            {!confidence && (
+              <ChordChartSlot
+                songId={song.id}
+                url={song.chord_chart_url}
+                canAdd={isAdmin || isSongEditor}
+                size="md"
+                onAdded={handleChartAdded}
+              />
             )}
           </div>
-          {(song.chord_chart_url || song.genius_url) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {song.chord_chart_url && (
-                <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Chords ↗
-                </a>
-              )}
-              {song.genius_url && (
-                <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Lyrics ↗
-                </a>
-              )}
-            </div>
-          )}
           {confidence && userId && <MySongNotes key={song.id} songId={song.id} userId={userId} className="mt-3" />}
           {song.chord_chart_url && <UgBackTip className="mt-3" />}
         </div>
@@ -475,7 +493,7 @@ export default function SongPageContent() {
         );
       })()}
 
-      {(song.first_line || song.hook) && (
+      {(song.first_line || song.hook || song.genius_url) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
           {song.first_line && (
@@ -489,6 +507,12 @@ export default function SongPageContent() {
               <span className="font-medium text-slate-500">Hook: </span>
               <em>{song.hook}</em>
             </p>
+          )}
+          {song.genius_url && (
+            <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
+              className="inline-block rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+              Full lyrics ↗
+            </a>
           )}
         </section>
       )}
@@ -529,9 +553,9 @@ export default function SongPageContent() {
             </div>
           ) : songUsers && (songUsers.lead.length > 0 || songUsers.support.length > 0 || songUsers.learn.length > 0) ? (
             <div className="space-y-2">
-              {songUsers.lead.length > 0 && <JammerRow label="Lead" jammers={songUsers.lead} />}
-              {songUsers.support.length > 0 && <JammerRow label="Support" jammers={songUsers.support} />}
-              {songUsers.learn.length > 0 && <JammerRow label="Learn" jammers={songUsers.learn} />}
+              {songUsers.lead.length > 0 && <JammerRow level="lead" label="Lead" jammers={songUsers.lead} />}
+              {songUsers.support.length > 0 && <JammerRow level="support" label="Support" jammers={songUsers.support} />}
+              {songUsers.learn.length > 0 && <JammerRow level="learn" label="Learning" jammers={songUsers.learn} />}
             </div>
           ) : (
             <p className="text-sm text-slate-400">No jammers have added this song yet.</p>
@@ -559,7 +583,7 @@ export default function SongPageContent() {
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
-            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
+            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
             {confidence && (
               <AddToSetPanel
                 songId={song.id}
@@ -571,12 +595,24 @@ export default function SongPageContent() {
                 onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
               />
             )}
+            {confidence && (
+              <ChordChartSlot
+                songId={song.id}
+                url={song.chord_chart_url}
+                canAdd={isAdmin || isSongEditor}
+                size="md"
+                onAdded={handleChartAdded}
+              />
+            )}
           </RepertoireButton>
-          {isAdmin && (
-            <Link href={`/admin/songs/${song.slug ?? song.id}`}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
-              Edit
-            </Link>
+          {!confidence && (
+            <ChordChartSlot
+              songId={song.id}
+              url={song.chord_chart_url}
+              canAdd={isAdmin || isSongEditor}
+              size="md"
+              onAdded={handleChartAdded}
+            />
           )}
         </div>
         <Link href={confidence ? "/repertoire" : "/search"}
@@ -596,7 +632,7 @@ export default function SongPageContent() {
                 <button
                   onClick={handleRemoveFromRepertoire}
                   disabled={removing}
-                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
                 >
                   {removing ? "Removing…" : "Remove"}
                 </button>
@@ -608,7 +644,7 @@ export default function SongPageContent() {
           ) : (
             <button
               onClick={() => setConfirmingRemove(true)}
-              className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+              className="rounded-full border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
             >
               Remove from my repertoire
             </button>

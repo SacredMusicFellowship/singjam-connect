@@ -211,7 +211,7 @@ function InstrumentSearch({
             <TouchableOpacity
               key={i}
               onPress={(e) => onSelect(i, e)}
-              className="border border-zinc-200 rounded-xl px-3 py-1.5"
+              className="border border-zinc-200 rounded-full px-3 py-1.5"
             >
               <Text className="text-sm text-zinc-700">+ {i}</Text>
             </TouchableOpacity>
@@ -284,7 +284,7 @@ function GenreSearch({
               <TouchableOpacity
                 key={g}
                 onPress={() => onToggle(g)}
-                className={`rounded-xl border px-3 py-1.5 ${isSelected ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-200'}`}
+                className={`rounded-full border px-3 py-1.5 ${isSelected ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-200'}`}
               >
                 <Text className={`text-sm ${isSelected ? 'text-white' : 'text-zinc-700'}`}>
                   {isSelected ? `✓ ${g}` : `+ ${g}`}
@@ -692,7 +692,7 @@ export default function ProfileForm({ title, subtitle, submitLabel, onSave }: Pr
               <Text className="text-sm font-medium text-zinc-700 mb-1">City</Text>
               <TouchableOpacity
                 onPress={() => setLocationModalVisible(true)}
-                className="border border-zinc-200 rounded-xl px-4 py-3 flex-row items-center"
+                className="border border-zinc-200 rounded-full px-4 py-3 flex-row items-center"
               >
                 <Text className="text-zinc-400 mr-2">📍</Text>
                 <Text className={`flex-1 ${neighborhood ? 'text-zinc-900' : 'text-zinc-400'}`}>

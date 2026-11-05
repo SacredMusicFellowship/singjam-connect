@@ -81,7 +81,7 @@ export default function SubmitSongForm() {
         <p className="text-sm text-zinc-500">Can't find your song?</p>
         <button
           onClick={() => setOpen(true)}
-          className="mt-2 rounded-xl bg-zinc-800 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors"
+          className="mt-2 rounded-full bg-zinc-800 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors"
         >
           Add a missing song
         </button>
@@ -152,7 +152,7 @@ export default function SubmitSongForm() {
               <button
                 onClick={lookup}
                 disabled={!title.trim()}
-                className="rounded-xl bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
               >
                 Look up
               </button>
@@ -162,7 +162,7 @@ export default function SubmitSongForm() {
               <>
                 <button
                   onClick={() => submit((step as { type: "preview"; spotifyUrl: string | null }).spotifyUrl)}
-                  className="rounded-xl bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+                  className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
                 >
                   {(step as { type: "preview"; spotifyUrl: string | null }).spotifyUrl
                     ? "That's the right song — add it"
@@ -171,7 +171,7 @@ export default function SubmitSongForm() {
                 {(step as { type: "preview"; spotifyUrl: string | null }).spotifyUrl && (
                   <button
                     onClick={() => submit(null)}
-                    className="rounded-xl border border-zinc-200 px-5 py-2 text-sm text-zinc-500 hover:bg-zinc-50 transition-colors"
+                    className="rounded-full border border-zinc-200 px-5 py-2 text-sm text-zinc-500 hover:bg-zinc-50 transition-colors"
                   >
                     Wrong match — add anyway
                   </button>
@@ -181,7 +181,7 @@ export default function SubmitSongForm() {
 
             <button
               onClick={() => { setOpen(false); setTitle(""); setArtist(""); reset(); }}
-              className="rounded-xl border border-zinc-200 px-5 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
+              className="rounded-full border border-zinc-200 px-5 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
             >
               Cancel
             </button>

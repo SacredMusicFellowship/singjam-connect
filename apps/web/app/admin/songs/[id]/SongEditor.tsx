@@ -864,7 +864,7 @@ export default function SongEditor({
           <button
             onClick={handleAILookup}
             disabled={finding || !title.trim()}
-            className="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
+            className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
           >
             {finding ? "Looking up…" : "✦ Look up with AI"}
           </button>
@@ -1078,7 +1078,7 @@ export default function SongEditor({
         <button
           onClick={handleSave}
           disabled={saving || !title.trim() || !!duplicateSong}
-          className="rounded-lg bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+          className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
         >
           {saving ? "Saving…" : found ? "Save" : "Save & continue"}
         </button>
@@ -1098,7 +1098,7 @@ export default function SongEditor({
               href={`/songs/${slug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-full border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               View ↗
             </a>
@@ -1106,14 +1106,14 @@ export default function SongEditor({
           <button
             onClick={handleEnrichWithAI}
             disabled={enrichingWithAI || !song?.id}
-            className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
+            className="rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
           >
             {enrichingWithAI ? "Asking AI…" : "✦ Enrich with AI"}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-lg bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+            className="rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -1214,7 +1214,7 @@ export default function SongEditor({
             <button
               onClick={applyAISuggestions}
               disabled={acceptedFields.size === 0}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+              className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
             >
               Apply {acceptedFields.size} suggestion{acceptedFields.size !== 1 ? "s" : ""}
             </button>
@@ -1349,7 +1349,7 @@ export default function SongEditor({
             value={yearWritten}
             onChange={(e) => setYearWritten(e.target.value)}
             placeholder="e.g. 1929"
-            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-32 rounded-xl border border-slate-300 px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
           />
           <p className="mt-1 text-xs text-slate-400">Only set if different from the first recording year</p>
         </div>
@@ -1395,7 +1395,7 @@ export default function SongEditor({
           <button
             onClick={handleGetGeniusUrl}
             disabled={openingGenius || !title.trim()}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-40 flex items-center gap-1.5"
+            className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-40 flex items-center gap-1.5"
           >
             {openingGenius ? "Finding…" : "♪ Get Genius URL"}
           </button>
@@ -1406,7 +1406,7 @@ export default function SongEditor({
               className="input flex-1" placeholder="https://genius.com/…" />
             {geniusUrl && (
               <a href={geniusUrl} target="_blank" rel="noopener noreferrer"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>
             )}
@@ -1418,7 +1418,7 @@ export default function SongEditor({
               className="input flex-1" placeholder="https://…" />
             {chordChartUrl && (
               <a href={chordChartUrl} target="_blank" rel="noopener noreferrer"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>
             )}
@@ -1441,7 +1441,7 @@ export default function SongEditor({
           <button
             onClick={handleFindTags}
             disabled={findingTags || !title.trim()}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-40"
+            className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-40"
           >
             {findingTags ? "Finding…" : "✦ Find more information"}
           </button>
@@ -1464,7 +1464,7 @@ export default function SongEditor({
               className="input flex-1"
             />
             <button onClick={addAltTitle}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700">
+              className="rounded-full bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700">
               Add
             </button>
           </div>
@@ -1499,7 +1499,7 @@ export default function SongEditor({
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+              className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -1508,7 +1508,7 @@ export default function SongEditor({
                 href={`/songs/${slug}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 View ↗
               </a>
@@ -1522,7 +1522,7 @@ export default function SongEditor({
               router.push("/admin/songs");
               router.refresh();
             }}
-            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+            className="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
           >
             Delete song
           </button>
@@ -1580,7 +1580,7 @@ function SortableArtistRow({
             value={e.year ?? ""}
             onChange={(ev) => onYearChange(e.id, ev.target.value ? parseInt(ev.target.value) : null)}
             placeholder="year"
-            className="w-16 rounded border border-slate-200 bg-white px-2 py-0.5 text-xs focus:border-amber-400 focus:outline-none"
+            className="w-16 rounded-xl border border-slate-200 bg-white px-2 py-0.5 text-xs focus:border-amber-400 focus:outline-none"
           />
           <button onClick={() => onRemove(e.id)} className="text-slate-400 hover:text-red-500 shrink-0">×</button>
         </div>
@@ -1659,7 +1659,7 @@ function SortableArtistRow({
             value={pasteSpotifyValue}
             onChange={(ev) => onPasteSpotifyChange(ev.target.value)}
             placeholder="https://open.spotify.com/track/…"
-            className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs focus:border-green-400 focus:outline-none"
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-2 py-1 text-xs focus:border-green-400 focus:outline-none"
           />
           <button
             type="button"
@@ -1682,7 +1682,7 @@ function SortableArtistRow({
               <button
                 type="button"
                 onClick={() => { onYoutubeUrlChange(e.id, r.url); onCloseResults(); }}
-                className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600"
+                className="shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600"
               >
                 Select
               </button>

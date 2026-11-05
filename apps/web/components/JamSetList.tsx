@@ -80,7 +80,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
           <a
             href={`/set/${set.short_code ?? set.id}`}
             title={set.name}
-            className="inline-flex min-w-0 items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
           >
             <span className="truncate">{set.name}</span>
             <svg className="h-4 w-4 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -91,7 +91,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
             <button
               onClick={handleUnlink}
               disabled={unlinking}
-              className="inline-flex shrink-0 items-center rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+              className="inline-flex shrink-0 items-center rounded-full border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
               {unlinking ? "Unlinking…" : "Unlink"}
             </button>
@@ -119,13 +119,13 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
             <button
               onClick={handleLink}
               disabled={!selectedSetId || linkingInProgress}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
             >
               {linkingInProgress ? "Linking…" : "Link set list"}
             </button>
             <button
               onClick={() => setLinking(false)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
             >
               Cancel
             </button>
@@ -140,13 +140,13 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
             <button
               onClick={handleCreate}
               disabled={creating}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
             >
               {creating ? "Creating…" : "Create set list"}
             </button>
             <button
               onClick={handleShowLink}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
             >
               Link existing
             </button>

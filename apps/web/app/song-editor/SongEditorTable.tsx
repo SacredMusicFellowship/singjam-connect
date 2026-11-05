@@ -17,11 +17,12 @@ type Song = {
 
 type EditState = { chord_chart_url: string; genius_url: string };
 
-export default function SongEditorTable() {
+export default function SongEditorTable({ initialQuery = "" }: { initialQuery?: string }) {
   const supabase = supabaseBrowser();
   const [songs, setSongs] = useState<Song[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  // A song page's Edit link opens the table already searched to that song.
+  const [query, setQuery] = useState(initialQuery);
   const [editing, setEditing] = useState<Record<string, EditState>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
@@ -209,7 +210,7 @@ export default function SongEditorTable() {
                         }))
                       }
                       placeholder="https://..."
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
                     />
                   </div>
                   <div>
@@ -225,21 +226,21 @@ export default function SongEditorTable() {
                         }))
                       }
                       placeholder="https://genius.com/..."
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
                     />
                   </div>
                   <div className="flex gap-2 pt-1">
                     <button
                       onClick={() => saveEdit(song)}
                       disabled={isSaving}
-                      className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-40"
+                      className="rounded-full bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-40"
                     >
                       {isSaving ? "Saving…" : "Save"}
                     </button>
                     <button
                       onClick={() => cancelEdit(song.id)}
                       disabled={isSaving}
-                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
                     >
                       Cancel
                     </button>

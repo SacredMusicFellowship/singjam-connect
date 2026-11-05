@@ -1,15 +1,11 @@
 import { memo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Linking, Alert } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatComposers } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-
-const CONFIDENCE_LEVELS = [
-  { key: 'lead', label: 'Lead' },
-  { key: 'support', label: 'Support' },
-  { key: 'learn', label: 'Learn' },
-];
+import RolePill from '@/components/RolePill';
+import MyKeyChip from '@/components/MyKeyChip';
 
 export type RepertoireCardSong = {
   song_id: string;
@@ -21,6 +17,7 @@ export type RepertoireCardSong = {
   cultures: string[];
   productions: string[];
   popularity: number;
+  chord_chart_url?: string | null;
 };
 
 // Every callback takes the song back rather than being bound to it, so a list
@@ -58,8 +55,6 @@ function RepertoireCard({
   const composersLabel = song.composers.length > 0
     ? formatComposers(song.composers, song.cultures)
     : null;
-  const confidenceLabel = CONFIDENCE_LEVELS.find(l => l.key === song.confidence)?.label ?? 'Learn';
-  const isLead = song.confidence === 'lead';
 
   return (
     <View
@@ -105,47 +100,27 @@ function RepertoireCard({
       </View>
 
       <View className="flex-row flex-wrap items-center gap-2 mt-3 ml-8">
-        <TouchableOpacity
-          onPress={handleConfidenceTap}
-          className={`flex-row items-center rounded-xl border px-2.5 py-1.5 ${
-            isLead ? 'border-amber-400 bg-amber-100' : 'border-zinc-200 bg-white'
-          }`}
-        >
-          <Text className={`text-sm ${isLead ? 'text-amber-800 font-semibold' : 'text-zinc-700'}`}>
-            {confidenceLabel}
-          </Text>
-          <Ionicons name="chevron-down" size={12} color={isLead ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-
-        <View className="flex-row items-center gap-1.5">
-          <Text className="text-sm text-zinc-700">My key</Text>
+        <RolePill level={song.confidence} onPress={handleConfidenceTap} size="md" />
+        <MyKeyChip value={song.key_note} onPress={() => onKeyTap(song)} size="md" />
+        {song.chord_chart_url ? (
+          // Same Chords link as the set list.
           <TouchableOpacity
-            onPress={() => onKeyTap(song)}
-            className={`flex-row items-center rounded-xl border px-2.5 py-1.5 ${
-              song.key_note ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'
-            }`}
-            accessibilityLabel="My key"
+            onPress={() => Linking.openURL(song.chord_chart_url!).catch(() => Alert.alert('Could not open link'))}
+            className="flex-row items-center gap-1 px-3 py-1.5 rounded-full border border-zinc-200 bg-white"
+            accessibilityLabel="Chord chart"
           >
-            <Text className={`text-sm ${song.key_note ? 'text-amber-800' : 'text-zinc-700'}`}>
-              {song.key_note ?? '—'}
-            </Text>
-            <Ionicons name="chevron-down" size={12} color={song.key_note ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
+            <Text className="text-sm font-medium text-zinc-600">Chords</Text>
+            <Ionicons name="open-outline" size={11} color="#a1a1aa" />
           </TouchableOpacity>
-        </View>
+        ) : null}
 
         <TouchableOpacity
           onPress={() => onAddToSet(song)}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5"
+          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5"
         >
           <Text className="text-sm text-zinc-600">Add to set</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => onView(song)}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5"
-        >
-          <Text className="text-sm text-zinc-600">View</Text>
-        </TouchableOpacity>
 
       </View>
     </View>

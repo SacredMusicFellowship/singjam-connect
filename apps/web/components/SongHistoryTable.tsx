@@ -61,7 +61,7 @@ export default function SongHistoryTable({ stats }: { stats: SongPlayStat[] }) {
           id="song-history-sort"
           value={sort.col}
           onChange={(e) => toggleSort(e.target.value as SortCol)}
-          className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-700"
+          className="flex-1 rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-700"
         >
           {COLUMNS.map((col) => (
             <option key={col.key} value={col.key}>
@@ -71,7 +71,7 @@ export default function SongHistoryTable({ stats }: { stats: SongPlayStat[] }) {
         </select>
         <button
           onClick={() => setSort((prev) => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
-          className="rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-500"
+          className="rounded-full border border-slate-200 px-2 py-1 text-sm text-slate-500"
           aria-label={sort.dir === "asc" ? "Sort ascending" : "Sort descending"}
         >
           {sort.dir === "asc" ? "↑" : "↓"}

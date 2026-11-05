@@ -199,7 +199,7 @@ export default function JamView({
           {!userId && !isOfficial && (
             <Link
               href={`/auth?next=${jamPath({ id: jamId, short_code: shortCode })}${inviteToken ? `&invite=${inviteToken}` : ""}`}
-              className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+              className="inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
             >
               Sign in to RSVP
             </Link>

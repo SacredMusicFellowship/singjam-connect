@@ -117,7 +117,7 @@ export default function BackfillSpotifyPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="space-y-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Backfill Spotify links</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -129,7 +129,7 @@ export default function BackfillSpotifyPage() {
           <button
             onClick={runBackfill}
             disabled={running || pending.length === 0}
-            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
           >
             {running ? `Running… ${progress}/${pending.length}` : `Run backfill`}
           </button>

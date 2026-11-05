@@ -270,26 +270,26 @@ export default function ProfileScreen() {
       <View className="mx-4 mt-6 flex-row" style={{ gap: 8 }}>
         <TouchableOpacity
           onPress={() => router.push('/profile-edit')}
-          className="flex-1 items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5"
+          className="flex-1 items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
         >
           <Text className="text-sm text-zinc-600">Edit profile</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={handleSignOut}
-          className="items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5"
+          className="items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
         >
           <Text className="text-sm text-zinc-600">Log out</Text>
         </TouchableOpacity>
       </View>
       <TouchableOpacity
         onPress={() => router.push('/account' as any)}
-        className="mx-4 mt-2 items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5"
+        className="mx-4 mt-2 items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
       >
         <Text className="text-sm text-zinc-600">Account settings</Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => router.push('/feedback' as any)}
-        className="mx-4 mt-2 items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5"
+        className="mx-4 mt-2 items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
       >
         <Text className="text-sm text-zinc-600">Report a bug</Text>
       </TouchableOpacity>

@@ -19,6 +19,8 @@ import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
 import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
+import RoleSelect from "@/components/RoleSelect";
+import ChordChartSlot from "@/components/ChordChartSlot";
 import SearchInput from "@/components/SearchInput";
 
 const CONFIDENCE_LEVELS = [
@@ -57,6 +59,7 @@ type Item = {
   meter: string | null;
   year: number | null;
   popularity?: number;
+  chord_chart_url?: string | null;
 };
 
 const CACHE_KEY = "cache:/repertoire";
@@ -182,6 +185,8 @@ export default function RepertoirePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null);
+  // Admins and song editors can attach a missing chord chart, as on the set list.
+  const [canAddCharts, setCanAddCharts] = useState(false);
   const [singingVoice, setSingingVoice] = useState<string | null>(null);
 
   const [items, setItems] = useState<Item[]>([]);
@@ -287,7 +292,7 @@ export default function RepertoirePage() {
         }
 
         const [{ data: p }, repertoireRes, setsJson, suggestionsRes] = await Promise.all([
-          supabase.from("profiles").select("singing_voice").eq("id", uid).single(),
+          supabase.from("profiles").select("singing_voice, role").eq("id", uid).single(),
           supabase.rpc("my_repertoire"),
           fetch("/api/sets").then((r) => (r.ok ? r.json() : { owned: [], collaborating: [] })),
           supabase.rpc("suggest_songs_for_user", { p_user_id: uid, p_limit: 20 }),
@@ -295,6 +300,7 @@ export default function RepertoirePage() {
         if (repertoireRes.error) throw repertoireRes.error;
 
         setSingingVoice((p as any)?.singing_voice ?? null);
+        setCanAddCharts(["admin", "song_editor"].includes((p as any)?.role));
         setUserSets(setsAcceptingSongs([...(setsJson.owned ?? []), ...(setsJson.collaborating ?? [])]));
         const initialSuggestions = (suggestionsRes.data ?? []) as SuggestionResult[];
         setSuggestions(initialSuggestions);
@@ -325,6 +331,7 @@ export default function RepertoirePage() {
           languages: r.languages ?? [],
           themes: r.themes ?? [],
           popularity: r.popularity ?? 0,
+          chord_chart_url: r.chord_chart_url ?? null,
         }));
 
         if (!itemsMutatedRef.current) {
@@ -760,7 +767,7 @@ export default function RepertoirePage() {
                 return (
                   <div key={result.song_id} className="rounded-md border flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <div className="truncate font-medium">
+                      <div className="line-clamp-2 font-medium">
                         <Link href={href} className="hover:text-amber-600">
                           {result.title}
                         </Link>
@@ -780,26 +787,8 @@ export default function RepertoirePage() {
                     <div className="relative flex flex-wrap items-center gap-2 sm:shrink-0">
                       {inRep ? (
                         <>
-                          <select
-                            value={(inRep.confidence ?? "") as ConfidenceKey}
-                            onChange={(e) => updateConfidence(inRep.song_id, e.target.value)}
-                            className={`rounded-xl border px-2 py-1.5 text-sm ${
-                              inRep.confidence === "lead"
-                                ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-                                : "border-zinc-200"
-                            }`}
-                            aria-label="Role"
-                          >
-                            {CONFIDENCE_LEVELS.map((l) => (
-                              <option
-                                key={l.key}
-                                value={l.key}
-                              >
-                                {l.label}
-                              </option>
-                            ))}
-                          </select>
-                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} />
+                          <RoleSelect value={inRep.confidence ?? "learn"} onChange={(level) => updateConfidence(inRep.song_id, level)} size="md" />
+                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} size="md" />
                           {userSets.length > 0 && (
                             <AddToSetPanel
                               songId={result.song_id}
@@ -810,9 +799,6 @@ export default function RepertoirePage() {
                               onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
                             />
                           )}
-                          <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
-                            View
-                          </Link>
                         </>
                       ) : isPicking ? (
                         <ConfidencePicker
@@ -824,12 +810,12 @@ export default function RepertoirePage() {
                         />
                       ) : (
                         <>
-                          <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
+                          <Link href={href} className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
                             View
                           </Link>
                           <button
                             onClick={() => setPendingAddId(result.song_id)}
-                            className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+                            className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
                           >
                             Add
                           </button>
@@ -875,7 +861,7 @@ export default function RepertoirePage() {
               <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
               <button
                 onClick={() => setFiltersOpen((o) => !o)}
-                className={`h-7 flex items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors ${
+                className={`h-7 flex items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                   activeFilterCount > 0
                     ? "border-amber-400 bg-amber-50 text-amber-700"
                     : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
@@ -928,7 +914,7 @@ export default function RepertoirePage() {
                       <button
                         onClick={() => { if (newSetName.trim()) createSetAndBulkAdd(newSetName.trim()); }}
                         disabled={!newSetName.trim()}
-                        className="rounded-xl border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
                       >
                         Create
                       </button>
@@ -946,7 +932,7 @@ export default function RepertoirePage() {
                         if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
                         else if (e.target.value) bulkAddToSet(e.target.value);
                       }}
-                      className="rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
+                      className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm"
                     >
                       <option value="">Add to set…</option>
                       {userSets.map((s) => (
@@ -959,7 +945,7 @@ export default function RepertoirePage() {
                 <select
                   value={bulkConfidenceLevel}
                   onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
-                  className="rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm"
                 >
                   <option value="">Change role…</option>
                   {CONFIDENCE_LEVELS.map((l) => (
@@ -978,13 +964,13 @@ export default function RepertoirePage() {
                     </span>
                     <button
                       onClick={bulkRemove}
-                      className="rounded-xl border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                      className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
                     >
                       Confirm
                     </button>
                     <button
                       onClick={() => setBulkRemoveConfirm(false)}
-                      className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
+                      className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
                     >
                       Cancel
                     </button>
@@ -992,7 +978,7 @@ export default function RepertoirePage() {
                 ) : (
                   <button
                     onClick={() => setBulkRemoveConfirm(true)}
-                    className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
+                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
                   >
                     Remove
                   </button>
@@ -1067,7 +1053,7 @@ export default function RepertoirePage() {
                       aria-label={`Select ${it.title}`}
                     />
                     <div className="min-w-0">
-                    <div className="truncate font-medium">
+                    <div className="line-clamp-2 font-medium">
                       <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => saveScrollPosition()} className="hover:text-amber-600">
                         {it.title}
                       </Link>
@@ -1089,27 +1075,9 @@ export default function RepertoirePage() {
                   </div>
 
                   <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
-                    <select
-                      value={(it.confidence ?? "") as ConfidenceKey}
-                      onChange={(e) => updateConfidence(it.song_id, e.target.value)}
-                      className={`rounded-xl border px-2 py-1.5 text-xs sm:text-sm ${
-                        it.confidence === "lead"
-                          ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-                          : "border-zinc-200"
-                      }`}
-                      aria-label="Confidence"
-                    >
-                      {CONFIDENCE_LEVELS.map((l) => (
-                        <option
-                          key={l.key}
-                          value={l.key}
-                        >
-                          {l.label}
-                        </option>
-                      ))}
-                    </select>
+                    <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" />
 
-                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} />
+                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" />
 
                     {userSets.length > 0 && (
                       <AddToSetPanel
@@ -1122,13 +1090,14 @@ export default function RepertoirePage() {
                       />
                     )}
 
-                    <Link
-                      href={`/songs/${it.slug ?? it.song_id}`}
-                      onClick={() => saveScrollPosition()}
-                      className="rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs sm:px-3 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
-                    >
-                      View
-                    </Link>
+                    <ChordChartSlot
+                      songId={it.song_id}
+                      url={it.chord_chart_url}
+                      canAdd={canAddCharts}
+                      size="md"
+                      onAdded={(url) => setItems((prev) => prev.map((x) => (x.song_id === it.song_id ? { ...x, chord_chart_url: url } : x)))}
+                    />
+
                   </div>
                 </div>
               ))}

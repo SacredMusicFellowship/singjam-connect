@@ -82,7 +82,7 @@ export default function AddToSetPanel({
     return (
       <button
         onClick={() => { setOpen(true); onOpen?.(); }}
-        className="rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs sm:px-3 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+        className="rounded-full border border-zinc-200 px-3 py-1 text-xs sm:py-1.5 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
       >
         Add to set
       </button>
@@ -107,7 +107,7 @@ export default function AddToSetPanel({
         <button
           onClick={() => { if (newName.trim()) createSetAndAdd(newName.trim()); }}
           disabled={!newName.trim()}
-          className="rounded-xl border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+          className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
         >
           Create
         </button>
@@ -125,7 +125,7 @@ export default function AddToSetPanel({
     <div ref={panelRef}>
       <button
         onClick={() => setOpen(false)}
-        className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition-colors"
+        className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition-colors"
       >
         Add to set
       </button>
@@ -139,7 +139,7 @@ export default function AddToSetPanel({
                 <button
                   disabled={inSet}
                   onClick={() => addToSet(s.id)}
-                  className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${inSet ? "bg-green-100 text-green-700 cursor-default" : "bg-amber-500 text-white hover:bg-amber-400"}`}
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${inSet ? "bg-green-100 text-green-700 cursor-default" : "bg-amber-500 text-white hover:bg-amber-400"}`}
                 >
                   {inSet ? "Added" : "Add"}
                 </button>

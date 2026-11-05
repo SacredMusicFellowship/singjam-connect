@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
-import { SET_SONG_NOTE_MAX } from "@singjam/core";
+import { CONFIDENCE_STYLES, hasLeadVoice, KEY_STYLE, SET_SONG_NOTE_MAX } from "@singjam/core";
+import RoleSelect from "@/components/RoleSelect";
+import ChordsLink from "@/components/ChordsLink";
 import {
   MUSICAL_KEYS,
   YoutubeIcon,
@@ -20,7 +22,8 @@ type AddingField = "youtube" | "spotify" | "chord" | null;
 
 export default function SetSongRow({
   song,
-  canEdit,
+  canManage,
+  canRemove,
   isAdmin,
   isSongEditor = false,
   isPublicViewer,
@@ -43,7 +46,10 @@ export default function SetSongRow({
 }: {
   song: Song;
   index: number;
-  canEdit: boolean;
+  /** Owner or co-owner: reorder, remove, key, played, notes, choosing leaders. */
+  canManage: boolean;
+  /** Managers, or an editor removing a song they added. */
+  canRemove: boolean;
   isAdmin: boolean;
   isSongEditor?: boolean;
   isPublicViewer: boolean;
@@ -73,6 +79,8 @@ export default function SetSongRow({
   const [urlInput, setUrlInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
+  // Choosing Lead without a lead voice asks about it first, as elsewhere in the app.
+  const [askingLeadVoice, setAskingLeadVoice] = useState(false);
   const [notesInput, setNotesInput] = useState("");
   // Set when Cancel/Escape closes the editor, so the input's blur doesn't save.
   const discardNotesRef = useRef(false);
@@ -187,55 +195,73 @@ export default function SetSongRow({
   const learnParticipants = visibleParticipants.filter(
     (p) => !leaderIds.includes(p.user_id) && participantKnowledge.get(p.user_id) === "learn"
   );
-  const learning = myConfidence === "learn";
+
+  // Only for songs you don't have yet; once it's yours, the Role dropdown moves it.
+  const showRepertoireButtons = !!(!myConfidence && (currentUserId || signInUrl));
+  const showPeople = (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canManage && participants.length > 0));
+  const showPlayed = canManage || song.played;
+  const showRole = !!currentUserId && !!myConfidence;
+  const showKeyLine = canManage || (!isPublicViewer && !!(song.key_note || song.songs.tonality));
+
+  // Your own name is bolder so you can find yourself on a busy card.
+  const ownWeight = (userId: string) => (userId === currentUserId ? "font-bold" : "font-medium");
+
+  // Removing their own song is the only action a guest has, so it gets a direct button instead of a ⋯ menu.
+  const guestRemove = canRemove && !canManage;
+  const menuItems: MenuItem[] = [];
+  if (canManage && !song.notes) menuItems.push({ label: "Add note", onSelect: startEditingNotes });
+  if (canManage) menuItems.push({ label: "Remove from set", destructive: true, onSelect: () => onRemove(song.song_id) });
 
   return (
     <div className="flex-1 min-w-0 space-y-2">
       <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-start gap-2 min-w-0">
             {song.songs.slug ? (
-              <Link href={`/songs/${song.songs.slug}`} target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-900 hover:text-amber-600 truncate">
+              <Link href={`/songs/${song.songs.slug}`} target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-900 hover:text-amber-600 line-clamp-2">
                 {song.songs.title}
               </Link>
             ) : (
-              <p className="font-medium text-zinc-900 truncate">{song.songs.title}</p>
-            )}
-            {/* Green like "You're going" on a jam, so a song you're learning
-                stands out as you scroll the set. */}
-            {learning && (
-              <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                Learning
-              </span>
+              <p className="font-medium text-zinc-900 line-clamp-2">{song.songs.title}</p>
             )}
           </div>
-          {song.songs.display_artist && (
-            <p className="text-xs text-zinc-500 truncate">{song.songs.display_artist}</p>
-          )}
-          <div className="flex items-center gap-2 mt-1">
-            {canEdit ? (
-              <select
-                value={song.key_note ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value || null;
-                  if (val !== song.key_note) onKeyChanged(song.id, val);
-                }}
-                className={`text-xs rounded border border-zinc-300 px-1.5 py-0.5 focus:border-amber-400 focus:outline-none ${song.key_note ? "w-14" : "w-20"}`}
-              >
-                <option value="">key</option>
-                {MUSICAL_KEYS.map((k) => (
-                  <option key={k} value={k}>{k}</option>
-                ))}
-              </select>
+          <div className="flex items-center gap-3 min-w-0 mt-0.5">
+            {song.songs.display_artist && (
+              <p className="min-w-0 truncate text-xs text-zinc-500">{song.songs.display_artist}</p>
+            )}
+            {showKeyLine && (
+            <span className="flex shrink-0 items-center gap-1">
+            {canManage ? (
+              // The visible chip is sized to its own text; the transparent select
+              // on top opens the native picker without its widest-option width.
+              <span className={`relative shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${song.key_note ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`}`}>
+                <span className="inline-grid justify-items-center"><span className="col-start-1 row-start-1">{song.key_note ?? "+ key"}</span><span className="invisible col-start-1 row-start-1" aria-hidden="true">C#</span></span>
+                <select
+                  value={song.key_note ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    if (val !== song.key_note) onKeyChanged(song.id, val);
+                  }}
+                  aria-label="Key"
+                  className="absolute inset-0 w-full cursor-pointer opacity-0"
+                >
+                  <option value="">No key</option>
+                  {MUSICAL_KEYS.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              </span>
             ) : (
               !isPublicViewer && song.key_note && (
-                <span className="text-xs font-medium bg-amber-100 text-amber-800 rounded px-1.5 py-0.5">
-                  {song.key_note}
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${KEY_STYLE.chip} ${KEY_STYLE.text}`}>
+                  <span className="inline-grid justify-items-center"><span className="col-start-1 row-start-1">{song.key_note}</span><span className="invisible col-start-1 row-start-1" aria-hidden="true">C#</span></span>
                 </span>
               )
             )}
             {!isPublicViewer && song.songs.tonality && (
-              <span className="text-xs font-semibold text-zinc-900">{song.songs.tonality}</span>
+              <span className="text-xs text-zinc-500">{song.songs.tonality}</span>
+            )}
+            </span>
             )}
           </div>
           {editingNotes ? (
@@ -252,14 +278,14 @@ export default function SetSongRow({
                 placeholder="e.g. Capo 3, start soft"
                 aria-label="Note for this song"
                 autoFocus
-                className="w-full rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="w-full rounded-xl border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
               />
               {/* onMouseDown keeps the input from blurring (and saving) before the click lands. */}
               <div className="flex items-center gap-2">
                 <button
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => saveNotes()}
-                  className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
+                  className="rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
                 >
                   Save
                 </button>
@@ -288,46 +314,19 @@ export default function SetSongRow({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
               <p className="flex-1 min-w-0 text-xs text-zinc-700 break-words">{song.notes}</p>
-              {canEdit && (
+              {canManage && (
                 <button onClick={startEditingNotes} className="shrink-0 text-xs font-medium text-amber-600 hover:text-amber-500">
                   Edit
                 </button>
               )}
             </div>
-          ) : canEdit ? (
-            <button
-              onClick={startEditingNotes}
-              className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5 text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-colors"
-            >
-              + Add note
-            </button>
           ) : null}
         </div>
 
         <div className="shrink-0 flex items-center gap-0.5">
           {/* Ultimate Guitar chord chart */}
           {chord_chart_url ? (
-            <>
-              <a
-                href={chord_chart_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="sm:hidden rounded-lg p-1.5 transition-opacity hover:opacity-80"
-                title="Chord chart"
-              >
-                <UltimateGuitarIcon />
-              </a>
-              <a
-                href={chord_chart_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-200 pl-1.5 pr-3 py-1 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-                title="Chord chart"
-              >
-                <UltimateGuitarIcon />
-                <span className="text-xs font-medium text-zinc-600">Chords</span>
-              </a>
-            </>
+            <ChordsLink href={chord_chart_url} />
           ) : isAdmin || isSongEditor ? (
             <>
               <button
@@ -385,126 +384,178 @@ export default function SetSongRow({
               <YoutubeIcon />
             </button>
           ) : null}
+
         </div>
       </div>
 
-      {/* Below the title row rather than inside it, so on a phone both buttons
-          get the card's full width and sit side by side. */}
-      {(!myConfidence || learning) && (currentUserId || signInUrl) && (
-        !currentUserId ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={signInUrl}
-              className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
-            >
-              I know this song!
-            </a>
-            <a href={signInUrl} className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors">
-              Want to learn it
-            </a>
-          </div>
-        ) : pickingRepertoire ? (
-          <div>
-            <ConfidencePicker
-              variant="compact"
-              singingVoice={currentUserSingingVoice}
-              onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setPickingRepertoire(false); }}
-              onCancel={() => setPickingRepertoire(false)}
-              offerLearn={false}
-              onVoiceUpdated={onVoiceUpdated}
-            />
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setPickingRepertoire(true)}
-              className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
-            >
-              I know this song!
-            </button>
-            {/* Already learning it: the badge by the title says so, and
-                "I know this song!" is how they move up. */}
-            {!learning && (
-              <button
-                onClick={() => onAddToRepertoire(song.song_id, "learn")}
-                className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors"
-              >
-                Want to learn it
-              </button>
-            )}
-          </div>
-        )
+      {askingLeadVoice && (
+        <ConfidencePicker
+          variant="compact"
+          singingVoice={currentUserSingingVoice}
+          initialAskVoice
+          offerLearn={false}
+          onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setAskingLeadVoice(false); }}
+          onCancel={() => setAskingLeadVoice(false)}
+          onVoiceUpdated={onVoiceUpdated}
+        />
       )}
 
-      {(leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0)) && (
-        <div className="space-y-1">
-          {(leadParticipants.length > 0 || (canEdit && participants.length > 0)) && (
-            <div className="flex items-start gap-1.5">
-              <span className="shrink-0 text-[10px] text-amber-500 font-medium pt-0.5">Lead</span>
-              <div className="flex flex-wrap gap-1 flex-1">
-                {canEdit && leaderIds.length === 0 && !hasEligible && (
-                  <span className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-500">
-                    No leader
-                  </span>
-                )}
-                {leadParticipants.map((p) => {
-                  const isLeader = leaderIds.includes(p.user_id);
-                  const isClickable = canEdit && participantKnowledge.get(p.user_id) === "lead";
-                  const firstName = p.display_name ?? p.username ?? "?";
-                  const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
-                  const personalKey = participantKeys.get(p.user_id);
-                  const pillStyle = isLeader ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700";
-                  return (
+      {(showRepertoireButtons || showPeople || showPlayed || showRole || menuItems.length > 0 || guestRemove) && (
+        // The ⋯ sits in the card's bottom-right corner, on whatever row is last,
+        // so it never adds a line of its own.
+        <div className="flex items-end gap-2">
+          <div className="flex-1 min-w-0 space-y-2">
+              {/* Below the title row rather than inside it, so on a phone both buttons
+                  get the card's full width and sit side by side. */}
+              {showRepertoireButtons && (
+                !currentUserId ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={signInUrl}
+                      className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
+                    >
+                      I know this song!
+                    </a>
+                    <a href={signInUrl} className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors">
+                      Want to learn it
+                    </a>
+                  </div>
+                ) : pickingRepertoire ? (
+                  <div>
+                    <ConfidencePicker
+                      variant="compact"
+                      singingVoice={currentUserSingingVoice}
+                      onSave={async (level) => { await onAddToRepertoire(song.song_id, level); setPickingRepertoire(false); }}
+                      onCancel={() => setPickingRepertoire(false)}
+                      offerLearn={false}
+                      onVoiceUpdated={onVoiceUpdated}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
-                      key={p.user_id}
-                      type="button"
-                      onClick={() => isClickable && handleToggleLeader(p.user_id)}
-                      disabled={!isClickable}
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium transition-all ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
+                      onClick={() => setPickingRepertoire(true)}
+                      className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 transition-colors"
                     >
-                      {name}
-                      {personalKey && ` (${personalKey})`}
+                      I know this song!
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {supportParticipants.length > 0 && (
-            <div className="flex items-start gap-1.5">
-              <span className="shrink-0 text-[10px] text-sky-500 font-medium pt-0.5">Support</span>
-              <div className="flex flex-wrap gap-1 flex-1">
-                {supportParticipants.map((p) => {
-                  const firstName = p.display_name ?? p.username ?? "?";
-                  const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
-                  return (
-                    <span
-                      key={p.user_id}
-                      className="rounded-full px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700"
+                    <button
+                      onClick={() => onAddToRepertoire(song.song_id, "learn")}
+                      className="inline-flex items-center rounded-full bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors"
                     >
-                      {label}
-                    </span>
-                  );
-                })}
+                      Want to learn it
+                    </button>
+                  </div>
+                )
+              )}
+
+              {showPeople && (
+                <div className="space-y-1">
+                  {(leadParticipants.length > 0 || (canManage && participants.length > 0)) && (
+                    <div className="flex items-start gap-1.5">
+                      <span className={`shrink-0 text-[10px] font-medium pt-0.5 ${CONFIDENCE_STYLES.lead.label}`}>Lead</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {canManage && leaderIds.length === 0 && !hasEligible && (
+                          <span className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-500">
+                            No leader
+                          </span>
+                        )}
+                        {leadParticipants.map((p) => {
+                          const isLeader = leaderIds.includes(p.user_id);
+                          // Anyone who has joined the set can put themselves forward; choosing
+                          // someone else is for the owner and co-owners.
+                          const isClickable = participantKnowledge.get(p.user_id) === "lead" && (canManage || p.user_id === currentUserId);
+                          const firstName = p.display_name ?? p.username ?? "?";
+                          const name = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                          const personalKey = participantKeys.get(p.user_id);
+                          const pillStyle = isLeader ? "bg-amber-400 text-white" : `${CONFIDENCE_STYLES.lead.pill} ${CONFIDENCE_STYLES.lead.pillText}`;
+                          return (
+                            <button
+                              key={p.user_id}
+                              type="button"
+                              onClick={() => isClickable && handleToggleLeader(p.user_id)}
+                              disabled={!isClickable}
+                              className={`rounded-full px-2 py-0.5 text-xs transition-all ${ownWeight(p.user_id)} ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
+                            >
+                              {name}
+                              {personalKey && ` (${personalKey})`}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {supportParticipants.length > 0 && (
+                    <div className="flex items-start gap-1.5">
+                      <span className={`shrink-0 text-[10px] font-medium pt-0.5 ${CONFIDENCE_STYLES.support.label}`}>Support</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {supportParticipants.map((p) => {
+                          const firstName = p.display_name ?? p.username ?? "?";
+                          const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                          return (
+                            <span
+                              key={p.user_id}
+                              className={`rounded-full px-2 py-0.5 text-xs ${CONFIDENCE_STYLES.support.pill} ${CONFIDENCE_STYLES.support.pillText} ${ownWeight(p.user_id)}`}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {learnParticipants.length > 0 && (
+                    <div className="flex items-start gap-1.5">
+                      <span className={`shrink-0 text-[10px] font-medium pt-0.5 ${CONFIDENCE_STYLES.learn.label}`}>Learning</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {learnParticipants.map((p) => {
+                          const firstName = p.display_name ?? p.username ?? "?";
+                          const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
+                          return (
+                            <span key={p.user_id} className={`rounded-full px-2 py-0.5 text-xs ${CONFIDENCE_STYLES.learn.pill} ${CONFIDENCE_STYLES.learn.pillText} ${ownWeight(p.user_id)}`}>
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {(showRole || showPlayed) && (
+              <div className="flex flex-wrap items-center gap-2">
+              {showRole && (
+                <RoleSelect
+                  value={myConfidence!}
+                  onChange={(level) => {
+                    if (level === "lead" && !hasLeadVoice(currentUserSingingVoice)) setAskingLeadVoice(true);
+                    else onAddToRepertoire(song.song_id, level);
+                  }}
+                />
+              )}
+              {canManage ? (
+                <button
+                  onClick={() => onTogglePlayed(song.id, !song.played)}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                    song.played
+                      ? "bg-green-500 text-white hover:bg-green-400"
+                      : "border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50"
+                  }`}
+                >
+                  {song.played && <CheckIcon />}
+                  {song.played ? "Played" : "Mark as played"}
+                </button>
+              ) : song.played ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-medium text-white">
+                  <CheckIcon />
+                  Played
+                </span>
+              ) : null}
               </div>
-            </div>
-          )}
-          {learnParticipants.length > 0 && (
-            <div className="flex items-start gap-1.5">
-              <span className="shrink-0 text-[10px] text-zinc-400 font-medium pt-0.5">Learning</span>
-              <div className="flex flex-wrap gap-1 flex-1">
-                {learnParticipants.map((p) => {
-                  const firstName = p.display_name ?? p.username ?? "?";
-                  const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
-                  return (
-                    <span key={p.user_id} className="rounded-full px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-600">
-                      {label}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+              )}
+          </div>
+          {menuItems.length > 0 && <SongMenu items={menuItems} />}
+          {guestRemove && <RemoveButton onRemove={() => onRemove(song.song_id)} />}
         </div>
       )}
 
@@ -532,56 +583,6 @@ export default function SetSongRow({
         />
       )}
 
-      {(canEdit || song.played) && (
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <div>
-            {canEdit ? (
-              <button
-                onClick={() => onTogglePlayed(song.id, !song.played)}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                  song.played
-                    ? "bg-green-500 text-white hover:bg-green-400"
-                    : "border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50"
-                }`}
-              >
-                {song.played && (
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                )}
-                {song.played ? "Played" : "Mark as played"}
-              </button>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-medium text-white">
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
-                Played
-              </span>
-            )}
-          </div>
-          {canEdit && (
-            <div className="flex items-center">
-              <button
-                onClick={() => onRemove(song.song_id)}
-                className="sm:hidden text-zinc-300 hover:text-red-400 transition-colors"
-                aria-label="Remove song"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                </svg>
-              </button>
-              <button
-                onClick={() => onRemove(song.song_id)}
-                className="hidden sm:inline-flex rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-              >
-                Remove
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {addingField && (
         <div className="space-y-2">
           {addingField === "youtube" && (
@@ -600,7 +601,7 @@ export default function SetSongRow({
                       <button
                         onClick={() => saveMedia("youtube", r.url)}
                         disabled={saving}
-                        className="shrink-0 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-50 transition-colors"
+                        className="shrink-0 rounded-full border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-50 transition-colors"
                       >
                         Select
                       </button>
@@ -619,14 +620,14 @@ export default function SetSongRow({
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
               placeholder={placeholders[addingField]}
-              className="flex-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+              className="flex-1 rounded-xl border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setAddingField(null); setUrlInput(""); setYoutubeSearchResults([]); } }}
               autoFocus={addingField !== "youtube"}
             />
             <button
               onClick={handleSave}
               disabled={saving || !urlInput.trim()}
-              className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+              className="rounded-full bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -640,5 +641,133 @@ export default function SetSongRow({
         </div>
       )}
     </div>
+  );
+}
+
+type MenuItem = { label: string; onSelect: () => void; destructive?: boolean };
+
+function RemoveButton({ onRemove }: { onRemove: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (confirming) {
+    return (
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          onClick={() => { setConfirming(false); onRemove(); }}
+          className="rounded-full bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-400 transition-colors"
+        >
+          Remove
+        </button>
+        <button
+          onClick={() => setConfirming(false)}
+          className="rounded-full border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex shrink-0 items-center">
+      <button
+        onClick={() => setConfirming(true)}
+        className="sm:hidden p-1 text-zinc-300 hover:text-red-400 transition-colors"
+        aria-label="Remove song"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+        </svg>
+      </button>
+      <button
+        onClick={() => setConfirming(true)}
+        className="hidden sm:inline-flex rounded-full border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+      >
+        Remove
+      </button>
+    </div>
+  );
+}
+
+function SongMenu({ items }: { items: MenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  // A destructive item asks again in place before it runs.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  function close() {
+    setOpen(false);
+    setConfirming(null);
+  }
+
+  // Same trigger and menu styling as the set's own ⋯ menu (SetDetail, SetCard).
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => (open ? close() : setOpen(true))}
+        className="p-1 text-zinc-400 hover:text-zinc-600 transition-colors"
+        aria-label="More options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+          <circle cx="4" cy="10" r="1.5" />
+          <circle cx="10" cy="10" r="1.5" />
+          <circle cx="16" cy="10" r="1.5" />
+        </svg>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 bottom-full mb-1 w-40 rounded-xl border border-zinc-200 bg-white shadow-lg z-10 overflow-hidden py-1">
+          {items.map((item) =>
+            confirming === item.label ? (
+              <div key={item.label} className="flex gap-2 px-3 py-2">
+                <button
+                  onClick={() => setConfirming(null)}
+                  className="flex-1 rounded-full border border-zinc-300 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { close(); item.onSelect(); }}
+                  className="flex-1 rounded-full bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                key={item.label}
+                role="menuitem"
+                onClick={() => {
+                  if (item.destructive) { setConfirming(item.label); return; }
+                  close();
+                  item.onSelect();
+                }}
+                className={`w-full text-left flex items-center px-4 py-2.5 text-sm transition-colors ${item.destructive ? "text-red-600 hover:bg-red-50" : "text-zinc-700 hover:bg-zinc-50"}`}
+              >
+                {item.label}
+              </button>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
   );
 }

@@ -266,14 +266,14 @@ function JamListCard({ jam, tags, hostLabel, isOfficial, ticketSummary, rsvp, is
               <button
                 onClick={() => setConfirming(false)}
                 disabled={deleting}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
                 Keep it
               </button>
               <button
                 onClick={deleteJam}
                 disabled={deleting}
-                className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Cancelling…" : "Yes, cancel"}
               </button>

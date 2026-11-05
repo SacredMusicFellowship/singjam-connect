@@ -61,7 +61,7 @@ export default async function ReviewSongsPage() {
                 <div className="flex items-center gap-2 shrink-0">
                   <Link
                     href={`/admin/songs/${song.id}`}
-                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                   >
                     Edit
                   </Link>

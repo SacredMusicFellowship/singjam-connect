@@ -1,22 +1,48 @@
-import { MUSICAL_KEYS } from "@singjam/core";
+import { KEY_STYLE, MUSICAL_KEYS } from "@singjam/core";
 
-// The key the member plays the song in, shown to their set-mates next to their name.
-export default function MyKeySelect({ value, onChange }: { value: string | null; onChange: (key: string | null) => void }) {
+// The key the member plays the song in, shown to their set-mates next to their
+// name. The same outlined pill as its neighbours, in the key colour shared with
+// the set list's key (violet once chosen, neutral while empty). Every possible label sits in one grid cell with only the
+// current one visible, so the pill keeps one width whatever the key. The select
+// lies over it invisibly, since phones force selects to 16px.
+export default function MyKeySelect({
+  value,
+  onChange,
+  size = "sm",
+}: {
+  value: string | null;
+  onChange: (key: string | null) => void;
+  size?: "sm" | "md";
+}) {
+  const label = (key: string | null) =>
+    key ? (
+      <>
+        My key <span className="font-semibold">{key}</span>
+      </>
+    ) : (
+      "+ My key"
+    );
   return (
-    <label className="flex items-center gap-1.5 text-xs sm:text-sm">
-      My key
+    <span
+      className={`relative inline-flex shrink-0 items-center rounded-full ${value ? `${KEY_STYLE.chip} ${KEY_STYLE.text}` : `${KEY_STYLE.emptyChip} ${KEY_STYLE.emptyText}`} ${
+        size === "md" ? "px-3 py-1 text-xs sm:py-1.5 sm:text-sm" : "px-2.5 py-1 text-xs"
+      }`}
+    >
+      <span className="grid justify-items-center">
+        <span className="col-start-1 row-start-1">{label(value)}</span>
+        <span className="invisible col-start-1 row-start-1" aria-hidden="true">{label("C#")}</span>
+      </span>
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className={`rounded-xl border px-2 py-1.5 text-xs sm:text-sm ${
-          value ? "border-amber-200 bg-amber-50 text-amber-800" : "border-zinc-200"
-        }`}
+        aria-label="My key"
+        className="absolute inset-0 w-full cursor-pointer opacity-0"
       >
-        <option value="">—</option>
+        <option value="">No key</option>
         {MUSICAL_KEYS.map((k) => (
           <option key={k} value={k}>{k}</option>
         ))}
       </select>
-    </label>
+    </span>
   );
 }
