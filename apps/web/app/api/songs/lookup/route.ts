@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { supabaseAdmin as admin } from "@/lib/supabase/admin";
-import { findOnSpotify, findOnYouTube } from "@/lib/songLookup";
+import { findExistingSong, findOnSpotify, findOnYouTube } from "@/lib/songLookup";
 
 export async function GET(req: NextRequest) {
   const supabase = await supabaseServer();
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const canonical = { title: spotify?.title ?? title, artist: spotify?.artist ?? artist };
     const [youtube, existing] = await Promise.all([
       canonical.artist ? findOnYouTube(canonical.title, canonical.artist) : Promise.resolve(null),
-      admin().from("songs").select("id, slug").ilike("title", canonical.title).ilike("display_artist", `%${canonical.artist}%`).limit(1).maybeSingle(),
+      findExistingSong(admin(), [canonical.title, title], canonical.artist || artist || null),
     ]);
     return NextResponse.json({
       title: canonical.title,
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       release_year: spotify?.release_year ?? null,
       youtube_id: youtube?.youtube_id ?? null,
       youtube_official: youtube?.youtube_official ?? false,
-      existing: existing.data ?? null,
+      existing,
     });
   } catch {
     return NextResponse.json({ title, artist: artist || null, spotify_url: null, release_year: null, youtube_id: null, youtube_official: false, existing: null });

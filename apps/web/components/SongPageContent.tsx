@@ -316,10 +316,8 @@ export default function SongPageContent() {
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               <h1 className="text-2xl font-bold text-slate-900">{song.title}</h1>
               {(isAdmin || isSongEditor) && (
-                // Admins open the full song editor; song editors manage chart and
-                // lyrics links from the Song Links table, opened on this song.
                 <Link
-                  href={isAdmin ? `/admin/songs/${song.slug ?? song.id}` : `/song-editor?q=${encodeURIComponent(song.title)}`}
+                  href={`${isAdmin ? "/admin/songs" : "/song-editor/songs"}/${song.slug ?? song.id}`}
                   className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
                 >
                   Edit

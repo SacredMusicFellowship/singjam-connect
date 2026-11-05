@@ -12,7 +12,7 @@ type Match = {
   release_year: number | null;
   youtube_id: string | null;
   youtube_official: boolean;
-  existing: { id: string; slug: string } | null;
+  existing: { id: string; slug: string | null; title: string; display_artist: string | null; match: 'same' | 'possible' } | null;
 };
 
 // Mirrors web's SubmitSongForm: look the song up, show the YouTube match so the
@@ -58,7 +58,7 @@ export default function SubmitMissingSong({
     }
   }
 
-  async function submit(chosen: Match) {
+  async function submit(chosen: Match, addAnyway = false) {
     setBusy('submit');
     setError(null);
     const auth = await authHeader();
@@ -67,7 +67,7 @@ export default function SubmitMissingSong({
       const res = await fetch(`${WEB_URL}/api/songs/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...auth },
-        body: JSON.stringify({ ...chosen, confirmed: true }),
+        body: JSON.stringify({ ...chosen, confirmed: true, add_anyway: addAnyway }),
       });
       const json = await res.json().catch(() => ({}));
       // 409 means it already exists — still hand back the id so we open it.
@@ -130,8 +130,10 @@ export default function SubmitMissingSong({
         <View className="mt-3">
           <Text className="text-sm text-zinc-700 mb-2">
             {match.existing ? 'Already in the library: ' : 'Is this the song? '}
-            <Text className="font-medium">{match.title}</Text>
-            {match.artist ? <Text className="text-zinc-500"> — {match.artist}</Text> : null}
+            <Text className="font-medium">{match.existing?.title ?? match.title}</Text>
+            {(match.existing ? match.existing.display_artist : match.artist) ? (
+              <Text className="text-zinc-500"> — {match.existing ? match.existing.display_artist : match.artist}</Text>
+            ) : null}
           </Text>
           {match.youtube_id ? (
             <YouTubePlayer videoId={match.youtube_id} />
@@ -144,9 +146,16 @@ export default function SubmitMissingSong({
       {error ? <Text className="text-red-500 text-sm mt-2">{error}</Text> : null}
 
       {match?.existing ? (
-        <TouchableOpacity onPress={() => onCreated(match.existing!.id)} className="mt-3 rounded-xl py-3 items-center bg-amber-500">
-          <Text className="font-semibold text-white">Open it</Text>
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity onPress={() => onCreated(match.existing!.id)} className="mt-3 rounded-xl py-3 items-center bg-amber-500">
+            <Text className="font-semibold text-white">Open it</Text>
+          </TouchableOpacity>
+          {match.existing.match === 'possible' ? (
+            <TouchableOpacity onPress={() => submit(match, true)} disabled={!!busy} className="mt-2 rounded-xl py-3 items-center border border-zinc-200">
+              <Text className="text-zinc-500">It's a different song — add it</Text>
+            </TouchableOpacity>
+          ) : null}
+        </>
       ) : match ? (
         <>
           <TouchableOpacity onPress={() => submit(match)} disabled={!!busy} className="mt-3 rounded-xl py-3 items-center bg-amber-500">

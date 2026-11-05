@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { requireAdmin } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { getSpotifyToken } from "@/lib/spotify";
 import { SONG_CULTURES as VALID_CULTURES, SONG_GENRES as VALID_GENRES, SONG_METERS as VALID_METERS, SONG_THEMES as VALID_THEMES, SONG_TONALITIES as VALID_TONALITIES } from "@singjam/core";
 
@@ -94,7 +94,7 @@ async function searchSpotifyTrack(token: string, title: string, artist: string):
 }
 
 export async function POST(req: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireRole("admin", "song_editor");
   if (!auth.ok) return auth.response;
 
   const { title, artist = "", production = "" } = await req.json();

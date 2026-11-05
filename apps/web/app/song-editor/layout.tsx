@@ -18,7 +18,7 @@ export default async function SongEditorLayout({ children }: { children: React.R
         </span>
         <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
           <Link href="/song-editor" className="text-slate-600 hover:text-slate-900">
-            Song Links
+            Songs
           </Link>
           <Link href="/song-editor/history" className="text-slate-600 hover:text-slate-900">
             Song History

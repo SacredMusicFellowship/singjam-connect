@@ -191,6 +191,7 @@ export default function SongDetailScreen() {
   const [popularity, setPopularity] = useState(0);
   const [singingVoice, setSingingVoice] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSongEditor, setIsSongEditor] = useState(false);
   const [myJammerEntry, setMyJammerEntry] = useState<SongJammer | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -312,6 +313,7 @@ export default function SongDetailScreen() {
     const p = profileRes.data as any;
     setSingingVoice(p?.singing_voice ?? null);
     setIsAdmin(p?.role === 'admin');
+    setIsSongEditor(p?.role === 'song_editor');
     if (user && p) {
       setMyJammerEntry({
         userId: user.id,
@@ -527,10 +529,10 @@ export default function SongDetailScreen() {
             </TouchableOpacity>
           </>
         )}
-        {isAdmin ? (
-          // The song editor is web-only, so admins hand off to the browser.
+        {isAdmin || isSongEditor ? (
+          // The song editor is web-only, so editors hand off to the browser.
           <TouchableOpacity
-            onPress={() => openUrl(`${WEB_URL}/admin/songs/${song!.slug ?? song!.id}`)}
+            onPress={() => openUrl(`${WEB_URL}/${isAdmin ? 'admin' : 'song-editor'}/songs/${song!.slug ?? song!.id}`)}
             className="flex-row items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5"
           >
             <Text className="text-slate-600 text-sm">Edit</Text>
