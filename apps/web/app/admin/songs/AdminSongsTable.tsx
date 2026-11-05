@@ -1,16 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useCallback, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo, useEffect } from "react";
 import DeleteSongButton from "./DeleteSongButton";
-import { fetchAllRows, songMissingFields } from "@singjam/core";
+import { fetchAllRows, formatRecordingArtists, songMissingFields, SONG_COMPLETENESS_FIELDS, type ProductionCredit } from "@singjam/core";
 import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import SearchInput from "@/components/SearchInput";
-
 import Select from "@/components/Select";
+
 type Song = {
   id: string;
   title: string;
@@ -27,7 +26,8 @@ type Song = {
   song_composers: { people: { name: string } | null }[];
   song_lyricists: { people: { name: string } | null }[];
   song_cultures: { cultures: { name: string } | null }[];
-  song_recording_artists: { year: number | null; youtube_url: string | null }[];
+  song_recording_artists: { year: number | null; position: number | null; youtube_url: string | null; artists: { name: string } | null }[];
+  song_productions: { productions: ProductionCredit | null }[];
   youtube_url: string | null;
   song_genres: { genre_id: string }[];
   song_languages: { language_id: string }[];
@@ -38,39 +38,79 @@ type Song = {
 };
 
 type SortCol = "title" | "songwriters" | "artist" | "year" | "popularity" | "added" | "missing";
+type SortDir = "asc" | "desc";
 
 export const BEFORE_TRACKING = "before-tracking";
+const PAGE = 100;
+const COMPLETE = "complete";
+const INCOMPLETE = "incomplete";
 
 function adderName(p: Song["profiles"]): string | null {
   if (!p) return null;
   return [p.display_name, p.last_name].filter(Boolean).join(" ") || p.username || null;
 }
-type SortDir = "asc" | "desc";
 
-const COLUMNS: { key: SortCol | "actions"; label: string; defaultWidth: number; sortable: boolean }[] = [
-  { key: "title",       label: "Title",               defaultWidth: 160, sortable: true },
-  { key: "songwriters", label: "Songwriters",          defaultWidth: 140, sortable: true },
-  { key: "artist",      label: "Artist(s)",            defaultWidth: 110, sortable: true },
-  { key: "year",        label: "Year",                 defaultWidth: 80,  sortable: true },
-  { key: "popularity",  label: "SingJam popularity",   defaultWidth: 80,  sortable: true },
-  { key: "added",       label: "Added",                defaultWidth: 120, sortable: true },
-  { key: "missing",     label: "Missing",              defaultWidth: 220, sortable: true },
-  { key: "actions",     label: "Actions",              defaultWidth: 100, sortable: false },
+const SORT_LABELS: Record<SortCol, string> = {
+  title: "Title",
+  songwriters: "Songwriters",
+  artist: "Artist",
+  year: "Year",
+  popularity: "Popularity",
+  added: "Added",
+  missing: "Missing",
+};
+
+const COLUMNS: { key: SortCol; className: string }[] = [
+  { key: "title",       className: "" },
+  { key: "songwriters", className: "" },
+  { key: "artist",      className: "" },
+  { key: "year",        className: "w-16" },
+  { key: "popularity",  className: "w-24" },
+  { key: "added",       className: "w-28" },
+  { key: "missing",     className: "w-40" },
 ];
+
+// Same wording as the search cards: "from Show (year) · Artist (year), …".
+function ArtistCredits({ shows, artistsLine }: { shows: ProductionCredit[]; artistsLine: string }) {
+  if (!shows.length) return <>{artistsLine}</>;
+  return (
+    <>
+      from{" "}
+      {shows.map((p, i) => (
+        <Fragment key={`${p.name}-${p.year}`}>
+          {i > 0 && ", "}
+          <em>{p.name}</em>
+          {p.year ? ` (${p.year})` : null}
+        </Fragment>
+      ))}
+      {artistsLine ? ` · ${artistsLine}` : null}
+    </>
+  );
+}
+
+function MissingSummary({ missing }: { missing: string[] }) {
+  if (!missing.length) return <span className="text-xs text-emerald-600">Complete</span>;
+  return (
+    <div className="line-clamp-2 text-xs text-zinc-500" title={missing.join(", ")}>
+      <span className="mr-1 inline-flex min-w-5 justify-center rounded-full bg-red-50 px-1.5 font-medium text-red-600">
+        {missing.length}
+      </span>
+      {missing.join(", ")}
+    </div>
+  );
+}
 
 // The Songs table for admins and song editors. Song editors get everything but
 // deleting; `addedBy` presets the "Added by" filter (?added_by= from the Users page).
 export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = true, addedBy = "" }: { basePath?: string; isAdmin?: boolean; addedBy?: string }) {
   const supabase = supabaseBrowser();
-  const router = useRouter();
-  const equalWidth = 100 / COLUMNS.length;
   const [songs, setSongs] = useState<Song[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [widths, setWidths] = useState<number[]>(COLUMNS.map(() => equalWidth));
-  const [wrap, setWrap] = useState(true);
   const [query, setQuery] = useState("");
   const [adderFilter, setAdderFilter] = useState(addedBy);
+  const [missingFilter, setMissingFilter] = useState("");
   const [sort, setSort] = useState<{ col: SortCol; dir: SortDir }>({ col: "missing", dir: "desc" });
+  const [shown, setShown] = useState(PAGE);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
@@ -83,7 +123,8 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
           first_line, hook, genius_url, chord_chart_url, youtube_url, tonality, meter, vibe, year_written,
           song_composers(people(name)),
           song_lyricists(people(name)),
-          song_recording_artists(year, youtube_url),
+          song_recording_artists(year, position, youtube_url, artists(name)),
+          song_productions(productions(name, year)),
           song_genres(genre_id),
           song_languages(language_id),
           song_cultures(cultures(name)),
@@ -101,37 +142,23 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const dragging = useRef<{ col: number; startX: number; startW: number } | null>(null);
-
-  const onMouseDown = useCallback((colIndex: number, e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = { col: colIndex, startX: e.clientX, startW: widths[colIndex] };
-
-    function onMove(ev: MouseEvent) {
-      if (!dragging.current) return;
-      const { col, startX, startW } = dragging.current;
-      const newW = Math.max(60, startW + (ev.clientX - startX));
-      setWidths((prev) => {
-        const next = [...prev];
-        next[col] = newW;
-        return next;
-      });
-    }
-    function onUp() {
-      dragging.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }, [widths]);
+  useEffect(() => {
+    setShown(PAGE);
+    setSelected(new Set());
+  }, [query, adderFilter, missingFilter, sort]);
 
   function toggleSort(col: SortCol) {
     setSort((prev) =>
       prev.col === col
         ? { col, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { col, dir: col === "missing" || col === "added" ? "desc" : "asc" }
+        : { col, dir: col === "missing" || col === "added" || col === "popularity" ? "desc" : "asc" }
     );
+  }
+
+  function removeSongs(ids: string[]) {
+    const gone = new Set(ids);
+    setSongs((prev) => prev && prev.filter((s) => !gone.has(s.id)));
+    setSelected((prev) => new Set([...prev].filter((id) => !gone.has(id))));
   }
 
   const enriched = useMemo(() =>
@@ -142,61 +169,70 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
       ]);
       const cultures = s.song_cultures.map((c) => c.cultures?.name).filter(Boolean) as string[];
       const songwriterNamesRaw = [...songwriterNames].sort().join(" ");
-      const songwriters = songwriterNames.size
-        ? formatComposers([...songwriterNames].sort(), cultures)
-        : "—";
+      const songwriters = songwriterNames.size ? formatComposers([...songwriterNames].sort(), cultures) : "";
       const years = s.song_recording_artists
         .map((r) => r.year)
         .filter((y): y is number => typeof y === "number");
       const firstRecording = years.length ? Math.min(...years) : null;
       const yw = s.year_written ?? null;
       const firstYear = yw && firstRecording ? Math.min(yw, firstRecording) : yw ?? firstRecording ?? null;
+      const credits = s.song_recording_artists
+        .filter((r) => r.artists?.name)
+        .map((r) => ({ name: r.artists!.name, year: r.year, position: r.position }));
+      const artistsLine = formatRecordingArtists(credits, s.display_artist) ?? "";
+      const shows = s.song_productions.map((p) => p.productions).filter((p): p is ProductionCredit => !!p?.name);
+      const artistSortKey = [...shows.map((p) => p.name), artistsLine].join(" ");
       const missing = songMissingFields(s);
-      return { ...s, songwriters, songwriterNamesRaw, firstYear, missing };
+      const adder = s.submitted_by ? adderName(s.profiles) ?? "Unknown user" : null;
+      return { ...s, songwriters, songwriterNamesRaw, firstYear, missing, adder, artistsLine, shows, artistSortKey, popularity: s.user_songs[0]?.count ?? 0 };
     }),
   [songs]);
 
   const adders = useMemo(() => {
     const byId = new Map<string, string>();
-    for (const s of songs ?? []) if (s.submitted_by) byId.set(s.submitted_by, adderName(s.profiles) ?? "Unknown user");
+    for (const s of enriched) if (s.submitted_by && s.adder) byId.set(s.submitted_by, s.adder);
     return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [songs]);
+  }, [enriched]);
 
   const filtered = useMemo(() => {
     return enriched.filter((s) => {
       if (adderFilter === BEFORE_TRACKING ? s.submitted_by : adderFilter && s.submitted_by !== adderFilter) return false;
-      const hay = [s.title, s.display_artist ?? "", s.songwriterNamesRaw, s.first_line ?? "", s.hook ?? ""].join(" ");
+      if (missingFilter === COMPLETE ? s.missing.length : missingFilter === INCOMPLETE ? !s.missing.length : missingFilter && !s.missing.includes(missingFilter)) return false;
+      const hay = [s.title, s.display_artist ?? "", s.artistSortKey, s.songwriterNamesRaw, s.first_line ?? "", s.hook ?? ""].join(" ");
       return matchesSearch(hay, query);
     });
-  }, [enriched, query, adderFilter]);
+  }, [enriched, query, adderFilter, missingFilter]);
 
   const sorted = useMemo(() => {
     const { col, dir } = sort;
     const mul = dir === "asc" ? 1 : -1;
+    const strip = (v: string) => v.replace(/^the\s+/i, "");
+    // Blanks always sink to the bottom, whichever way the column is sorted.
+    const blank = (a: unknown, b: unknown) => Number(a == null || a === "") - Number(b == null || b === "");
     return [...filtered].sort((a, b) => {
       let cmp = 0;
-      if (col === "title")       cmp = a.title.localeCompare(b.title);
-      else if (col === "songwriters") cmp = a.songwriters.localeCompare(b.songwriters);
-      else if (col === "artist") {
-        const strip = (v: string) => v.replace(/^the\s+/i, "");
-        cmp = strip(a.display_artist ?? "").localeCompare(strip(b.display_artist ?? ""));
-      }
-      else if (col === "year")   cmp = (a.firstYear ?? Infinity) - (b.firstYear ?? Infinity);
-      else if (col === "popularity") cmp = (a.user_songs[0]?.count ?? 0) - (b.user_songs[0]?.count ?? 0);
+      if (col === "title") cmp = a.title.localeCompare(b.title);
+      else if (col === "songwriters") cmp = blank(a.songwriters, b.songwriters) || a.songwriters.localeCompare(b.songwriters) * mul;
+      else if (col === "artist") cmp = blank(a.artistSortKey, b.artistSortKey) || strip(a.artistSortKey).localeCompare(strip(b.artistSortKey)) * mul;
+      else if (col === "year") cmp = blank(a.firstYear, b.firstYear) || ((a.firstYear ?? 0) - (b.firstYear ?? 0)) * mul;
+      else if (col === "popularity") cmp = a.popularity - b.popularity;
       else if (col === "added") cmp = a.created_at.localeCompare(b.created_at);
       else if (col === "missing") cmp = a.missing.length - b.missing.length;
-      return cmp * mul || a.title.localeCompare(b.title);
+      if (col !== "songwriters" && col !== "artist" && col !== "year") cmp *= mul;
+      return cmp || a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
     });
   }, [filtered, sort]);
 
-  const allVisibleIds = sorted.map((s) => s.id);
-  const allSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selected.has(id));
+  const visible = sorted.slice(0, shown);
+  const visibleIds = visible.map((s) => s.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const filtering = Boolean(query.trim() || adderFilter || missingFilter);
 
   function toggleAll() {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allSelected) allVisibleIds.forEach((id) => next.delete(id));
-      else allVisibleIds.forEach((id) => next.add(id));
+      if (allSelected) visibleIds.forEach((id) => next.delete(id));
+      else visibleIds.forEach((id) => next.add(id));
       return next;
     });
   }
@@ -212,14 +248,12 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
   async function handleBulkDelete() {
     if (!confirm(`Delete ${selected.size} song${selected.size === 1 ? "" : "s"}? This cannot be undone.`)) return;
     setDeleting(true);
-    const { error } = await supabase.from("songs").delete().in("id", [...selected]);
+    const ids = [...selected];
+    const { error } = await supabase.from("songs").delete().in("id", ids);
     setDeleting(false);
     if (error) { alert(error.message); return; }
-    setSelected(new Set());
-    router.refresh();
+    removeSongs(ids);
   }
-
-  const cellClass = wrap ? "px-4 py-2.5 whitespace-normal" : "px-4 py-2.5 truncate";
 
   if (loadError !== null) {
     return (
@@ -229,50 +263,9 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
     );
   }
 
-  if (songs === null) {
-    return (
-      <div className="space-y-2">
-        <div className="rounded-2xl border border-zinc-200 p-5 shadow-sm">
-          <div className="h-4 w-16 animate-pulse rounded bg-zinc-200" />
-          <div className="mt-2 h-9 animate-pulse rounded-lg bg-zinc-100" />
-        </div>
+  if (songs === null) return <AdminSongsTableSkeleton />;
 
-        {/* Mobile card skeleton */}
-        <div className="sm:hidden space-y-2">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-zinc-200" />
-                  <div className="h-3 w-1/3 animate-pulse rounded bg-zinc-100" />
-                </div>
-                <div className="h-4 w-8 shrink-0 animate-pulse rounded bg-zinc-100" />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Desktop table skeleton */}
-        <div className="hidden sm:block overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
-            <div className="h-3 w-full animate-pulse rounded bg-zinc-200" />
-          </div>
-          <div className="divide-y divide-slate-100">
-            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-2.5">
-                <div className="h-4 w-1/4 animate-pulse rounded bg-zinc-200" />
-                <div className="h-3 w-1/5 animate-pulse rounded bg-zinc-100" />
-                <div className="h-3 w-1/6 animate-pulse rounded bg-zinc-100" />
-                <div className="h-3 w-10 animate-pulse rounded bg-zinc-100" />
-                <div className="h-3 w-12 animate-pulse rounded bg-zinc-100" />
-                <div className="h-3 w-20 animate-pulse rounded bg-zinc-100" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const emptyText = filtering ? "No songs match these filters." : "No songs yet.";
 
   return (
     <div className="space-y-2">
@@ -282,180 +275,215 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}
-          placeholder="Search by title, songwriter, artist, first line, or hook…"
+          placeholder="Title, songwriter, artist, first line, or hook…"
           autoComplete="off"
         />
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label htmlFor="added-by" className="text-xs font-medium text-zinc-600">Added by</label>
-          <Select
-            id="added-by"
-            value={adderFilter}
-            onChange={(e) => setAdderFilter(e.target.value)}
-            shape="pill"
-            size="sm"
-          >
-            <option value="">Anyone</option>
-            {adders.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-            <option value={BEFORE_TRACKING}>Before tracking</option>
-          </Select>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <label htmlFor="added-by" className="text-xs font-medium text-zinc-600">Added by</label>
+            <Select id="added-by" value={adderFilter} onChange={(e) => setAdderFilter(e.target.value)} shape="pill" size="sm">
+              <option value="">Anyone</option>
+              {adders.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              <option value={BEFORE_TRACKING}>Before tracking</option>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="missing" className="text-xs font-medium text-zinc-600">Details</label>
+            <Select id="missing" value={missingFilter} onChange={(e) => setMissingFilter(e.target.value)} shape="pill" size="sm">
+              <option value="">Any</option>
+              <option value={INCOMPLETE}>Missing something</option>
+              <option value={COMPLETE}>Complete</option>
+              <optgroup label="Missing…">
+                {SONG_COMPLETENESS_FIELDS.map((f) => <option key={f} value={f}>Missing {f}</option>)}
+              </optgroup>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 sm:hidden">
+            <label htmlFor="sort" className="text-xs font-medium text-zinc-600">Sort</label>
+            <Select
+              id="sort"
+              value={`${sort.col}:${sort.dir}`}
+              onChange={(e) => {
+                const [col, dir] = e.target.value.split(":") as [SortCol, SortDir];
+                setSort({ col, dir });
+              }}
+              shape="pill"
+              size="sm"
+            >
+              <option value="missing:desc">Most missing</option>
+              <option value="title:asc">Title A–Z</option>
+              <option value="added:desc">Newest</option>
+              <option value="added:asc">Oldest</option>
+              <option value="popularity:desc">Most popular</option>
+              <option value="year:asc">Year</option>
+            </Select>
+          </div>
         </div>
-        {(query.trim() || adderFilter) && (
-          <p className="mt-2 text-xs text-zinc-500">{filtered.length} of {songs.length} songs</p>
+      </div>
+
+      <div className="flex min-h-8 items-center justify-between gap-2">
+        <p className="text-xs text-zinc-500">
+          {filtering ? `${sorted.length} of ${songs.length} songs` : `${songs.length} songs`}
+        </p>
+        {isAdmin && selected.size > 0 && (
+          <button
+            onClick={handleBulkDelete}
+            disabled={deleting}
+            className="hidden sm:block rounded-full bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-40"
+          >
+            {deleting ? "Deleting…" : `Delete ${selected.size} selected`}
+          </button>
         )}
       </div>
 
       {/* Mobile card list */}
       <div className="sm:hidden space-y-2">
-        {sorted.map((s) => {
-          const editHref = `${basePath}/${s.slug ?? s.id}`;
-          return (
-            <div key={s.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-medium text-slate-900 truncate">{s.title}</div>
-                  {s.songwriters !== "—" && (
-                    <div className="mt-0.5 text-xs text-slate-500 truncate">{s.songwriters}</div>
-                  )}
-                  <div className="mt-0.5 text-xs text-slate-400 truncate">
-                    Added {s.created_at.slice(0, 10)}{s.submitted_by ? ` by ${adderName(s.profiles) ?? "Unknown user"}` : ""}
-                  </div>
-                  {s.missing.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {s.missing.map((m) => (
-                        <span key={m} className="rounded-full bg-red-50 border border-red-200 px-1.5 py-0.5 text-xs text-red-500">
-                          {m}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <Link href={editHref} className="shrink-0 text-sm font-medium text-amber-600 hover:text-amber-500">
-                  Edit
-                </Link>
-              </div>
+        {visible.map((s) => (
+          <Link
+            key={s.id}
+            href={`${basePath}/${s.slug ?? s.id}`}
+            className="block rounded-xl border border-slate-200 bg-white px-4 py-3 active:bg-slate-50"
+          >
+            <div className="font-medium text-slate-900">{s.title}</div>
+            {s.songwriters && <div className="mt-0.5 text-xs text-slate-500">{s.songwriters}</div>}
+            {(s.shows.length > 0 || s.artistsLine) && (
+              <div className="mt-0.5 text-xs text-slate-500"><ArtistCredits shows={s.shows} artistsLine={s.artistsLine} /></div>
+            )}
+            <div className="mt-0.5 truncate text-xs text-slate-400">
+              Added {s.created_at.slice(0, 10)}{s.adder ? ` by ${s.adder}` : ""}
             </div>
-          );
-        })}
-        {!sorted.length && (
-          <p className="py-8 text-center text-sm text-slate-400">
-            {query.trim() ? "No songs match that search." : "No songs yet."}
-          </p>
-        )}
+            <div className="mt-1.5"><MissingSummary missing={s.missing} /></div>
+          </Link>
+        ))}
+        {!sorted.length && <p className="py-8 text-center text-sm text-slate-400">{emptyText}</p>}
       </div>
 
       {/* Desktop table */}
-      <div className="hidden sm:flex items-center justify-between">
-        {isAdmin && selected.size > 0 ? (
-          <button
-            onClick={handleBulkDelete}
-            disabled={deleting}
-            className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-40"
-          >
-            {deleting ? "Deleting…" : `Delete ${selected.size} selected`}
-          </button>
-        ) : <div />}
-        <button
-          onClick={() => setWrap((w) => !w)}
-          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50"
-        >
-          {wrap ? "Clip cells" : "Wrap cells"}
-        </button>
-      </div>
       <div className="hidden sm:block overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
-          <colgroup>
-            {widths.map((w, i) => <col key={i} style={{ width: w }} />)}
-          </colgroup>
+        <table className="w-full min-w-[760px] table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium text-slate-500">
-              <th className="w-8 px-3 py-3">
-                {isAdmin && <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-amber-500" />}
-              </th>
-              {COLUMNS.map((col, i) => (
-                <th
-                  key={col.key}
-                  className="relative px-4 py-3 select-none"
-                  style={{ width: widths[i] }}
-                >
-                  {col.sortable ? (
-                    <button
-                      onClick={() => toggleSort(col.key as SortCol)}
-                      className="flex items-center gap-1 hover:text-slate-800"
-                    >
-                      {col.label}
-                      <span className="text-slate-300">
-                        {sort.col === col.key
-                          ? sort.dir === "asc" ? "↑" : "↓"
-                          : "↕"}
-                      </span>
-                    </button>
-                  ) : col.label}
-                  {i < COLUMNS.length - 1 && (
-                    <div
-                      onMouseDown={(e) => onMouseDown(i, e)}
-                      className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-amber-300 active:bg-amber-400"
-                    />
-                  )}
+              {isAdmin && (
+                <th className="w-10 px-3 py-3">
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all shown" className="accent-amber-500" />
+                </th>
+              )}
+              {COLUMNS.map((col) => (
+                <th key={col.key} className={`px-3 py-3 ${col.className}`}>
+                  <button
+                    onClick={() => toggleSort(col.key)}
+                    className={`flex items-center gap-1 hover:text-slate-800 ${sort.col === col.key ? "text-slate-800" : ""}`}
+                  >
+                    {SORT_LABELS[col.key]}
+                    <span className={sort.col === col.key ? "text-amber-500" : "text-slate-300"}>
+                      {sort.col === col.key ? (sort.dir === "asc" ? "↑" : "↓") : "↕"}
+                    </span>
+                  </button>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {sorted.map((s) => {
-              const viewHref = `/songs/${s.slug ?? s.id}`;
-              const editHref = `${basePath}/${s.slug ?? s.id}`;
-
-              return (
-                <tr key={s.id} className={`hover:bg-slate-50 ${selected.has(s.id) ? "bg-amber-50" : ""}`}>
-                  <td className="w-8 px-3 py-2.5">
-                    {isAdmin && <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} className="accent-amber-500" />}
+            {visible.map((s) => (
+              <tr key={s.id} className={`align-top hover:bg-slate-50 ${selected.has(s.id) ? "bg-amber-50" : ""}`}>
+                {isAdmin && (
+                  <td className="px-3 py-2.5">
+                    <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} aria-label={`Select ${s.title}`} className="accent-amber-500" />
                   </td>
-                  <td className={`${cellClass} font-medium`}>
-                    <Link href={viewHref} className={`text-slate-900 hover:text-amber-600 hover:underline ${wrap ? "" : "truncate"} block`}>
-                      {s.title}
-                    </Link>
-                  </td>
-                  <td className={`${cellClass} text-slate-500`}>{s.songwriters}</td>
-                  <td className={`${cellClass} text-slate-500`}>{s.display_artist ?? "—"}</td>
-                  <td className={`${cellClass} text-slate-500`}>{s.firstYear ?? "—"}</td>
-                  <td className={`${cellClass} text-slate-500`}>{s.user_songs[0]?.count ?? 0}</td>
-                  <td className={`${cellClass} text-xs text-slate-500`}>
-                    <div>{s.submitted_by ? adderName(s.profiles) ?? "Unknown user" : <span className="text-slate-300">before tracking</span>}</div>
-                    <div className="text-slate-400">{s.created_at.slice(0, 10)}</div>
-                  </td>
-                  <td className={cellClass}>
-                    {s.missing.length === 0 ? (
-                      <span className="text-xs text-slate-300">✓</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {s.missing.map((m) => (
-                          <span key={m} className="rounded-full bg-red-50 border border-red-200 px-1.5 py-0.5 text-xs text-red-500">
-                            {m}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td className={cellClass}>
-                    <div className="flex items-center gap-3">
-                      <Link href={editHref} className="text-amber-600 hover:text-amber-500">
-                        Edit
-                      </Link>
-                      {isAdmin && <DeleteSongButton id={s.id} />}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                )}
+                <td className="px-3 py-2.5 font-medium">
+                  <Link href={`/songs/${s.slug ?? s.id}`} className="text-slate-900 hover:text-amber-600 hover:underline">
+                    {s.title}
+                  </Link>
+                  <div className="mt-1 flex gap-3 text-xs font-normal">
+                    <Link href={`${basePath}/${s.slug ?? s.id}`} className="text-amber-600 hover:text-amber-500">Edit</Link>
+                    {isAdmin && <DeleteSongButton id={s.id} onDeleted={() => removeSongs([s.id])} />}
+                  </div>
+                </td>
+                <td className="px-3 py-2.5 text-slate-500">
+                  {s.songwriters || <span className="text-slate-300">—</span>}
+                </td>
+                <td className="px-3 py-2.5 text-slate-500">
+                  {s.shows.length > 0 || s.artistsLine
+                    ? <ArtistCredits shows={s.shows} artistsLine={s.artistsLine} />
+                    : <span className="text-slate-300">—</span>}
+                </td>
+                <td className="px-3 py-2.5 tabular-nums text-slate-500">{s.firstYear ?? <span className="text-slate-300">—</span>}</td>
+                <td className="px-3 py-2.5 tabular-nums text-slate-500">{s.popularity}</td>
+                <td className="px-3 py-2.5 text-xs">
+                  <div className="truncate text-slate-500">{s.adder ?? <span className="text-slate-300">before tracking</span>}</div>
+                  <div className="tabular-nums text-slate-400">{s.created_at.slice(0, 10)}</div>
+                </td>
+                <td className="px-3 py-2.5"><MissingSummary missing={s.missing} /></td>
+              </tr>
+            ))}
             {!sorted.length && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
-                  {query.trim() ? "No songs match that search." : "No songs yet."}
-                </td>
+                <td colSpan={COLUMNS.length + (isAdmin ? 1 : 0)} className="px-4 py-8 text-center text-slate-400">{emptyText}</td>
               </tr>
             )}
           </tbody>
         </table>
+      </div>
+
+      {sorted.length > shown && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={() => setShown((n) => n + PAGE)}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Show {Math.min(PAGE, sorted.length - shown)} more · {sorted.length - shown} left
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AdminSongsTableSkeleton() {
+  return (
+    <div className="space-y-2">
+      <div className="rounded-2xl border border-zinc-200 p-5 shadow-sm">
+        <div className="h-4 w-16 animate-pulse rounded bg-zinc-200" />
+        <div className="mt-2 h-9 animate-pulse rounded-lg bg-zinc-100" />
+        <div className="mt-3 flex gap-4">
+          <div className="h-6 w-36 animate-pulse rounded-lg bg-zinc-100" />
+          <div className="h-6 w-32 animate-pulse rounded-lg bg-zinc-100" />
+        </div>
+      </div>
+      <div className="flex min-h-8 items-center">
+        <div className="h-3 w-20 animate-pulse rounded bg-zinc-100" />
+      </div>
+
+      {/* Mobile card skeleton */}
+      <div className="sm:hidden space-y-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-xl border border-slate-200 bg-white px-4 py-3 space-y-1.5">
+            <div className="h-4 w-2/3 animate-pulse rounded bg-zinc-200" />
+            <div className="h-3 w-1/2 animate-pulse rounded bg-zinc-100" />
+            <div className="h-3 w-1/3 animate-pulse rounded bg-zinc-100" />
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table skeleton */}
+      <div className="hidden sm:block overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+          <div className="h-3 w-full animate-pulse rounded bg-zinc-200" />
+        </div>
+        <div className="divide-y divide-slate-100">
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+            <div key={i} className="flex items-center gap-4 px-4 py-3">
+              <div className="h-4 w-1/5 animate-pulse rounded bg-zinc-200" />
+              <div className="h-3 w-1/6 animate-pulse rounded bg-zinc-100" />
+              <div className="h-3 w-1/6 animate-pulse rounded bg-zinc-100" />
+              <div className="h-3 w-10 animate-pulse rounded bg-zinc-100" />
+              <div className="h-3 w-10 animate-pulse rounded bg-zinc-100" />
+              <div className="h-3 w-20 animate-pulse rounded bg-zinc-100" />
+              <div className="h-3 w-32 animate-pulse rounded bg-zinc-100" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
