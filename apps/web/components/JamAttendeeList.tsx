@@ -253,7 +253,7 @@ export default function JamAttendeeList({
                     Leader
                   </span>
                 ) : isCohost ? (
-                  <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700">
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
                     Co-host
                   </span>
                 ) : (
