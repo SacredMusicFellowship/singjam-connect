@@ -122,13 +122,15 @@ export async function POST(
   }, null, 2);
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5.5",
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: `Current song data:\n\n${context}\n\nPlease research this song and return your suggested values.` },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.1,
+    // gpt-5.5 only accepts the default temperature; low effort keeps a lookup near
+    // 10s, well inside Netlify's 60s function limit (default effort took ~30s).
+    reasoning_effort: "low",
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";

@@ -105,13 +105,15 @@ export async function POST(req: Request) {
   // AI and Genius run in parallel — Genius doesn't depend on AI output
   const [completionResult, geniusResult] = await Promise.allSettled([
     openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.5",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: `Research this song and return accurate data.\n\nTitle: ${title.trim()}\nArtist: ${artist.trim() || "(unknown)"}${production.trim() ? `\nProduction: ${production.trim()}` : ""}` },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.1,
+      // gpt-5.5 only accepts the default temperature; low effort keeps a lookup near
+      // 10s, well inside Netlify's 60s function limit (default effort took ~30s).
+      reasoning_effort: "low",
     }),
     lookupGeniusUrl(title.trim(), artist.trim()),
   ]);
