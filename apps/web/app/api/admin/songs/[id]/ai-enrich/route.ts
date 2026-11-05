@@ -1,51 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { requireAdmin } from "@/lib/auth";
-
-const VALID_TONALITIES = [
-  "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
-  "Aeolian", "Locrian", "Harmonic Minor", "Melodic Minor",
-  "Pentatonic", "Blues", "Whole Tone", "Chromatic", "Modal",
-];
-
-const VALID_METERS = ["4", "3", "5", "7", "9", "11", "Free", "Irregular"];
-
-const VALID_GENRES = [
-  "Afropop", "Alternative Rock", "Americana", "Bluegrass", "Blues", "Bossa Nova",
-  "Cajun", "Calypso", "Celtic", "Child Ballad", "Children's Music", "Classic Rock",
-  "Contemporary Christian", "Country", "Disco", "Doo-Wop", "Emo", "Flamenco",
-  "Folk", "Folk Rock", "Funk", "Gospel", "Grunge", "Hard Rock", "Hip-Hop & Rap",
-  "Holiday", "Hymns", "Indie Rock", "Jam Band", "Jazz", "Klezmer", "Latin",
-  "Lullaby", "Metal", "Motown", "Musical", "New Wave", "Pop", "Progressive Rock",
-  "Psychedelic Rock", "Punk", "R&B", "Reggae", "Rock", "Rockabilly", "Roots Rock",
-  "Salsa", "Sea Shanties", "Ska", "Soft Rock", "Soul", "Spiritual", "Zydeco",
-];
-
-const VALID_THEMES = [
-  "Addiction", "Aging", "Betrayal", "Celebration", "Childhood", "City Life", "Coming of Age",
-  "Courage", "Dancing", "Death", "Drinking", "Dreams", "Exile", "Faith", "Family", "Fantasy",
-  "Forgiveness", "Freedom", "Friendship", "History", "Home", "Hope", "Humor", "Identity",
-  "Immigration", "Joy", "Justice", "Labor", "Longing", "Loss", "Love", "Memory", "Music",
-  "Mythology", "Nature", "Nostalgia", "Parenthood", "Peace", "Politics", "Poverty", "Pride",
-  "Race", "Rebellion", "Romance", "Rural Life", "Satire", "Sea", "Seasons",
-  "Shame", "Spirituality", "Storytelling", "Struggle", "Time", "Travel", "Unity", "Wandering",
-  "War", "Wealth", "Work", "Youth",
-];
-
-const VALID_CULTURES = [
-  "American", "Arab", "Argentine", "Australian", "Belgian", "Brazilian", "Cajun", "Cambodian", "Chilean", "Chinese",
-  "Colombian", "Creole", "Cuban", "Czech", "Danish", "Dutch", "East African", "Egyptian", "English",
-  "Ethiopian", "Filipino", "Finnish", "First Nations/Native American", "French", "German", "Ghanaian", "Greek",
-  "Haitian", "Hawaiian", "Hungarian", "Indian", "Indonesian", "Irish", "Israeli", "Italian",
-  "Jamaican", "Japanese", "Jewish", "Kenyan", "Korean", "Latin American", "Māori", "Mexican",
-  "Nepali", "Nigerian", "Norwegian", "Pakistani", "Peruvian", "Polish",
-  "Portuguese", "Puerto Rican", "Romanian", "Romani", "Russian", "Scandinavian", "Scottish",
-  "South African", "Spanish", "Sri Lankan", "Swedish", "Swiss", "Tex-Mex", "Thai", "Trinidadian",
-  "Turkish", "Ukrainian", "Venezuelan", "Vietnamese", "Welsh", "West African", "Yoruba", "Zulu",
-  "Bahá'í", "Buddhist", "Catholic", "Christian", "Confucian", "Eastern Orthodox", "Hindu",
-  "Islamic", "Mormon/LDS", "Pagan", "Protestant", "Rastafarian", "Shinto",
-  "Sikh", "Sufi", "Taoist", "Zoroastrian",
-];
+import { SONG_CULTURES as VALID_CULTURES, SONG_GENRES as VALID_GENRES, SONG_METERS as VALID_METERS, SONG_THEMES as VALID_THEMES, SONG_TONALITIES as VALID_TONALITIES } from "@singjam/core";
 
 const SYSTEM_PROMPT = `You are a music research assistant helping to enrich a song database for SingJam, a platform for musicians.
 
@@ -166,13 +122,15 @@ export async function POST(
   }, null, 2);
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5.5",
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: `Current song data:\n\n${context}\n\nPlease research this song and return your suggested values.` },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.1,
+    // gpt-5.5 only accepts the default temperature; low effort keeps a lookup near
+    // 10s, well inside Netlify's 60s function limit (default effort took ~30s).
+    reasoning_effort: "low",
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";

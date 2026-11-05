@@ -1,12 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+type Match = {
+  title: string;
+  artist: string | null;
+  spotify_url: string | null;
+  release_year: number | null;
+  youtube_id: string | null;
+  youtube_official: boolean;
+  existing: { id: string; slug: string } | null;
+};
 
 type Step =
   | { type: "input" }
   | { type: "looking-up" }
-  | { type: "preview"; spotifyUrl: string | null }
+  | { type: "preview"; match: Match }
   | { type: "submitting" };
 
 function spotifyTrackId(url: string | null): string | null {
@@ -27,51 +38,44 @@ export default function SubmitSongForm() {
     setError(null);
   }
 
+  const typed = (): Match => ({
+    title: title.trim(), artist: artist.trim() || null, spotify_url: null, release_year: null, youtube_id: null, youtube_official: false, existing: null,
+  });
+
   async function lookup() {
     if (!title.trim()) return;
     setError(null);
     setStep({ type: "looking-up" });
-
     const params = new URLSearchParams({ title: title.trim() });
     if (artist.trim()) params.set("artist", artist.trim());
-
     try {
       const res = await fetch(`/api/songs/lookup?${params}`);
-      const json = res.ok ? await res.json() : {};
-      setStep({ type: "preview", spotifyUrl: json.spotify_url ?? null });
+      setStep({ type: "preview", match: res.ok ? await res.json() : typed() });
     } catch {
-      setStep({ type: "preview", spotifyUrl: null });
+      setStep({ type: "preview", match: typed() });
     }
   }
 
-  async function submit(spotifyUrl: string | null) {
+  async function submit(match: Match) {
     setError(null);
     setStep({ type: "submitting" });
-
-    const body: Record<string, string> = { title: title.trim() };
-    if (artist.trim()) body.artist = artist.trim();
-    if (spotifyUrl) body.spotify_url = spotifyUrl;
-
     const res = await fetch("/api/songs/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...match, confirmed: true }),
     });
     const json = await res.json();
-
     if (res.status === 409) {
       setError("This song is already in our library.");
-      setStep({ type: "preview", spotifyUrl });
+      setStep({ type: "preview", match });
       if (json.slug) setTimeout(() => router.push(`/songs/${json.slug}`), 1500);
       return;
     }
-
     if (!res.ok) {
       setError(json.error ?? "Something went wrong. Please try again.");
-      setStep({ type: "preview", spotifyUrl });
+      setStep({ type: "preview", match });
       return;
     }
-
     router.push(`/songs/${json.slug}`);
   }
 
@@ -129,19 +133,11 @@ export default function SubmitSongForm() {
         </div>
       </div>
 
-      {isLookingUp && (
-        <p className="text-xs text-zinc-400">Searching Spotify…</p>
-      )}
+      {isLookingUp && <p className="text-xs text-zinc-400">Looking it up…</p>}
 
-      {isSubmitting && (
-        <p className="text-xs text-zinc-400">Looking up song info — this may take a few seconds…</p>
-      )}
+      {isSubmitting && <p className="text-xs text-zinc-400">Adding it to the library…</p>}
 
-      {isPreview && (
-        <SpotifyPreview
-          spotifyUrl={(step as { type: "preview"; spotifyUrl: string | null }).spotifyUrl}
-        />
-      )}
+      {step.type === "preview" && <MatchPreview match={step.match} />}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -158,22 +154,20 @@ export default function SubmitSongForm() {
               </button>
             )}
 
-            {isPreview && (
+            {step.type === "preview" && !step.match.existing && (
               <>
                 <button
-                  onClick={() => submit((step as { type: "preview"; spotifyUrl: string | null }).spotifyUrl)}
+                  onClick={() => submit(step.match)}
                   className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
                 >
-                  {(step as { type: "preview"; spotifyUrl: string | null }).spotifyUrl
-                    ? "That's the right song — add it"
-                    : "Add song"}
+                  {step.match.youtube_id || step.match.spotify_url ? "Yes, that's the song — add it" : "Add song"}
                 </button>
-                {(step as { type: "preview"; spotifyUrl: string | null }).spotifyUrl && (
+                {(step.match.youtube_id || step.match.spotify_url) && (
                   <button
-                    onClick={() => submit(null)}
+                    onClick={() => submit(typed())}
                     className="rounded-full border border-zinc-200 px-5 py-2 text-sm text-zinc-500 hover:bg-zinc-50 transition-colors"
                   >
-                    Wrong match — add anyway
+                    Not it — add what I typed
                   </button>
                 )}
               </>
@@ -192,27 +186,43 @@ export default function SubmitSongForm() {
   );
 }
 
-function SpotifyPreview({ spotifyUrl }: { spotifyUrl: string | null }) {
-  const trackId = spotifyTrackId(spotifyUrl);
-
-  if (!trackId) {
-    return (
-      <p className="text-xs text-zinc-400">
-        No Spotify match found — you can still add the song.
-      </p>
-    );
-  }
-
+function MatchPreview({ match }: { match: Match }) {
+  const trackId = spotifyTrackId(match.spotify_url);
   return (
-    <div className="rounded-xl overflow-hidden">
-      <iframe
-        src={`https://open.spotify.com/embed/track/${trackId}?utm_source=generator`}
-        width="100%"
-        height="152"
-        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        loading="lazy"
-        className="border-0"
-      />
+    <div className="space-y-2">
+      <p className="text-sm text-zinc-700">
+        {match.existing ? "Already in the library: " : "Is this the song? "}
+        <span className="font-medium">{match.title}</span>
+        {match.artist && <span className="text-zinc-500"> — {match.artist}</span>}
+        {match.existing && (
+          <Link href={`/songs/${match.existing.slug}`} className="ml-2 font-medium text-amber-600 hover:text-amber-500">
+            Open it
+          </Link>
+        )}
+      </p>
+      {match.youtube_id ? (
+        <div className="overflow-hidden rounded-xl border border-zinc-200">
+          <iframe
+            className="aspect-video w-full"
+            src={`https://www.youtube.com/embed/${match.youtube_id}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      ) : trackId ? (
+        <div className="overflow-hidden rounded-xl">
+          <iframe
+            src={`https://open.spotify.com/embed/track/${trackId}?utm_source=generator`}
+            width="100%"
+            height="152"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+            className="border-0"
+          />
+        </div>
+      ) : (
+        <p className="text-xs text-zinc-400">No recording found to preview — you can still add the song.</p>
+      )}
     </div>
   );
 }
