@@ -1,6 +1,6 @@
 "use client";
 
-import { hasLeadVoice } from "@singjam/core";
+import { formatRecordingArtists, hasLeadVoice, type RecordingArtistCredit } from "@singjam/core";
 import { useState } from "react";
 import Link from "next/link";
 import { formatComposers } from "@/lib/formatComposers";
@@ -37,7 +37,7 @@ export default function SongCard({
   composers,
   cultures,
   productions,
-  year,
+  recordingArtists,
   aka,
   genres,
   languages,
@@ -59,7 +59,7 @@ export default function SongCard({
   composers: string[];
   cultures: string[];
   productions: string[];
-  year: number | null;
+  recordingArtists?: RecordingArtistCredit[] | null;
   aka: string[] | null;
   genres: string[];
   languages: string[];
@@ -82,6 +82,7 @@ export default function SongCard({
   const confidenceLabel = LEVELS.find((l) => l.key === confidence)?.label ?? confidence;
   const picking = pendingAddId === songId;
   const href = `/songs/${slug ?? songId}`;
+  const artistsLine = formatRecordingArtists(recordingArtists, displayArtist);
 
   return (
     <div className="rounded-2xl border border-zinc-200 p-4 shadow-sm">
@@ -96,15 +97,12 @@ export default function SongCard({
                 ({formatComposers(composers, cultures ?? [])})
               </span>
             )}
-            {productions && productions.length > 0 ? (
-              <span className="text-zinc-500 font-normal"> — <em>{productions.join(", ")}</em></span>
-            ) : displayArtist ? (
-              <span className="text-zinc-500 font-normal"> — {displayArtist}</span>
-            ) : null}
-            {year && (
-              <span className="ml-1 font-normal text-zinc-400">({year})</span>
-            )}
           </div>
+          {productions && productions.length > 0 ? (
+            <div className="text-sm text-zinc-500">from <em>{productions.join(", ")}</em></div>
+          ) : artistsLine ? (
+            <div className="text-sm text-zinc-500">{artistsLine}</div>
+          ) : null}
           {aka && aka.length ? (
             <div className="text-xs text-zinc-500">aka: {aka.join(" · ")}</div>
           ) : null}

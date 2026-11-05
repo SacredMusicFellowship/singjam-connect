@@ -17,7 +17,7 @@ import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
+import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, type RecordingArtistCredit } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
 import ChordChartSlot from "@/components/ChordChartSlot";
@@ -89,6 +89,7 @@ type SuggestionResult = {
   popularity: number;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
 };
 
 type AddableSong = {
@@ -152,7 +153,7 @@ function SuggestionsPanel({
             composers={s.composers}
             cultures={s.cultures}
             productions={s.productions}
-            year={s.year}
+            recordingArtists={s.recording_artists}
             aka={null}
             genres={s.genres}
             languages={s.languages}
@@ -747,7 +748,7 @@ export default function RepertoirePage() {
                       composers={result.composers}
                       cultures={result.cultures ?? []}
                       productions={result.productions}
-                      year={result.year}
+                      recordingArtists={result.recording_artists}
                       aka={result.aka}
                       genres={result.genres}
                       languages={result.languages ?? []}

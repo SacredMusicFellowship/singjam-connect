@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { formatComposers } from '@singjam/core';
+import { formatComposers, formatRecordingArtists, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 
 export type Suggestion = {
@@ -20,6 +20,7 @@ export type Suggestion = {
   popularity: number;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
 };
 
 const CONFIDENCE_LABELS: Record<string, string> = {
@@ -39,7 +40,8 @@ type Props = {
   confidence?: string | null;
 };
 
-// Mirrors web's SongCard: title + (songwriters) — production/artist (year),
+// Mirrors web's SongCard: title + (songwriters), then "from <production>" or
+// each recording artist with their recording year,
 // media links, genre chips + jammer count, then Add / View. Web embeds the
 // YouTube and Spotify players inline; here they open the apps instead, since a
 // WebView per row would hurt list scrolling and Spotify only plays full tracks
@@ -66,6 +68,7 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
   const composersLabel = song.composers.length > 0
     ? formatComposers(song.composers, song.cultures)
     : null;
+  const artistsLine = formatRecordingArtists(song.recording_artists, song.display_artist);
   const genres = [...song.genres].sort();
   const isLead = confidence === 'lead';
 
@@ -78,13 +81,12 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
             {composersLabel ? (
               <Text className="text-zinc-400"> ({composersLabel})</Text>
             ) : null}
-            {song.productions.length > 0 ? (
-              <Text className="text-zinc-500"> — <Text className="italic">{song.productions.join(', ')}</Text></Text>
-            ) : song.display_artist ? (
-              <Text className="text-zinc-500"> — {song.display_artist}</Text>
-            ) : null}
-            {song.year ? <Text className="text-zinc-400"> ({song.year})</Text> : null}
           </Text>
+          {song.productions.length > 0 ? (
+            <Text className="text-sm text-zinc-500">from <Text className="italic">{song.productions.join(', ')}</Text></Text>
+          ) : artistsLine ? (
+            <Text className="text-sm text-zinc-500">{artistsLine}</Text>
+          ) : null}
         </TouchableOpacity>
 
         <View className="shrink-0 flex-row items-center">
