@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { requireRole } from "@/lib/auth";
-import { SONG_CULTURES as VALID_CULTURES, SONG_GENRES as VALID_GENRES, SONG_METERS as VALID_METERS, SONG_THEMES as VALID_THEMES, SONG_TONALITIES as VALID_TONALITIES } from "@singjam/core";
+import { SONG_CULTURES as VALID_CULTURES, SONG_GENRES as VALID_GENRES, SONG_METERS as VALID_METERS, SONG_THEMES as VALID_THEMES, SONG_TONALITIES as VALID_TONALITIES, MAX_RECORDINGS } from "@singjam/core";
 
 const SYSTEM_PROMPT = `You are a music research assistant helping to enrich a song database for SingJam, a platform for musicians.
 
@@ -24,7 +24,7 @@ Given the current data for a song, research and suggest corrections or additions
 - notes: A concise factual paragraph about the song's history, origin, or cultural significance. Include disputed credits, notable recordings, or anything a musician would find useful. For traditional songs, include Roud Folk Song Index and Child Ballad numbers where known (e.g. "Roud 123" or "Child 10"). Null if nothing meaningful to add.
 - productions: Movies, musicals, TV shows, or other productions this song originally appeared in or is strongly associated with. Return as an array of production names (e.g. "The Sound of Music", "Grease"), or an empty array if none.
 - alternate_titles: Other titles the song is commonly known by (e.g. subtitle variants, translated titles, common misspellings). Do not repeat titles already in the current alternate_titles list.
-- additional_recordings: Up to 2 other significant recordings of this song not already in the recording_artists list. Each entry must have "artist" (canonical artist name) and "year" (recording year — required; only omit if completely unverifiable). Focus on the most historically or culturally notable versions.
+- additional_recordings: Up to open_recording_slots (from the song data; return [] when it is 0) other significant recordings of this song not already in the recording_artists list. Each entry must have "artist" (canonical artist name) and "year" (recording year — required; only omit if completely unverifiable). Focus on the most historically or culturally notable versions.
 
 Rules:
 - Only suggest values you are confident about. If unsure, return null for scalar fields or an empty array for lists.
@@ -113,6 +113,7 @@ export async function POST(
     composers,
     lyricists,
     recording_artists: recordings,
+    open_recording_slots: Math.max(0, Math.min(2, MAX_RECORDINGS - recordings.length)),
     genres,
     themes,
     productions,

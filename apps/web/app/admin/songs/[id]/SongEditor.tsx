@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { generateSlug } from "@/lib/generateSlug";
+import { MAX_RECORDINGS } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -424,7 +425,7 @@ export default function SongEditor({
       const aiArtists: { artist: string; year: number | null; spotify_url: string | null }[] = ai.recording_artists ?? [];
       const existingRAEntries: RecordingArtistEntry[] = [];
       const pendingRAEntries: { name: string; year: number | null; spotify_url: string | null }[] = [];
-      for (const ra of aiArtists) {
+      for (const ra of aiArtists.slice(0, MAX_RECORDINGS)) {
         const match = allArtists.find((a) => a.name.toLowerCase() === ra.artist.trim().toLowerCase());
         if (match) {
           existingRAEntries.push({ id: match.id, year: ra.year, youtube_url: null, spotify_url: ra.spotify_url ?? null });
@@ -571,7 +572,8 @@ export default function SongEditor({
     }
     if (acceptedFields.has("additional_recordings") && aiSuggestions.additional_recordings.length) {
       const toAdd: { id: string; year: number | null }[] = [];
-      for (const rec of aiSuggestions.additional_recordings) {
+      const openSlots = MAX_RECORDINGS - recordingArtists.length - pendingRecordingArtists.length;
+      for (const rec of aiSuggestions.additional_recordings.slice(0, Math.max(0, openSlots))) {
         const artistId = await resolvePersonName(rec.artist, "artists", allArtists);
         if (artistId && !recordingArtists.find((e) => e.id === artistId) && !toAdd.find((e) => e.id === artistId)) {
           toAdd.push({ id: artistId, year: rec.year });
@@ -764,27 +766,34 @@ export default function SongEditor({
         if (error) throw error;
       }
 
+      // Removals land before additions so a swap at the recording cap never
+      // briefly counts as one too many.
+      async function syncRecordings() {
+        if (toDeleteArtists.length) {
+          const { error } = await supabase.from("song_recording_artists").delete().eq("song_id", songId!).in("artist_id", toDeleteArtists);
+          if (error) throw error;
+        }
+        if (!allRecordingArtists.length) return;
+        const { error } = await supabase.from("song_recording_artists").upsert(
+          allRecordingArtists.map((e, i) => {
+            const row: Record<string, unknown> = { song_id: songId!, artist_id: e.id, year: e.year, position: i, youtube_url: e.youtube_url ?? null };
+            // Only write spotify_url when explicitly provided (pending entries from AI lookup)
+            // Omitting it for existing DB entries preserves their current value
+            if ("spotify_url" in e) row.spotify_url = e.spotify_url;
+            return row;
+          }),
+          { onConflict: "song_id,artist_id" }
+        );
+        if (error) throw error;
+      }
+
       await Promise.all([
         syncJoinTable(songId!, "song_genres", "genre_id", genreIds, originalGenres),
         syncJoinTable(songId!, "song_themes", "theme_id", themeIds, originalThemes),
         syncJoinTable(songId!, "song_languages", "language_id", languageIds, originalLanguages),
         syncJoinTable(songId!, "song_composers", "person_id", allComposerIds, originalComposers),
         syncJoinTable(songId!, "song_lyricists", "person_id", allLyricistIds, originalLyricists),
-        toDeleteArtists.length
-          ? supabase.from("song_recording_artists").delete().eq("song_id", songId!).in("artist_id", toDeleteArtists)
-          : Promise.resolve(),
-        allRecordingArtists.length
-          ? supabase.from("song_recording_artists").upsert(
-              allRecordingArtists.map((e, i) => {
-                const row: Record<string, unknown> = { song_id: songId!, artist_id: e.id, year: e.year, position: i, youtube_url: e.youtube_url ?? null };
-                // Only write spotify_url when explicitly provided (pending entries from AI lookup)
-                // Omitting it for existing DB entries preserves their current value
-                if ("spotify_url" in e) row.spotify_url = e.spotify_url;
-                return row;
-              }),
-              { onConflict: "song_id,artist_id" }
-            )
-          : Promise.resolve(),
+        syncRecordings(),
       ]);
 
       // Sync traditional cultures with context
@@ -1824,13 +1833,14 @@ function RecordingArtistField({
 
   const trimmedQuery = query.trim();
   const showSuggestions = trimmedQuery.length > 0;
+  const atCap = items.length + pendingItems.length >= MAX_RECORDINGS;
   const suggestions = allArtists.filter(
     (a) => !items.find((e) => e.id === a.id) && !pendingItems.find((p) => p.name === a.name) && a.name.toLowerCase().includes(trimmedQuery.toLowerCase())
   );
 
   return (
     <div className="space-y-2">
-      <label className="block text-xs font-medium text-slate-600">Recording artists <span className="font-normal text-slate-400">(drag to reorder)</span></label>
+      <label className="block text-xs font-medium text-slate-600">Recording artists <span className="font-normal text-slate-400">(up to {MAX_RECORDINGS}, drag to reorder)</span></label>
       <div className="space-y-1">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={items.map((e) => e.id)} strategy={verticalListSortingStrategy}>
@@ -1881,6 +1891,9 @@ function RecordingArtistField({
         ))}
         {!items.length && !pendingItems.length && <span className="text-sm text-slate-400">None added.</span>}
       </div>
+      {atCap ? (
+        <p className="text-xs text-slate-400">That's the most a song can list — remove one to add another.</p>
+      ) : (
       <div className="relative">
         <input
           value={query}
@@ -1910,6 +1923,7 @@ function RecordingArtistField({
           </ul>
         )}
       </div>
+      )}
     </div>
   );
 }
