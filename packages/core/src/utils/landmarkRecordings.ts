@@ -1,11 +1,11 @@
+import { MAX_RECORDINGS } from "./formatRecordingArtists";
+
 // Other recordings worth listing on a song: only versions both models name as
 // iconic on their own, confirmed to exist on MusicBrainz. Most songs get none.
 
 export type LandmarkCandidate = { artist: string; year: number; why: "original" | "iconic" };
 export type AgreedLandmark = { artist: string; altArtist: string; gptYear: number; claudeYear: number; why: LandmarkCandidate["why"] };
 
-// A song shows at most this many recordings, the one it was added with included.
-export const MAX_RECORDINGS = 4;
 
 const STOP = new Set(["the", "and", "his", "her", "their", "orchestra", "band"]);
 const tokens = (s: string) =>

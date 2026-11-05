@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agreedLandmarks, landmarkYear, leadArtist, MAX_RECORDINGS, sameArtist, type LandmarkCandidate } from "./landmarkRecordings";
+import { agreedLandmarks, landmarkYear, leadArtist, sameArtist, type LandmarkCandidate } from "./landmarkRecordings";
+import { MAX_RECORDINGS } from "./formatRecordingArtists";
 
 const rec = (artist: string, year: number, why: LandmarkCandidate["why"] = "iconic"): LandmarkCandidate => ({ artist, year, why });
 
