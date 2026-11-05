@@ -17,6 +17,7 @@ import {
   type ConfidenceLevel,
   productionCredits,
   type ProductionCredit,
+  sortRecordingsByYear,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
@@ -293,10 +294,11 @@ export default function SongDetailScreen() {
       lyricists: sortByLastName((s.song_lyricists ?? []).map((x: any) => x.people?.name).filter(Boolean)),
       musicCultures: (musicRows.length ? musicRows : noCtx).map((x: any) => x.cultures?.name).filter(Boolean),
       lyricsCultures: (lyricsRows.length ? lyricsRows : noCtx).map((x: any) => x.cultures?.name).filter(Boolean),
-      recordingArtists: (s.song_recording_artists ?? [])
-        .map((x: any) => ({ name: x.artists?.name, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
-        .filter((x: any) => x.name)
-        .sort((a: any, b: any) => (a.position ?? 999) - (b.position ?? 999)),
+      recordingArtists: sortRecordingsByYear(
+        (s.song_recording_artists ?? [])
+          .map((x: any) => ({ name: x.artists?.name, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
+          .filter((x: any) => x.name)
+      ),
       genres: (s.song_genres ?? []).map((x: any) => x.genres?.name).filter(Boolean).sort(),
       themes: (s.song_themes ?? []).map((x: any) => x.themes?.name).filter(Boolean).sort(),
       cultures: [...new Set((cultureRows).map((x: any) => x.cultures?.name).filter(Boolean) as string[])],

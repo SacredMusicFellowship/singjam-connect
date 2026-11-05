@@ -4,7 +4,7 @@ import { CONFIDENCE_STYLES, type ConfidenceLevel } from "@singjam/core";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { formatComposersLong, sortByLastName, setsAcceptingSongs } from "@singjam/core";
+import { formatComposersLong, sortByLastName, setsAcceptingSongs, sortRecordingsByYear } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
@@ -287,10 +287,11 @@ export default function SongPageContent() {
     .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
   const lyricsCultures = (lyricsSpecificRows.length ? lyricsSpecificRows : noContextRows)
     .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
-  const recordingArtists = (song.song_recording_artists as any[])
-    .map((x: any) => ({ name: x.artists?.name as string, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
-    .filter((x: any) => x.name)
-    .sort((a: any, b: any) => (a.position ?? 999) - (b.position ?? 999));
+  const recordingArtists = sortRecordingsByYear(
+    (song.song_recording_artists as any[])
+      .map((x: any) => ({ name: x.artists?.name as string, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
+      .filter((x: any) => x.name)
+  );
   const altTitles = (song.song_alternate_titles as any[]).map((x: any) => x.title as string).filter(Boolean);
   const genres = (song.song_genres as any[]).map((x: any) => x.genres?.name as string).filter(Boolean).sort();
   const themes = (song.song_themes as any[]).map((x: any) => x.themes?.name as string).filter(Boolean).sort();
