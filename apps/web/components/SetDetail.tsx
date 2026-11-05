@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { canRemoveSetSong, jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
+import { canRemoveSetSong, createLatestWinsQueue, fetchAllRows, jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -76,6 +76,10 @@ export default function SetDetail({
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = supabaseBrowser();
+  // Order, key, played and leader saves go out one at a time per song (the order
+  // per set), latest tap winning. While one is settling, live updates for that
+  // field are ignored: they describe an earlier tap and used to flip it back.
+  const syncRef = useRef(createLatestWinsQueue());
 
   const [songs, setSongs] = useState(initialSongs);
   const [songKnowledge, setSongKnowledge] = useState(initialSongKnowledge);
@@ -378,12 +382,8 @@ export default function SetDetail({
                 s.id === row.id
                   ? {
                       ...s,
-                      position: row.position,
-                      key_note: row.key_note,
+                      ...settledFields(s, row),
                       notes: row.notes,
-                      played: row.played,
-                      // A leader change of ours is still settling; keep what the user tapped.
-                      leader_user_ids: leaderSyncRef.current.has(row.id) ? s.leader_user_ids : row.leader_user_ids,
                     }
                   : s
               )
@@ -512,14 +512,63 @@ export default function SetDetail({
     );
   }
 
-  async function handleKeyChanged(id: string, key: string | null) {
-    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, key_note: key } : s));
-    const entry = songs.find((s) => s.id === id);
-    if (!entry) return;
-    fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
+  function settledFields(local: Song, server: { position: number; key_note: string | null; played: boolean; leader_user_ids: string[] | null }) {
+    const q = syncRef.current;
+    return {
+      position: q.isPending("order") ? local.position : server.position,
+      key_note: q.isPending(`key:${local.id}`) ? local.key_note : server.key_note,
+      played: q.isPending(`played:${local.id}`) ? local.played : server.played,
+      leader_user_ids: q.isPending(`leaders:${local.id}`) ? local.leader_user_ids : server.leader_user_ids ?? [],
+    };
+  }
+
+  // After a failed save, show what the server actually has.
+  async function resyncSongs() {
+    const rows = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from("set_songs")
+        .select("id, position, key_note, played, leader_user_ids")
+        .eq("set_id", set.id)
+        .order("id")
+        .range(from, to)
+    ).catch(() => null);
+    if (!rows) return;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    setSongs((prev) =>
+      prev
+        .map((s) => (byId.has(s.id) ? { ...s, ...settledFields(s, byId.get(s.id)) } : s))
+        .sort((a, b) => a.position - b.position)
+    );
+  }
+
+  function patchSong(songId: string, body: Record<string, unknown>) {
+    return fetch(`/api/sets/${set.id}/songs/${songId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key_note: key }),
+      body: JSON.stringify(body),
+    }).then((res) => (res.ok ? res.json() : null));
+  }
+
+  function saveOrder(list: Song[]) {
+    const order = list.map((s) => ({ id: s.id, position: s.position }));
+    syncRef.current.run(
+      "order",
+      () =>
+        fetch(`/api/sets/${set.id}/songs/reorder`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order }),
+        }).then((res) => res.ok),
+      (ok) => { if (!ok) resyncSongs(); }
+    );
+  }
+
+  function handleKeyChanged(id: string, key: string | null) {
+    const entry = songs.find((s) => s.id === id);
+    if (!entry) return;
+    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, key_note: key } : s));
+    syncRef.current.run(`key:${id}`, () => patchSong(entry.song_id, { key_note: key }), (json) => {
+      if (!json) resyncSongs();
     });
   }
 
@@ -535,59 +584,15 @@ export default function SetDetail({
     if (!res.ok) setSongs((prev) => prev.map((s) => s.id === id ? { ...s, notes: entry.notes } : s));
   }
 
-  async function handleTogglePlayed(id: string, played: boolean) {
+  function handleTogglePlayed(id: string, played: boolean) {
     const entry = songs.find((s) => s.id === id);
     if (!entry) return;
-    const previous = songs;
     const reordered = reorderSongsForPlayed(songs, id, played).map((s, i) => ({ ...s, position: i }));
-
     setSongs(reordered);
-    const [playedRes, reorderRes] = await Promise.all([
-      fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ played }),
-      }),
-      fetch(`/api/sets/${set.id}/songs/reorder`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: reordered.map((s) => ({ id: s.id, position: s.position })) }),
-      }),
-    ]);
-    if (!playedRes.ok || !reorderRes.ok) setSongs(previous);
-  }
-
-  // One leader request per song at a time. Taps made while one is in flight
-  // collapse into the latest, and until the last settles, live updates and
-  // earlier replies can't put back a leader who was just removed (they used to
-  // land after the tap and flip the pill back).
-  const leaderSyncRef = useRef<Map<string, { next: Record<string, unknown> | null; confirmed: string[] }>>(new Map());
-
-  function sendLeaders(id: string, songId: string, body: Record<string, unknown>) {
-    fetch(`/api/sets/${set.id}/songs/${songId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .catch(() => null)
-      .then((json) => {
-        const sync = leaderSyncRef.current.get(id);
-        if (!sync) return;
-        if (json && Array.isArray(json.leader_user_ids)) sync.confirmed = json.leader_user_ids;
-        if (sync.next) {
-          const next = sync.next;
-          sync.next = null;
-          sendLeaders(id, songId, next);
-          return;
-        }
-        leaderSyncRef.current.delete(id);
-        setSongs((prev) => prev.map((s) => s.id === id ? {
-          ...s,
-          leader_user_ids: sync.confirmed,
-          ...(json && "key_note" in json ? { key_note: json.key_note } : {}),
-        } : s));
-      });
+    syncRef.current.run(`played:${id}`, () => patchSong(entry.song_id, { played }), (json) => {
+      if (!json) resyncSongs();
+    });
+    saveOrder(reordered);
   }
 
   function handleLeadersChanged(id: string, leaderUserIds: string[]) {
@@ -602,13 +607,15 @@ export default function SetDetail({
     const body = canManage
       ? { leader_user_ids: leaderUserIds }
       : { self_leader: !!currentUserId && leaderUserIds.includes(currentUserId) };
-    const sync = leaderSyncRef.current.get(id);
-    if (sync) {
-      sync.next = body;
-      return;
-    }
-    leaderSyncRef.current.set(id, { next: null, confirmed: entry.leader_user_ids ?? [] });
-    sendLeaders(id, entry.song_id, body);
+    syncRef.current.run(`leaders:${id}`, () => patchSong(entry.song_id, body), (json) => {
+      if (!json || !Array.isArray(json.leader_user_ids)) { resyncSongs(); return; }
+      const keepKey = syncRef.current.isPending(`key:${id}`);
+      setSongs((prev) => prev.map((s) => s.id === id ? {
+        ...s,
+        leader_user_ids: json.leader_user_ids,
+        ...(!keepKey && "key_note" in json ? { key_note: json.key_note } : {}),
+      } : s));
+    });
   }
 
   const participants: Participant[] = [
@@ -705,11 +712,7 @@ export default function SetDetail({
     const reordered = next.map((s, i) => ({ ...s, position: i }));
 
     setSongs(reordered);
-    fetch(`/api/sets/${set.id}/songs/reorder`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order: reordered.map((s) => ({ id: s.id, position: s.position })) }),
-    });
+    saveOrder(reordered);
   }
 
   async function handleSaveName() {

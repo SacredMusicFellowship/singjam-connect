@@ -12,7 +12,7 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, formatComposers, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
@@ -892,8 +892,10 @@ export default function SetDetailScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
-  // Songs whose leader change is still settling (see sendLeaders).
-  const leaderSyncRef = useRef<Map<string, { next: Record<string, unknown> | null; confirmed: string[] }>>(new Map());
+  // As on web: order, key, played and leader saves go out one at a time per
+  // song (the order per set), latest tap winning, and live updates for a field
+  // still settling are ignored so they can't flip it back.
+  const syncRef = useRef(createLatestWinsQueue());
   const [songKnowledge, setSongKnowledge] = useState<{ user_id: string; song_id: string; confidence: string; key_note: string | null }[]>([]);
   const [sortBy, setSortBy] = useState<SetSortOrder>('custom');
   const [filterQuery, setFilterQuery] = useState('');
@@ -938,7 +940,7 @@ export default function SetDetailScreen() {
             sortByPosition(
               prev.map((s) =>
                 s.id === row.id
-                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: leaderSyncRef.current.has(row.song_id) ? s.leader_user_ids : row.leader_user_ids }
+                  ? { ...s, ...settledFields(s, row), notes: row.notes }
                   : s
               )
             )
@@ -1092,11 +1094,54 @@ export default function SetDetailScreen() {
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not remove song.'); }
   }
 
-  async function handleKeyChange(songId: string, key: string | null) {
-    const previous = songs;
+  function settledFields(local: SetSong, server: { position: number; key_note: string | null; played: boolean; leader_user_ids: string[] | null }) {
+    const q = syncRef.current;
+    return {
+      position: q.isPending('order') ? local.position : server.position,
+      key_note: q.isPending(`key:${local.id}`) ? local.key_note : server.key_note,
+      played: q.isPending(`played:${local.id}`) ? local.played : server.played,
+      leader_user_ids: q.isPending(`leaders:${local.id}`) ? local.leader_user_ids : server.leader_user_ids ?? [],
+    };
+  }
+
+  // After a failed save, show what the server actually has.
+  async function resyncSongs() {
+    const rows = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from('set_songs')
+        .select('id, position, key_note, played, leader_user_ids')
+        .eq('set_id', id)
+        .order('id')
+        .range(from, to)
+    ).catch(() => null);
+    if (!rows) return;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    setSongs((prev) =>
+      prev
+        .map((s) => (byId.has(s.id) ? { ...s, ...settledFields(s, byId.get(s.id)) } : s))
+        .sort((a, b) => a.position - b.position)
+    );
+  }
+
+  function failed(message: string) {
+    Alert.alert('Error', message);
+    resyncSongs();
+  }
+
+  function saveOrder(list: SetSong[]) {
+    const order = list.map((s) => ({ id: s.id, position: s.position }));
+    syncRef.current.run('order', () => setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', { order }), (res) => {
+      if (!res?.ok) failed('Could not reorder the set.');
+    });
+  }
+
+  function handleKeyChange(songId: string, key: string | null) {
+    const entry = songs.find((s) => s.song_id === songId);
+    if (!entry) return;
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, key_note: key } : s));
-    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { key_note: key });
-    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update key.'); }
+    syncRef.current.run(`key:${entry.id}`, () => setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { key_note: key }), (res) => {
+      if (!res?.ok) failed(res?.json?.error ?? 'Could not update key.');
+    });
   }
 
   async function handleNotesChange(songId: string, notes: string | null) {
@@ -1104,28 +1149,6 @@ export default function SetDetailScreen() {
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, notes } : s));
     const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { notes });
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not save note.'); }
-  }
-
-  // As on web: one leader request per song at a time, later taps collapse into
-  // the latest, and live updates can't flip a pill back while one is settling.
-  async function sendLeaders(songId: string, body: Record<string, unknown>) {
-    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', body);
-    const sync = leaderSyncRef.current.get(songId);
-    if (!sync) return;
-    if (ok && json && Array.isArray(json.leader_user_ids)) sync.confirmed = json.leader_user_ids;
-    if (sync.next) {
-      const next = sync.next;
-      sync.next = null;
-      sendLeaders(songId, next);
-      return;
-    }
-    leaderSyncRef.current.delete(songId);
-    if (!ok) Alert.alert('Error', json?.error ?? 'Could not update leaders.');
-    setSongs((prev) => prev.map((s) => s.song_id === songId ? {
-      ...s,
-      leader_user_ids: sync.confirmed,
-      ...(ok && json && 'key_note' in json ? { key_note: json.key_note } : {}),
-    } : s));
   }
 
   function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
@@ -1138,38 +1161,31 @@ export default function SetDetailScreen() {
     const body = manage
       ? { leader_user_ids: newLeaderIds }
       : { self_leader: !!myUserId && newLeaderIds.includes(myUserId) };
-    const sync = leaderSyncRef.current.get(songId);
-    if (sync) {
-      sync.next = body;
-      return;
-    }
-    leaderSyncRef.current.set(songId, { next: null, confirmed: entry.leader_user_ids ?? [] });
-    sendLeaders(songId, body);
+    syncRef.current.run(`leaders:${entry.id}`, () => setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', body), (res) => {
+      if (!res?.ok || !Array.isArray(res.json?.leader_user_ids)) { failed(res?.json?.error ?? 'Could not update leaders.'); return; }
+      const keepKey = syncRef.current.isPending(`key:${entry.id}`);
+      setSongs((prev) => prev.map((s) => s.song_id === songId ? {
+        ...s,
+        leader_user_ids: res.json.leader_user_ids,
+        ...(!keepKey && 'key_note' in res.json ? { key_note: res.json.key_note } : {}),
+      } : s));
+    });
   }
 
-  async function handleReorder(data: SetSong[]) {
-    const previous = songs;
+  function handleReorder(data: SetSong[]) {
     const reordered = data.map((s, i) => ({ ...s, position: i + 1 }));
     setSongs(reordered);
-    const { ok } = await setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', {
-      order: reordered.map((s) => ({ id: s.id, position: s.position })),
-    });
-    if (!ok) { setSongs(previous); Alert.alert('Error', 'Could not reorder the set.'); }
+    saveOrder(reordered);
   }
 
-  async function handleTogglePlayed(song: SetSong, played: boolean) {
-    const previous = songs;
+  function handleTogglePlayed(song: SetSong, played: boolean) {
     const reordered = reorderSongsForPlayed(songs, song.id, played)
       .map((s, i) => ({ ...s, position: i + 1 }));
     setSongs(reordered);
-    const [playedRes, reorderRes] = await Promise.all([
-      setApi(`/api/sets/${id}/songs/${song.song_id}`, 'PATCH', { played }),
-      setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', { order: reordered.map((s) => ({ id: s.id, position: s.position })) }),
-    ]);
-    if (!playedRes.ok || !reorderRes.ok) {
-      setSongs(previous);
-      Alert.alert('Error', 'Could not update the set.');
-    }
+    syncRef.current.run(`played:${song.id}`, () => setApi(`/api/sets/${id}/songs/${song.song_id}`, 'PATCH', { played }), (res) => {
+      if (!res?.ok) failed(res?.json?.error ?? 'Could not update the set.');
+    });
+    saveOrder(reordered);
   }
 
   async function handleSpotifyExport() {

@@ -19,6 +19,7 @@ export * from './utils/musicalKeys';
 export * from './utils/normalizeSearch';
 export * from './utils/optionSheet';
 export * from './utils/peopleOverflow';
+export * from './utils/latestWinsQueue';
 export * from './utils/reorderSongsForPlayed';
 export * from './utils/resolvePlaceAddress';
 export * from './utils/attendeeSummary';
