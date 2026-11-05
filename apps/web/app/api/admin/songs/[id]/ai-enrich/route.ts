@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { requireAdmin } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { SONG_CULTURES as VALID_CULTURES, SONG_GENRES as VALID_GENRES, SONG_METERS as VALID_METERS, SONG_THEMES as VALID_THEMES, SONG_TONALITIES as VALID_TONALITIES } from "@singjam/core";
 
 const SYSTEM_PROMPT = `You are a music research assistant helping to enrich a song database for SingJam, a platform for musicians.
@@ -65,7 +65,7 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdmin();
+  const auth = await requireRole("admin", "song_editor");
   if (!auth.ok) return auth.response;
   const { supabase } = auth;
 

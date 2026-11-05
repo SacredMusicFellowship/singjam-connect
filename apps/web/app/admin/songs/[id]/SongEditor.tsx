@@ -106,6 +106,8 @@ type Props = {
   allPeople: Lookup[];
   allArtists: Lookup[];
   allProductions: ProductionLookup[];
+  basePath: string;
+  isAdmin: boolean;
 };
 
 function toSet(ids: string[]) {
@@ -122,6 +124,8 @@ export default function SongEditor({
   allPeople,
   allArtists,
   allProductions,
+  basePath,
+  isAdmin,
 }: Props) {
   const supabase = supabaseBrowser();
   const router = useRouter();
@@ -201,6 +205,7 @@ export default function SongEditor({
 
   // UI state
   const [saving, setSaving] = useState(false);
+  const [fillState, setFillState] = useState<"idle" | "running" | "started" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
 
   // AI enrichment
@@ -830,7 +835,7 @@ export default function SongEditor({
       }
 
       setSlug(resolvedSlug);
-      router.push(`/admin/songs/${resolvedSlug}`);
+      router.push(`${basePath}/${resolvedSlug}`);
       router.refresh();
     } catch (e: any) {
       setError(e.message ?? "Save failed.");
@@ -1084,7 +1089,7 @@ export default function SongEditor({
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             This song already exists in the database.{" "}
             <a
-              href={`/admin/songs/${duplicateSong.slug ?? duplicateSong.id}`}
+              href={`${basePath}/${duplicateSong.slug ?? duplicateSong.id}`}
               className="font-semibold underline hover:text-red-900"
             >
               Edit "{duplicateSong.title}" →
@@ -1098,7 +1103,7 @@ export default function SongEditor({
             {sameTitleSongs.map((s, i) => (
               <span key={s.id}>
                 {i > 0 && ", "}
-                <a href={`/admin/songs/${s.slug ?? s.id}`} className="underline hover:text-amber-900">
+                <a href={`${basePath}/${s.slug ?? s.id}`} className="underline hover:text-amber-900">
                   {s.title}
                 </a>
               </span>
@@ -1538,6 +1543,18 @@ export default function SongEditor({
             >
               {saving ? "Saving…" : "Save"}
             </button>
+            <button
+              onClick={async () => {
+                setFillState("running");
+                const res = await fetch(`/api/songs/${song!.id}/enrich`, { method: "POST" });
+                setFillState(res.ok ? "started" : "failed");
+              }}
+              disabled={fillState === "running"}
+              title="Fills only empty fields, from sources that agree. Reload in a minute to see what changed."
+              className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            >
+              {fillState === "started" ? "Filling in — reload in a minute" : fillState === "failed" ? "Couldn't start — try again" : "Fill in blanks automatically"}
+            </button>
             {slug && (
               <a
                 href={`/songs/${slug}`}
@@ -1549,18 +1566,20 @@ export default function SongEditor({
               </a>
             )}
           </div>
-          <button
-            onClick={async () => {
-              if (!confirm("Delete this song? This cannot be undone.")) return;
-              const { error } = await supabase.from("songs").delete().eq("id", song!.id);
-              if (error) { setError(error.message); return; }
-              router.push("/admin/songs");
-              router.refresh();
-            }}
-            className="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-          >
-            Delete song
-          </button>
+          {isAdmin && (
+            <button
+              onClick={async () => {
+                if (!confirm("Delete this song? This cannot be undone.")) return;
+                const { error } = await supabase.from("songs").delete().eq("id", song!.id);
+                if (error) { setError(error.message); return; }
+                router.push(basePath);
+                router.refresh();
+              }}
+              className="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+            >
+              Delete song
+            </button>
+          )}
         </div>
       )}
     </div>

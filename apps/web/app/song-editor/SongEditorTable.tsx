@@ -5,6 +5,7 @@ import { fetchAllRows } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import SearchInput from "@/components/SearchInput";
+import Link from "next/link";
 
 type Song = {
   id: string;
@@ -173,7 +174,9 @@ export default function SongEditorTable({ initialQuery = "" }: { initialQuery?: 
             <div key={song.id} className="px-4 py-3">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="font-medium text-slate-900 truncate">{song.title}</p>
+                  <Link href={`/song-editor/songs/${song.slug ?? song.id}`} className="block font-medium text-slate-900 truncate hover:text-teal-600">
+                    {song.title}
+                  </Link>
                   {song.display_artist && (
                     <p className="text-xs text-slate-500 truncate">{song.display_artist}</p>
                   )}
