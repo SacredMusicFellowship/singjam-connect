@@ -376,7 +376,15 @@ export default function SetDetail({
             prev
               .map((s) =>
                 s.id === row.id
-                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: row.leader_user_ids }
+                  ? {
+                      ...s,
+                      position: row.position,
+                      key_note: row.key_note,
+                      notes: row.notes,
+                      played: row.played,
+                      // A leader change of ours is still settling; keep what the user tapped.
+                      leader_user_ids: leaderSyncRef.current.has(row.id) ? s.leader_user_ids : row.leader_user_ids,
+                    }
                   : s
               )
               .sort((a, b) => a.position - b.position)
@@ -549,10 +557,42 @@ export default function SetDetail({
     if (!playedRes.ok || !reorderRes.ok) setSongs(previous);
   }
 
+  // One leader request per song at a time. Taps made while one is in flight
+  // collapse into the latest, and until the last settles, live updates and
+  // earlier replies can't put back a leader who was just removed (they used to
+  // land after the tap and flip the pill back).
+  const leaderSyncRef = useRef<Map<string, { next: Record<string, unknown> | null; confirmed: string[] }>>(new Map());
+
+  function sendLeaders(id: string, songId: string, body: Record<string, unknown>) {
+    fetch(`/api/sets/${set.id}/songs/${songId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null)
+      .then((json) => {
+        const sync = leaderSyncRef.current.get(id);
+        if (!sync) return;
+        if (json && Array.isArray(json.leader_user_ids)) sync.confirmed = json.leader_user_ids;
+        if (sync.next) {
+          const next = sync.next;
+          sync.next = null;
+          sendLeaders(id, songId, next);
+          return;
+        }
+        leaderSyncRef.current.delete(id);
+        setSongs((prev) => prev.map((s) => s.id === id ? {
+          ...s,
+          leader_user_ids: sync.confirmed,
+          ...(json && "key_note" in json ? { key_note: json.key_note } : {}),
+        } : s));
+      });
+  }
+
   function handleLeadersChanged(id: string, leaderUserIds: string[]) {
     const entry = songs.find((s) => s.id === id);
     if (!entry) return;
-    const previousLeaderIds = entry.leader_user_ids ?? [];
     setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: leaderUserIds } : s));
     if (currentUserId && leaderUserIds.includes(currentUserId) && !userRepertoire.has(entry.song_id)) {
       setUserRepertoire((prev) => new Map(prev).set(entry.song_id, "lead"));
@@ -562,23 +602,13 @@ export default function SetDetail({
     const body = canManage
       ? { leader_user_ids: leaderUserIds }
       : { self_leader: !!currentUserId && leaderUserIds.includes(currentUserId) };
-    fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (!json) {
-          setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: previousLeaderIds } : s));
-          return;
-        }
-        setSongs((prev) => prev.map((s) => s.id === id ? {
-          ...s,
-          ...("leader_user_ids" in json ? { leader_user_ids: json.leader_user_ids } : {}),
-          ...("key_note" in json ? { key_note: json.key_note } : {}),
-        } : s));
-      });
+    const sync = leaderSyncRef.current.get(id);
+    if (sync) {
+      sync.next = body;
+      return;
+    }
+    leaderSyncRef.current.set(id, { next: null, confirmed: entry.leader_user_ids ?? [] });
+    sendLeaders(id, entry.song_id, body);
   }
 
   const participants: Participant[] = [
@@ -1159,7 +1189,7 @@ export default function SetDetail({
 
         {/* Collaborator cards */}
         {(showAllCollaborators ? collaborators : collaborators.slice(0, 3)).map((c) => (
-          <li key={c.id} className="flex items-center gap-2 rounded-xl border border-zinc-100 bg-white px-3 py-2">
+          <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-zinc-100 bg-white px-3 py-2">
             <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-200 text-xs font-medium text-zinc-600">
               {c.profiles?.avatar_url
                 ? <Image src={c.profiles.avatar_url} alt="" fill sizes="28px" className="object-cover" />
@@ -1176,7 +1206,9 @@ export default function SetDetail({
               </span>
             )}
             {canManage && (isOwner || c.role !== "co-owner") ? (
-              <div className="flex items-center gap-2 shrink-0">
+              // On a phone the role switcher takes its own line under the name,
+              // so the name isn't squeezed down to a couple of letters.
+              <div className="flex w-full shrink-0 items-center justify-between gap-2 pl-9 sm:w-auto sm:justify-start sm:pl-0">
                 <div className="flex rounded-lg border border-zinc-200 overflow-hidden">
                   {(isOwner ? (["editor", "viewer", "co-owner"] as const) : (["editor", "viewer"] as const)).map((r) => (
                     <button

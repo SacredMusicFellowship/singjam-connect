@@ -12,7 +12,7 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, KEY_STYLE, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
@@ -273,6 +273,7 @@ function SongRow({
 }) {
   const [keyPickerVisible, setKeyPickerVisible] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
+  const [showAllPeople, setShowAllPeople] = useState(false);
   const [notesInput, setNotesInput] = useState('');
   const composerNames = (song.songs.song_composers ?? [])
     .map((sc) => sc.people?.name)
@@ -371,6 +372,25 @@ function SongRow({
       ],
     });
   }
+
+  // As on web: each row keeps to one line, "+ N more" opens the rest, and only
+  // a cut-short row is reordered (chosen leaders, then you, first).
+  const trimRow = <T extends { user_id: string }>(list: T[], first: (string | null)[]) =>
+    showAllPeople || list.length <= PEOPLE_ROW_LIMIT.phone
+      ? list
+      : prioritizePeople(list, first).slice(0, shownPeopleCount(list.length, PEOPLE_ROW_LIMIT.phone));
+  const moreToggle = (count: number) => {
+    const hidden = count - shownPeopleCount(count, PEOPLE_ROW_LIMIT.phone);
+    if (hidden === 0) return null;
+    return (
+      <TouchableOpacity
+        onPress={() => setShowAllPeople((v) => !v)}
+        className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 mr-1 mb-1"
+      >
+        <Text className="text-xs text-zinc-500">{showAllPeople ? 'Show less' : `+${hidden} more`}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   const nameWeight = (userId: string) => (userId === myUserId ? 'font-bold' : 'font-medium');
 
@@ -503,7 +523,7 @@ function SongRow({
                         <Text className="text-amber-500 text-xs font-medium">No leader</Text>
                       </View>
                     ) : null}
-                    {leadParticipants.map((p) => {
+                    {trimRow(leadParticipants, [...leaderIds, myUserId]).map((p) => {
                       const isLeader = leaderIds.includes(p.user_id);
                       // As on web: anyone who has joined can put themselves forward; choosing
                       // someone else is for the owner and co-owners.
@@ -527,6 +547,7 @@ function SongRow({
                         </TouchableOpacity>
                       );
                     })}
+                    {moreToggle(leadParticipants.length)}
                   </View>
                 </View>
               ) : null}
@@ -534,11 +555,12 @@ function SongRow({
                 <View className="flex-row items-start">
                   <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.support.label}`}>Support</Text>
                   <View className="flex-row flex-wrap flex-1">
-                    {supportParticipants.map((p) => (
+                    {trimRow(supportParticipants, [myUserId]).map((p) => (
                       <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.support.pill}`}>
                         <Text className={`text-xs ${CONFIDENCE_STYLES.support.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
                       </View>
                     ))}
+                    {moreToggle(supportParticipants.length)}
                   </View>
                 </View>
               ) : null}
@@ -546,11 +568,12 @@ function SongRow({
                 <View className="flex-row items-start">
                   <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.learn.label}`}>Learning</Text>
                   <View className="flex-row flex-wrap flex-1">
-                    {learnParticipants.map((p) => (
+                    {trimRow(learnParticipants, [myUserId]).map((p) => (
                       <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.learn.pill}`}>
                         <Text className={`text-xs ${CONFIDENCE_STYLES.learn.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
                       </View>
                     ))}
+                    {moreToggle(learnParticipants.length)}
                   </View>
                 </View>
               ) : null}
@@ -869,6 +892,8 @@ export default function SetDetailScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  // Songs whose leader change is still settling (see sendLeaders).
+  const leaderSyncRef = useRef<Map<string, { next: Record<string, unknown> | null; confirmed: string[] }>>(new Map());
   const [songKnowledge, setSongKnowledge] = useState<{ user_id: string; song_id: string; confidence: string; key_note: string | null }[]>([]);
   const [sortBy, setSortBy] = useState<SetSortOrder>('custom');
   const [filterQuery, setFilterQuery] = useState('');
@@ -913,7 +938,7 @@ export default function SetDetailScreen() {
             sortByPosition(
               prev.map((s) =>
                 s.id === row.id
-                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: row.leader_user_ids }
+                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: leaderSyncRef.current.has(row.song_id) ? s.leader_user_ids : row.leader_user_ids }
                   : s
               )
             )
@@ -1081,8 +1106,31 @@ export default function SetDetailScreen() {
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not save note.'); }
   }
 
-  async function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
-    const previous = songs;
+  // As on web: one leader request per song at a time, later taps collapse into
+  // the latest, and live updates can't flip a pill back while one is settling.
+  async function sendLeaders(songId: string, body: Record<string, unknown>) {
+    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', body);
+    const sync = leaderSyncRef.current.get(songId);
+    if (!sync) return;
+    if (ok && json && Array.isArray(json.leader_user_ids)) sync.confirmed = json.leader_user_ids;
+    if (sync.next) {
+      const next = sync.next;
+      sync.next = null;
+      sendLeaders(songId, next);
+      return;
+    }
+    leaderSyncRef.current.delete(songId);
+    if (!ok) Alert.alert('Error', json?.error ?? 'Could not update leaders.');
+    setSongs((prev) => prev.map((s) => s.song_id === songId ? {
+      ...s,
+      leader_user_ids: sync.confirmed,
+      ...(ok && json && 'key_note' in json ? { key_note: json.key_note } : {}),
+    } : s));
+  }
+
+  function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
+    const entry = songs.find((s) => s.song_id === songId);
+    if (!entry) return;
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, leader_user_ids: newLeaderIds } : s));
     // Guests can only add or remove themselves; the API merges that into the
     // current leaders so it can't undo a change someone else just made.
@@ -1090,16 +1138,13 @@ export default function SetDetailScreen() {
     const body = manage
       ? { leader_user_ids: newLeaderIds }
       : { self_leader: !!myUserId && newLeaderIds.includes(myUserId) };
-    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', body);
-    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update leaders.'); return; }
-    // A newly selected leader brings their own key (decided by the API).
-    if (json && ('key_note' in json || 'leader_user_ids' in json)) {
-      setSongs((prev) => prev.map((s) => s.song_id === songId ? {
-        ...s,
-        ...('leader_user_ids' in json ? { leader_user_ids: json.leader_user_ids } : {}),
-        ...('key_note' in json ? { key_note: json.key_note } : {}),
-      } : s));
+    const sync = leaderSyncRef.current.get(songId);
+    if (sync) {
+      sync.next = body;
+      return;
     }
+    leaderSyncRef.current.set(songId, { next: null, confirmed: entry.leader_user_ids ?? [] });
+    sendLeaders(songId, body);
   }
 
   async function handleReorder(data: SetSong[]) {
