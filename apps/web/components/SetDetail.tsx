@@ -162,7 +162,7 @@ export default function SetDetail({
   }, [currentUserId]);
 
   useEffect(() => {
-    if (!canManage) return;
+    if (!setMenuOpen) return;
     function onClickOutside(e: MouseEvent) {
       if (setMenuRef.current && !setMenuRef.current.contains(e.target as Node)) {
         setSetMenuOpen(false);
@@ -170,7 +170,7 @@ export default function SetDetail({
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [canManage]);
+  }, [setMenuOpen]);
 
   useEffect(() => {
     participantIdsRef.current = new Set([
@@ -941,7 +941,7 @@ export default function SetDetail({
                   ? `YouTube playlist synced — ${playlistLinks.youtube.added} of ${playlistLinks.youtube.total} songs added (${(playlistLinks.youtube.total ?? 0) - playlistLinks.youtube.added} have no YouTube link).`
                   : `YouTube playlist synced — all ${playlistLinks.youtube.total} songs added.`}
               </p>
-              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-green-700 underline">Open →</a>
+              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-green-700 underline">Open</a>
             </div>
           )}
           {playlistLinks.spotify?.added !== undefined && (
@@ -951,7 +951,7 @@ export default function SetDetail({
                   ? `Spotify playlist synced — ${playlistLinks.spotify.added} of ${playlistLinks.spotify.total} songs added (${(playlistLinks.spotify.total ?? 0) - playlistLinks.spotify.added} have no Spotify link).`
                   : `Spotify playlist synced — all ${playlistLinks.spotify.total} songs added.`}
               </p>
-              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-green-700 underline">Open →</a>
+              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-green-700 underline">Open</a>
             </div>
           )}
           {playlistError && (
@@ -1032,36 +1032,20 @@ export default function SetDetail({
           )}
         </div>
 
-        {!canManage && (
-          currentUserId ? (
-            <button
-              onClick={handleCopySet}
-              disabled={copying}
-              className="shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
-            >
-              {copying ? "Copying…" : "Copy to my sets"}
-            </button>
-          ) : (
-            <a
-              href={`/auth?next=${setPath(set)}`}
-              className="shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
-            >
-              Sign in to copy
-            </a>
-          )
-        )}
-
-        {canManage && !editingName && (
+        {/* Signed-out visitors get no copy button: SetGuestPrompt at the foot of the page makes that pitch. */}
+        {(canManage ? !editingName : !!currentUserId) && (
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => setEditingName(true)}
-              className="text-zinc-400 hover:text-zinc-600 transition-colors"
-              aria-label="Edit set name"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-              </svg>
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setEditingName(true)}
+                className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                aria-label="Edit set name"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                </svg>
+              </button>
+            )}
             <div className="relative" ref={setMenuRef}>
               <button
                 onClick={() => setSetMenuOpen((o) => !o)}
@@ -1087,7 +1071,7 @@ export default function SetDetail({
                     onClick={handleCopySet}
                     className="w-full text-left flex items-center px-4 py-2.5 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
                   >
-                    Copy set
+                    {canManage ? "Copy set" : "Copy to my sets"}
                   </button>
                 </div>
               )}
@@ -1297,36 +1281,36 @@ export default function SetDetail({
             <button
               onClick={() => handleCreatePlaylist("youtube")}
               disabled={!!creatingPlaylist}
-              className="flex items-center gap-1.5 rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
-              <YoutubeIcon />
+              <span className="flex text-red-600"><YoutubeIcon /></span>
               {creatingPlaylist === "youtube" ? "Creating…" : "YouTube playlist"}
             </button>
           ) : youtubeOutdated ? (
-            <div className="flex items-center rounded-full border border-red-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
               <button
                 onClick={() => handleCreatePlaylist("youtube")}
                 disabled={!!creatingPlaylist}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
-                <YoutubeIcon />
+                <span className="flex text-red-600"><YoutubeIcon /></span>
                 <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
                 {creatingPlaylist === "youtube" ? "Updating…" : "Update"}
               </button>
-              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors border-l border-red-200">
-                Open →
+              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 transition-colors border-l border-zinc-300">
+                Open
               </a>
             </div>
           ) : (
-            <div className="flex items-center rounded-full border border-red-200 overflow-hidden">
-              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
-                <YoutubeIcon />
+            <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
+              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+                <span className="flex text-red-600"><YoutubeIcon /></span>
                 Open playlist
               </a>
               <button
                 onClick={() => handleCreatePlaylist("youtube")}
                 disabled={!!creatingPlaylist}
-                className="px-3 py-2 text-sm text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors border-l border-red-200"
+                className="px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 disabled:opacity-50 transition-colors border-l border-zinc-300"
                 title="Re-sync playlist"
               >
                 {creatingPlaylist === "youtube" ? "…" : "↺"}
@@ -1334,9 +1318,9 @@ export default function SetDetail({
             </div>
           )
         ) : playlistLinks.youtube ? (
-          <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
-            <YoutubeIcon />
-            YouTube playlist →
+          <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" aria-label="YouTube playlist" className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+            <span className="flex text-red-600"><YoutubeIcon /></span>
+            YouTube
           </a>
         ) : null}
 
@@ -1345,36 +1329,36 @@ export default function SetDetail({
             <button
               onClick={() => handleCreatePlaylist("spotify")}
               disabled={!!creatingPlaylist}
-              className="flex items-center gap-1.5 rounded-full border border-green-200 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
-              <SpotifyIcon />
+              <span className="flex text-green-600"><SpotifyIcon /></span>
               {creatingPlaylist === "spotify" ? "Creating…" : "Spotify playlist"}
             </button>
           ) : spotifyOutdated ? (
-            <div className="flex items-center rounded-full border border-green-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
               <button
                 onClick={() => handleCreatePlaylist("spotify")}
                 disabled={!!creatingPlaylist}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
-                <SpotifyIcon />
+                <span className="flex text-green-600"><SpotifyIcon /></span>
                 <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
                 {creatingPlaylist === "spotify" ? "Updating…" : "Update"}
               </button>
-              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-green-500 hover:bg-green-50 transition-colors border-l border-green-200">
-                Open →
+              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 transition-colors border-l border-zinc-300">
+                Open
               </a>
             </div>
           ) : (
-            <div className="flex items-center rounded-full border border-green-200 overflow-hidden">
-              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors">
-                <SpotifyIcon />
+            <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
+              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+                <span className="flex text-green-600"><SpotifyIcon /></span>
                 Open playlist
               </a>
               <button
                 onClick={() => handleCreatePlaylist("spotify")}
                 disabled={!!creatingPlaylist}
-                className="px-3 py-2 text-sm text-green-400 hover:bg-green-50 hover:text-green-600 disabled:opacity-50 transition-colors border-l border-green-200"
+                className="px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 disabled:opacity-50 transition-colors border-l border-zinc-300"
                 title="Re-sync playlist"
               >
                 {creatingPlaylist === "spotify" ? "…" : "↺"}
@@ -1382,23 +1366,23 @@ export default function SetDetail({
             </div>
           )
         ) : playlistLinks.spotify ? (
-          <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-green-200 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors">
-            <SpotifyIcon />
-            Spotify playlist →
+          <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" aria-label="Spotify playlist" className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+            <span className="flex text-green-600"><SpotifyIcon /></span>
+            Spotify
           </a>
         ) : null}
 
         {canManage ? (
           ugPlaylistUrl ? (
             <>
-              <div className="flex items-center rounded-full border border-amber-200 overflow-hidden">
-                <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
+              <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
+                <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
                   <UltimateGuitarIcon />
                   UG playlist
                 </a>
                 <button
                   onClick={() => { setUgPlaylistInput(ugPlaylistUrl); setEditingUgPlaylist(true); }}
-                  className="px-3 py-2 text-sm text-amber-400 hover:bg-amber-50 hover:text-amber-700 transition-colors border-l border-amber-200"
+                  className="px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 transition-colors border-l border-zinc-300"
                   title="Edit URL"
                 >
                   ✎
@@ -1455,16 +1439,16 @@ export default function SetDetail({
           ) : (
             <button
               onClick={() => setEditingUgPlaylist(true)}
-              className="flex items-center gap-1.5 rounded-full border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
             >
               <UltimateGuitarIcon />
               UG playlist
             </button>
           )
         ) : ugPlaylistUrl ? (
-          <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
+          <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
             <UltimateGuitarIcon />
-            UG playlist →
+            UG playlist
           </a>
         ) : null}
 
