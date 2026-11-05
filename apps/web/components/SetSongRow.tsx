@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
-import { CONFIDENCE_STYLES, hasLeadVoice, KEY_STYLE, SET_SONG_NOTE_MAX } from "@singjam/core";
+import { CONFIDENCE_STYLES, hasLeadVoice, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_SONG_NOTE_MAX, shownPeopleCount } from "@singjam/core";
 import RoleSelect from "@/components/RoleSelect";
 import ChordsLink from "@/components/ChordsLink";
 import {
@@ -81,6 +81,7 @@ export default function SetSongRow({
   const [editingNotes, setEditingNotes] = useState(false);
   // Choosing Lead without a lead voice asks about it first, as elsewhere in the app.
   const [askingLeadVoice, setAskingLeadVoice] = useState(false);
+  const [showAllPeople, setShowAllPeople] = useState(false);
   const [notesInput, setNotesInput] = useState("");
   // Set when Cancel/Escape closes the editor, so the input's blur doesn't save.
   const discardNotesRef = useRef(false);
@@ -195,6 +196,46 @@ export default function SetSongRow({
   const learnParticipants = visibleParticipants.filter(
     (p) => !leaderIds.includes(p.user_id) && participantKnowledge.get(p.user_id) === "learn"
   );
+
+  // Each row stays on one line ("+ N more" opens the rest) so a big jam's card
+  // doesn't grow. Only a cut-short row is reordered, chosen leaders and you
+  // first, so pills don't jump around when the whole list is showing.
+  const collapse = <T extends { user_id: string }>(list: T[], first: (string | null)[]) =>
+    showAllPeople || list.length <= PEOPLE_ROW_LIMIT.phone ? list : prioritizePeople(list, first);
+  const leadShown = collapse(leadParticipants, [...leaderIds, currentUserId]);
+  const supportShown = collapse(supportParticipants, [currentUserId]);
+  const learnShown = collapse(learnParticipants, [currentUserId]);
+  const pillVisibility = (i: number, count: number) => {
+    if (showAllPeople) return "";
+    if (i >= shownPeopleCount(count, PEOPLE_ROW_LIMIT.wide)) return "hidden";
+    if (i >= shownPeopleCount(count, PEOPLE_ROW_LIMIT.phone)) return "hidden sm:inline-block";
+    return "";
+  };
+  const moreToggle = (count: number) => {
+    const phoneHidden = count - shownPeopleCount(count, PEOPLE_ROW_LIMIT.phone);
+    const wideHidden = count - shownPeopleCount(count, PEOPLE_ROW_LIMIT.wide);
+    if (phoneHidden === 0) return null;
+    const pill = "rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors";
+    if (showAllPeople) {
+      return (
+        <button type="button" onClick={() => setShowAllPeople(false)} className={`${pill} ${wideHidden === 0 ? "sm:hidden" : ""}`}>
+          Show less
+        </button>
+      );
+    }
+    return (
+      <>
+        <button type="button" onClick={() => setShowAllPeople(true)} className={`${pill} sm:hidden`}>
+          +{phoneHidden} more
+        </button>
+        {wideHidden > 0 && (
+          <button type="button" onClick={() => setShowAllPeople(true)} className={`${pill} hidden sm:inline-block`}>
+            +{wideHidden} more
+          </button>
+        )}
+      </>
+    );
+  };
 
   // Only for songs you don't have yet; once it's yours, the Role dropdown moves it.
   const showRepertoireButtons = !!(!myConfidence && (currentUserId || signInUrl));
@@ -460,7 +501,7 @@ export default function SetSongRow({
                             No leader
                           </span>
                         )}
-                        {leadParticipants.map((p) => {
+                        {leadShown.map((p, i) => {
                           const isLeader = leaderIds.includes(p.user_id);
                           // Anyone who has joined the set can put themselves forward; choosing
                           // someone else is for the owner and co-owners.
@@ -475,13 +516,14 @@ export default function SetSongRow({
                               type="button"
                               onClick={() => isClickable && handleToggleLeader(p.user_id)}
                               disabled={!isClickable}
-                              className={`rounded-full px-2 py-0.5 text-xs transition-all ${ownWeight(p.user_id)} ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
+                              className={`rounded-full px-2 py-0.5 text-xs transition-all ${pillVisibility(i, leadShown.length)} ${ownWeight(p.user_id)} ${pillStyle} ${isClickable ? "cursor-pointer hover:opacity-75" : "cursor-default"}`}
                             >
                               {name}
                               {personalKey && ` (${personalKey})`}
                             </button>
                           );
                         })}
+                        {moreToggle(leadShown.length)}
                       </div>
                     </div>
                   )}
@@ -489,18 +531,19 @@ export default function SetSongRow({
                     <div className="flex items-start gap-1.5">
                       <span className={`shrink-0 text-[10px] font-medium pt-0.5 ${CONFIDENCE_STYLES.support.label}`}>Support</span>
                       <div className="flex flex-wrap gap-1 flex-1">
-                        {supportParticipants.map((p) => {
+                        {supportShown.map((p, i) => {
                           const firstName = p.display_name ?? p.username ?? "?";
                           const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                           return (
                             <span
                               key={p.user_id}
-                              className={`rounded-full px-2 py-0.5 text-xs ${CONFIDENCE_STYLES.support.pill} ${CONFIDENCE_STYLES.support.pillText} ${ownWeight(p.user_id)}`}
+                              className={`rounded-full px-2 py-0.5 text-xs ${pillVisibility(i, supportShown.length)} ${CONFIDENCE_STYLES.support.pill} ${CONFIDENCE_STYLES.support.pillText} ${ownWeight(p.user_id)}`}
                             >
                               {label}
                             </span>
                           );
                         })}
+                        {moreToggle(supportShown.length)}
                       </div>
                     </div>
                   )}
@@ -508,15 +551,16 @@ export default function SetSongRow({
                     <div className="flex items-start gap-1.5">
                       <span className={`shrink-0 text-[10px] font-medium pt-0.5 ${CONFIDENCE_STYLES.learn.label}`}>Learning</span>
                       <div className="flex flex-wrap gap-1 flex-1">
-                        {learnParticipants.map((p) => {
+                        {learnShown.map((p, i) => {
                           const firstName = p.display_name ?? p.username ?? "?";
                           const label = p.last_name ? `${firstName} ${p.last_name[0].toUpperCase()}.` : firstName;
                           return (
-                            <span key={p.user_id} className={`rounded-full px-2 py-0.5 text-xs ${CONFIDENCE_STYLES.learn.pill} ${CONFIDENCE_STYLES.learn.pillText} ${ownWeight(p.user_id)}`}>
+                            <span key={p.user_id} className={`rounded-full px-2 py-0.5 text-xs ${pillVisibility(i, learnShown.length)} ${CONFIDENCE_STYLES.learn.pill} ${CONFIDENCE_STYLES.learn.pillText} ${ownWeight(p.user_id)}`}>
                               {label}
                             </span>
                           );
                         })}
+                        {moreToggle(learnShown.length)}
                       </div>
                     </div>
                   )}

@@ -220,7 +220,7 @@ export default function JamView({
     <JamAttendeeList
       jamId={jamId}
       hostId={isOfficial ? null : jam.host_user_id}
-      isHost={isHost}
+      canAppointCohosts={isHost && !isOfficial}
       leaderIds={leaders.map((l) => l.user_id).filter((id): id is string => !!id)}
       myLeader={myLeader}
       version={attendeesVersion}
@@ -253,7 +253,7 @@ export default function JamView({
     </>
   );
 
-  // Two columns from md up, after Luma: the image (or a date tile) and a
+  // Two columns from sm up, after Luma: the image (or a date tile) and a
   // compact who's going on the left; title, date and place, tickets and
   // description on the right. Everything after that runs full width below
   // both. The summary is desktop-only, since on a phone the full list is a
@@ -267,7 +267,7 @@ export default function JamView({
           <>
             <JamPoster jam={jamCardData} />
             {showAttendees && (
-              <div className="hidden md:block">
+              <div className="hidden sm:block">
                 <JamAttendeeSummary jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} version={attendeesVersion} />
               </div>
             )}

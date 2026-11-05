@@ -124,7 +124,7 @@ describe("PATCH /api/sets/[id]/songs/[songId]", () => {
       params: Promise.resolve({ id: "set-1", songId: "song-1" }),
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, key_note: "G" });
+    expect(await res.json()).toEqual({ ok: true, key_note: "G", leader_user_ids: ["ana"] });
     expect(updateSpy.update).toHaveBeenCalledWith({ leader_user_ids: ["ana"], key_note: "G" });
   });
 
@@ -139,7 +139,8 @@ describe("PATCH /api/sets/[id]/songs/[songId]", () => {
     const res = await PATCH(req("set-1", "song-1", { leader_user_ids: ["ana"] }), {
       params: Promise.resolve({ id: "set-1", songId: "song-1" }),
     });
-    expect(await res.json()).toEqual({ ok: true });
+    // The saved leaders come back so the client can settle on them.
+    expect(await res.json()).toEqual({ ok: true, leader_user_ids: ["ana"] });
     expect(updateSpy.update).toHaveBeenCalledWith({ leader_user_ids: ["ana"] });
   });
 

@@ -12,7 +12,7 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, formatComposers, KEY_STYLE, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, formatComposers, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
@@ -273,6 +273,7 @@ function SongRow({
 }) {
   const [keyPickerVisible, setKeyPickerVisible] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
+  const [showAllPeople, setShowAllPeople] = useState(false);
   const [notesInput, setNotesInput] = useState('');
   const composerNames = (song.songs.song_composers ?? [])
     .map((sc) => sc.people?.name)
@@ -371,6 +372,25 @@ function SongRow({
       ],
     });
   }
+
+  // As on web: each row keeps to one line, "+ N more" opens the rest, and only
+  // a cut-short row is reordered (chosen leaders, then you, first).
+  const trimRow = <T extends { user_id: string }>(list: T[], first: (string | null)[]) =>
+    showAllPeople || list.length <= PEOPLE_ROW_LIMIT.phone
+      ? list
+      : prioritizePeople(list, first).slice(0, shownPeopleCount(list.length, PEOPLE_ROW_LIMIT.phone));
+  const moreToggle = (count: number) => {
+    const hidden = count - shownPeopleCount(count, PEOPLE_ROW_LIMIT.phone);
+    if (hidden === 0) return null;
+    return (
+      <TouchableOpacity
+        onPress={() => setShowAllPeople((v) => !v)}
+        className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 mr-1 mb-1"
+      >
+        <Text className="text-xs text-zinc-500">{showAllPeople ? 'Show less' : `+${hidden} more`}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   const nameWeight = (userId: string) => (userId === myUserId ? 'font-bold' : 'font-medium');
 
@@ -503,7 +523,7 @@ function SongRow({
                         <Text className="text-amber-500 text-xs font-medium">No leader</Text>
                       </View>
                     ) : null}
-                    {leadParticipants.map((p) => {
+                    {trimRow(leadParticipants, [...leaderIds, myUserId]).map((p) => {
                       const isLeader = leaderIds.includes(p.user_id);
                       // As on web: anyone who has joined can put themselves forward; choosing
                       // someone else is for the owner and co-owners.
@@ -527,6 +547,7 @@ function SongRow({
                         </TouchableOpacity>
                       );
                     })}
+                    {moreToggle(leadParticipants.length)}
                   </View>
                 </View>
               ) : null}
@@ -534,11 +555,12 @@ function SongRow({
                 <View className="flex-row items-start">
                   <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.support.label}`}>Support</Text>
                   <View className="flex-row flex-wrap flex-1">
-                    {supportParticipants.map((p) => (
+                    {trimRow(supportParticipants, [myUserId]).map((p) => (
                       <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.support.pill}`}>
                         <Text className={`text-xs ${CONFIDENCE_STYLES.support.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
                       </View>
                     ))}
+                    {moreToggle(supportParticipants.length)}
                   </View>
                 </View>
               ) : null}
@@ -546,11 +568,12 @@ function SongRow({
                 <View className="flex-row items-start">
                   <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.learn.label}`}>Learning</Text>
                   <View className="flex-row flex-wrap flex-1">
-                    {learnParticipants.map((p) => (
+                    {trimRow(learnParticipants, [myUserId]).map((p) => (
                       <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.learn.pill}`}>
                         <Text className={`text-xs ${CONFIDENCE_STYLES.learn.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
                       </View>
                     ))}
+                    {moreToggle(learnParticipants.length)}
                   </View>
                 </View>
               ) : null}
@@ -869,6 +892,10 @@ export default function SetDetailScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  // As on web: order, key, played and leader saves go out one at a time per
+  // song (the order per set), latest tap winning, and live updates for a field
+  // still settling are ignored so they can't flip it back.
+  const syncRef = useRef(createLatestWinsQueue());
   const [songKnowledge, setSongKnowledge] = useState<{ user_id: string; song_id: string; confidence: string; key_note: string | null }[]>([]);
   const [sortBy, setSortBy] = useState<SetSortOrder>('custom');
   const [filterQuery, setFilterQuery] = useState('');
@@ -913,7 +940,7 @@ export default function SetDetailScreen() {
             sortByPosition(
               prev.map((s) =>
                 s.id === row.id
-                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: row.leader_user_ids }
+                  ? { ...s, ...settledFields(s, row), notes: row.notes }
                   : s
               )
             )
@@ -1067,11 +1094,54 @@ export default function SetDetailScreen() {
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not remove song.'); }
   }
 
-  async function handleKeyChange(songId: string, key: string | null) {
-    const previous = songs;
+  function settledFields(local: SetSong, server: { position: number; key_note: string | null; played: boolean; leader_user_ids: string[] | null }) {
+    const q = syncRef.current;
+    return {
+      position: q.isPending('order') ? local.position : server.position,
+      key_note: q.isPending(`key:${local.id}`) ? local.key_note : server.key_note,
+      played: q.isPending(`played:${local.id}`) ? local.played : server.played,
+      leader_user_ids: q.isPending(`leaders:${local.id}`) ? local.leader_user_ids : server.leader_user_ids ?? [],
+    };
+  }
+
+  // After a failed save, show what the server actually has.
+  async function resyncSongs() {
+    const rows = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from('set_songs')
+        .select('id, position, key_note, played, leader_user_ids')
+        .eq('set_id', id)
+        .order('id')
+        .range(from, to)
+    ).catch(() => null);
+    if (!rows) return;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    setSongs((prev) =>
+      prev
+        .map((s) => (byId.has(s.id) ? { ...s, ...settledFields(s, byId.get(s.id)) } : s))
+        .sort((a, b) => a.position - b.position)
+    );
+  }
+
+  function failed(message: string) {
+    Alert.alert('Error', message);
+    resyncSongs();
+  }
+
+  function saveOrder(list: SetSong[]) {
+    const order = list.map((s) => ({ id: s.id, position: s.position }));
+    syncRef.current.run('order', () => setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', { order }), (res) => {
+      if (!res?.ok) failed('Could not reorder the set.');
+    });
+  }
+
+  function handleKeyChange(songId: string, key: string | null) {
+    const entry = songs.find((s) => s.song_id === songId);
+    if (!entry) return;
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, key_note: key } : s));
-    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { key_note: key });
-    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update key.'); }
+    syncRef.current.run(`key:${entry.id}`, () => setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { key_note: key }), (res) => {
+      if (!res?.ok) failed(res?.json?.error ?? 'Could not update key.');
+    });
   }
 
   async function handleNotesChange(songId: string, notes: string | null) {
@@ -1081,8 +1151,9 @@ export default function SetDetailScreen() {
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not save note.'); }
   }
 
-  async function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
-    const previous = songs;
+  function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
+    const entry = songs.find((s) => s.song_id === songId);
+    if (!entry) return;
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, leader_user_ids: newLeaderIds } : s));
     // Guests can only add or remove themselves; the API merges that into the
     // current leaders so it can't undo a change someone else just made.
@@ -1090,41 +1161,31 @@ export default function SetDetailScreen() {
     const body = manage
       ? { leader_user_ids: newLeaderIds }
       : { self_leader: !!myUserId && newLeaderIds.includes(myUserId) };
-    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', body);
-    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update leaders.'); return; }
-    // A newly selected leader brings their own key (decided by the API).
-    if (json && ('key_note' in json || 'leader_user_ids' in json)) {
+    syncRef.current.run(`leaders:${entry.id}`, () => setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', body), (res) => {
+      if (!res?.ok || !Array.isArray(res.json?.leader_user_ids)) { failed(res?.json?.error ?? 'Could not update leaders.'); return; }
+      const keepKey = syncRef.current.isPending(`key:${entry.id}`);
       setSongs((prev) => prev.map((s) => s.song_id === songId ? {
         ...s,
-        ...('leader_user_ids' in json ? { leader_user_ids: json.leader_user_ids } : {}),
-        ...('key_note' in json ? { key_note: json.key_note } : {}),
+        leader_user_ids: res.json.leader_user_ids,
+        ...(!keepKey && 'key_note' in res.json ? { key_note: res.json.key_note } : {}),
       } : s));
-    }
+    });
   }
 
-  async function handleReorder(data: SetSong[]) {
-    const previous = songs;
+  function handleReorder(data: SetSong[]) {
     const reordered = data.map((s, i) => ({ ...s, position: i + 1 }));
     setSongs(reordered);
-    const { ok } = await setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', {
-      order: reordered.map((s) => ({ id: s.id, position: s.position })),
-    });
-    if (!ok) { setSongs(previous); Alert.alert('Error', 'Could not reorder the set.'); }
+    saveOrder(reordered);
   }
 
-  async function handleTogglePlayed(song: SetSong, played: boolean) {
-    const previous = songs;
+  function handleTogglePlayed(song: SetSong, played: boolean) {
     const reordered = reorderSongsForPlayed(songs, song.id, played)
       .map((s, i) => ({ ...s, position: i + 1 }));
     setSongs(reordered);
-    const [playedRes, reorderRes] = await Promise.all([
-      setApi(`/api/sets/${id}/songs/${song.song_id}`, 'PATCH', { played }),
-      setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', { order: reordered.map((s) => ({ id: s.id, position: s.position })) }),
-    ]);
-    if (!playedRes.ok || !reorderRes.ok) {
-      setSongs(previous);
-      Alert.alert('Error', 'Could not update the set.');
-    }
+    syncRef.current.run(`played:${song.id}`, () => setApi(`/api/sets/${id}/songs/${song.song_id}`, 'PATCH', { played }), (res) => {
+      if (!res?.ok) failed(res?.json?.error ?? 'Could not update the set.');
+    });
+    saveOrder(reordered);
   }
 
   async function handleSpotifyExport() {

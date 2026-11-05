@@ -511,7 +511,7 @@ export default function SongPageContent() {
           {song.genius_url && (
             <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
               className="inline-block rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-              Full lyrics ↗
+              Full lyrics
             </a>
           )}
         </section>

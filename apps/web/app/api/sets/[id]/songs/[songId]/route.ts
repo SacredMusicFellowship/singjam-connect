@@ -84,7 +84,12 @@ export async function PATCH(
     .eq("song_id", songId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json("key_note" in updates ? { ok: true, key_note: updates.key_note } : { ok: true });
+  // The client settles its leader pills on what was saved, not on what it sent.
+  return NextResponse.json({
+    ok: true,
+    ...("key_note" in updates ? { key_note: updates.key_note } : {}),
+    ...("leader_user_ids" in updates ? { leader_user_ids: updates.leader_user_ids } : {}),
+  });
 }
 
 export async function DELETE(

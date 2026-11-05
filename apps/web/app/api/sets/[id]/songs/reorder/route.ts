@@ -23,11 +23,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await Promise.all(
-    order.map(({ id, position }: { id: string; position: number }) =>
-      admin.from("set_songs").update({ position }).eq("id", id).eq("set_id", setId)
-    )
-  );
+  const { error } = await admin.rpc("reorder_set_songs", {
+    p_set_id: setId,
+    p_order: order.map(({ id, position }: { id: string; position: number }) => ({ id, position })),
+  });
+  if (error) return NextResponse.json({ error: "Could not reorder the set" }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }
