@@ -176,14 +176,15 @@ async function loadAttendees(
 export default function JamAttendeeList({
   jamId,
   hostId,
-  isHost,
+  canAppointCohosts,
   leaderIds = [],
   myLeader = null,
   version = 0,
 }: {
   jamId: string;
   hostId: string | null;
-  isHost: boolean;
+  /** The host, or an official host on an official event (the same people who can edit it). */
+  canAppointCohosts: boolean;
   /** Members leading the music who are listed publicly. */
   leaderIds?: string[];
   /** Set when the viewer leads this event: their row says Leader even if they aren't listed publicly. */
@@ -263,7 +264,7 @@ export default function JamAttendeeList({
                 )
               }
               action={
-                isHost && (
+                canAppointCohosts && (
                   <button
                     onClick={() => toggleCohost(r.user_id, !isCohost)}
                     disabled={pending === r.user_id}

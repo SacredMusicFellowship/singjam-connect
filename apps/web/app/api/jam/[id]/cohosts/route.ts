@@ -2,6 +2,23 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications";
+import { canEditJam } from "@singjam/core";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+// Co-hosts are appointed by whoever can edit the jam: its host, or on an
+// official event anyone who can host official events (the creator of an
+// official event is often not the person running it). Co-hosts can't appoint
+// more co-hosts.
+async function mayAppointCohosts(
+  admin: SupabaseClient,
+  jam: { host_user_id: string | null; visibility: string | null },
+  userId: string
+) {
+  if (jam.host_user_id === userId) return true;
+  if (jam.visibility !== "official") return false;
+  const { data: profile } = await admin.from("profiles").select("can_host_official").eq("id", userId).maybeSingle();
+  return canEditJam(jam, { id: userId, can_host_official: (profile as any)?.can_host_official });
+}
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: jamId } = await params;
@@ -14,9 +31,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const admin = supabaseAdmin();
 
-  const { data: jam } = await admin.from("jams").select("host_user_id, name").eq("id", jamId).single();
+  const { data: jam } = await admin.from("jams").select("host_user_id, name, visibility").eq("id", jamId).single();
   if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
-  if (jam.host_user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await mayAppointCohosts(admin, jam, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { data: rsvp } = await admin
     .from("jam_rsvps")
@@ -54,9 +71,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const admin = supabaseAdmin();
 
-  const { data: jam } = await admin.from("jams").select("host_user_id").eq("id", jamId).single();
+  const { data: jam } = await admin.from("jams").select("host_user_id, visibility").eq("id", jamId).single();
   if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
-  if (jam.host_user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await mayAppointCohosts(admin, jam, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { error } = await admin
     .from("jam_cohosts")

@@ -100,6 +100,43 @@ describe("POST /api/jam/[id]/cohosts", () => {
       expect.objectContaining({ userId: ATTENDEE_ID, type: "jam_cohost_added" })
     );
   });
+
+  describe("on an official event", () => {
+    const officialJam = { ...jamRow, visibility: "official" };
+
+    it("lets an official host who didn't create it appoint co-hosts", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "official-host" } } });
+      mockAdminFrom
+        .mockReturnValueOnce(chain({ data: officialJam }))
+        .mockReturnValueOnce(chain({ data: { can_host_official: true } }))
+        .mockReturnValueOnce(chain({ data: { status: "attending" } }))
+        .mockReturnValueOnce(chain({ error: null }));
+      const res = await POST(makeReq("POST", JAM_ID, { userId: ATTENDEE_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+      expect(res.status).toBe(200);
+      expect(mockAdminFrom.mock.results[3].value.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: ATTENDEE_ID, added_by: "official-host" })
+      );
+    });
+
+    it("still refuses members who can't host official events, co-hosts included", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "cohost" } } });
+      mockAdminFrom
+        .mockReturnValueOnce(chain({ data: officialJam }))
+        .mockReturnValueOnce(chain({ data: { can_host_official: false } }));
+      const res = await POST(makeReq("POST", JAM_ID, { userId: ATTENDEE_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+      expect(res.status).toBe(403);
+    });
+
+    it("lets an official host remove a co-host", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "official-host" } } });
+      mockAdminFrom
+        .mockReturnValueOnce(chain({ data: officialJam }))
+        .mockReturnValueOnce(chain({ data: { can_host_official: true } }))
+        .mockReturnValueOnce(chain({ error: null }));
+      const res = await DELETE(makeReq("DELETE", JAM_ID, { userId: ATTENDEE_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+      expect(res.status).toBe(200);
+    });
+  });
 });
 
 describe("DELETE /api/jam/[id]/cohosts", () => {
