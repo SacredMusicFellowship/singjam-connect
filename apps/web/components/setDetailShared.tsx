@@ -27,6 +27,7 @@ export type Song = {
     song_genres: { genres: { name: string } | null }[];
     song_themes: { themes: { name: string } | null }[];
     song_recording_artists: { position: number; youtube_url: string | null; spotify_url: string | null }[];
+    song_productions?: { productions: { name: string } | null }[];
   };
 };
 

@@ -201,7 +201,7 @@ export default function SetDetail({
         const { data } = await supabase
           .from("songs")
           .select(
-            "id, title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url)"
+            "id, title, display_artist, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url)"
           )
           .in("id", ids);
         if (!data) return;
@@ -345,7 +345,7 @@ export default function SetDetail({
             supabase
               .from("set_songs")
               .select(
-                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
+                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
               )
               .eq("id", row.id)
               .single(),
