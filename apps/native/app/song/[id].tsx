@@ -19,6 +19,8 @@ import {
   productionCredits,
   type ProductionCredit,
   sortRecordingsByYear,
+  enrichmentInProgress,
+  ENRICHMENT_WAIT_MS,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
@@ -54,6 +56,8 @@ type SongDetail = {
   genius_url: string | null;
   chord_chart_url: string | null;
   chord_chart_pending: boolean;
+  enrichment_started_at?: string | null;
+  enrichment_finished_at?: string | null;
   youtube_url: string | null;
   year: number | null;
   year_written: number | null;
@@ -221,6 +225,26 @@ export default function SongDetailScreen() {
     load();
   }, [songId]);
 
+  // A just-added song fills itself in over the next 10–30 seconds (mirrors web):
+  // watch its row and reload when the enrichment job finishes or gives up.
+  const fillingIn = !!song && enrichmentInProgress(song);
+  useEffect(() => {
+    if (!song?.id || !fillingIn) return;
+    const channel = supabase
+      .channel(`song-fill-${song.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'songs', filter: `id=eq.${song.id}` }, (payload: any) => {
+        if (payload.new?.enrichment_finished_at) load();
+      })
+      .subscribe();
+    const started = Date.parse(song.enrichment_started_at ?? '');
+    const giveUp = setTimeout(load, Math.max(0, started + ENRICHMENT_WAIT_MS - Date.now()) + 500);
+    return () => {
+      clearTimeout(giveUp);
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song?.id, fillingIn]);
+
   async function load() {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
@@ -231,7 +255,7 @@ export default function SongDetailScreen() {
         .select(`
           id, slug, title, display_artist, first_line, hook, notes,
           genius_url, chord_chart_url, chord_chart_pending, youtube_url,
-          year, year_written, tonality, meter, vibe,
+          year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_alternate_titles(title),
           song_composers(people(name)),
           song_lyricists(people(name)),
@@ -286,6 +310,8 @@ export default function SongDetailScreen() {
       genius_url: s.genius_url ?? null,
       chord_chart_url: s.chord_chart_url ?? null,
       chord_chart_pending: !!s.chord_chart_pending,
+      enrichment_started_at: s.enrichment_started_at ?? null,
+      enrichment_finished_at: s.enrichment_finished_at ?? null,
       youtube_url: s.youtube_url ?? null,
       year: s.year ?? null,
       year_written: s.year_written ?? null,
@@ -643,6 +669,17 @@ export default function SongDetailScreen() {
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
                 </TouchableOpacity>
               ) : null}
+            </View>
+          ) : null}
+          {fillingIn ? (
+            <View className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <Text className="text-sm text-zinc-600">Finding the songwriters, key, lyrics and tags…</Text>
+              {['w-1/2', 'w-1/3', 'w-2/3'].map(w => (
+                <View key={w} className="mt-2 flex-row items-center gap-3">
+                  <View className="h-3 w-20 rounded bg-zinc-200" />
+                  <View className={`h-3 ${w} rounded bg-zinc-100`} />
+                </View>
+              ))}
             </View>
           ) : null}
           <ChordChartControls

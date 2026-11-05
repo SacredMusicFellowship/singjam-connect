@@ -4,7 +4,7 @@ import { CONFIDENCE_STYLES, type ConfidenceLevel } from "@singjam/core";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { formatComposersLong, sortByLastName, setsAcceptingSongs, sortRecordingsByYear } from "@singjam/core";
+import { formatComposersLong, sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, ENRICHMENT_WAIT_MS } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
@@ -102,6 +102,19 @@ function usePinToTopOnLoad(loaded: boolean) {
   }, [loaded]);
 }
 
+const SONG_SELECT = `
+          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          song_composers(people(name)),
+          song_lyricists(people(name)),
+          song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
+          song_alternate_titles(title),
+          song_genres(genres(name)),
+          song_themes(themes(name)),
+          song_cultures(context, cultures(name)),
+          song_languages(languages(name)),
+          song_productions(productions(name, year))
+        `;
+
 export default function SongPageContent() {
   const params = useParams();
   const slug = params.slug as string;
@@ -132,18 +145,7 @@ export default function SongPageContent() {
 
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
-      const songQuery = supabase.from("songs").select(`
-          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe,
-          song_composers(people(name)),
-          song_lyricists(people(name)),
-          song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
-          song_alternate_titles(title),
-          song_genres(genres(name)),
-          song_themes(themes(name)),
-          song_cultures(context, cultures(name)),
-          song_languages(languages(name)),
-          song_productions(productions(name, year))
-        `);
+      const songQuery = supabase.from("songs").select(SONG_SELECT);
       const [{ data: { user } }, songRes] = await Promise.all([
         supabase.auth.getUser(),
         (isUuid ? songQuery.eq("id", slug) : songQuery.or(`slug.eq.${slug},former_slug.eq.${slug}`)).single(),
@@ -203,6 +205,31 @@ export default function SongPageContent() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // A just-added song fills itself in over the next 10–30 seconds. Watch its row
+  // and reload the details when the enrichment job finishes (or gives up).
+  const songId = data?.song?.id as string | undefined;
+  const fillingIn = !!data && enrichmentInProgress(data.song);
+  useEffect(() => {
+    if (!songId || !fillingIn) return;
+    const reload = async () => {
+      const { data: fresh } = await supabase.from("songs").select(SONG_SELECT).eq("id", songId).single();
+      if (fresh) setData((prev) => (prev ? { ...prev, song: fresh } : prev));
+    };
+    const channel = supabase
+      .channel(`song-fill-${songId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "songs", filter: `id=eq.${songId}` }, (payload: any) => {
+        if (payload.new?.enrichment_finished_at) reload();
+      })
+      .subscribe();
+    const started = Date.parse(data!.song.enrichment_started_at);
+    const giveUp = setTimeout(reload, Math.max(0, started + ENRICHMENT_WAIT_MS - Date.now()) + 500);
+    return () => {
+      clearTimeout(giveUp);
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songId, fillingIn]);
 
   // Deleting the user_songs row takes the key with it; migration 179's trigger
   // deletes the private notes.
@@ -396,6 +423,19 @@ export default function SongPageContent() {
                 songId={song.id}
                 onReported={() => setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_pending: true } } : prev))}
               />
+            </div>
+          )}
+          {fillingIn && (
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4" aria-live="polite">
+              <p className="text-sm text-zinc-600">Finding the songwriters, key, lyrics and tags…</p>
+              <div className="mt-3 space-y-2">
+                {["w-1/2", "w-1/3", "w-2/3"].map((w) => (
+                  <div key={w} className="flex items-center gap-3">
+                    <div className="h-3 w-20 shrink-0 animate-pulse rounded bg-zinc-200" />
+                    <div className={`h-3 ${w} animate-pulse rounded bg-zinc-100`} />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
