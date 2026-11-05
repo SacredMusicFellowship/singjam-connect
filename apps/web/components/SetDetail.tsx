@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { canRemoveSetSong, createLatestWinsQueue, fetchAllRows, jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
+import { canRemoveSetSong, createLatestWinsQueue, fetchAllRows, jamPath, reorderSongsForPlayed, setPath, webUrl } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -119,6 +119,8 @@ export default function SetDetail({
   });
   const [playlistError, setPlaylistError] = useState<"youtube" | "spotify" | "spotify_auth_expired" | null>(null);
   const [ugPlaylistUrl, setUgPlaylistUrl] = useState<string | null>(set.ultimate_guitar_playlist_url ?? null);
+  // Typed in by the set's owner and shown to everyone, so only a web address becomes a link.
+  const safeUgPlaylistUrl = webUrl(ugPlaylistUrl);
   const [editingUgPlaylist, setEditingUgPlaylist] = useState(false);
   const [ugPlaylistInput, setUgPlaylistInput] = useState("");
   const [showCsvOptions, setShowCsvOptions] = useState(false);
@@ -888,7 +890,7 @@ export default function SetDetail({
   }
 
   async function handleSaveUgPlaylist() {
-    const url = ugPlaylistInput.trim() || null;
+    const url = webUrl(ugPlaylistInput);
     setUgPlaylistUrl(url);
     setEditingUgPlaylist(false);
     setUgPlaylistInput("");
@@ -1373,15 +1375,15 @@ export default function SetDetail({
         ) : null}
 
         {canManage ? (
-          ugPlaylistUrl ? (
+          safeUgPlaylistUrl ? (
             <>
               <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
-                <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+                <a href={safeUgPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
                   <UltimateGuitarIcon />
                   UG playlist
                 </a>
                 <button
-                  onClick={() => { setUgPlaylistInput(ugPlaylistUrl); setEditingUgPlaylist(true); }}
+                  onClick={() => { setUgPlaylistInput(safeUgPlaylistUrl); setEditingUgPlaylist(true); }}
                   className="px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 transition-colors border-l border-zinc-300"
                   title="Edit URL"
                 >
@@ -1424,7 +1426,7 @@ export default function SetDetail({
               />
               <button
                 onClick={handleSaveUgPlaylist}
-                disabled={!ugPlaylistInput.trim()}
+                disabled={!webUrl(ugPlaylistInput)}
                 className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
               >
                 Save
@@ -1445,8 +1447,8 @@ export default function SetDetail({
               UG playlist
             </button>
           )
-        ) : ugPlaylistUrl ? (
-          <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+        ) : safeUgPlaylistUrl ? (
+          <a href={safeUgPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
             <UltimateGuitarIcon />
             UG playlist
           </a>

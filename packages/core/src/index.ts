@@ -21,6 +21,7 @@ export * from './utils/optionSheet';
 export * from './utils/peopleOverflow';
 export * from './utils/latestWinsQueue';
 export * from './utils/attendeeOrder';
+export * from './utils/webUrl';
 export * from './utils/reorderSongsForPlayed';
 export * from './utils/resolvePlaceAddress';
 export * from './utils/attendeeSummary';

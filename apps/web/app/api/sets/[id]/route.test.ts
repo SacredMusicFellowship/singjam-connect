@@ -137,4 +137,31 @@ describe("PATCH /api/sets/[id]", () => {
     expect(mockSupabaseFromBearer).toHaveBeenCalledWith("native-token");
     expect(updateSpy.update).toHaveBeenCalledWith(expect.objectContaining({ link_sharing: "public" }));
   });
+
+  it("refuses a UG playlist link that isn't a web address", async () => {
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { id: "set-1" } }))
+      .mockReturnValueOnce(chain({ data: null }));
+    const res = await PATCH(req("set-1", { ultimate_guitar_playlist_url: "javascript:alert(1)" }), {
+      params: Promise.resolve({ id: "set-1" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockAdminFrom).toHaveBeenCalledTimes(2);
+  });
+
+  it("saves a UG playlist web address, and clears it when empty", async () => {
+    for (const [input, saved] of [[" https://www.ultimate-guitar.com/p/1 ", "https://www.ultimate-guitar.com/p/1"], ["", null]] as const) {
+      vi.clearAllMocks();
+      const updateSpy = updateChain({ error: null });
+      mockAdminFrom
+        .mockReturnValueOnce(chain({ data: { id: "set-1" } }))
+        .mockReturnValueOnce(chain({ data: null }))
+        .mockReturnValueOnce(updateSpy);
+      const res = await PATCH(req("set-1", { ultimate_guitar_playlist_url: input }), {
+        params: Promise.resolve({ id: "set-1" }),
+      });
+      expect(res.status).toBe(200);
+      expect(updateSpy.update).toHaveBeenCalledWith(expect.objectContaining({ ultimate_guitar_playlist_url: saved }));
+    }
+  });
 });
