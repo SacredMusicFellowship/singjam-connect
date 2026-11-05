@@ -99,7 +99,9 @@ export default function SongCard({
             )}
           </div>
           {productions && productions.length > 0 ? (
-            <div className="text-sm text-zinc-500">from <em>{productions.join(", ")}</em></div>
+            <div className="text-sm text-zinc-500">
+              from <em>{productions.join(", ")}</em>{artistsLine ? ` · ${artistsLine}` : null}
+            </div>
           ) : artistsLine ? (
             <div className="text-sm text-zinc-500">{artistsLine}</div>
           ) : null}

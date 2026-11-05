@@ -40,7 +40,7 @@ type Props = {
   confidence?: string | null;
 };
 
-// Mirrors web's SongCard: title + (songwriters), then "from <production>" or
+// Mirrors web's SongCard: title + (songwriters), then "from <production>" and/or
 // each recording artist with their recording year,
 // media links, genre chips + jammer count, then Add / View. Web embeds the
 // YouTube and Spotify players inline; here they open the apps instead, since a
@@ -83,7 +83,9 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
             ) : null}
           </Text>
           {song.productions.length > 0 ? (
-            <Text className="text-sm text-zinc-500">from <Text className="italic">{song.productions.join(', ')}</Text></Text>
+            <Text className="text-sm text-zinc-500">
+              from <Text className="italic">{song.productions.join(', ')}</Text>{artistsLine ? ` · ${artistsLine}` : null}
+            </Text>
           ) : artistsLine ? (
             <Text className="text-sm text-zinc-500">{artistsLine}</Text>
           ) : null}
