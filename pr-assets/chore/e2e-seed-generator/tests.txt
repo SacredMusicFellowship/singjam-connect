@@ -1,0 +1,53 @@
+$ npm run seed:write -w @singjam/test-fixtures
+Wrote 8 seed files to ../../supabase/seed/e2e
+
+$ cd packages/test-fixtures && npx vitest run
+ ✓ src/seed/sql.test.ts > literal > escapes single quotes 1ms
+ ✓ src/seed/sql.test.ts > literal > writes null, numbers, booleans and raw SQL as-is 0ms
+ ✓ src/seed/sql.test.ts > literal > refuses values SQL can't hold 0ms
+ ✓ src/seed/sql.test.ts > arrays and json > types empty arrays so Postgres accepts them 0ms
+ ✓ src/seed/sql.test.ts > arrays and json > escapes values inside arrays and json 0ms
+ ✓ src/seed/sql.test.ts > relativeTimestamp > writes times as an offset from now() 0ms
+ ✓ src/seed/sql.test.ts > insert > rejects rows with different columns 0ms
+ ✓ src/seed/sql.test.ts > insert > writes one multi-row insert 0ms
+ ✓ src/random.test.ts > createRng > repeats the same sequence for the same seed 1ms
+ ✓ src/random.test.ts > createRng > gives a different sequence for a different seed 0ms
+ ✓ src/random.test.ts > createRng > keeps int() within its bounds 10ms
+ ✓ src/random.test.ts > createRng > samples without repeats 0ms
+ ✓ src/random.test.ts > stableUuid > is a valid v4-shaped uuid that depends only on the key 0ms
+ ✓ src/random.test.ts > stableShortCode > uses the same 8-character alphabet as the database generators 0ms
+ ✓ src/scenario.test.ts > buildScenario determinism > builds the same world for the same seed 6ms
+ ✓ src/scenario.test.ts > buildScenario determinism > builds a different world with different ids for another seed 2ms
+ ✓ src/scenario.test.ts > referential integrity > gives every profile an auth user with the same id 0ms
+ ✓ src/scenario.test.ts > referential integrity > points every foreign key at a row in the scenario 3ms
+ ✓ src/scenario.test.ts > database constraints > only uses values the check constraints allow 5ms
+ ✓ src/scenario.test.ts > database constraints > satisfies the unique indexes 0ms
+ ✓ src/scenario.test.ts > database constraints > uses genres and keys the app knows 1ms
+ ✓ src/scenario.test.ts > fake data only > uses the reserved .test domain for every email 0ms
+ ✓ src/scenario.test.ts > fake data only > has no photos, recordings or chord charts 1ms
+ ✓ src/scenario.test.ts > fake data only > marks every Stripe id as a fixture 0ms
+ ✓ src/scenario.test.ts > what the e2e suite relies on > has upcoming and past official events, with ticket types and paid orders 0ms
+ ✓ src/scenario.test.ts > what the e2e suite relies on > hosts official events only from members allowed to 0ms
+ ✓ src/scenario.test.ts > what the e2e suite relies on > puts RSVPs past capacity on the waitlist 0ms
+ ✓ src/scenario.test.ts > what the e2e suite relies on > gives the member friend matches and leaves the newcomer's repertoire empty 0ms
+ ✓ src/scenario.test.ts > what the e2e suite relies on > leaves the unfinished account without a username, like a fresh signup 0ms
+ ✓ src/seed/seed.test.ts > committed seed files > match the generator (run npm run seed:write -w @singjam/test-fixtures) 2ms
+ ✓ src/seed/seed.test.ts > seed against the migrated schema > loads every row 5ms
+ ✓ src/seed/seed.test.ts > seed against the migrated schema > resolves every genre by name 0ms
+ ✓ src/seed/seed.test.ts > seed against the migrated schema > fills in the profiles created by the signup trigger 0ms
+ ✓ src/seed/seed.test.ts > seed against the migrated schema > anchors times to now(), keeping upcoming jams upcoming 1ms
+ ✓ src/seed/seed.test.ts > seed against the migrated schema > stores passwords hashed, and they verify 5ms
+ ✓ src/seed/seed.test.ts > seed against the migrated schema > only needs stand-ins for the policies production created outside the migrations 0ms
+ Test Files  4 passed (4)
+      Tests  36 passed (36)
+
+$ cd packages/core && npx vitest run
+      Tests  218 passed (218)
+$ cd apps/web && npx vitest run
+      Tests  739 passed (739)
+$ cd apps/native && npm test
+Tests:       3 passed, 3 total
+
+$ cd apps/web && npm run build
+ ✓ Compiled successfully in 3.5s
+ ✓ Generating static pages (64/64)
