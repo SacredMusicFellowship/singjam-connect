@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchAllRows } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import { type SharedSong, type SortMode, displayedSongs } from "@/lib/setDisplayedSongs";
 import SearchInput from "@/components/SearchInput";
+
+function ArtistOrShow({ productions, artist }: { productions: string[] | undefined; artist: string | null }) {
+  if (productions?.length) return <span className="text-xs text-zinc-400">from <em>{productions.join(", ")}</em></span>;
+  return artist ? <span className="text-xs text-zinc-400">{artist}</span> : null;
+}
 
 function WhoKnows({ s }: { s: SharedSong }) {
   const leadsSet = new Set(s.who_else_leads);
@@ -97,6 +103,26 @@ export default function SetSongPanel({
 
   const { results: searchResults, loading: searching } = useSongSearch(searchQuery, { limit: 20 });
   const supabase = supabaseBrowser();
+  const [productionsBySong, setProductionsBySong] = useState<Map<string, string[]>>(new Map());
+
+  useEffect(() => {
+    fetchAllRows<{ song_id: string; productions: { name: string } | null }>((from, to) =>
+      supabase
+        .from("song_productions")
+        .select("song_id, productions(name)")
+        .order("song_id")
+        .order("production_id")
+        .range(from, to) as any
+    )
+      .then((rows) => {
+        const map = new Map<string, string[]>();
+        for (const r of rows) {
+          if (r.productions?.name) map.set(r.song_id, [...(map.get(r.song_id) ?? []), r.productions.name]);
+        }
+        setProductionsBySong(map);
+      })
+      .catch(() => {});
+  }, []);
 
   function fetchSharedSongs() {
     const rpc = isSolo ? "solo_set_songs" : "set_shared_songs";
@@ -328,9 +354,7 @@ export default function SetSongPanel({
                     <div className={`min-w-0 flex-1 ${inSet ? "opacity-40" : ""}`}>
                       <div className="flex items-baseline gap-1.5 flex-wrap">
                         <span className="text-sm font-medium text-zinc-900">{song.title}</span>
-                        {song.display_artist && (
-                          <span className="text-xs text-zinc-400">{song.display_artist}</span>
-                        )}
+                        <ArtistOrShow productions={song.productions} artist={song.display_artist} />
                       </div>
                       {shared && <WhoKnows s={shared} />}
                       {inSet && <p className="text-xs text-zinc-400">Already in set</p>}
@@ -439,9 +463,7 @@ export default function SetSongPanel({
                       ) : (
                         <span className="text-sm font-medium text-zinc-900">{s.title}</span>
                       )}
-                      {s.display_artist && (
-                        <span className="text-xs text-zinc-400">{s.display_artist}</span>
-                      )}
+                      <ArtistOrShow productions={productionsBySong.get(s.song_id)} artist={s.display_artist} />
                     </div>
                     {!isSolo && <WhoKnows s={s} />}
                   </div>

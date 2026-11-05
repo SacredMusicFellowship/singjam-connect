@@ -29,7 +29,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     getSet(id),
     supabase
       .from("set_songs")
-      .select("song_id, position, key_note, leader_user_ids, songs(title, display_artist, tonality, song_recording_artists(position, youtube_url), song_composers(people(name)))")
+      .select("song_id, position, key_note, leader_user_ids, songs(title, display_artist, song_productions(productions(name)), tonality, song_recording_artists(position, youtube_url), song_composers(people(name)))")
       .eq("set_id", id)
       .order("position", { ascending: true }),
     user
@@ -65,6 +65,9 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
   }
 
   let rawSongs = (songsRes.data ?? []).map((s: any) => {
+    const productions = (s.songs?.song_productions ?? [])
+      .map((sp: any) => sp.productions?.name)
+      .filter(Boolean) as string[];
     const songwriters = (s.songs?.song_composers ?? [])
       .map((sc: any) => sc.people?.name)
       .filter(Boolean) as string[];
@@ -72,7 +75,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     return {
       song_id: s.song_id as string,
       title: (s.songs?.title ?? "") as string,
-      artist: (s.songs?.display_artist ?? null) as string | null,
+      artist: (productions.length > 0 ? `from ${productions.join(", ")}` : s.songs?.display_artist ?? null) as string | null,
       key: (s.key_note ?? null) as string | null,
       tonality: (s.songs?.tonality ?? null) as string | null,
       songwriters,

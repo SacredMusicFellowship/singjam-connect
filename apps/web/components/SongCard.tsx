@@ -1,7 +1,7 @@
 "use client";
 
-import { hasLeadVoice } from "@singjam/core";
-import { useState } from "react";
+import { formatRecordingArtists, hasLeadVoice, productionCredits, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { formatComposers } from "@/lib/formatComposers";
 import RoleSelect from "@/components/RoleSelect";
@@ -37,7 +37,8 @@ export default function SongCard({
   composers,
   cultures,
   productions,
-  year,
+  productionCredits: productionCreditsProp,
+  recordingArtists,
   aka,
   genres,
   languages,
@@ -59,7 +60,8 @@ export default function SongCard({
   composers: string[];
   cultures: string[];
   productions: string[];
-  year: number | null;
+  productionCredits?: ProductionCredit[] | null;
+  recordingArtists?: RecordingArtistCredit[] | null;
   aka: string[] | null;
   genres: string[];
   languages: string[];
@@ -82,6 +84,8 @@ export default function SongCard({
   const confidenceLabel = LEVELS.find((l) => l.key === confidence)?.label ?? confidence;
   const picking = pendingAddId === songId;
   const href = `/songs/${slug ?? songId}`;
+  const artistsLine = formatRecordingArtists(recordingArtists, displayArtist);
+  const shows = productionCredits(productionCreditsProp, productions);
 
   return (
     <div className="rounded-2xl border border-zinc-200 p-4 shadow-sm">
@@ -96,15 +100,22 @@ export default function SongCard({
                 ({formatComposers(composers, cultures ?? [])})
               </span>
             )}
-            {productions && productions.length > 0 ? (
-              <span className="text-zinc-500 font-normal"> — <em>{productions.join(", ")}</em></span>
-            ) : displayArtist ? (
-              <span className="text-zinc-500 font-normal"> — {displayArtist}</span>
-            ) : null}
-            {year && (
-              <span className="ml-1 font-normal text-zinc-400">({year})</span>
-            )}
           </div>
+          {shows.length > 0 ? (
+            <div className="text-sm text-zinc-500">
+              from{" "}
+              {shows.map((p, i) => (
+                <Fragment key={`${p.name}-${p.year}`}>
+                  {i > 0 && ", "}
+                  <em>{p.name}</em>
+                  {p.year ? ` (${p.year})` : null}
+                </Fragment>
+              ))}
+              {artistsLine ? ` · ${artistsLine}` : null}
+            </div>
+          ) : artistsLine ? (
+            <div className="text-sm text-zinc-500">{artistsLine}</div>
+          ) : null}
           {aka && aka.length ? (
             <div className="text-xs text-zinc-500">aka: {aka.join(" · ")}</div>
           ) : null}

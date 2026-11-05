@@ -15,6 +15,8 @@ import {
   type SongJammers,
   CONFIDENCE_STYLES,
   type ConfidenceLevel,
+  productionCredits,
+  type ProductionCredit,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
@@ -66,6 +68,7 @@ type SongDetail = {
   cultures: string[];
   languages: string[];
   productions: string[];
+  production_credits?: ProductionCredit[];
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -272,7 +275,7 @@ export default function SongDetailScreen() {
           song_genres(genres(name)),
           song_themes(themes(name)),
           song_languages(languages(name)),
-          song_productions(productions(name))
+          song_productions(productions(name, year))
         `)
         .eq('id', songId)
         .single(),
@@ -337,6 +340,10 @@ export default function SongDetailScreen() {
       cultures: [...new Set((cultureRows).map((x: any) => x.cultures?.name).filter(Boolean) as string[])],
       languages: (s.song_languages ?? []).map((x: any) => x.languages?.name).filter(Boolean),
       productions: (s.song_productions ?? []).map((x: any) => x.productions?.name).filter(Boolean),
+      production_credits: (s.song_productions ?? [])
+        .map((x: any) => x.productions)
+        .filter((p: any) => p?.name)
+        .map((p: any) => ({ name: p.name, year: p.year ?? null })),
     });
 
     setMyConfidence((confidenceRes.data as any)?.confidence ?? null);
@@ -629,7 +636,14 @@ export default function SongDetailScreen() {
 
           {song.productions.length > 0 ? (
             <Text className="text-base text-slate-500 mt-0.5">
-              from <Text className="italic">{song.productions.join(', ')}</Text>
+              from{' '}
+              {productionCredits(song.production_credits, song.productions).map((p, i) => (
+                <Text key={`${p.name}-${p.year}`}>
+                  {i > 0 ? ', ' : null}
+                  <Text className="italic">{p.name}</Text>
+                  {p.year ? ` (${p.year})` : null}
+                </Text>
+              ))}
             </Text>
           ) : song.display_artist ? (
             <Text className="text-base text-slate-500 mt-0.5">{song.display_artist}</Text>

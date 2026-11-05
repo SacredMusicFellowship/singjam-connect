@@ -1,3 +1,4 @@
+import type { ProductionCredit, RecordingArtistCredit } from "@singjam/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { browseRpcParams, type BrowseFilters } from "@/lib/browseSongsParams";
@@ -22,6 +23,8 @@ export type BrowseSong = {
   popularity: number;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
   total_count: number;
 };
 

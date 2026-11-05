@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { songMatchesFilters, deriveFilterOptions, countActiveFilters, type SongFilterState } from '@singjam/core';
+import { songMatchesFilters, deriveFilterOptions, countActiveFilters, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
@@ -36,6 +36,8 @@ type SongMeta = {
   year: number | null;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
 };
 
 type SortBy = 'popularity' | 'title_asc' | 'title_desc';
@@ -88,6 +90,8 @@ function toSongMeta(r: any): SongMeta {
     slug: r.slug ?? null,
     youtube_id: r.youtube_id ?? null,
     spotify_track_id: r.spotify_track_id ?? null,
+    recording_artists: r.recording_artists ?? null,
+    production_credits: r.production_credits ?? null,
     composers: r.composers ?? [],
     productions: r.productions ?? [],
     popularity: Number(r.popularity ?? 0),

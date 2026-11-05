@@ -17,7 +17,7 @@ import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
+import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
 import ChordChartSlot from "@/components/ChordChartSlot";
@@ -89,6 +89,8 @@ type SuggestionResult = {
   popularity: number;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
 };
 
 type AddableSong = {
@@ -152,7 +154,8 @@ function SuggestionsPanel({
             composers={s.composers}
             cultures={s.cultures}
             productions={s.productions}
-            year={s.year}
+            recordingArtists={s.recording_artists}
+            productionCredits={s.production_credits}
             aka={null}
             genres={s.genres}
             languages={s.languages}
@@ -682,7 +685,7 @@ export default function RepertoirePage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold">My Repertoire</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-zinc-500">
           {items.length} song{items.length === 1 ? "" : "s"}
           {isPending ? "…" : ""}
         </p>
@@ -724,12 +727,12 @@ export default function RepertoirePage() {
       {/* Search results mode */}
       {searching ? (
         <>
-          <div className="text-sm text-muted-foreground px-1">
+          <div className="text-sm text-zinc-500 px-1">
             {searchLoading ? "Searching…" : `${sortedSearchResults.length} result${sortedSearchResults.length === 1 ? "" : "s"}`}
           </div>
           <div className="grid gap-2">
             {!searchLoading && sortedSearchResults.length === 0 ? (
-              <div className="rounded-md border p-4 text-sm text-muted-foreground">No songs found.</div>
+              <div className="rounded-md border p-4 text-sm text-zinc-500">No songs found.</div>
             ) : (
               sortedSearchResults.map((result) => {
                 const inRep = repertoireMap.get(result.song_id);
@@ -747,7 +750,8 @@ export default function RepertoirePage() {
                       composers={result.composers}
                       cultures={result.cultures ?? []}
                       productions={result.productions}
-                      year={result.year}
+                      recordingArtists={result.recording_artists}
+                      productionCredits={result.production_credits}
                       aka={result.aka}
                       genres={result.genres}
                       languages={result.languages ?? []}
@@ -777,7 +781,7 @@ export default function RepertoirePage() {
                           </span>
                         )}
                       </div>
-                      <div className="truncate text-sm text-muted-foreground">
+                      <div className="truncate text-sm text-zinc-500">
                         {result.productions.length > 0
                           ? <>from <em>{result.productions.join(", ")}</em></>
                           : result.display_artist ?? "—"}
@@ -1017,7 +1021,7 @@ export default function RepertoirePage() {
           <div className="divide-y rounded-md border">
             {sortedFiltered.length === 0 ? (
               <div className="p-4 text-center">
-                <p className="text-sm text-muted-foreground">No songs match these filters.</p>
+                <p className="text-sm text-zinc-500">No songs match these filters.</p>
                 {activeFilterCount > 0 && (
                   <button onClick={clearFilters} className="mt-3 text-sm font-medium text-amber-600 hover:underline">
                     Clear filters
@@ -1063,7 +1067,7 @@ export default function RepertoirePage() {
                         </span>
                       )}
                     </div>
-                    <div className="truncate text-sm text-muted-foreground">
+                    <div className="truncate text-sm text-zinc-500">
                       {it.productions.length > 0
                         ? <>from <em>{it.productions.join(", ")}</em></>
                         : it.display_artist ?? "—"}

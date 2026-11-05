@@ -32,7 +32,7 @@ const getSetSongs = cache(async (id: string) => {
   const supabase = await getServerSupabase();
   const { data } = await supabase
     .from("set_songs")
-    .select("id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))")
+    .select("id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))")
     .eq("set_id", id)
     .order("position", { ascending: true });
   return (data ?? []) as any[];

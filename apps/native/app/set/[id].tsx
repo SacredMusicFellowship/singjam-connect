@@ -63,6 +63,7 @@ type SetSong = {
     chord_chart_url: string | null;
     tonality?: string | null;
     song_composers: { people: { name: string } | null }[];
+    song_productions?: { productions: { name: string } | null }[];
   };
 };
 
@@ -70,6 +71,7 @@ type SongSearchResult = {
   song_id: string;
   title: string;
   display_artist: string | null;
+  productions: string[];
 };
 
 function AddSongModal({
@@ -108,13 +110,8 @@ function AddSongModal({
 
   async function search(q: string) {
     setSearching(true);
-    const { data } = await supabase
-      .from('songs')
-      .select('song_id, title, display_artist')
-      .or(`title.ilike.%${q}%,display_artist.ilike.%${q}%`)
-      .order('title')
-      .limit(30);
-    setResults(data ?? []);
+    const { data } = await supabase.rpc('search_songs', { q, limit_n: 30 });
+    setResults((data ?? []) as SongSearchResult[]);
     setSearching(false);
   }
 
@@ -197,7 +194,11 @@ function AddSongModal({
                 <View className="flex-row items-center px-4 py-3 border-b border-zinc-100">
                   <View className="flex-1 mr-3">
                     <Text className="text-zinc-900 font-medium" numberOfLines={1}>{item.title}</Text>
-                    {item.display_artist ? (
+                    {item.productions?.length ? (
+                      <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>
+                        from <Text className="italic">{item.productions.join(', ')}</Text>
+                      </Text>
+                    ) : item.display_artist ? (
                       <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>{item.display_artist}</Text>
                     ) : null}
                   </View>
@@ -279,6 +280,9 @@ function SongRow({
     .map((sc) => sc.people?.name)
     .filter(Boolean) as string[];
   const artist = song.songs.display_artist ?? formatComposers(composerNames, []);
+  const productions = (song.songs.song_productions ?? [])
+    .map((sp) => sp.productions?.name)
+    .filter(Boolean) as string[];
 
   // Leader/support assignments are only shown to collaborators; public viewers
   // see none. Mirrors web SetSongRow.
@@ -423,7 +427,11 @@ function SongRow({
             <View className="flex-1 min-w-0">
               <Text className="text-zinc-900 font-medium" numberOfLines={2}>{song.songs.title}</Text>
               <View className="flex-row items-center mt-0.5">
-                {artist ? (
+                {productions.length > 0 ? (
+                  <Text className="text-zinc-500 text-sm flex-shrink mr-3" numberOfLines={1}>
+                    from <Text className="italic">{productions.join(', ')}</Text>
+                  </Text>
+                ) : artist ? (
                   <Text className="text-zinc-500 text-sm flex-shrink mr-3" numberOfLines={1}>{artist}</Text>
                 ) : null}
                 {canManage ? (
@@ -914,7 +922,7 @@ export default function SetDetailScreen() {
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, chord_chart_url, tonality, song_composers(people(name)))';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, song_productions(productions(name)), chord_chart_url, tonality, song_composers(people(name)))';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -1030,7 +1038,7 @@ export default function SetDetailScreen() {
         .single(),
       supabase
         .from('set_songs')
-        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, chord_chart_url, tonality, song_composers(people(name)))')
+        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, song_productions(productions(name)), chord_chart_url, tonality, song_composers(people(name)))')
         .eq('set_id', id)
         .order('position', { ascending: true }),
       user

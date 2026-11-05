@@ -92,6 +92,9 @@ export default function SetSongRow({
   const spotify_url = getPrimarySpotifyUrl(song.songs);
   const spotifyTrackId = getSpotifyTrackId(spotify_url);
   const { chord_chart_url } = song.songs;
+  const productions = (song.songs.song_productions ?? [])
+    .map((sp) => sp.productions?.name)
+    .filter(Boolean) as string[];
 
   const fieldMap: Record<NonNullable<AddingField>, "youtube_url" | "spotify_url" | "chord_chart_url"> = {
     youtube: "youtube_url",
@@ -267,9 +270,11 @@ export default function SetSongRow({
             )}
           </div>
           <div className="flex items-center gap-3 min-w-0 mt-0.5">
-            {song.songs.display_artist && (
+            {productions.length > 0 ? (
+              <p className="min-w-0 truncate text-xs text-zinc-500">from <em>{productions.join(", ")}</em></p>
+            ) : song.songs.display_artist ? (
               <p className="min-w-0 truncate text-xs text-zinc-500">{song.songs.display_artist}</p>
-            )}
+            ) : null}
             {showKeyLine && (
             <span className="flex shrink-0 items-center gap-1">
             {canManage ? (
