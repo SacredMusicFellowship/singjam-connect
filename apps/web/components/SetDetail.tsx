@@ -889,16 +889,17 @@ export default function SetDetail({
     setCreatingPlaylist(null);
   }
 
+  // Shows the link the server checked and saved, not the text box's contents.
   async function handleSaveUgPlaylist() {
-    const url = webUrl(ugPlaylistInput);
-    setUgPlaylistUrl(url);
     setEditingUgPlaylist(false);
-    setUgPlaylistInput("");
-    fetch(`/api/sets/${set.id}`, {
+    const res = await fetch(`/api/sets/${set.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ultimate_guitar_playlist_url: url }),
-    });
+      body: JSON.stringify({ ultimate_guitar_playlist_url: ugPlaylistInput }),
+    }).catch(() => null);
+    const json = res?.ok ? await res.json() : null;
+    if (json && "ultimate_guitar_playlist_url" in json) setUgPlaylistUrl(json.ultimate_guitar_playlist_url);
+    setUgPlaylistInput("");
   }
 
   async function handleDeleteSet() {

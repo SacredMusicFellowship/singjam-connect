@@ -47,7 +47,7 @@ export async function PATCH(
       .update({ ultimate_guitar_playlist_url: url, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ultimate_guitar_playlist_url: url });
   }
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });

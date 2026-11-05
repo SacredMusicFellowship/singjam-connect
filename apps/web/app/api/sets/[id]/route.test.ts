@@ -162,6 +162,7 @@ describe("PATCH /api/sets/[id]", () => {
       });
       expect(res.status).toBe(200);
       expect(updateSpy.update).toHaveBeenCalledWith(expect.objectContaining({ ultimate_guitar_playlist_url: saved }));
+      expect(await res.json()).toEqual({ ok: true, ultimate_guitar_playlist_url: saved });
     }
   });
 });
