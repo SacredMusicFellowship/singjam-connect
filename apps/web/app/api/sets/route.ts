@@ -28,12 +28,12 @@ export async function GET(req: Request) {
   const [ownedRes, collabRes, publicRes] = await Promise.all([
     supabase
       .from("sets")
-      .select("id, short_code, name, description, created_at, owner_user_id, jam_id, link_sharing")
+      .select("id, short_code, name, description, created_at, owner_user_id, jam_id, link_sharing, jam:jams(name)")
       .eq("owner_user_id", user.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("set_collaborators")
-      .select("set_id, role, sets(id, short_code, name, description, created_at, owner_user_id, link_sharing, profiles!owner_user_id(display_name, last_name, username))")
+      .select("set_id, role, sets(id, short_code, name, description, created_at, owner_user_id, jam_id, link_sharing, jam:jams(name), profiles!owner_user_id(display_name, last_name, username))")
       .eq("user_id", user.id)
       .eq("status", "accepted"),
     supabase
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
       .limit(20),
   ]);
 
-  const owned = (ownedRes.data ?? []) as any[];
+  const owned = ((ownedRes.data ?? []) as any[]).map(({ jam, ...s }) => ({ ...s, jam_name: jam?.name ?? null }));
   const ownedIds = new Set(owned.map((s: any) => s.id));
   // `role` rides along so callers can tell a set the user may only read from one
   // they may add songs to. Viewers still appear here — they can open the set.
@@ -60,6 +60,8 @@ export async function GET(req: Request) {
       created_at: s.created_at,
       owner_user_id: s.owner_user_id,
       link_sharing: s.link_sharing,
+      jam_id: s.jam_id,
+      jam_name: s.jam?.name ?? null,
       role: s.role,
       ownerUserId: s.owner_user_id,
       ownerName: [s.profiles?.display_name, s.profiles?.last_name].filter(Boolean).join(" ") || s.profiles?.username || null,
