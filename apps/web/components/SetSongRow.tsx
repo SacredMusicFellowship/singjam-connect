@@ -275,7 +275,7 @@ export default function SetSongRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2 min-w-0">
             {song.songs.slug ? (
-              <Link href={`/songs/${song.songs.slug}`} target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-900 hover:text-amber-600 line-clamp-2">
+              <Link href={`/songs/${song.songs.slug}`} className="font-medium text-zinc-900 hover:text-amber-600 line-clamp-2">
                 {song.songs.title}
               </Link>
             ) : (

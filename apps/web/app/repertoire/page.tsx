@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
@@ -183,6 +183,95 @@ function SuggestionsPanel({
     </div>
   );
 }
+
+type RowActions = {
+  toggleSelect: (songId: string) => void;
+  updateConfidence: (songId: string, level: string) => void;
+  updateKey: (songId: string, key: string | null) => void;
+  loadSetMemberships: (songId: string) => void;
+  saveScroll: () => void;
+  addedToSet: (songId: string, setId: string) => void;
+  setCreated: (set: { id: string; name: string }) => void;
+  chartAdded: (songId: string, url: string) => void;
+};
+
+const RepertoireRow = memo(function RepertoireRow({
+  it,
+  selectable,
+  selected,
+  userSets,
+  inSets,
+  canAddCharts,
+  actions,
+}: {
+  it: Item;
+  selectable: boolean;
+  selected: boolean;
+  userSets: { id: string; name: string }[];
+  inSets: Set<string> | undefined;
+  canAddCharts: boolean;
+  actions: RowActions;
+}) {
+  return (
+  <div
+    className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
+      !selectable ? "rounded-md border" : selected ? "bg-amber-50/60" : ""
+    }`}
+  >
+    <div className="flex min-w-0 items-start gap-3">
+      {selectable && <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => actions.toggleSelect(it.song_id)}
+        className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-zinc-300 accent-amber-500"
+        aria-label={`Select ${it.title}`}
+      />}
+      <div className="min-w-0">
+        <div className="line-clamp-2 font-medium">
+          <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => actions.saveScroll()} className="hover:text-amber-600">
+            {it.title}
+          </Link>
+          {it.composers.length > 0 && (
+            <span className="ml-1 font-normal text-slate-400">
+              ({formatComposers(it.composers, it.cultures)})
+            </span>
+          )}
+        </div>
+        <SongSubtitle productions={it.productions} artist={it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
+        {(it.popularity ?? 0) > 0 && (
+          <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
+        )}
+      </div>
+    </div>
+
+    <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
+      <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => actions.updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
+
+      <MyKeySelect value={it.key_note} onChange={(k) => actions.updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
+
+      {userSets.length > 0 && (
+        <AddToSetPanel
+          songId={it.song_id}
+          sets={userSets}
+          inSets={inSets}
+          onOpen={() => actions.loadSetMemberships(it.song_id)}
+          onAdded={(setId) => actions.addedToSet(it.song_id, setId)}
+          onSetCreated={(set) => actions.setCreated(set)}
+        />
+      )}
+
+      <ChordChartSlot
+        songId={it.song_id}
+        url={it.chord_chart_url}
+        canAdd={canAddCharts}
+        size="md"
+        onAdded={(url) => actions.chartAdded(it.song_id, url)}
+      />
+
+    </div>
+  </div>
+  );
+});
 
 export default function RepertoirePage() {
   const supabase = useMemo(() => supabaseBrowser(), []);
@@ -391,65 +480,37 @@ export default function RepertoirePage() {
 
   // One row for a song already in the repertoire, used by both the list and
   // search results so the two can't drift apart. Selection is list-only.
+  // Handlers the rows call. The object never changes identity (each entry calls
+  // the latest handler), so a memoized row only redraws when its own song,
+  // selection or set membership changes — not on every edit or batch.
+  const rowHandlers = useRef<RowActions>(null!);
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      toggleSelect: (id) => rowHandlers.current.toggleSelect(id),
+      updateConfidence: (id, level) => rowHandlers.current.updateConfidence(id, level),
+      updateKey: (id, key) => rowHandlers.current.updateKey(id, key),
+      loadSetMemberships: (id) => rowHandlers.current.loadSetMemberships(id),
+      saveScroll: () => rowHandlers.current.saveScroll(),
+      addedToSet: (songId, setId) => rowHandlers.current.addedToSet(songId, setId),
+      setCreated: (set) => rowHandlers.current.setCreated(set),
+      chartAdded: (songId, url) => rowHandlers.current.chartAdded(songId, url),
+    }),
+    []
+  );
+
+  // One row for a song already in the repertoire, used by both the list and
+  // search results so the two can't drift apart. Selection is list-only.
   const renderRepertoireRow = (it: Item, selectable: boolean) => (
-    <div
+    <RepertoireRow
       key={it.song_id}
-      className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
-        !selectable ? "rounded-md border" : selectedIds.has(it.song_id) ? "bg-amber-50/60" : ""
-      }`}
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        {selectable && <input
-          type="checkbox"
-          checked={selectedIds.has(it.song_id)}
-          onChange={() => toggleSelect(it.song_id)}
-          className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-zinc-300 accent-amber-500"
-          aria-label={`Select ${it.title}`}
-        />}
-        <div className="min-w-0">
-          <div className="line-clamp-2 font-medium">
-            <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => saveScrollPosition()} className="hover:text-amber-600">
-              {it.title}
-            </Link>
-            {it.composers.length > 0 && (
-              <span className="ml-1 font-normal text-slate-400">
-                ({formatComposers(it.composers, it.cultures)})
-              </span>
-            )}
-          </div>
-          <SongSubtitle productions={it.productions} artist={it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
-          {(it.popularity ?? 0) > 0 && (
-            <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
-          )}
-        </div>
-      </div>
-
-      <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
-        <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
-
-        <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
-
-        {userSets.length > 0 && (
-          <AddToSetPanel
-            songId={it.song_id}
-            sets={userSets}
-            inSets={songSetMemberships[it.song_id]}
-            onOpen={() => loadSetMemberships(it.song_id)}
-            onAdded={(setId) => setSongSetMemberships((prev) => ({ ...prev, [it.song_id]: new Set([...(prev[it.song_id] ?? []), setId]) }))}
-            onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
-          />
-        )}
-
-        <ChordChartSlot
-          songId={it.song_id}
-          url={it.chord_chart_url}
-          canAdd={canAddCharts}
-          size="md"
-          onAdded={(url) => setItems((prev) => prev.map((x) => (x.song_id === it.song_id ? { ...x, chord_chart_url: url } : x)))}
-        />
-
-      </div>
-    </div>
+      it={it}
+      selectable={selectable}
+      selected={selectable && selectedIds.has(it.song_id)}
+      userSets={userSets}
+      inSets={songSetMemberships[it.song_id]}
+      canAddCharts={canAddCharts}
+      actions={rowActions}
+    />
   );
 
   const sortedSearchResults = useMemo(
@@ -629,6 +690,19 @@ export default function RepertoirePage() {
         alert(error.message);
       }
     });
+  };
+
+  rowHandlers.current = {
+    toggleSelect,
+    updateConfidence,
+    updateKey,
+    loadSetMemberships,
+    saveScroll: () => saveScrollPosition(),
+    addedToSet: (songId, setId) =>
+      setSongSetMemberships((prev) => ({ ...prev, [songId]: new Set([...(prev[songId] ?? []), setId]) })),
+    setCreated: (set) => setUserSets((prev) => [set, ...prev]),
+    chartAdded: (songId, url) =>
+      setItems((prev) => prev.map((x) => (x.song_id === songId ? { ...x, chord_chart_url: url } : x))),
   };
 
   const addSong = (songId: string, confidence: string, result: AddableSong) => {
@@ -893,119 +967,123 @@ export default function RepertoirePage() {
             </div>
           </div>
 
-          {/* Bulk action bar */}
-          {selectedIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <span className="text-sm font-medium text-amber-800">
-                {selectedIds.size} selected
-              </span>
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                className="text-xs text-amber-700 underline underline-offset-2"
-              >
-                Deselect all
-              </button>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                {bulkStatus ? (
-                  <span
-                    role={bulkStatus.ok ? undefined : "alert"}
-                    className={`text-xs ${bulkStatus.ok ? "text-green-700" : "text-red-600"}`}
-                  >
-                    {bulkStatus.text}
-                  </span>
-                ) : null}
-                {userSets.length > 0 && (
-                  bulkCreatingSet ? (
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={newSetName}
-                        onChange={(e) => setNewSetName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && newSetName.trim()) createSetAndBulkAdd(newSetName.trim());
-                          if (e.key === "Escape") { setBulkCreatingSet(false); setNewSetName(""); }
+          {/* Bulk action bar. Its wrapper is always rendered: the page's space-y
+              spacing is a sibling selector, so inserting the bar as a sibling of
+              the list made the browser restyle every row (~1.2s on a phone). */}
+          <div className="contents">
+            {selectedIds.size > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <span className="text-sm font-medium text-amber-800">
+                  {selectedIds.size} selected
+                </span>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs text-amber-700 underline underline-offset-2"
+                >
+                  Deselect all
+                </button>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {bulkStatus ? (
+                    <span
+                      role={bulkStatus.ok ? undefined : "alert"}
+                      className={`text-xs ${bulkStatus.ok ? "text-green-700" : "text-red-600"}`}
+                    >
+                      {bulkStatus.text}
+                    </span>
+                  ) : null}
+                  {userSets.length > 0 && (
+                    bulkCreatingSet ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={newSetName}
+                          onChange={(e) => setNewSetName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newSetName.trim()) createSetAndBulkAdd(newSetName.trim());
+                            if (e.key === "Escape") { setBulkCreatingSet(false); setNewSetName(""); }
+                          }}
+                          placeholder="Set name…"
+                          autoFocus
+                          className="w-28 rounded-xl border border-zinc-300 px-2 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => { if (newSetName.trim()) createSetAndBulkAdd(newSetName.trim()); }}
+                          disabled={!newSetName.trim()}
+                          className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        >
+                          Create
+                        </button>
+                        <button
+                          onClick={() => { setBulkCreatingSet(false); setNewSetName(""); }}
+                          className="text-zinc-400 hover:text-zinc-600 text-sm"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <Select
+                        value={bulkSetId}
+                        onChange={(e) => {
+                          if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
+                          else if (e.target.value) bulkAddToSet(e.target.value);
                         }}
-                        placeholder="Set name…"
-                        autoFocus
-                        className="w-28 rounded-xl border border-zinc-300 px-2 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
-                      />
-                      <button
-                        onClick={() => { if (newSetName.trim()) createSetAndBulkAdd(newSetName.trim()); }}
-                        disabled={!newSetName.trim()}
-                        className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        shape="pill"
+                        size="sm"
                       >
-                        Create
+                        <option value="">Add to set…</option>
+                        {userSets.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                        <option value="__new__">+ New set…</option>
+                      </Select>
+                    )
+                  )}
+                  <Select
+                    value={bulkConfidenceLevel}
+                    onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
+                    shape="pill"
+                    size="sm"
+                  >
+                    <option value="">Change role…</option>
+                    {CONFIDENCE_LEVELS.map((l) => (
+                      <option
+                        key={l.key}
+                        value={l.key}
+                      >
+                        {l.label}
+                      </option>
+                    ))}
+                  </Select>
+                  {bulkRemoveConfirm ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-700">
+                        Remove {selectedIds.size} song{selectedIds.size === 1 ? "" : "s"}?
+                      </span>
+                      <button
+                        onClick={bulkRemove}
+                        className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                      >
+                        Confirm
                       </button>
                       <button
-                        onClick={() => { setBulkCreatingSet(false); setNewSetName(""); }}
-                        className="text-zinc-400 hover:text-zinc-600 text-sm"
+                        onClick={() => setBulkRemoveConfirm(false)}
+                        className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
                       >
-                        ✕
+                        Cancel
                       </button>
                     </div>
                   ) : (
-                    <Select
-                      value={bulkSetId}
-                      onChange={(e) => {
-                        if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
-                        else if (e.target.value) bulkAddToSet(e.target.value);
-                      }}
-                      shape="pill"
-                      size="sm"
-                    >
-                      <option value="">Add to set…</option>
-                      {userSets.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                      <option value="__new__">+ New set…</option>
-                    </Select>
-                  )
-                )}
-                <Select
-                  value={bulkConfidenceLevel}
-                  onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
-                  shape="pill"
-                  size="sm"
-                >
-                  <option value="">Change role…</option>
-                  {CONFIDENCE_LEVELS.map((l) => (
-                    <option
-                      key={l.key}
-                      value={l.key}
-                    >
-                      {l.label}
-                    </option>
-                  ))}
-                </Select>
-                {bulkRemoveConfirm ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-red-700">
-                      Remove {selectedIds.size} song{selectedIds.size === 1 ? "" : "s"}?
-                    </span>
                     <button
-                      onClick={bulkRemove}
-                      className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                      onClick={() => setBulkRemoveConfirm(true)}
+                      className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
                     >
-                      Confirm
+                      Remove
                     </button>
-                    <button
-                      onClick={() => setBulkRemoveConfirm(false)}
-                      className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setBulkRemoveConfirm(true)}
-                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
-                  >
-                    Remove
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {filtersOpen && (
             <FilterPanel
