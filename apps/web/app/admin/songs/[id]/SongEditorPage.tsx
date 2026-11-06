@@ -1,10 +1,9 @@
 import { cache } from "react";
 import { getServerSupabase } from "@/lib/supabase/cached";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import SongEditor from "./SongEditor";
 
 export const getSong = cache(async (id: string) => {
-  if (id === "new") return null;
   const supabase = await getServerSupabase();
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   const { data } = await supabase
@@ -27,11 +26,11 @@ export const getSong = cache(async (id: string) => {
 });
 
 // Rendered by /admin/songs/[id] and /song-editor/songs/[id]; song editors get
-// everything except creating and deleting songs.
+// everything except deleting songs. New songs are added through the same form
+// everyone uses, so the old /new address goes back to the songs list.
 export default async function SongEditorPage({ id, basePath, isAdmin }: { id: string; basePath: string; isAdmin: boolean }) {
-  if (id === "new" && !isAdmin) notFound();
+  if (id === "new") redirect(basePath);
   const supabase = await getServerSupabase();
-  const isNew = id === "new";
 
   const [song, genresRes, themesRes, culturesRes, langsRes, peopleRes, artistsRes, productionsRes] =
     await Promise.all([
@@ -45,12 +44,11 @@ export default async function SongEditorPage({ id, basePath, isAdmin }: { id: st
       supabase.from("productions").select("id, name, year").order("name").order("year"),
     ]);
 
-  if (!isNew && !song) notFound();
+  if (!song) notFound();
 
   return (
     <SongEditor
       song={song}
-      isNew={isNew}
       allGenres={genresRes.data ?? []}
       allThemes={themesRes.data ?? []}
       allCultures={culturesRes.data ?? []}

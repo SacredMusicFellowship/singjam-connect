@@ -165,9 +165,14 @@ export type EnrichmentReview = {
     productions: string[];
     alternate_titles: string[];
     additional_recordings: { artist: string; year: number | null }[];
+    genius_url: string | null;
   };
   agreed: string[];
+  fromWikipedia: string[];
 };
+
+// Facts a model pulled out of the song's Wikipedia article (not from memory).
+export type WikipediaFacts = { notes: string | null; productions: string[]; alternate_titles: string[] };
 
 // What a song editor reviews: every value the auto-fill rules accept is marked
 // agreed (and pre-ticked), and where they don't, one model's answer is still
@@ -175,6 +180,7 @@ export type EnrichmentReview = {
 export function reviewEnrichment(
   src: EnrichmentSources,
   landmarks: { artist: string; year: number | null }[],
+  extra: { wikipedia?: WikipediaFacts | null; geniusUrl?: string | null } = {},
 ): EnrichmentReview {
   const d = decideEnrichment(src);
   const g = src.gpt ?? {}, c = src.claude ?? {};
@@ -187,11 +193,16 @@ export function reviewEnrichment(
   };
   const inList = (allowed: readonly string[]) => (v: string | null) => (v && allowed.includes(v) ? v : null);
   const listIn = (allowed: readonly string[]) => (v: string[] | null) => (v ?? []).filter((x) => allowed.includes(x));
+  const wiki = extra.wikipedia ?? null;
+  const fromWikipedia = new Set<string>();
+  // Two of the three (GPT, Claude, the Wikipedia article) naming an item confirms it.
   const bothLists = (key: string, f: "productions" | "alternate_titles") => {
-    const a = value(g[f], SURE) ?? [], b = value(c[f], SURE) ?? [];
-    const shared = a.filter((x) => b.map(norm).includes(norm(x)));
+    const lists = [value(g[f], SURE) ?? [], value(c[f], SURE) ?? [], wiki?.[f] ?? []];
+    const all = lists.flat().filter((x, i, arr) => arr.findIndex((y) => norm(y) === norm(x)) === i);
+    const shared = all.filter((x) => lists.filter((l) => l.some((y) => norm(y) === norm(x))).length >= 2);
     if (shared.length) { agreed.add(key); return shared; }
-    return a.length ? a : b;
+    if (wiki?.[f].length) { fromWikipedia.add(key); return wiki[f]; }
+    return lists[0].length ? lists[0] : lists[1];
   };
   const culture = (key: "music_culture" | "lyric_culture") => {
     const a = inList(SONG_CULTURES)(value(g[key], SURE)), b = inList(SONG_CULTURES)(value(c[key], SURE));
@@ -216,17 +227,20 @@ export function reviewEnrichment(
     languages: pick("languages", d.languages, (one<string[]>("languages") ?? []).slice(0, MAX_TAGS)) ?? [],
     music_culture: culture("music_culture"),
     lyric_culture: culture("lyric_culture"),
-    notes: one<string>("notes"),
+    notes: wiki?.notes ?? one<string>("notes"),
     productions: bothLists("productions", "productions"),
     alternate_titles: bothLists("alternate_titles", "alternate_titles"),
     additional_recordings: landmarks,
+    genius_url: extra.geniusUrl ?? null,
   };
   if (landmarks.length) agreed.add("additional_recordings");
+  if (extra.geniusUrl) agreed.add("genius_url");
+  if (wiki?.notes) fromWikipedia.add("notes");
   // The auto-fill tag rule lets one model's extra picks fill up to the cap; in a
   // review, a tag list only counts as confirmed when both models chose every tag.
   for (const f of ["genres", "themes"] as const) {
     const both = (value(g[f], SURE) ?? []).filter((t) => (value(c[f], SURE) ?? []).includes(t));
     if (!suggestions[f].every((t) => both.includes(t))) agreed.delete(f);
   }
-  return { suggestions, agreed: [...agreed] };
+  return { suggestions, agreed: [...agreed], fromWikipedia: [...fromWikipedia] };
 }

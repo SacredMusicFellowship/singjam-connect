@@ -64,4 +64,30 @@ describe("reviewEnrichment", () => {
     const both = reviewEnrichment(base({ gpt: { genres: hi(["Pop", "Folk"]) }, claude: { genres: hi(["Folk", "Pop"]) } }), []);
     expect(both.agreed).toContain("genres");
   });
+
+  it("prefers notes drawn from Wikipedia, and says so", () => {
+    const r = reviewEnrichment(base({ gpt: { notes: hi("From memory.") } }), [], { wikipedia: { notes: "From the article.", productions: [], alternate_titles: [] } });
+    expect(r.suggestions.notes).toBe("From the article.");
+    expect(r.fromWikipedia).toContain("notes");
+    expect(r.agreed).not.toContain("notes");
+  });
+
+  it("confirms a production one model and Wikipedia both name", () => {
+    const r = reviewEnrichment(base({ gpt: { productions: hi(["Pitch Perfect"]) } }), [], { wikipedia: { notes: null, productions: ["Pitch Perfect"], alternate_titles: [] } });
+    expect(r.suggestions.productions).toEqual(["Pitch Perfect"]);
+    expect(r.agreed).toContain("productions");
+  });
+
+  it("offers Wikipedia's alternate titles, labelled, when no model names them", () => {
+    const r = reviewEnrichment(base(), [], { wikipedia: { notes: null, productions: [], alternate_titles: ["When I'm Gone"] } });
+    expect(r.suggestions.alternate_titles).toEqual(["When I'm Gone"]);
+    expect(r.fromWikipedia).toContain("alternate_titles");
+    expect(r.agreed).not.toContain("alternate_titles");
+  });
+
+  it("treats a matched Genius link as confirmed", () => {
+    const r = reviewEnrichment(base(), [], { geniusUrl: "https://genius.com/x" });
+    expect(r.suggestions.genius_url).toBe("https://genius.com/x");
+    expect(r.agreed).toContain("genius_url");
+  });
 });
