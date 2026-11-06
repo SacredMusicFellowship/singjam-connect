@@ -1,0 +1,23 @@
+$ npm run e2e
+  ✓   5 [setup] › e2e/auth.setup.ts:7:3 › sign in as admin
+  ✓   2 [setup] › e2e/auth.setup.ts:7:3 › sign in as unfinished
+  ✓   3 [setup] › e2e/auth.setup.ts:7:3 › sign in as newcomer
+  ✓   6 [setup] › e2e/auth.setup.ts:7:3 › sign in as host
+  ✓   4 [setup] › e2e/auth.setup.ts:7:3 › sign in as editor
+  ✓   1 [setup] › e2e/auth.setup.ts:7:3 › sign in as member
+  ✓   8 [desktop-chrome] › e2e/smoke.spec.ts:4:3 › signed out › the home page loads and offers sign in
+  ✓   9 [desktop-chrome] › e2e/smoke.spec.ts:35:3 › signed in as the member › the server answers Google Places from MSW, not the real API
+  ✓  10 [desktop-chrome] › e2e/smoke.spec.ts:30:3 › signed in as the member › the invited private jam is visible
+  ✓   7 [iphone-safari] › e2e/smoke.spec.ts:4:3 › signed out › the home page loads and offers sign in
+  ✓  12 [desktop-chrome] › e2e/smoke.spec.ts:14:3 › signed in as a newcomer with no invites › the jams list shows official jams but not someone else's private jam
+  ✓  14 [iphone-safari] › e2e/smoke.spec.ts:35:3 › signed in as the member › the server answers Google Places from MSW, not the real API
+  ✓  11 [desktop-chrome] › e2e/smoke.spec.ts:24:3 › signed in as the member › their repertoire loads from the seed
+  ✓  13 [iphone-safari] › e2e/smoke.spec.ts:14:3 › signed in as a newcomer with no invites › the jams list shows official jams but not someone else's private jam
+  ✓  15 [iphone-safari] › e2e/smoke.spec.ts:24:3 › signed in as the member › their repertoire loads from the seed
+  ✓  17 [android-chrome] › e2e/smoke.spec.ts:4:3 › signed out › the home page loads and offers sign in
+  ✓  16 [iphone-safari] › e2e/smoke.spec.ts:30:3 › signed in as the member › the invited private jam is visible
+  ✓  18 [android-chrome] › e2e/smoke.spec.ts:14:3 › signed in as a newcomer with no invites › the jams list shows official jams but not someone else's private jam
+  ✓  21 [android-chrome] › e2e/smoke.spec.ts:35:3 › signed in as the member › the server answers Google Places from MSW, not the real API
+  ✓  19 [android-chrome] › e2e/smoke.spec.ts:24:3 › signed in as the member › their repertoire loads from the seed
+  ✓  20 [android-chrome] › e2e/smoke.spec.ts:30:3 › signed in as the member › the invited private jam is visible
+  21 passed

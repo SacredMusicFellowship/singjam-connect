@@ -6,7 +6,8 @@
   },
   "scripts": {
     "e2e:db:reset": "supabase db reset",
-    "test:rls": "npm run test:rls -w @singjam/test-fixtures"
+    "test:rls": "npm run test:rls -w @singjam/test-fixtures",
+    "e2e": "npm run e2e -w singjam-connect"
   },
   "workspaces": [
     "apps/web",
