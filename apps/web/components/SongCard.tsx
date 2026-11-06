@@ -92,7 +92,7 @@ export default function SongCard({
       <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
           <div className="font-medium">
-            <Link href={href} target="_blank" rel="noopener noreferrer" className="hover:text-amber-600">
+            <Link href={href} className="hover:text-amber-600">
               {title}
             </Link>
             {composers.length > 0 && (
@@ -214,7 +214,7 @@ export default function SongCard({
           </>
         )}
         {!picking && !askingLeadVoice && (
-          <Link href={href} target="_blank" rel="noopener noreferrer" className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50">
+          <Link href={href} className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50">
             View
           </Link>
         )}

@@ -240,7 +240,10 @@ export default function RepertoirePage() {
     sortBy, setSortBy,
   } = useSongFilters(items, "title_asc");
 
-  const saveScrollPosition = useScrollRestoration("scroll:/repertoire", !loading);
+  const saveScrollPosition = useScrollRestoration(
+    "scroll:/repertoire",
+    !loading && (!query.trim() || (!searchLoading && searchResults.length > 0))
+  );
 
   // Show the cached repertoire immediately on return visits (the fresh fetch
   // below still runs and silently replaces it). Layout effect so the cached
@@ -797,7 +800,12 @@ export default function RepertoirePage() {
           <div className="text-sm text-zinc-500 px-1">
             {searchLoading ? "Searching…" : `${sortedSearchResults.length} result${sortedSearchResults.length === 1 ? "" : "s"}`}
           </div>
-          <div className="grid gap-2">
+          <div
+            className="grid gap-2"
+            onClickCapture={(e) => {
+              if ((e.target as HTMLElement).closest('a[href^="/songs/"]')) saveScrollPosition();
+            }}
+          >
             {!searchLoading && sortedSearchResults.length === 0 ? (
               <div className="rounded-md border p-4 text-sm text-zinc-500">No songs found.</div>
             ) : (

@@ -7,6 +7,7 @@ import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import { useBrowseSongs, type BrowseFilters } from "@/hooks/useBrowseSongs";
+import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { SortDropdown } from "@/components/SortDropdown";
 import { FilterPanel } from "@/components/FilterPanel";
 import SongCard from "@/components/SongCard";
@@ -48,14 +49,16 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
   const [pendingAddId, setPendingAddId] = useState<string | null>(null);
   const [repertoire, setRepertoire] = useState<Map<string, string>>(new Map());
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [hideMySongs, setHideMySongs] = useState(false);
+  const [hideMySongs, setHideMySongs] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("mine") === "hide";
+  });
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [initialCount] = useState(() => {
     if (typeof window === "undefined") return PAGE_SIZE;
     const saved = Number(sessionStorage.getItem("vc:/search"));
-    // browse_songs caps p_limit at 200 server-side
-    return Number.isFinite(saved) && saved > PAGE_SIZE ? Math.min(saved, 200) : PAGE_SIZE;
+    return Number.isFinite(saved) && saved > PAGE_SIZE ? Math.min(saved, 2000) : PAGE_SIZE;
   });
 
   const { results, loading, error: searchError } = useSongSearch(q, { limit: 50, debounceMs: 200 });
@@ -160,9 +163,11 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     } else {
       params.delete("q");
     }
+    if (hideMySongs) params.set("mine", "hide");
+    else params.delete("mine");
     const qs = params.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [q]);
+  }, [q, hideMySongs]);
 
   async function handlePendingAdd(songId: string, slug?: string | null) {
     const { data } = await supabase.auth.getSession();
@@ -193,8 +198,21 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
 
   const searching = q.trim().length > 0;
 
+  // Back from a song lands where the visitor was: the query and filters are in
+  // the URL and the loaded row count in sessionStorage, so once that many rows
+  // are back the saved scroll position has something to land on.
+  const restoreReady = searching
+    ? !loading && results.length > 0
+    : !browseLoading && browseSongs.length > 0 && (browseSongs.length >= initialCount || !hasMore);
+  const saveScrollPosition = useScrollRestoration("scroll:/search", restoreReady);
+
   return (
-    <div className="space-y-3">
+    <div
+      className="space-y-3"
+      onClickCapture={(e) => {
+        if ((e.target as HTMLElement).closest('a[href^="/songs/"]')) saveScrollPosition();
+      }}
+    >
       {/* Search box */}
       <div className="rounded-2xl border border-zinc-200 p-5 shadow-sm space-y-3">
         <div>
