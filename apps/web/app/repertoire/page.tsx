@@ -8,6 +8,7 @@ import { matchesSearch } from "@/lib/normalizeSearch";
 import { mergeSuggestionsById } from "@/lib/mergeSuggestionsById";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
+import { useProgressiveRows } from "@/hooks/useProgressiveRows";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { useSongSearch, type SongSearchResult } from "@/hooks/useSongSearch";
 import { sortRepertoireSearchResults } from "@/lib/sortRepertoireSearchResults";
@@ -470,6 +471,7 @@ export default function RepertoirePage() {
     if (sortBy === "title_desc") return list.sort((a, b) => b.title.localeCompare(a.title));
     return list.sort((a, b) => a.title.localeCompare(b.title));
   }, [filtered, sortBy]);
+  const rowsToDraw = useProgressiveRows(sortedFiltered.length, "scroll:/repertoire");
 
   useEffect(() => {
     const el = selectAllRef.current;
@@ -1047,7 +1049,7 @@ export default function RepertoirePage() {
                   />
                   <span className="text-xs text-zinc-400">Select all</span>
                 </div>
-                {sortedFiltered.map((it) => renderRepertoireRow(it, true))}
+                {sortedFiltered.slice(0, rowsToDraw).map((it) => renderRepertoireRow(it, true))}
               </>
             )}
           </div>
