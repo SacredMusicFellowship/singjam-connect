@@ -15,6 +15,8 @@ import {
   SONG_TONALITIES,
   type EnrichmentDecision,
   type EnrichmentSources,
+  reviewEnrichment,
+  type EnrichmentReview,
   type LandmarkCandidate,
   type ModelAnswer,
 } from "@singjam/core";
@@ -42,9 +44,15 @@ const FIELD_RULES: Record<Field, string> = {
   cultures: `cultures: cultural origins or associations, each from: ${SONG_CULTURES.join(", ")}. Never "British"`,
   first_line: "first_line: the first sung line, verbatim, without section labels",
   hook: "hook: the most recognisable lyric phrase, usually from the chorus, verbatim and short",
+  notes: "notes: a short factual paragraph on the song's origin and history that a musician would find useful (disputed credits, notable recordings; Roud or Child numbers for traditional songs). Null if nothing solid",
+  productions: "productions: films, musicals or TV shows the song first appeared in or is strongly tied to; empty if none",
+  alternate_titles: "alternate_titles: other titles the song is commonly known by; empty if none",
+  music_culture: `music_culture: for a traditional song, the tradition its melody comes from, one of: ${SONG_CULTURES.join(", ")}. Null otherwise`,
+  lyric_culture: `lyric_culture: for a traditional song, the tradition its words come from, one of: ${SONG_CULTURES.join(", ")}. Null otherwise`,
 };
 
-const ARRAY_FIELDS = new Set<Field>(["composers", "lyricists", "genres", "themes", "languages", "cultures"]);
+const ALL_FIELDS = Object.keys(FIELD_RULES) as Field[];
+const ARRAY_FIELDS = new Set<Field>(["composers", "lyricists", "genres", "themes", "languages", "cultures", "productions", "alternate_titles"]);
 const NUMBER_FIELDS = new Set<Field>(["year_written", "recording_year"]);
 
 function prompt(song: SongContext) {
@@ -441,4 +449,54 @@ async function fillSong(
     if (ids.length) await admin.from("song_languages").insert(ids.map((language_id) => ({ song_id: songId, language_id })));
   }
   return { songId, decision, usage };
+}
+
+// Review mode for the song editor: asks every source about every field, saves
+// nothing, and returns suggestions a person ticks before they're applied.
+export async function proposeEnrichment(admin: SupabaseClient, songId: string): Promise<EnrichmentReview & { usage: ModelUsage[] }> {
+  const { data: song, error } = await admin
+    .from("songs")
+    .select("title, display_artist, song_alternate_titles(title), song_productions(productions(name)), song_recording_artists(position, artists(name))")
+    .eq("id", songId)
+    .single();
+  if (error || !song) throw error ?? new Error(`song ${songId} not found`);
+
+  const s = song as any;
+  const primary = [...(s.song_recording_artists ?? [])].sort((a: any, b: any) => (a.position ?? 99) - (b.position ?? 99))[0];
+  const artist: string | null = primary?.artists?.name ?? s.display_artist ?? null;
+  const context: SongContext = {
+    title: s.title,
+    artist,
+    production: (s.song_productions ?? []).map((p: any) => p.productions?.name).filter(Boolean).join(", ") || null,
+    wanted: ALL_FIELDS,
+  };
+  const usage: ModelUsage[] = [];
+  const [[gpt, claude, mb, lyrics], landmarks] = await Promise.all([
+    Promise.all([
+      askGpt(context, usage),
+      askClaude(context, usage),
+      artist ? lookUpMusicBrainz(s.title, artist) : Promise.resolve(null),
+      artist ? lookUpLyrics(s.title, artist) : Promise.resolve(null),
+    ]),
+    addLandmarkRecordings(admin, songId, { dryRun: true }).catch(() => ({ added: [] as LandmarkResult[], usage: [] as ModelUsage[] })),
+  ]);
+  const review = reviewEnrichment({ gpt, claude, musicbrainz: mb, spotifyReleaseYear: null, lyrics }, landmarks.added);
+  const existingTitles = new Set([s.title, ...(s.song_alternate_titles ?? []).map((t: any) => t.title)].map(norm));
+  review.suggestions.alternate_titles = review.suggestions.alternate_titles.filter((t) => !existingTitles.has(norm(t)));
+  return { ...review, usage: [...usage, ...landmarks.usage] };
+}
+
+// Runs a review and stores it on the song for the editor to pick up. The
+// requested-at stamp lets the editor ignore an older run that finishes late.
+export async function runEnrichmentReview(admin: SupabaseClient, songId: string, requestedAt: string) {
+  let proposal: Record<string, unknown>;
+  try {
+    const { usage, ...review } = await proposeEnrichment(admin, songId);
+    console.log(`[enrich-review] ${songId}: usage ${JSON.stringify(usage)}`);
+    proposal = { requested_at: requestedAt, finished_at: new Date().toISOString(), ...review };
+  } catch (e) {
+    console.error(`[enrich-review] ${songId} failed: ${e instanceof Error ? e.message : String(e)}`);
+    proposal = { requested_at: requestedAt, finished_at: new Date().toISOString(), error: true };
+  }
+  await admin.from("songs").update({ enrichment_proposal: proposal }).eq("id", songId).eq("enrichment_proposal->>requested_at", requestedAt);
 }

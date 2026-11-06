@@ -384,6 +384,73 @@ export default function RepertoirePage() {
   const repertoireMap = useMemo(() => new Map(items.map((it) => [it.song_id, it])), [items]);
   const searching = query.trim().length > 0;
 
+  // One row for a song already in the repertoire, used by both the list and
+  // search results so the two can't drift apart. Selection is list-only.
+  const renderRepertoireRow = (it: Item, selectable: boolean) => (
+    <div
+      key={it.song_id}
+      className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
+        !selectable ? "rounded-md border" : selectedIds.has(it.song_id) ? "bg-amber-50/60" : ""
+      }`}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        {selectable && <input
+          type="checkbox"
+          checked={selectedIds.has(it.song_id)}
+          onChange={() => toggleSelect(it.song_id)}
+          className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-zinc-300 accent-amber-500"
+          aria-label={`Select ${it.title}`}
+        />}
+        <div className="min-w-0">
+          <div className="line-clamp-2 font-medium">
+            <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => saveScrollPosition()} className="hover:text-amber-600">
+              {it.title}
+            </Link>
+            {it.composers.length > 0 && (
+              <span className="ml-1 font-normal text-slate-400">
+                ({formatComposers(it.composers, it.cultures)})
+              </span>
+            )}
+          </div>
+          <div className="truncate text-sm text-zinc-500">
+            {it.productions.length > 0
+              ? <>from <em>{it.productions.join(", ")}</em></>
+              : it.display_artist ?? "—"}
+          </div>
+          {(it.popularity ?? 0) > 0 && (
+            <div className="text-xs text-zinc-400">{it.popularity} {it.popularity === 1 ? "jammer" : "jammers"}</div>
+          )}
+        </div>
+      </div>
+
+      <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
+        <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
+
+        <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
+
+        {userSets.length > 0 && (
+          <AddToSetPanel
+            songId={it.song_id}
+            sets={userSets}
+            inSets={songSetMemberships[it.song_id]}
+            onOpen={() => loadSetMemberships(it.song_id)}
+            onAdded={(setId) => setSongSetMemberships((prev) => ({ ...prev, [it.song_id]: new Set([...(prev[it.song_id] ?? []), setId]) }))}
+            onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
+          />
+        )}
+
+        <ChordChartSlot
+          songId={it.song_id}
+          url={it.chord_chart_url}
+          canAdd={canAddCharts}
+          size="md"
+          onAdded={(url) => setItems((prev) => prev.map((x) => (x.song_id === it.song_id ? { ...x, chord_chart_url: url } : x)))}
+        />
+
+      </div>
+    </div>
+  );
+
   const sortedSearchResults = useMemo(
     () => searching
       ? sortRepertoireSearchResults(searchResults, new Set(repertoireMap.keys()))
@@ -737,8 +804,6 @@ export default function RepertoirePage() {
             ) : (
               sortedSearchResults.map((result) => {
                 const inRep = repertoireMap.get(result.song_id);
-                const isPicking = pendingAddId === result.song_id;
-                const href = `/songs/${result.slug ?? result.song_id}`;
 
                 if (!inRep) {
                   return (
@@ -769,66 +834,7 @@ export default function RepertoirePage() {
                   );
                 }
 
-                return (
-                  <div key={result.song_id} className="rounded-md border flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="line-clamp-2 font-medium">
-                        <Link href={href} className="hover:text-amber-600">
-                          {result.title}
-                        </Link>
-                        {result.composers.length > 0 && (
-                          <span className="ml-1 font-normal text-slate-400">
-                            ({formatComposers(result.composers, result.cultures ?? [])})
-                          </span>
-                        )}
-                      </div>
-                      <div className="truncate text-sm text-zinc-500">
-                        {result.productions.length > 0
-                          ? <>from <em>{result.productions.join(", ")}</em></>
-                          : result.display_artist ?? "—"}
-                      </div>
-                    </div>
-
-                    <div className="relative flex flex-wrap items-center gap-2 sm:shrink-0">
-                      {inRep ? (
-                        <>
-                          <RoleSelect value={inRep.confidence ?? "learn"} onChange={(level) => updateConfidence(inRep.song_id, level)} size="md" label={`Role for ${result.title}`} />
-                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} size="md" label={`My key for ${result.title}`} />
-                          {userSets.length > 0 && (
-                            <AddToSetPanel
-                              songId={result.song_id}
-                              sets={userSets}
-                              inSets={songSetMemberships[result.song_id]}
-                              onOpen={() => loadSetMemberships(result.song_id)}
-                              onAdded={(setId) => setSongSetMemberships((prev) => ({ ...prev, [result.song_id]: new Set([...(prev[result.song_id] ?? []), setId]) }))}
-                              onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
-                            />
-                          )}
-                        </>
-                      ) : isPicking ? (
-                        <ConfidencePicker
-                          variant="compact"
-                          singingVoice={singingVoice}
-                          onSave={(level) => addSong(result.song_id, level, result)}
-                          onCancel={() => setPendingAddId(null)}
-                          onVoiceUpdated={(voice) => setSingingVoice(voice)}
-                        />
-                      ) : (
-                        <>
-                          <Link href={href} className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
-                            View
-                          </Link>
-                          <button
-                            onClick={() => setPendingAddId(result.song_id)}
-                            className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
-                          >
-                            Add
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
+                return renderRepertoireRow(inRep, false);
               })
             )}
           </div>
@@ -1044,70 +1050,7 @@ export default function RepertoirePage() {
                   />
                   <span className="text-xs text-zinc-400">Select all</span>
                 </div>
-                {sortedFiltered.map((it) => (
-                <div
-                  key={it.song_id}
-                  className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
-                    selectedIds.has(it.song_id) ? "bg-amber-50/60" : ""
-                  }`}
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(it.song_id)}
-                      onChange={() => toggleSelect(it.song_id)}
-                      className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-zinc-300 accent-amber-500"
-                      aria-label={`Select ${it.title}`}
-                    />
-                    <div className="min-w-0">
-                    <div className="line-clamp-2 font-medium">
-                      <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => saveScrollPosition()} className="hover:text-amber-600">
-                        {it.title}
-                      </Link>
-                      {it.composers.length > 0 && (
-                        <span className="ml-1 font-normal text-slate-400">
-                          ({formatComposers(it.composers, it.cultures)})
-                        </span>
-                      )}
-                    </div>
-                    <div className="truncate text-sm text-zinc-500">
-                      {it.productions.length > 0
-                        ? <>from <em>{it.productions.join(", ")}</em></>
-                        : it.display_artist ?? "—"}
-                    </div>
-                    {(it.popularity ?? 0) > 0 && (
-                      <div className="text-xs text-zinc-400">{it.popularity} {it.popularity === 1 ? "jammer" : "jammers"}</div>
-                    )}
-                  </div>
-                  </div>
-
-                  <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
-                    <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
-
-                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
-
-                    {userSets.length > 0 && (
-                      <AddToSetPanel
-                        songId={it.song_id}
-                        sets={userSets}
-                        inSets={songSetMemberships[it.song_id]}
-                        onOpen={() => loadSetMemberships(it.song_id)}
-                        onAdded={(setId) => setSongSetMemberships((prev) => ({ ...prev, [it.song_id]: new Set([...(prev[it.song_id] ?? []), setId]) }))}
-                        onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
-                      />
-                    )}
-
-                    <ChordChartSlot
-                      songId={it.song_id}
-                      url={it.chord_chart_url}
-                      canAdd={canAddCharts}
-                      size="md"
-                      onAdded={(url) => setItems((prev) => prev.map((x) => (x.song_id === it.song_id ? { ...x, chord_chart_url: url } : x)))}
-                    />
-
-                  </div>
-                </div>
-              ))}
+                {sortedFiltered.map((it) => renderRepertoireRow(it, true))}
               </>
             )}
           </div>

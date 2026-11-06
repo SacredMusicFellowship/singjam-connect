@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { generateSlug } from "@/lib/generateSlug";
-import { MAX_RECORDINGS } from "@singjam/core";
+import { MAX_RECORDINGS, type EnrichmentReview } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -206,34 +207,13 @@ export default function SongEditor({
 
   // UI state
   const [saving, setSaving] = useState(false);
-  const [fillState, setFillState] = useState<"idle" | "running" | "started" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  // AI enrichment
-  type AISuggestions = {
-    year_written: number | null;
-    first_line: string | null;
-    hook: string | null;
-    composers: string[];
-    lyricists: string[];
-    primary_recording_year: number | null;
-    tonality: string | null;
-    meter: string | null;
-    vibe: "Banger" | "Ballad" | null;
-    genres: string[];
-    themes: string[];
-    cultures: string[];
-    music_culture: string | null;
-    lyric_culture: string | null;
-    languages: string[];
-    notes: string | null;
-    productions: string[];
-    alternate_titles: string[];
-    additional_recordings: { artist: string; year: number | null }[];
-    confidence: "high" | "medium" | "low";
-  };
+  // Suggestions from the multi-source enrichment, reviewed before applying
+  type AISuggestions = EnrichmentReview["suggestions"];
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestions | null>(null);
-  const [enrichingWithAI, setEnrichingWithAI] = useState(false);
+  const [agreedFields, setAgreedFields] = useState<Set<string>>(new Set());
+  const [suggesting, setSuggesting] = useState(false);
   const [acceptedFields, setAcceptedFields] = useState<Set<string>>(new Set());
 
   // Lyric data
@@ -471,106 +451,144 @@ export default function SongEditor({
     return { existingIds, pendingNames };
   }
 
-  async function handleEnrichWithAI() {
+  const formSnapshot = JSON.stringify([
+    title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
+    [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
+    isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
+    composerTraditionalCulture, lyricistTraditionalCulture,
+  ]);
+  const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
+
+  function confirmLeave(e: React.MouseEvent) {
+    if (formSnapshot !== savedSnapshot && !confirm("You have unsaved changes. Leave without saving?")) e.preventDefault();
+  }
+
+  async function handleSuggest() {
     if (!song?.id) return;
-    setEnrichingWithAI(true);
+    setSuggesting(true);
     setError(null);
     setAiSuggestions(null);
     try {
-      const res = await fetch(`/api/admin/songs/${song.id}/ai-enrich`, { method: "POST" });
+      const res = await fetch(`/api/songs/${song.id}/enrich`, { method: "POST" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const s = data.suggestions;
-      setAiSuggestions(s);
-      const initial = new Set<string>();
-      if (s.year_written != null) initial.add("year_written");
-      if (s.first_line) initial.add("first_line");
-      if (s.hook) initial.add("hook");
-      if (s.composers?.length) initial.add("composers");
-      if (s.lyricists?.length) initial.add("lyricists");
-      if (s.primary_recording_year != null) initial.add("primary_recording_year");
-      if (s.tonality) initial.add("tonality");
-      if (s.meter) initial.add("meter");
-      if (s.vibe) initial.add("vibe");
-      if (s.genres?.length) initial.add("genres");
-      if (s.themes?.length) initial.add("themes");
-      if (s.cultures?.length) initial.add("cultures");
-      if (s.music_culture) initial.add("music_culture");
-      if (s.lyric_culture) initial.add("lyric_culture");
-      if (s.languages?.length) initial.add("languages");
-      if (s.notes) initial.add("notes");
-      if (s.productions?.length) initial.add("productions");
-      if (s.alternate_titles?.length) initial.add("alternate_titles");
-      if (s.additional_recordings?.length) initial.add("additional_recordings");
-      setAcceptedFields(initial);
+      const { requestedAt } = await res.json();
+      const deadline = Date.now() + 4 * 60_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const poll = await fetch(`/api/songs/${song.id}/enrich`);
+        if (!poll.ok) continue;
+        const { proposal } = await poll.json();
+        if (proposal?.requested_at !== requestedAt) throw new Error("superseded");
+        if (!proposal.finished_at) continue;
+        if (proposal.error) throw new Error("failed");
+        setAiSuggestions(proposal.suggestions);
+        setAgreedFields(new Set(proposal.agreed));
+        setAcceptedFields(new Set(proposal.agreed));
+        return;
+      }
+      throw new Error("timed out");
     } catch {
-      setError("AI enrichment failed. Check that OPENAI_API_KEY is set in .env.local.");
+      setError("Couldn't gather suggestions. Try again in a minute.");
     } finally {
-      setEnrichingWithAI(false);
+      setSuggesting(false);
     }
+  }
+
+  // Only fields where a suggestion differs from what's in the form are shown
+  // (and applied), so a review lists real changes.
+  function suggestionRows(s: AISuggestions) {
+    const names = (ids: Iterable<string>, list: Lookup[]) => [...ids].map((id) => list.find((p) => p.id === id)?.name).filter((n): n is string => !!n);
+    const key = (v: string) => v.toLowerCase().split(/,\s*/).map((x) => x.trim()).sort().join("|");
+    const productionNames = names(productions, allProductions).concat(pendingProductionNames);
+    const recordingNames = names(recordingArtists.map((e) => e.id), allArtists);
+    const newOnly = (list: string[], have: string[]) => list.filter((x) => !have.some((h) => h.toLowerCase() === x.toLowerCase()));
+    const rows: { key: string; label: string; current: string; suggested: string }[] = [
+      { key: "year_written", label: "Year written", current: yearWritten, suggested: s.year_written?.toString() ?? "" },
+      { key: "first_line", label: "First line", current: firstLine, suggested: s.first_line ?? "" },
+      { key: "hook", label: "Hook", current: hook, suggested: s.hook ?? "" },
+      { key: "composers", label: "Composers", current: names(composers, allPeople).concat(pendingComposerNames).join(", "), suggested: s.composers.join(", ") },
+      { key: "lyricists", label: "Lyricists", current: names(lyricists, allPeople).concat(pendingLyricistNames).join(", "), suggested: s.lyricists.join(", ") },
+      { key: "primary_recording_year", label: "Primary recording year", current: recordingArtists[0]?.year?.toString() ?? "", suggested: recordingArtists.length ? s.primary_recording_year?.toString() ?? "" : "" },
+      { key: "tonality", label: "Tonality", current: tonalities.join(", "), suggested: s.tonality ?? "" },
+      { key: "meter", label: "Meter", current: meters.join(", "), suggested: s.meter ?? "" },
+      { key: "vibe", label: "Vibe", current: vibe ?? "", suggested: s.vibe ?? "" },
+      { key: "genres", label: "Genres", current: genres.join(", "), suggested: s.genres.join(", ") },
+      { key: "themes", label: "Themes", current: themes.join(", "), suggested: s.themes.join(", ") },
+      { key: "cultures", label: "Cultures", current: cultures.join(", "), suggested: s.cultures.join(", ") },
+      { key: "music_culture", label: "Music culture", current: composerTraditionalCulture, suggested: s.music_culture ?? "" },
+      { key: "lyric_culture", label: "Lyric culture", current: lyricistTraditionalCulture, suggested: s.lyric_culture ?? "" },
+      { key: "languages", label: "Languages", current: languages.join(", "), suggested: s.languages.join(", ") },
+      { key: "additional_recordings", label: "Add recordings", current: "", suggested: s.additional_recordings.filter((r) => newOnly([r.artist], recordingNames).length).map((r) => (r.year ? `${r.artist} (${r.year})` : r.artist)).join(", ") },
+      { key: "notes", label: "Notes", current: notes, suggested: s.notes ?? "" },
+      { key: "productions", label: "Add productions", current: "", suggested: newOnly(s.productions, productionNames).join(", ") },
+      { key: "alternate_titles", label: "Add alternate titles", current: "", suggested: newOnly(s.alternate_titles, altTitles.map((t) => t.title)).join(", ") },
+    ];
+    return rows.filter((r) => r.suggested && key(r.suggested) !== key(r.current));
   }
 
   async function applyAISuggestions() {
     if (!aiSuggestions) return;
-    if (acceptedFields.has("year_written") && aiSuggestions.year_written != null) {
+    const visible = new Set(suggestionRows(aiSuggestions).map((r) => r.key));
+    const accept = (field: string) => acceptedFields.has(field) && visible.has(field);
+    if (accept("year_written") && aiSuggestions.year_written != null) {
       setYearWritten(aiSuggestions.year_written.toString());
     }
-    if (acceptedFields.has("first_line") && aiSuggestions.first_line) {
+    if (accept("first_line") && aiSuggestions.first_line) {
       setFirstLine(aiSuggestions.first_line);
     }
-    if (acceptedFields.has("hook") && aiSuggestions.hook) {
+    if (accept("hook") && aiSuggestions.hook) {
       setHook(aiSuggestions.hook);
     }
-    if (acceptedFields.has("composers") && aiSuggestions.composers.length) {
+    if (accept("composers") && aiSuggestions.composers.length) {
       const { existingIds, pendingNames } = splitNames(aiSuggestions.composers);
       setComposers(new Set(existingIds));
       setPendingComposerNames(pendingNames);
     }
-    if (acceptedFields.has("lyricists") && aiSuggestions.lyricists.length) {
+    if (accept("lyricists") && aiSuggestions.lyricists.length) {
       const { existingIds, pendingNames } = splitNames(aiSuggestions.lyricists);
       setLyricists(new Set(existingIds));
       setPendingLyricistNames(pendingNames);
     }
-    if (acceptedFields.has("primary_recording_year") && aiSuggestions.primary_recording_year != null) {
+    if (accept("primary_recording_year") && aiSuggestions.primary_recording_year != null) {
       const yr = aiSuggestions.primary_recording_year;
       setRecordingArtists((prev) => prev.map((e, i) => i === 0 ? { ...e, year: yr } : e));
     }
-    if (acceptedFields.has("tonality") && aiSuggestions.tonality) {
+    if (accept("tonality") && aiSuggestions.tonality) {
       setTonalities([aiSuggestions.tonality]);
     }
-    if (acceptedFields.has("meter") && aiSuggestions.meter) {
+    if (accept("meter") && aiSuggestions.meter) {
       setMeters([aiSuggestions.meter]);
     }
-    if (acceptedFields.has("vibe") && aiSuggestions.vibe) {
+    if (accept("vibe") && aiSuggestions.vibe) {
       setVibe(aiSuggestions.vibe);
     }
-    if (acceptedFields.has("genres") && aiSuggestions.genres.length) {
+    if (accept("genres") && aiSuggestions.genres.length) {
       setGenres(aiSuggestions.genres.slice(0, 3));
     }
-    if (acceptedFields.has("themes") && aiSuggestions.themes.length) {
+    if (accept("themes") && aiSuggestions.themes.length) {
       setThemes(aiSuggestions.themes.slice(0, 3));
     }
-    if (acceptedFields.has("cultures") && aiSuggestions.cultures.length) {
+    if (accept("cultures") && aiSuggestions.cultures.length) {
       setCultures(aiSuggestions.cultures);
     }
-    if (acceptedFields.has("music_culture") && aiSuggestions.music_culture) {
+    if (accept("music_culture") && aiSuggestions.music_culture) {
       setComposerTraditionalCulture(aiSuggestions.music_culture);
     }
-    if (acceptedFields.has("lyric_culture") && aiSuggestions.lyric_culture) {
+    if (accept("lyric_culture") && aiSuggestions.lyric_culture) {
       setLyricistTraditionalCulture(aiSuggestions.lyric_culture);
     }
-    if (acceptedFields.has("languages") && aiSuggestions.languages.length) {
+    if (accept("languages") && aiSuggestions.languages.length) {
       setLanguages(aiSuggestions.languages);
     }
-    if (acceptedFields.has("notes") && aiSuggestions.notes) {
+    if (accept("notes") && aiSuggestions.notes) {
       setNotes(aiSuggestions.notes);
     }
-    if (acceptedFields.has("productions") && aiSuggestions.productions.length) {
+    if (accept("productions") && aiSuggestions.productions.length) {
       const { existingIds, pendingNames } = splitExistingAndPending(aiSuggestions.productions, allProductions);
       setProductions((prev) => new Set([...prev, ...existingIds]));
       setPendingProductionNames((prev) => [...prev, ...pendingNames.filter((n) => !prev.includes(n))]);
     }
-    if (acceptedFields.has("additional_recordings") && aiSuggestions.additional_recordings.length) {
+    if (accept("additional_recordings") && aiSuggestions.additional_recordings.length) {
       const toAdd: { id: string; year: number | null }[] = [];
       const openSlots = MAX_RECORDINGS - recordingArtists.length - pendingRecordingArtists.length;
       for (const rec of aiSuggestions.additional_recordings.slice(0, Math.max(0, openSlots))) {
@@ -586,7 +604,7 @@ export default function SongEditor({
         ]);
       }
     }
-    if (acceptedFields.has("alternate_titles") && aiSuggestions.alternate_titles.length && song?.id) {
+    if (accept("alternate_titles") && aiSuggestions.alternate_titles.length && song?.id) {
       const existingTitles = new Set(altTitles.map((t) => t.title.toLowerCase()));
       for (const title of aiSuggestions.alternate_titles) {
         if (!existingTitles.has(title.toLowerCase())) {
@@ -845,6 +863,7 @@ export default function SongEditor({
       }
 
       setSlug(resolvedSlug);
+      setSavedSnapshot(formSnapshot);
       router.push(`${basePath}/${resolvedSlug}`);
       router.refresh();
     } catch (e: any) {
@@ -1140,22 +1159,22 @@ export default function SongEditor({
           {title || "Edit song"}
         </h1>
         <div className="flex flex-wrap gap-2">
-          {slug && (
-            <a
-              href={`/songs/${slug}`}
-              target="_blank"
-              rel="noopener noreferrer"
+          {song?.slug && (
+            <Link
+              href={`/songs/${song.slug}`}
+              onClick={confirmLeave}
               className="rounded-full border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              View ↗
-            </a>
+              View
+            </Link>
           )}
           <button
-            onClick={handleEnrichWithAI}
-            disabled={enrichingWithAI || !song?.id}
+            onClick={handleSuggest}
+            disabled={suggesting || !song?.id}
+            title="Asks two AIs, MusicBrainz and LRCLIB about every field, then lets you pick what to apply."
             className="rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
           >
-            {enrichingWithAI ? "Asking AI…" : "✦ Enrich with AI"}
+            {suggesting ? "Gathering suggestions…" : "✦ Suggest improvements"}
           </button>
           <button
             onClick={handleSave}
@@ -1174,97 +1193,38 @@ export default function SongEditor({
       )}
 
       {aiSuggestions && (() => {
-        const currentComposerNames = [...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter(Boolean).join(", ");
-        const currentLyricistNames = [...lyricists].map((id) => allPeople.find((p) => p.id === id)?.name).filter(Boolean).join(", ");
+        const rows = suggestionRows(aiSuggestions);
+        const acceptedCount = rows.filter((r) => acceptedFields.has(r.key)).length;
         const toggleField = (field: string) => (on: boolean) =>
           setAcceptedFields((prev) => { const s = new Set(prev); on ? s.add(field) : s.delete(field); return s; });
         return (
           <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-semibold text-violet-900">AI Suggestions</h2>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  aiSuggestions.confidence === "high" ? "bg-green-100 text-green-700" :
-                  aiSuggestions.confidence === "medium" ? "bg-amber-100 text-amber-700" :
-                  "bg-red-100 text-red-700"
-                }`}>
-                  {aiSuggestions.confidence} confidence
-                </span>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-violet-900">Suggested improvements</h2>
+                <p className="mt-0.5 text-xs text-violet-700">Ticked items were confirmed by two sources. Check anything marked unconfirmed before ticking it.</p>
               </div>
-              <button onClick={() => setAiSuggestions(null)} className="text-violet-400 hover:text-violet-600 text-lg leading-none">×</button>
+              <button onClick={() => setAiSuggestions(null)} aria-label="Close suggestions" className="text-violet-400 hover:text-violet-600 text-lg leading-none">×</button>
             </div>
 
-            {aiSuggestions.notes && (
-              <p className="rounded-lg bg-violet-100 px-3 py-2 text-xs text-violet-700">{aiSuggestions.notes}</p>
+            {rows.length === 0 ? (
+              <p className="text-sm text-violet-800">No changes to suggest — the sources match what&apos;s already here.</p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {rows.map((r) => (
+                    <SuggestionRow key={r.key} label={r.label} current={r.current} suggested={r.suggested} unconfirmed={!agreedFields.has(r.key)} accepted={acceptedFields.has(r.key)} onChange={toggleField(r.key)} />
+                  ))}
+                </div>
+                <button
+                  onClick={applyAISuggestions}
+                  disabled={acceptedCount === 0}
+                  className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                >
+                  Apply {acceptedCount} suggestion{acceptedCount !== 1 ? "s" : ""}
+                </button>
+              </>
             )}
-
-            <div className="space-y-2">
-              {aiSuggestions.year_written != null && (
-                <SuggestionRow label="Year written" current={yearWritten || "—"} suggested={aiSuggestions.year_written.toString()} accepted={acceptedFields.has("year_written")} onChange={toggleField("year_written")} />
-              )}
-              {aiSuggestions.first_line && (
-                <SuggestionRow label="First line" current={firstLine || "—"} suggested={aiSuggestions.first_line} accepted={acceptedFields.has("first_line")} onChange={toggleField("first_line")} />
-              )}
-              {aiSuggestions.hook && (
-                <SuggestionRow label="Hook" current={hook || "—"} suggested={aiSuggestions.hook} accepted={acceptedFields.has("hook")} onChange={toggleField("hook")} />
-              )}
-              {aiSuggestions.composers.length > 0 && (
-                <SuggestionRow label="Composers" current={currentComposerNames || "—"} suggested={aiSuggestions.composers.join(", ")} accepted={acceptedFields.has("composers")} onChange={toggleField("composers")} />
-              )}
-              {aiSuggestions.lyricists.length > 0 && (
-                <SuggestionRow label="Lyricists" current={currentLyricistNames || "—"} suggested={aiSuggestions.lyricists.join(", ")} accepted={acceptedFields.has("lyricists")} onChange={toggleField("lyricists")} />
-              )}
-              {aiSuggestions.primary_recording_year != null && (
-                <SuggestionRow label="Primary recording year" current={recordingArtists[0]?.year?.toString() || "—"} suggested={aiSuggestions.primary_recording_year.toString()} accepted={acceptedFields.has("primary_recording_year")} onChange={toggleField("primary_recording_year")} />
-              )}
-              {aiSuggestions.tonality && (
-                <SuggestionRow label="Tonality" current={tonalities.join(", ") || "—"} suggested={aiSuggestions.tonality} accepted={acceptedFields.has("tonality")} onChange={toggleField("tonality")} />
-              )}
-              {aiSuggestions.meter && (
-                <SuggestionRow label="Meter" current={meters.join(", ") || "—"} suggested={aiSuggestions.meter} accepted={acceptedFields.has("meter")} onChange={toggleField("meter")} />
-              )}
-              {aiSuggestions.vibe && (
-                <SuggestionRow label="Vibe" current={vibe || "—"} suggested={aiSuggestions.vibe} accepted={acceptedFields.has("vibe")} onChange={toggleField("vibe")} />
-              )}
-              {aiSuggestions.genres.length > 0 && (
-                <SuggestionRow label="Genres" current={genres.join(", ") || "—"} suggested={aiSuggestions.genres.join(", ")} accepted={acceptedFields.has("genres")} onChange={toggleField("genres")} />
-              )}
-              {aiSuggestions.themes.length > 0 && (
-                <SuggestionRow label="Themes" current={themes.join(", ") || "—"} suggested={aiSuggestions.themes.join(", ")} accepted={acceptedFields.has("themes")} onChange={toggleField("themes")} />
-              )}
-              {aiSuggestions.cultures.length > 0 && (
-                <SuggestionRow label="Cultures" current={cultures.join(", ") || "—"} suggested={aiSuggestions.cultures.join(", ")} accepted={acceptedFields.has("cultures")} onChange={toggleField("cultures")} />
-              )}
-              {aiSuggestions.music_culture && (
-                <SuggestionRow label="Music culture" current={composerTraditionalCulture || "—"} suggested={aiSuggestions.music_culture} accepted={acceptedFields.has("music_culture")} onChange={toggleField("music_culture")} />
-              )}
-              {aiSuggestions.lyric_culture && (
-                <SuggestionRow label="Lyric culture" current={lyricistTraditionalCulture || "—"} suggested={aiSuggestions.lyric_culture} accepted={acceptedFields.has("lyric_culture")} onChange={toggleField("lyric_culture")} />
-              )}
-              {aiSuggestions.languages.length > 0 && (
-                <SuggestionRow label="Languages" current={languages.join(", ") || "—"} suggested={aiSuggestions.languages.join(", ")} accepted={acceptedFields.has("languages")} onChange={toggleField("languages")} />
-              )}
-              {aiSuggestions.additional_recordings?.length > 0 && (
-                <SuggestionRow label="Additional recordings" current={recordingArtists.map((e) => allArtists.find((a) => a.id === e.id)?.name).filter(Boolean).join(", ") || "—"} suggested={aiSuggestions.additional_recordings.map((r) => r.year ? `${r.artist} (${r.year})` : r.artist).join(", ")} accepted={acceptedFields.has("additional_recordings")} onChange={toggleField("additional_recordings")} />
-              )}
-              {aiSuggestions.notes && (
-                <SuggestionRow label="Notes" current={notes || "—"} suggested={aiSuggestions.notes} accepted={acceptedFields.has("notes")} onChange={toggleField("notes")} />
-              )}
-              {aiSuggestions.productions?.length > 0 && (
-                <SuggestionRow label="Productions" current={[...productions].map((id) => allProductions.find((p) => p.id === id)?.name).filter(Boolean).join(", ") || "—"} suggested={aiSuggestions.productions.join(", ")} accepted={acceptedFields.has("productions")} onChange={toggleField("productions")} />
-              )}
-              {aiSuggestions.alternate_titles.length > 0 && (
-                <SuggestionRow label="Alternate titles" current={altTitles.map((t) => t.title).join(", ") || "—"} suggested={aiSuggestions.alternate_titles.join(", ")} accepted={acceptedFields.has("alternate_titles")} onChange={toggleField("alternate_titles")} />
-              )}
-            </div>
-
-            <button
-              onClick={applyAISuggestions}
-              disabled={acceptedFields.size === 0}
-              className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
-            >
-              Apply {acceptedFields.size} suggestion{acceptedFields.size !== 1 ? "s" : ""}
-            </button>
           </div>
         );
       })()}
@@ -1544,8 +1504,8 @@ export default function SongEditor({
       )}
 
       {!isNew && (
-        <div className="border-t border-slate-200 pt-6 flex items-center justify-between">
-          <div className="flex gap-2">
+        <div className="border-t border-slate-200 pt-6 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={handleSave}
               disabled={saving}
@@ -1553,27 +1513,14 @@ export default function SongEditor({
             >
               {saving ? "Saving…" : "Save"}
             </button>
-            <button
-              onClick={async () => {
-                setFillState("running");
-                const res = await fetch(`/api/songs/${song!.id}/enrich`, { method: "POST" });
-                setFillState(res.ok ? "started" : "failed");
-              }}
-              disabled={fillState === "running"}
-              title="Fills only empty fields, from sources that agree. Reload in a minute to see what changed."
-              className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-            >
-              {fillState === "started" ? "Filling in — reload in a minute" : fillState === "failed" ? "Couldn't start — try again" : "Fill in blanks automatically"}
-            </button>
-            {slug && (
-              <a
-                href={`/songs/${slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
+            {song?.slug && (
+              <Link
+                href={`/songs/${song.slug}`}
+                onClick={confirmLeave}
                 className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                View ↗
-              </a>
+                View
+              </Link>
             )}
           </div>
           {isAdmin && (
@@ -2185,16 +2132,17 @@ function SuggestionRow({
   label,
   current,
   suggested,
+  unconfirmed,
   accepted,
   onChange,
 }: {
   label: string;
   current: string;
   suggested: string;
+  unconfirmed: boolean;
   accepted: boolean;
   onChange: (v: boolean) => void;
 }) {
-  const unchanged = current === suggested;
   return (
     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-violet-100 bg-white px-3 py-2.5">
       <input
@@ -2205,15 +2153,18 @@ function SuggestionRow({
       />
       <div className="min-w-0 flex-1 text-sm">
         <span className="font-medium text-slate-700">{label}</span>
-        {unchanged ? (
-          <span className="ml-2 text-slate-400 text-xs">(no change)</span>
-        ) : (
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            <span className="text-slate-400 line-through">{current}</span>
-            <span className="text-slate-400">→</span>
-            <span className="font-medium text-violet-700">{suggested}</span>
-          </div>
+        {unconfirmed && (
+          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">unconfirmed</span>
         )}
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+          {current && (
+            <>
+              <span className="text-slate-400 line-through">{current}</span>
+              <span className="text-slate-400">→</span>
+            </>
+          )}
+          <span className="font-medium text-violet-700">{suggested}</span>
+        </div>
       </div>
     </label>
   );
