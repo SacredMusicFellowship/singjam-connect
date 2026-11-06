@@ -967,119 +967,123 @@ export default function RepertoirePage() {
             </div>
           </div>
 
-          {/* Bulk action bar */}
-          {selectedIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <span className="text-sm font-medium text-amber-800">
-                {selectedIds.size} selected
-              </span>
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                className="text-xs text-amber-700 underline underline-offset-2"
-              >
-                Deselect all
-              </button>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                {bulkStatus ? (
-                  <span
-                    role={bulkStatus.ok ? undefined : "alert"}
-                    className={`text-xs ${bulkStatus.ok ? "text-green-700" : "text-red-600"}`}
-                  >
-                    {bulkStatus.text}
-                  </span>
-                ) : null}
-                {userSets.length > 0 && (
-                  bulkCreatingSet ? (
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={newSetName}
-                        onChange={(e) => setNewSetName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && newSetName.trim()) createSetAndBulkAdd(newSetName.trim());
-                          if (e.key === "Escape") { setBulkCreatingSet(false); setNewSetName(""); }
+          {/* Bulk action bar. Its wrapper is always rendered: the page's space-y
+              spacing is a sibling selector, so inserting the bar as a sibling of
+              the list made the browser restyle every row (~1.2s on a phone). */}
+          <div className="contents">
+            {selectedIds.size > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <span className="text-sm font-medium text-amber-800">
+                  {selectedIds.size} selected
+                </span>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs text-amber-700 underline underline-offset-2"
+                >
+                  Deselect all
+                </button>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {bulkStatus ? (
+                    <span
+                      role={bulkStatus.ok ? undefined : "alert"}
+                      className={`text-xs ${bulkStatus.ok ? "text-green-700" : "text-red-600"}`}
+                    >
+                      {bulkStatus.text}
+                    </span>
+                  ) : null}
+                  {userSets.length > 0 && (
+                    bulkCreatingSet ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={newSetName}
+                          onChange={(e) => setNewSetName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newSetName.trim()) createSetAndBulkAdd(newSetName.trim());
+                            if (e.key === "Escape") { setBulkCreatingSet(false); setNewSetName(""); }
+                          }}
+                          placeholder="Set name…"
+                          autoFocus
+                          className="w-28 rounded-xl border border-zinc-300 px-2 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => { if (newSetName.trim()) createSetAndBulkAdd(newSetName.trim()); }}
+                          disabled={!newSetName.trim()}
+                          className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        >
+                          Create
+                        </button>
+                        <button
+                          onClick={() => { setBulkCreatingSet(false); setNewSetName(""); }}
+                          className="text-zinc-400 hover:text-zinc-600 text-sm"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <Select
+                        value={bulkSetId}
+                        onChange={(e) => {
+                          if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
+                          else if (e.target.value) bulkAddToSet(e.target.value);
                         }}
-                        placeholder="Set name…"
-                        autoFocus
-                        className="w-28 rounded-xl border border-zinc-300 px-2 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
-                      />
-                      <button
-                        onClick={() => { if (newSetName.trim()) createSetAndBulkAdd(newSetName.trim()); }}
-                        disabled={!newSetName.trim()}
-                        className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        shape="pill"
+                        size="sm"
                       >
-                        Create
+                        <option value="">Add to set…</option>
+                        {userSets.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                        <option value="__new__">+ New set…</option>
+                      </Select>
+                    )
+                  )}
+                  <Select
+                    value={bulkConfidenceLevel}
+                    onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
+                    shape="pill"
+                    size="sm"
+                  >
+                    <option value="">Change role…</option>
+                    {CONFIDENCE_LEVELS.map((l) => (
+                      <option
+                        key={l.key}
+                        value={l.key}
+                      >
+                        {l.label}
+                      </option>
+                    ))}
+                  </Select>
+                  {bulkRemoveConfirm ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-700">
+                        Remove {selectedIds.size} song{selectedIds.size === 1 ? "" : "s"}?
+                      </span>
+                      <button
+                        onClick={bulkRemove}
+                        className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                      >
+                        Confirm
                       </button>
                       <button
-                        onClick={() => { setBulkCreatingSet(false); setNewSetName(""); }}
-                        className="text-zinc-400 hover:text-zinc-600 text-sm"
+                        onClick={() => setBulkRemoveConfirm(false)}
+                        className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
                       >
-                        ✕
+                        Cancel
                       </button>
                     </div>
                   ) : (
-                    <Select
-                      value={bulkSetId}
-                      onChange={(e) => {
-                        if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
-                        else if (e.target.value) bulkAddToSet(e.target.value);
-                      }}
-                      shape="pill"
-                      size="sm"
-                    >
-                      <option value="">Add to set…</option>
-                      {userSets.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                      <option value="__new__">+ New set…</option>
-                    </Select>
-                  )
-                )}
-                <Select
-                  value={bulkConfidenceLevel}
-                  onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
-                  shape="pill"
-                  size="sm"
-                >
-                  <option value="">Change role…</option>
-                  {CONFIDENCE_LEVELS.map((l) => (
-                    <option
-                      key={l.key}
-                      value={l.key}
-                    >
-                      {l.label}
-                    </option>
-                  ))}
-                </Select>
-                {bulkRemoveConfirm ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-red-700">
-                      Remove {selectedIds.size} song{selectedIds.size === 1 ? "" : "s"}?
-                    </span>
                     <button
-                      onClick={bulkRemove}
-                      className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                      onClick={() => setBulkRemoveConfirm(true)}
+                      className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
                     >
-                      Confirm
+                      Remove
                     </button>
-                    <button
-                      onClick={() => setBulkRemoveConfirm(false)}
-                      className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setBulkRemoveConfirm(true)}
-                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
-                  >
-                    Remove
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {filtersOpen && (
             <FilterPanel
