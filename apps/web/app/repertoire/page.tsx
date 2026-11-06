@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
@@ -183,6 +183,95 @@ function SuggestionsPanel({
     </div>
   );
 }
+
+type RowActions = {
+  toggleSelect: (songId: string) => void;
+  updateConfidence: (songId: string, level: string) => void;
+  updateKey: (songId: string, key: string | null) => void;
+  loadSetMemberships: (songId: string) => void;
+  saveScroll: () => void;
+  addedToSet: (songId: string, setId: string) => void;
+  setCreated: (set: { id: string; name: string }) => void;
+  chartAdded: (songId: string, url: string) => void;
+};
+
+const RepertoireRow = memo(function RepertoireRow({
+  it,
+  selectable,
+  selected,
+  userSets,
+  inSets,
+  canAddCharts,
+  actions,
+}: {
+  it: Item;
+  selectable: boolean;
+  selected: boolean;
+  userSets: { id: string; name: string }[];
+  inSets: Set<string> | undefined;
+  canAddCharts: boolean;
+  actions: RowActions;
+}) {
+  return (
+  <div
+    className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
+      !selectable ? "rounded-md border" : selected ? "bg-amber-50/60" : ""
+    }`}
+  >
+    <div className="flex min-w-0 items-start gap-3">
+      {selectable && <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => actions.toggleSelect(it.song_id)}
+        className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-zinc-300 accent-amber-500"
+        aria-label={`Select ${it.title}`}
+      />}
+      <div className="min-w-0">
+        <div className="line-clamp-2 font-medium">
+          <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => actions.saveScroll()} className="hover:text-amber-600">
+            {it.title}
+          </Link>
+          {it.composers.length > 0 && (
+            <span className="ml-1 font-normal text-slate-400">
+              ({formatComposers(it.composers, it.cultures)})
+            </span>
+          )}
+        </div>
+        <SongSubtitle productions={it.productions} artist={it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
+        {(it.popularity ?? 0) > 0 && (
+          <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
+        )}
+      </div>
+    </div>
+
+    <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
+      <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => actions.updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
+
+      <MyKeySelect value={it.key_note} onChange={(k) => actions.updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
+
+      {userSets.length > 0 && (
+        <AddToSetPanel
+          songId={it.song_id}
+          sets={userSets}
+          inSets={inSets}
+          onOpen={() => actions.loadSetMemberships(it.song_id)}
+          onAdded={(setId) => actions.addedToSet(it.song_id, setId)}
+          onSetCreated={(set) => actions.setCreated(set)}
+        />
+      )}
+
+      <ChordChartSlot
+        songId={it.song_id}
+        url={it.chord_chart_url}
+        canAdd={canAddCharts}
+        size="md"
+        onAdded={(url) => actions.chartAdded(it.song_id, url)}
+      />
+
+    </div>
+  </div>
+  );
+});
 
 export default function RepertoirePage() {
   const supabase = useMemo(() => supabaseBrowser(), []);
@@ -391,65 +480,37 @@ export default function RepertoirePage() {
 
   // One row for a song already in the repertoire, used by both the list and
   // search results so the two can't drift apart. Selection is list-only.
+  // Handlers the rows call. The object never changes identity (each entry calls
+  // the latest handler), so a memoized row only redraws when its own song,
+  // selection or set membership changes — not on every edit or batch.
+  const rowHandlers = useRef<RowActions>(null!);
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      toggleSelect: (id) => rowHandlers.current.toggleSelect(id),
+      updateConfidence: (id, level) => rowHandlers.current.updateConfidence(id, level),
+      updateKey: (id, key) => rowHandlers.current.updateKey(id, key),
+      loadSetMemberships: (id) => rowHandlers.current.loadSetMemberships(id),
+      saveScroll: () => rowHandlers.current.saveScroll(),
+      addedToSet: (songId, setId) => rowHandlers.current.addedToSet(songId, setId),
+      setCreated: (set) => rowHandlers.current.setCreated(set),
+      chartAdded: (songId, url) => rowHandlers.current.chartAdded(songId, url),
+    }),
+    []
+  );
+
+  // One row for a song already in the repertoire, used by both the list and
+  // search results so the two can't drift apart. Selection is list-only.
   const renderRepertoireRow = (it: Item, selectable: boolean) => (
-    <div
+    <RepertoireRow
       key={it.song_id}
-      className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
-        !selectable ? "rounded-md border" : selectedIds.has(it.song_id) ? "bg-amber-50/60" : ""
-      }`}
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        {selectable && <input
-          type="checkbox"
-          checked={selectedIds.has(it.song_id)}
-          onChange={() => toggleSelect(it.song_id)}
-          className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-zinc-300 accent-amber-500"
-          aria-label={`Select ${it.title}`}
-        />}
-        <div className="min-w-0">
-          <div className="line-clamp-2 font-medium">
-            <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => saveScrollPosition()} className="hover:text-amber-600">
-              {it.title}
-            </Link>
-            {it.composers.length > 0 && (
-              <span className="ml-1 font-normal text-slate-400">
-                ({formatComposers(it.composers, it.cultures)})
-              </span>
-            )}
-          </div>
-          <SongSubtitle productions={it.productions} artist={it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
-          {(it.popularity ?? 0) > 0 && (
-            <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
-          )}
-        </div>
-      </div>
-
-      <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
-        <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
-
-        <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
-
-        {userSets.length > 0 && (
-          <AddToSetPanel
-            songId={it.song_id}
-            sets={userSets}
-            inSets={songSetMemberships[it.song_id]}
-            onOpen={() => loadSetMemberships(it.song_id)}
-            onAdded={(setId) => setSongSetMemberships((prev) => ({ ...prev, [it.song_id]: new Set([...(prev[it.song_id] ?? []), setId]) }))}
-            onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
-          />
-        )}
-
-        <ChordChartSlot
-          songId={it.song_id}
-          url={it.chord_chart_url}
-          canAdd={canAddCharts}
-          size="md"
-          onAdded={(url) => setItems((prev) => prev.map((x) => (x.song_id === it.song_id ? { ...x, chord_chart_url: url } : x)))}
-        />
-
-      </div>
-    </div>
+      it={it}
+      selectable={selectable}
+      selected={selectable && selectedIds.has(it.song_id)}
+      userSets={userSets}
+      inSets={songSetMemberships[it.song_id]}
+      canAddCharts={canAddCharts}
+      actions={rowActions}
+    />
   );
 
   const sortedSearchResults = useMemo(
@@ -629,6 +690,19 @@ export default function RepertoirePage() {
         alert(error.message);
       }
     });
+  };
+
+  rowHandlers.current = {
+    toggleSelect,
+    updateConfidence,
+    updateKey,
+    loadSetMemberships,
+    saveScroll: () => saveScrollPosition(),
+    addedToSet: (songId, setId) =>
+      setSongSetMemberships((prev) => ({ ...prev, [songId]: new Set([...(prev[songId] ?? []), setId]) })),
+    setCreated: (set) => setUserSets((prev) => [set, ...prev]),
+    chartAdded: (songId, url) =>
+      setItems((prev) => prev.map((x) => (x.song_id === songId ? { ...x, chord_chart_url: url } : x))),
   };
 
   const addSong = (songId: string, confidence: string, result: AddableSong) => {
