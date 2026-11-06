@@ -21,6 +21,7 @@ import {
   sortRecordingsByYear,
   enrichmentInProgress,
   ENRICHMENT_WAIT_MS,
+  formatJammers,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
@@ -619,7 +620,7 @@ export default function SongDetailScreen() {
             <View className="shrink-0 flex-row items-center gap-3 mt-1">
               {popularity > 0 ? (
                 <Text className="text-sm text-slate-400">
-                  {popularity} {popularity === 1 ? 'jammer' : 'jammers'}
+                  {formatJammers(popularity)}
                 </Text>
               ) : null}
               {earliestYear ? (

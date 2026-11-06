@@ -7,6 +7,7 @@ import { CONFIDENCE_STYLES, hasLeadVoice, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritiz
 import RoleSelect from "@/components/RoleSelect";
 import PillSelect, { StackedLabels } from "@/components/PillSelect";
 import ChordsLink from "@/components/ChordsLink";
+import SongSubtitle from "@/components/SongSubtitle";
 import {
   MUSICAL_KEYS,
   YoutubeIcon,
@@ -282,11 +283,7 @@ export default function SetSongRow({
             )}
           </div>
           <div className="flex items-center gap-3 min-w-0 mt-0.5">
-            {productions.length > 0 ? (
-              <p className="min-w-0 truncate text-xs text-zinc-500">from <em>{productions.join(", ")}</em></p>
-            ) : song.songs.display_artist ? (
-              <p className="min-w-0 truncate text-xs text-zinc-500">{song.songs.display_artist}</p>
-            ) : null}
+            <SongSubtitle productions={productions} artist={song.songs.display_artist} className="block min-w-0 truncate text-xs text-zinc-500" />
             {showKeyLine && (
             <span className="flex shrink-0 items-center gap-1">
             {canManage ? (

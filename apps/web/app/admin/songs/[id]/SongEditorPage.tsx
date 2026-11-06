@@ -1,11 +1,14 @@
 import { cache } from "react";
 import { getServerSupabase } from "@/lib/supabase/cached";
+import { resolveSongId } from "@/lib/resolveSongId";
+import { isUuid } from "@singjam/core";
 import { notFound, redirect } from "next/navigation";
 import SongEditor from "./SongEditor";
 
 export const getSong = cache(async (id: string) => {
   const supabase = await getServerSupabase();
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const songId = await resolveSongId(supabase, id);
+  if (!songId) return null;
   const { data } = await supabase
     .from("songs")
     .select(`
@@ -20,7 +23,7 @@ export const getSong = cache(async (id: string) => {
       song_alternate_titles(id, title),
       song_productions(production_id)
     `)
-    .eq(isUuid ? "id" : "slug", id)
+    .eq("id", songId)
     .single();
   return data;
 });
@@ -45,6 +48,7 @@ export default async function SongEditorPage({ id, basePath, isAdmin }: { id: st
     ]);
 
   if (!song) notFound();
+  if (song.slug && song.slug !== id && !isUuid(id)) redirect(`${basePath}/${song.slug}`);
 
   return (
     <SongEditor

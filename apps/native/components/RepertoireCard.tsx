@@ -2,7 +2,8 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Linking, Alert } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { formatComposers } from '@singjam/core';
+import { formatComposers, formatJammers } from '@singjam/core';
+import SubtitleText from '@/components/SubtitleText';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RolePill from '@/components/RolePill';
 import MyKeyChip from '@/components/MyKeyChip';
@@ -85,15 +86,11 @@ function RepertoireCard({
             </Text>
           </TouchableOpacity>
           <Text className="text-sm text-zinc-500 mt-0.5" numberOfLines={1}>
-            {song.productions.length > 0 ? (
-              <>from <Text className="italic">{song.productions.join(', ')}</Text></>
-            ) : (
-              song.display_artist ?? '—'
-            )}
+            <SubtitleText productions={song.productions} artist={song.display_artist} fallback="—" />
           </Text>
           {song.popularity > 0 && (
             <Text className="text-xs text-zinc-400 mt-0.5">
-              {song.popularity} {song.popularity === 1 ? 'jammer' : 'jammers'}
+              {formatJammers(song.popularity)}
             </Text>
           )}
         </View>

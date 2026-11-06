@@ -17,12 +17,13 @@ import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
 import ChordChartSlot from "@/components/ChordChartSlot";
 import SearchInput from "@/components/SearchInput";
 import Select from "@/components/Select";
+import SongSubtitle from "@/components/SongSubtitle";
 
 const CONFIDENCE_LEVELS = [
   { key: "lead", label: "Lead" },
@@ -412,13 +413,9 @@ export default function RepertoirePage() {
               </span>
             )}
           </div>
-          <div className="truncate text-sm text-zinc-500">
-            {it.productions.length > 0
-              ? <>from <em>{it.productions.join(", ")}</em></>
-              : it.display_artist ?? "—"}
-          </div>
+          <SongSubtitle productions={it.productions} artist={it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
           {(it.popularity ?? 0) > 0 && (
-            <div className="text-xs text-zinc-400">{it.popularity} {it.popularity === 1 ? "jammer" : "jammers"}</div>
+            <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
           )}
         </div>
       </div>

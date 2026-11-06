@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as admin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
-import { generateSlug } from "@/lib/generateSlug";
 import { findExistingSong, findOnSpotify } from "@/lib/songLookup";
 import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
 
@@ -47,13 +46,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This song is already in our library.", id: existing.id, slug: existing.slug }, { status: 409 });
   }
 
-  let slug = generateSlug(title, []);
-  const { data: slugConflict } = await db.from("songs").select("id").eq("slug", slug).maybeSingle();
-  if (slugConflict) slug = `${slug}-${Date.now()}`;
-
   const { data: song, error: songErr } = await db
     .from("songs")
-    .insert({ title, display_artist: artist, slug, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString() })
+    .insert({ title, display_artist: artist, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString() })
     .select("id, slug")
     .single();
   if (songErr || !song) {

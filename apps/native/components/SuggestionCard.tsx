@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { formatComposers, formatRecordingArtists, productionCredits, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { formatComposers, formatJammers, formatRecordingArtists, productionCredits, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 
 export type Suggestion = {
@@ -134,7 +134,7 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
           ))}
           {song.popularity > 0 && (
             <Text className="text-xs text-zinc-400">
-              {song.popularity} {song.popularity === 1 ? 'jammer' : 'jammers'}
+              {formatJammers(song.popularity)}
             </Text>
           )}
         </View>

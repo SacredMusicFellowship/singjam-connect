@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { generateSlug } from "@/lib/generateSlug";
 import { MAX_RECORDINGS, samePeople, type EnrichmentReview } from "@singjam/core";
 import {
   DndContext,
@@ -522,23 +521,13 @@ export default function SongEditor({
 
     try {
       const finalTitle = title.trim();
-      const composerNamesForSlug = [
-        ...[...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
-        ...pendingComposerNames,
-      ];
-      const lyricistNamesForSlug = [
-        ...[...lyricists].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
-        ...pendingLyricistNames,
-      ];
       const traditionalId = allPeople.find((p) => p.name === "Traditional")?.id;
       const isTraditionalComposer = (traditionalId && composers.has(traditionalId)) || pendingComposerNames.some((n) => n.toLowerCase() === "traditional");
       const isTraditionalLyricist = (traditionalId && lyricists.has(traditionalId)) || pendingLyricistNames.some((n) => n.toLowerCase() === "traditional");
-      const resolvedSlug = slug.trim() || generateSlug(finalTitle, [...composerNamesForSlug, ...lyricistNamesForSlug], (isTraditionalComposer && composerTraditionalCulture) || undefined);
       const originalRecordingArtistIds = song?.song_recording_artists.map((x) => x.artist_id) ?? [];
 
       const payload = {
         title: finalTitle,
-        slug: resolvedSlug,
         display_artist: recordingArtists.map((e) => allArtists.find((a) => a.id === e.id)?.name).filter(Boolean).join(", ") || (originalRecordingArtistIds.length === 0 ? displayArtist.trim() : null) || null,
         first_line: firstLine.trim() || null,
         hook: hook.trim() || null,
@@ -691,9 +680,13 @@ export default function SongEditor({
       const originalProductionIds = (song?.song_productions ?? []).map((x) => x.production_id);
       await syncJoinTable(songId!, "song_productions", "production_id", resolvedProductionIds, originalProductionIds);
 
-      setSlug(resolvedSlug);
+      // The database sets the slug from the title, writers and music culture,
+      // so read back what it is now.
+      const { data: saved } = await supabase.from("songs").select("slug").eq("id", songId!).single();
+      const newSlug = saved?.slug ?? slug;
+      setSlug(newSlug);
       setSavedSnapshot(formSnapshot);
-      router.push(`${basePath}/${resolvedSlug}`);
+      router.push(`${basePath}/${newSlug}`);
       router.refresh();
     } catch (e: any) {
       setError(e.message ?? "Save failed.");
@@ -847,9 +840,9 @@ export default function SongEditor({
             <input value={title} onChange={(e) => setTitle(e.target.value)}
               className="input" placeholder="Song title" />
           </Field>
-          <Field label="Slug">
-            <input value={slug} onChange={(e) => setSlug(e.target.value)}
-              className="input font-mono text-xs" placeholder="e.g. blowin-in-the-wind-bob-dylan" />
+          <Field label="Address">
+            <p className="py-2 font-mono text-xs text-slate-500 break-all">/songs/{slug || "…"}</p>
+            <p className="text-xs text-slate-400">Set automatically from the title, first three writers and music culture. Old addresses keep working.</p>
           </Field>
         </div>
 
