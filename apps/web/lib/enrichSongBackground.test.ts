@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { enrichSong, runEnrichmentReview } = vi.hoisted(() => ({ enrichSong: vi.fn(), runEnrichmentReview: vi.fn() }));
-vi.mock("../../lib/songEnrichment", () => ({ enrichSong, runEnrichmentReview }));
+vi.mock("./songEnrichment", () => ({ enrichSong, runEnrichmentReview }));
 vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({}) }));
 
-import { handler } from "./enrich-song-background";
+import { handler } from "../netlify/functions/enrich-song-background";
 
 const call = (body: object, secret = "s3cret") =>
   handler({ httpMethod: "POST", headers: { "x-enrich-secret": secret }, body: JSON.stringify(body) });
