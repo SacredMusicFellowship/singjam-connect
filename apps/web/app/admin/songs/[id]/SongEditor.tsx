@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { songSavePayload } from "@/lib/songSavePayload";
 import { MAX_RECORDINGS, samePeople, type EnrichmentReview } from "@singjam/core";
 import {
   DndContext,
@@ -30,10 +31,6 @@ function productionLabel(p: ProductionLookup) {
   return p.year ? `${p.name} (${p.year})` : p.name;
 }
 
-function parseYear(v: string | undefined): number | null {
-  const n = parseInt(v ?? "", 10);
-  return Number.isFinite(n) ? n : null;
-}
 type AltTitle = { id: string; title: string };
 
 function toTitleCase(s: string) {
@@ -483,33 +480,6 @@ export default function SongEditor({
     setAcceptedFields(new Set());
   }
 
-  async function syncJoinTable(
-    songId: string,
-    table: string,
-    fkCol: string,
-    newIds: Set<string>,
-    originalIds: string[]
-  ) {
-    const toAdd = [...newIds].filter((id) => !originalIds.includes(id));
-    const toRemove = originalIds.filter((id) => !newIds.has(id));
-
-    if (toAdd.length) {
-      const { error } = await supabase
-        .from(table)
-        .insert(toAdd.map((id) => ({ song_id: songId, [fkCol]: id })));
-      if (error) throw error;
-    }
-
-    if (toRemove.length) {
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq("song_id", songId)
-        .in(fkCol, toRemove);
-      if (error) throw error;
-    }
-  }
-
   async function handleSave() {
     if (!title.trim()) {
       setError("Title is required.");
@@ -520,173 +490,26 @@ export default function SongEditor({
     setError(null);
 
     try {
-      const finalTitle = title.trim();
-      const traditionalId = allPeople.find((p) => p.name === "Traditional")?.id;
-      const isTraditionalComposer = (traditionalId && composers.has(traditionalId)) || pendingComposerNames.some((n) => n.toLowerCase() === "traditional");
-      const isTraditionalLyricist = (traditionalId && lyricists.has(traditionalId)) || pendingLyricistNames.some((n) => n.toLowerCase() === "traditional");
-      const originalRecordingArtistIds = song?.song_recording_artists.map((x) => x.artist_id) ?? [];
+      // One call, one transaction (migration 200): either all of this is saved
+      // or none of it, and the database returns the slug it settles on.
+      const { data: newSlug, error: saveError } = await supabase.rpc("save_song", {
+        p_song_id: song!.id,
+        p: songSavePayload(
+          {
+            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
+            genres, themes, languages, cultures, composers, lyricists, pendingComposerNames, pendingLyricistNames,
+            composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
+            productions, pendingProductionNames, productionYears,
+            hadRecordingArtists: (song?.song_recording_artists.length ?? 0) > 0,
+          },
+          { people: allPeople, artists: allArtists },
+        ),
+      });
+      if (saveError) throw saveError;
 
-      const payload = {
-        title: finalTitle,
-        display_artist: recordingArtists.map((e) => allArtists.find((a) => a.id === e.id)?.name).filter(Boolean).join(", ") || (originalRecordingArtistIds.length === 0 ? displayArtist.trim() : null) || null,
-        first_line: firstLine.trim() || null,
-        hook: hook.trim() || null,
-        notes: notes.trim() || null,
-        genius_url: geniusUrl.trim() || null,
-        chord_chart_url: chordChartUrl.trim() || null,
-        year: year ? parseInt(year) : null,
-        year_written: yearWritten ? parseInt(yearWritten) : null,
-        tonality: tonalities.join(", ") || null,
-        meter: meters.join(", ") || null,
-        vibe: vibe,
-        updated_at: new Date().toISOString(),
-      };
-
-      const songId = song?.id;
-
-      const { error: updateError } = await supabase.from("songs").update(payload).eq("id", songId!);
-      if (updateError) throw updateError;
-
-      async function resolveNamesToIds(names: string[], table: string, lookup: Lookup[]) {
-        const ids: string[] = [];
-        for (const name of names) {
-          const existing = lookup.find((l) => l.name === name);
-          if (existing) {
-            ids.push(existing.id);
-          } else {
-            const { data: row } = await supabase.from(table).upsert({ name }, { onConflict: "name" }).select("id").single();
-            if (row?.id) {
-              ids.push(row.id);
-              lookup.push({ id: row.id, name });
-            }
-          }
-        }
-        return new Set(ids);
-      }
-      const originalGenres = song?.song_genres.map((x) => x.genre_id) ?? [];
-      const originalThemes = song?.song_themes.map((x) => x.theme_id) ?? [];
-      const originalCultures = (song?.song_cultures ?? []).filter((x) => !x.context).map((x) => x.culture_id);
-      const originalLanguages = song?.song_languages.map((x) => x.language_id) ?? [];
-      const [genreIds, themeIds, cultureIds, languageIds] = await Promise.all([
-        resolveNamesToIds(genres, "genres", allGenres),
-        resolveNamesToIds(themes, "themes", allThemes),
-        resolveNamesToIds(cultures, "cultures", allCultures),
-        resolveNamesToIds(languages, "languages", allLanguages),
-      ]);
-      const originalComposers = song?.song_composers.map((x) => x.person_id) ?? [];
-      const originalLyricists = song?.song_lyricists.map((x) => x.person_id) ?? [];
-
-      const resolvedPendingComposerIds = await Promise.all(
-        pendingComposerNames.map((name) => resolvePersonName(name, "people", allPeople))
-      );
-      const resolvedPendingLyricistIds = await Promise.all(
-        pendingLyricistNames.map((name) => resolvePersonName(name, "people", allPeople))
-      );
-      const allComposerIds = new Set([...composers, ...resolvedPendingComposerIds.filter((id): id is string => !!id)]);
-      const allLyricistIds = new Set([...lyricists, ...resolvedPendingLyricistIds.filter((id): id is string => !!id)]);
-
-      const resolvedPendingArtistIds = await Promise.all(
-        pendingRecordingArtists.map((ra) => resolvePersonName(ra.name, "artists", allArtists))
-      );
-      type ResolvedEntry = RecordingArtistEntry & { spotify_url?: string | null };
-      const resolvedPendingEntries: ResolvedEntry[] = resolvedPendingArtistIds
-        .map((id, i): ResolvedEntry | null => id ? {
-          id,
-          year: pendingRecordingArtists[i]?.year ?? null,
-          youtube_url: null,
-          spotify_url: pendingRecordingArtists[i]?.spotify_url ?? null,
-        } : null)
-        .filter((e): e is ResolvedEntry => e !== null)
-        .filter(({ id }) => !recordingArtists.find((e) => e.id === id));
-      const allRecordingArtists: ResolvedEntry[] = [...recordingArtists, ...resolvedPendingEntries];
-
-      const newRecordingArtistIds = allRecordingArtists.map((e) => e.id);
-      const toDeleteArtists = originalRecordingArtistIds.filter((id) => !newRecordingArtistIds.includes(id));
-
-      // Sync non-contextual cultures manually so the delete is scoped to context IS NULL
-      // (syncJoinTable would delete by culture_id alone, wiping traditional culture rows)
-      const toAddCultures = [...cultureIds].filter((id) => !originalCultures.includes(id));
-      const toRemoveCultures = originalCultures.filter((id) => !cultureIds.has(id));
-      if (toAddCultures.length) {
-        const { error } = await supabase.from("song_cultures").insert(toAddCultures.map((id) => ({ song_id: songId!, culture_id: id })));
-        if (error) throw error;
-      }
-      if (toRemoveCultures.length) {
-        const { error } = await supabase.from("song_cultures").delete().eq("song_id", songId!).in("culture_id", toRemoveCultures).is("context", null);
-        if (error) throw error;
-      }
-
-      // Removals land before additions so a swap at the recording cap never
-      // briefly counts as one too many.
-      async function syncRecordings() {
-        if (toDeleteArtists.length) {
-          const { error } = await supabase.from("song_recording_artists").delete().eq("song_id", songId!).in("artist_id", toDeleteArtists);
-          if (error) throw error;
-        }
-        if (!allRecordingArtists.length) return;
-        const { error } = await supabase.from("song_recording_artists").upsert(
-          allRecordingArtists.map((e, i) => {
-            const row: Record<string, unknown> = { song_id: songId!, artist_id: e.id, year: e.year, position: i, youtube_url: e.youtube_url ?? null };
-            // Only write spotify_url when explicitly provided (pending entries from AI lookup)
-            // Omitting it for existing DB entries preserves their current value
-            if ("spotify_url" in e) row.spotify_url = e.spotify_url;
-            return row;
-          }),
-          { onConflict: "song_id,artist_id" }
-        );
-        if (error) throw error;
-      }
-
-      await Promise.all([
-        syncJoinTable(songId!, "song_genres", "genre_id", genreIds, originalGenres),
-        syncJoinTable(songId!, "song_themes", "theme_id", themeIds, originalThemes),
-        syncJoinTable(songId!, "song_languages", "language_id", languageIds, originalLanguages),
-        syncJoinTable(songId!, "song_composers", "person_id", allComposerIds, originalComposers),
-        syncJoinTable(songId!, "song_lyricists", "person_id", allLyricistIds, originalLyricists),
-        syncRecordings(),
-      ]);
-
-      // Sync traditional cultures with context
-      await supabase.from("song_cultures").delete().eq("song_id", songId!).in("context", ["music", "lyrics"]);
-      const tCultures: { name: string; context: string }[] = [];
-      if (isTraditionalComposer && composerTraditionalCulture) {
-        tCultures.push({ name: composerTraditionalCulture, context: "music" });
-      }
-      if (isTraditionalLyricist && lyricistTraditionalCulture) {
-        tCultures.push({ name: lyricistTraditionalCulture, context: "lyrics" });
-      }
-      for (const { name: cultureName, context } of tCultures) {
-        const culture = allCultures.find((c) => c.name.toLowerCase() === cultureName.toLowerCase());
-        if (culture) {
-          await supabase.from("song_cultures").insert({ song_id: songId!, culture_id: culture.id, context });
-        }
-      }
-
-      // Sync productions
-      const resolvedProductionIds = new Set<string>([...productions]);
-      for (const id of productions) {
-        const year = parseYear(productionYears[id]);
-        if (year !== (allProductions.find((p) => p.id === id)?.year ?? null)) {
-          await supabase.from("productions").update({ year }).eq("id", id);
-        }
-      }
-      for (const name of pendingProductionNames) {
-        const year = parseYear(productionYears[`new:${name}`]);
-        const lookup = supabase.from("productions").select("id").eq("name", name);
-        const { data: existing } = await (year === null ? lookup.is("year", null) : lookup.eq("year", year)).maybeSingle();
-        const id = existing?.id ?? (await supabase.from("productions").insert({ name, year }).select("id").single()).data?.id;
-        if (id) resolvedProductionIds.add(id);
-      }
-      const originalProductionIds = (song?.song_productions ?? []).map((x) => x.production_id);
-      await syncJoinTable(songId!, "song_productions", "production_id", resolvedProductionIds, originalProductionIds);
-
-      // The database sets the slug from the title, writers and music culture,
-      // so read back what it is now.
-      const { data: saved } = await supabase.from("songs").select("slug").eq("id", songId!).single();
-      const newSlug = saved?.slug ?? slug;
-      setSlug(newSlug);
+      setSlug(newSlug ?? slug);
       setSavedSnapshot(formSnapshot);
-      router.push(`${basePath}/${newSlug}`);
+      router.push(`${basePath}/${newSlug ?? slug}`);
       router.refresh();
     } catch (e: any) {
       setError(e.message ?? "Save failed.");

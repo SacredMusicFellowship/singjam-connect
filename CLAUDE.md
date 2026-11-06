@@ -59,6 +59,10 @@ The native app (`apps/native`) is the mobile companion to the web app (`apps/web
 - All new features must include tests before merging
 - Focus especially on: auth flows, data mutations, and matching logic
 
+## Automated checks
+
+`.github/workflows/checks.yml` runs on every PR and push to `main`: `scripts/check-repo-rules.mjs` (no test files or helpers in `apps/web/netlify/functions`, explicit grants for every new table from migration 201 on, unique migration numbers, no `select('*')` from `jams`) and the web + core unit tests. When a rule bites us, add it to that script.
+
 ## Pull Requests
 
 Every PR must include:
