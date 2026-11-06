@@ -21,10 +21,9 @@ describe("committed seed files", () => {
 
 describe("seed against the migrated schema", () => {
   let db: PGlite;
-  let standIns: string[];
 
   beforeAll(async () => {
-    ({ db, standIns } = await createMigratedDatabase(MIGRATIONS_DIR));
+    db = await createMigratedDatabase(MIGRATIONS_DIR);
     for (const file of files) await db.exec(file.sql);
   }, 180_000);
 
@@ -81,9 +80,5 @@ describe("seed against the migrated schema", () => {
       [E2E_PASSWORD, refs.members.member.auth.id],
     );
     expect(rows[0]).toEqual({ ok: true, hashed: true });
-  });
-
-  it("only needs stand-ins for the policies production created outside the migrations", () => {
-    expect(standIns.every((s) => /^(jams|jam_invites|user_songs): /.test(s))).toBe(true);
   });
 });

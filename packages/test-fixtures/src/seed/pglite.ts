@@ -38,31 +38,19 @@ const SUPABASE_STUBS = `
   create function storage.foldername(name text) returns text[] language sql immutable as $$ select string_to_array(name, '/') $$;
 `;
 
-// Migration 134 alters RLS policies that were created in production outside the migrations, so a
-// from-scratch replay can't find them. Until a backfill migration adds them, create a stand-in so
-// the replay can continue. Returns the policies it had to stand in for.
-const MISSING_POLICY = /policy "(.+)" for table "(.+)" does not exist/;
-
-export async function createMigratedDatabase(migrationsDir: string): Promise<{ db: PGlite; standIns: string[] }> {
+export async function createMigratedDatabase(migrationsDir: string): Promise<PGlite> {
   const db = new PGlite({ extensions: { pg_trgm, pgcrypto, unaccent } });
   await db.exec(SUPABASE_STUBS);
-  const standIns: string[] = [];
 
   const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
   for (const file of files) {
     const sql = fs.readFileSync(path.join(migrationsDir, file), "utf8");
-    for (;;) {
-      try {
-        await db.exec(`begin;\n${sql}\n;commit;`);
-        break;
-      } catch (error) {
-        await db.exec("rollback;").catch(() => {});
-        const missing = (error as Error).message.match(MISSING_POLICY);
-        if (!missing || standIns.length > 50) throw new Error(`${file}: ${(error as Error).message}`);
-        standIns.push(`${missing[2]}: ${missing[1]}`);
-        await db.exec(`create policy "${missing[1]}" on public.${missing[2]} using (true);`);
-      }
+    try {
+      await db.exec(`begin;\n${sql}\n;commit;`);
+    } catch (error) {
+      await db.exec("rollback;").catch(() => {});
+      throw new Error(`${file}: ${(error as Error).message}`);
     }
   }
-  return { db, standIns };
+  return db;
 }
