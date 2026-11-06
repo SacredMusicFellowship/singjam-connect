@@ -94,7 +94,7 @@ as $$
     where us.user_id <> for_user_id
       and us.confidence in ('lead','support','follow')
   ),
-  overlaps as (
+  song_overlaps as (
     select o.user_id, count(*)::int as shared_count
     from others o
     join my on my.song_id = o.song_id
@@ -113,7 +113,7 @@ as $$
          p.neighborhood,
          ov.shared_count,
          coalesce(top5.titles[1:10], '{}'::text[]) as top_shared
-  from overlaps ov
+  from song_overlaps ov
   join public.profiles p on p.id = ov.user_id
   left join top5 on top5.user_id = ov.user_id
   where ov.shared_count > 0
