@@ -1,6 +1,7 @@
 "use client";
 
 import { CONFIDENCE_STYLES, formatJammers, isUuid, type ConfidenceLevel } from "@singjam/core";
+import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -514,42 +515,12 @@ export default function SongPageContent() {
                     {e.name}{e.year && <span className="ml-2 font-normal text-slate-400">{e.year}</span>}
                   </p>
                 )}
-                {e.videoId && (
-                  <section className="rounded-xl overflow-hidden border border-slate-200">
-                    <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                      <iframe
-                        className="absolute inset-0 w-full h-full"
-                        src={`https://www.youtube.com/embed/${e.videoId}`}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                  </section>
-                )}
-                {e.trackId && (
-                  <section className="rounded-xl overflow-hidden border border-slate-200">
-                    <iframe
-                      src={`https://open.spotify.com/embed/track/${e.trackId}`}
-                      width="100%"
-                      height="80"
-                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                      loading="lazy"
-                    />
-                  </section>
-                )}
+                {e.videoId && <YouTubeEmbed videoId={e.videoId} title={song.title} />}
+                {e.trackId && <SpotifyEmbed trackId={e.trackId} title={song.title} subtitle={e.name} />}
               </div>
             ))}
             {fallbackVideoId && (
-              <section className="rounded-xl overflow-hidden border border-slate-200">
-                <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                  <iframe
-                    className="absolute inset-0 w-full h-full"
-                    src={`https://www.youtube.com/embed/${fallbackVideoId}`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              </section>
+              <YouTubeEmbed videoId={fallbackVideoId} title={song.title} />
             )}
           </div>
         );

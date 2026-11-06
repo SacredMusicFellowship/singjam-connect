@@ -66,12 +66,20 @@ export default async function SetPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }) {
-  const id = await resolveSetId((await params).id);
+  const [id, user, { invite: inviteToken }] = await Promise.all([
+    resolveSetId((await params).id),
+    getServerUser(),
+    searchParams,
+  ]);
   if (!id) notFound();
-  const { invite: inviteToken } = await searchParams;
   const supabase = await getServerSupabase();
 
-  const user = await getServerUser();
+  // RLS decides whether the viewer can see the linked jam; when they can, the
+  // same read gives the short code for the "Back to jam" link. Started now so
+  // it overlaps the reads below rather than following them.
+  const linkedJamPromise = getSet(id).then(async (s) =>
+    s?.jam_id ? (await supabase.from("jams").select("id, short_code").eq("id", s.jam_id).maybeSingle()).data : null
+  );
 
   const [set, songs, collabRes, requestsRes, profileRes] = await Promise.all([
     getSet(id),
@@ -199,21 +207,18 @@ export default async function SetPage({
   const participantIds = [set.owner_user_id, ...collaborators.map((c: any) => c.user_id)].filter(Boolean) as string[];
 
   // Fetch all knowledge levels for every participant × song combination
-  const songKnowledge = songIds.length > 0 && participantIds.length > 0
-    ? ((await supabase
-        .from("user_songs")
-        .select("user_id, song_id, confidence, key_note")
-        .in("user_id", participantIds)
-        .in("song_id", songIds)
-        .in("confidence", ["lead", "support", "learn"])
-      ).data ?? []) as SongKnowledge[]
-    : [];
-
-  // RLS decides whether the viewer can see the linked jam; when they can, the
-  // same read gives the short code for the "Back to jam" link.
-  const linkedJam = set.jam_id
-    ? (await supabase.from("jams").select("id, short_code").eq("id", set.jam_id).maybeSingle()).data
-    : null;
+  const [songKnowledge, linkedJam] = await Promise.all([
+    songIds.length > 0 && participantIds.length > 0
+      ? supabase
+          .from("user_songs")
+          .select("user_id, song_id, confidence, key_note")
+          .in("user_id", participantIds)
+          .in("song_id", songIds)
+          .in("confidence", ["lead", "support", "learn"])
+          .then((r) => (r.data ?? []) as SongKnowledge[])
+      : Promise.resolve([] as SongKnowledge[]),
+    linkedJamPromise,
+  ]);
   const canAccessJam = linkedJam !== null;
 
   return (

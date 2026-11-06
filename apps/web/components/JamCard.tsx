@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { getImageProps } from "next/image";
 import Link from "next/link";
+import { WhenVisible } from "@/components/MediaEmbeds";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
 import { dropUsCountry, dropVenueRepeatedInTitle, googleMapsUrl, jamImageFor, JAM_IMAGE_SLOTS } from "@singjam/core";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
@@ -58,7 +59,7 @@ export function JamMap({ jam, className = "h-[260px]" }: { jam: JamCardData; cla
     mapQuery
   )}&zoom=${mapZoom}`;
   return (
-    <div className={`overflow-hidden rounded-2xl border border-zinc-200 ${className}`}>
+    <WhenVisible className={`overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 ${className}`}>
       <iframe
         src={src}
         title="Venue map"
@@ -66,10 +67,9 @@ export function JamMap({ jam, className = "h-[260px]" }: { jam: JamCardData; cla
         height="100%"
         style={{ border: 0 }}
         allowFullScreen
-        loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
       />
-    </div>
+    </WhenVisible>
   );
 }
 

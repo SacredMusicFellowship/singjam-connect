@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { claimJamInvite } from "@/lib/claimJamInvite";
@@ -66,26 +67,39 @@ export default async function JamPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }) {
-  const id = await resolveJamId((await params).id);
-  const { invite } = await searchParams;
+  const [id, user, { invite }] = await Promise.all([resolveJamId((await params).id), getServerUser(), searchParams]);
   if (!id) return <p className="text-sm text-zinc-500">Jam not found.</p>;
 
   const supabase = await getServerSupabase();
   const admin = supabaseAdmin();
-  const user = await getServerUser();
 
   // Record the guest against the host's invite before reading their own rows
   // below, so the accept/decline banner is right on the first paint.
   if (invite && user) await claimJamInvite(invite, user.id);
 
+  const userId = user?.id ?? null;
+
+  // The database is a cross-country round trip from the server, so every read
+  // below starts at once; reads that depend on another chain off its promise
+  // instead of waiting for the whole batch.
+  //
   // Jam-scoped reads go through the admin client for the same reason getJam
-  // does: the link is the credential. The per-user reads below stay RLS-scoped.
+  // does: the link is the credential. The per-user reads stay RLS-scoped.
   // The street address is the one jam field that isn't the link's to give: a
   // public jam shows it only to people who've RSVP'd. jam_full_address
   // (migration 173) decides, as this viewer, so it never reaches the page —
   // or its serialized props — for anyone else.
-  const [jam, genresRes, themesRes, flagRes, tierRes, addressRes] = await Promise.all([
-    getJam(id),
+  const jamPromise = getJam(id);
+  const leaderRowsPromise = jamLeaderRows(admin, id);
+  const accessPromise: Promise<[boolean, boolean]> = userId
+    ? Promise.all([canManageJam(admin, id, userId), canEditJamById(admin, id, userId)])
+    : Promise.resolve([false, false]);
+
+  const [
+    jam, genresRes, themesRes, flagRes, tierRes, addressRes,
+    attendingCount, rsvpRes, inviteRes, cohostRes, [canManage, canEdit], allLeaders, managed,
+  ] = await Promise.all([
+    jamPromise,
     admin.from("jam_genres").select("genres(name)").eq("jam_id", id),
     admin.from("jam_themes").select("themes(name)").eq("jam_id", id),
     supabase.from("feature_flags").select("enabled").eq("key", "jam_invites").maybeSingle(),
@@ -95,27 +109,20 @@ export default async function JamPage({
     // sits beside it only when there is something for it to sit beside.
     admin.from("ticket_types").select("id", { count: "exact", head: true }).eq("jam_id", id),
     supabase.rpc("jam_full_address", { jam_id_param: id }),
-  ]);
-
-  if (!jam) return <p className="text-sm text-zinc-500">Jam not found.</p>;
-
-  const userId = user?.id ?? null;
-  const genres = ((genresRes.data ?? []) as any[]).map((g: any) => g.genres?.name).filter(Boolean) as string[];
-  const themes = ((themesRes.data ?? []) as any[]).map((t: any) => t.themes?.name).filter(Boolean) as string[];
-  const invitesEnabled = flagRes.data?.enabled ?? true;
-
-  // Excludes the host, whose seat jamSeatsTaken adds back exactly once — a
-  // host with a stray RSVP row of their own must not be counted twice. On an
-  // official event nobody is excluded: the creator's RSVP is an ordinary one.
-  const excludedUserId = jamSeatExcludedUserId(jam);
-  let attendingQuery = admin
-    .from("jam_rsvps")
-    .select("id", { count: "exact", head: true })
-    .eq("jam_id", id)
-    .eq("status", "attending");
-  if (excludedUserId) attendingQuery = attendingQuery.neq("user_id", excludedUserId);
-  const [countRes, rsvpRes, inviteRes, cohostRes] = await Promise.all([
-    attendingQuery,
+    jamPromise.then(async (j) => {
+      if (!j) return 0;
+      // Excludes the host, whose seat jamSeatsTaken adds back exactly once — a
+      // host with a stray RSVP row of their own must not be counted twice. On an
+      // official event nobody is excluded: the creator's RSVP is an ordinary one.
+      const excludedUserId = jamSeatExcludedUserId(j);
+      let q = admin
+        .from("jam_rsvps")
+        .select("id", { count: "exact", head: true })
+        .eq("jam_id", id)
+        .eq("status", "attending");
+      if (excludedUserId) q = q.neq("user_id", excludedUserId);
+      return (await q).count ?? 0;
+    }),
     userId
       ? supabase.from("jam_rsvps").select("status, waitlist_position").eq("jam_id", id).eq("user_id", userId).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -125,9 +132,22 @@ export default async function JamPage({
     userId
       ? supabase.from("jam_cohosts").select("user_id").eq("jam_id", id).eq("user_id", userId).maybeSingle()
       : Promise.resolve({ data: null }),
+    // Distinct from isHost: someone who can host official events may run any of
+    // them without being this one's host. isHost stays literal — it drives the
+    // co-host controls and whether the RSVP button is offered.
+    accessPromise,
+    // Music leaders are an official-event feature (migration 172).
+    Promise.all([jamPromise, leaderRowsPromise]).then(([j, rows]) =>
+      describeLeaders(admin, j?.visibility === "official" ? rows : [])
+    ),
+    accessPromise.then(([manage]) => (manage ? managerData(admin, supabase, id, userId!) : null)),
   ]);
 
-  const attendingCount = countRes.count ?? 0;
+  if (!jam) return <p className="text-sm text-zinc-500">Jam not found.</p>;
+
+  const genres = ((genresRes.data ?? []) as any[]).map((g: any) => g.genres?.name).filter(Boolean) as string[];
+  const themes = ((themesRes.data ?? []) as any[]).map((t: any) => t.themes?.name).filter(Boolean) as string[];
+  const invitesEnabled = flagRes.data?.enabled ?? true;
 
   const hostLabel = [jam.profiles?.display_name, jam.profiles?.last_name].filter(Boolean).join(" ") || jam.profiles?.username || null;
   const hostUsername = jam.profiles?.username ?? null;
@@ -139,73 +159,19 @@ export default async function JamPage({
   const isAttending = rsvpStatus === "attending";
   const isHost = jam.host_user_id === userId;
   const isCoHost = !!cohostRes.data;
-  // Distinct from isHost: someone who can host official events may run any of
-  // them without being this one's host. isHost stays literal — it drives the
-  // co-host controls and whether the RSVP button is offered.
-  const [canManage, canEdit] = userId
-    ? await Promise.all([canManageJam(supabaseAdmin(), id, userId), canEditJamById(supabaseAdmin(), id, userId)])
-    : [false, false];
   const hasFullAccess = isOfficial || isAttending || canManage;
 
-  // Music leaders are an official-event feature (migration 172).
-  const leaderRows = isOfficial ? await jamLeaderRows(admin, id) : [];
-  const allLeaders = await describeLeaders(admin, leaderRows);
+  const leaderRows = isOfficial ? await leaderRowsPromise : [];
   const myLeaderRow = userId ? leaderRows.find((r) => r.user_id === userId) : undefined;
   const showRsvp = !isOfficial && !!userId && !pendingInvite && !isHost;
   const canInvite = !!userId && !isOfficial && (canManage || (isAttending && jam.guests_can_invite));
 
-  let inviteList: InviteEntry[] = [];
-  let guestBuyerCount = 0;
-  let alreadyInvitedIds: string[] = [];
-
+  const inviteList: InviteEntry[] = managed?.inviteList ?? [];
+  const guestBuyerCount = managed?.guestBuyerCount ?? 0;
+  const alreadyInvitedIds: string[] = managed?.alreadyInvitedIds ?? [];
   // "Message attendees" goes to everyone attending except whoever sends it, so
   // its count is its own — not the capacity count, which leaves out the host.
-  let messageRecipientCount = 0;
-
-  if (canManage) {
-    const [buyers, { count: othersAttending }] = await Promise.all([
-      guestTicketBuyers(admin, id),
-      admin
-        .from("jam_rsvps")
-        .select("id", { count: "exact", head: true })
-        .eq("jam_id", id)
-        .eq("status", "attending")
-        .neq("user_id", userId!),
-    ]);
-    guestBuyerCount = buyers.size;
-    messageRecipientCount = (othersAttending ?? 0) + guestBuyerCount;
-    const { data: rawInvites } = await supabase
-      .from("jam_invites")
-      .select("id, invited_user_id, invitee_email, status")
-      .eq("jam_id", id)
-      .order("created_at", { ascending: true });
-
-    if (rawInvites && rawInvites.length > 0) {
-      const memberIds = (rawInvites as any[]).map((i: any) => i.invited_user_id).filter(Boolean);
-      const profileMap = new Map<string, any>();
-
-      if (memberIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, display_name, last_name, username")
-          .in("id", memberIds);
-        for (const p of (profiles ?? []) as any[]) {
-          profileMap.set(p.id, p);
-        }
-      }
-
-      alreadyInvitedIds = (rawInvites as any[]).map((i: any) => i.invited_user_id).filter(Boolean);
-      inviteList = (rawInvites as any[])
-        .filter((inv: any) => inv.status !== "accepted" && (inv.invited_user_id || inv.invitee_email))
-        .map((inv: any) => ({
-          invited_user_id: inv.invited_user_id,
-          invitee_email: inv.invitee_email,
-          status: inv.status,
-          ...(inv.invited_user_id ? profileMap.get(inv.invited_user_id) : {}),
-          id: inv.id,
-        }));
-    }
-  }
+  const messageRecipientCount = managed?.messageRecipientCount ?? 0;
 
   const jamCardData: JamCardData = {
     id: jam.id,
@@ -272,4 +238,44 @@ export default async function JamPage({
     />
     </>
   );
+}
+
+// What only a jam's managers see: the invite list and the message-attendees count.
+async function managerData(admin: SupabaseClient, supabase: SupabaseClient, id: string, userId: string) {
+  const [buyers, { count: othersAttending }, { data: rawInvites }] = await Promise.all([
+    guestTicketBuyers(admin, id),
+    admin
+      .from("jam_rsvps")
+      .select("id", { count: "exact", head: true })
+      .eq("jam_id", id)
+      .eq("status", "attending")
+      .neq("user_id", userId),
+    supabase
+      .from("jam_invites")
+      .select("id, invited_user_id, invitee_email, status")
+      .eq("jam_id", id)
+      .order("created_at", { ascending: true }),
+  ]);
+  const guestBuyerCount = buyers.size;
+  const messageRecipientCount = (othersAttending ?? 0) + guestBuyerCount;
+  const invites = (rawInvites ?? []) as any[];
+  const memberIds = invites.map((i: any) => i.invited_user_id).filter(Boolean);
+  const profileMap = new Map<string, any>();
+  if (memberIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name, last_name, username")
+      .in("id", memberIds);
+    for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, p);
+  }
+  const inviteList: InviteEntry[] = invites
+    .filter((inv: any) => inv.status !== "accepted" && (inv.invited_user_id || inv.invitee_email))
+    .map((inv: any) => ({
+      invited_user_id: inv.invited_user_id,
+      invitee_email: inv.invitee_email,
+      status: inv.status,
+      ...(inv.invited_user_id ? profileMap.get(inv.invited_user_id) : {}),
+      id: inv.id,
+    }));
+  return { guestBuyerCount, messageRecipientCount, alreadyInvitedIds: memberIds as string[], inviteList };
 }
