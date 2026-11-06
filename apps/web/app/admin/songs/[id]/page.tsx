@@ -7,7 +7,6 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  if (id === "new") return { title: "New Song | SingJam Admin" };
   const song = await getSong(id);
   return { title: song?.title ? `${song.title} | SingJam Admin` : "Edit Song | SingJam Admin" };
 }

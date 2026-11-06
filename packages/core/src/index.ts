@@ -47,3 +47,4 @@ export * from './utils/userSong';
 export * from './utils/username';
 export * from './utils/zonedDateTime';
 export * from './utils/landmarkRecordings';
+export * from './utils/enrichmentMatching';

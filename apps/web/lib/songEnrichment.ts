@@ -4,6 +4,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   agreedLandmarks,
   decideEnrichment,
+  decideListedFacts,
+  matchesGeniusHit,
+  matchesWikipediaArticle,
   landmarkYear,
   leadArtist,
   MAX_RECORDINGS,
@@ -15,8 +18,10 @@ import {
   SONG_TONALITIES,
   type EnrichmentDecision,
   type EnrichmentSources,
+  reviewEnrichment,
   type LandmarkCandidate,
   type ModelAnswer,
+  type WikipediaFacts,
 } from "@singjam/core";
 
 const USER_AGENT = "SingJam/1.0 ( https://singjam.org )";
@@ -26,7 +31,7 @@ const norm = (s: string) =>
 
 type Field = keyof ModelAnswer;
 export type ModelUsage = { model: string; input: number; output: number; reasoning?: number };
-type SongContext = { title: string; artist: string | null; production: string | null; wanted: Field[] };
+export type SongContext = { title: string; artist: string | null; production: string | null; wanted: Field[]; artists?: string[] };
 
 const FIELD_RULES: Record<Field, string> = {
   year_written: "year_written: year the song was composed (not recorded)",
@@ -42,9 +47,15 @@ const FIELD_RULES: Record<Field, string> = {
   cultures: `cultures: cultural origins or associations, each from: ${SONG_CULTURES.join(", ")}. Never "British"`,
   first_line: "first_line: the first sung line, verbatim, without section labels",
   hook: "hook: the most recognisable lyric phrase, usually from the chorus, verbatim and short",
+  notes: "notes: a short factual paragraph on the song's origin and history that a musician would find useful (disputed credits, notable recordings; Roud or Child numbers for traditional songs). Null if nothing solid",
+  productions: "productions: the film, musical or TV show the song was written for or first introduced in. Not productions that later used an existing song or recording. Empty if none",
+  alternate_titles: "alternate_titles: other titles the song is commonly known by; empty if none",
+  music_culture: `music_culture: for a traditional song, the tradition its melody comes from, one of: ${SONG_CULTURES.join(", ")}. Null otherwise`,
+  lyric_culture: `lyric_culture: for a traditional song, the tradition its words come from, one of: ${SONG_CULTURES.join(", ")}. Null otherwise`,
 };
 
-const ARRAY_FIELDS = new Set<Field>(["composers", "lyricists", "genres", "themes", "languages", "cultures"]);
+const ALL_FIELDS = Object.keys(FIELD_RULES) as Field[];
+const ARRAY_FIELDS = new Set<Field>(["composers", "lyricists", "genres", "themes", "languages", "cultures", "productions", "alternate_titles"]);
 const NUMBER_FIELDS = new Set<Field>(["year_written", "recording_year"]);
 
 function prompt(song: SongContext) {
@@ -53,13 +64,16 @@ Only use the listed values where a list is given. For each field give confidence
   const user = `Song: "${song.title}" — ${song.artist ?? "(no artist)"}${song.production ? ` — from ${song.production}` : ""}
 Fill these fields:
 ${song.wanted.map((f) => `- ${FIELD_RULES[f]}`).join("\n")}
-Return JSON: {"fields": {"<field>": {"v": <value or null>, "c": "high" | "medium" | "low"}}}`;
+Return JSON: {"fields": {"<field>": {"v": <value or null>, "c": "high" | "medium" | "low"}}}. Where null isn't allowed, use "", 0 or [] for unknown.`;
   return { system, user };
 }
 
 function schemaFor(wanted: Field[]) {
+  // No nullable types: Claude's structured output allows at most 16 union-typed
+  // parameters and a review asks about more fields than that. "Unknown" comes
+  // back as "", 0 or [] instead, and blankToNull turns it back into null.
   const valueType = (f: Field) =>
-    ARRAY_FIELDS.has(f) ? { type: ["array", "null"], items: { type: "string" } } : NUMBER_FIELDS.has(f) ? { type: ["integer", "null"] } : { type: ["string", "null"] };
+    ARRAY_FIELDS.has(f) ? { type: "array", items: { type: "string" } } : NUMBER_FIELDS.has(f) ? { type: "integer" } : { type: "string" };
   return {
     type: "object",
     additionalProperties: false,
@@ -111,6 +125,14 @@ async function askGpt(song: SongContext, usage: ModelUsage[]): Promise<ModelAnsw
   }
 }
 
+function blankToNull(answer: ModelAnswer | null): ModelAnswer | null {
+  if (!answer) return null;
+  const out: Record<string, unknown> = {};
+  for (const [field, a] of Object.entries(answer) as [string, { v: unknown; c: string } | null][])
+    out[field] = a && (a.v === "" || a.v === 0 || (Array.isArray(a.v) && !a.v.length)) ? { ...a, v: null } : a;
+  return out as ModelAnswer;
+}
+
 async function askClaude(song: SongContext, usage: ModelUsage[]): Promise<ModelAnswer | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
   try {
@@ -127,7 +149,7 @@ async function askClaude(song: SongContext, usage: ModelUsage[]): Promise<ModelA
     usage.push({ model: res.model, input: res.usage.input_tokens, output: res.usage.output_tokens });
     if (res.stop_reason === "refusal") return null;
     const text = res.content.find((b) => b.type === "text");
-    return text && text.type === "text" ? JSON.parse(text.text).fields ?? null : null;
+    return text && text.type === "text" ? blankToNull(JSON.parse(text.text).fields ?? null) : null;
   } catch (e) {
     console.error("[song-enrichment] claude failed:", e instanceof Error ? e.message : e);
     return null;
@@ -193,6 +215,152 @@ async function lookUpLyrics(title: string, artist: string): Promise<string | nul
   } catch {
     return null;
   }
+}
+
+// ---- Wikipedia and Genius (review only) ----
+
+const WIKI = "https://en.wikipedia.org";
+
+// The song's article, if one can be found that is really about this song.
+async function lookUpWikipedia(title: string, artist: string | null) {
+  const q = `${title} ${artist ?? ""} song`.trim();
+  const search = await fetch(`${WIKI}/w/api.php?action=query&list=search&srlimit=5&format=json&srsearch=${encodeURIComponent(q)}`, {
+    headers: { "User-Agent": USER_AGENT },
+  });
+  if (!search.ok) return null;
+  const hits: { title: string }[] = (await search.json()).query?.search ?? [];
+  for (const hit of hits) {
+    const res = await fetch(`${WIKI}/api/rest_v1/page/summary/${encodeURIComponent(hit.title.replace(/ /g, "_"))}`, {
+      headers: { "User-Agent": USER_AGENT },
+    });
+    if (!res.ok) continue;
+    const page = await res.json();
+    const candidate = { title: page.title ?? hit.title, type: page.type ?? "", description: page.description ?? null, extract: page.extract ?? "" };
+    if (matchesWikipediaArticle({ title, artist }, candidate))
+      return { ...candidate, url: page.content_urls?.desktop?.page ?? `${WIKI}/wiki/${encodeURIComponent(hit.title.replace(/ /g, "_"))}` };
+  }
+  return null;
+}
+
+const WIKI_FACTS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["notes", "productions", "alternate_titles"],
+  properties: {
+    notes: { type: ["string", "null"] },
+    productions: { type: "array", items: { type: "string" } },
+    alternate_titles: { type: "array", items: { type: "string" } },
+  },
+};
+
+// Pulls facts out of the article text (Wikipedia is CC BY-SA, so notes are
+// written fresh, never copied). Kept apart from the two research calls so the
+// models' agreement elsewhere stays independent of the article.
+async function extractWikipediaFacts(title: string, extract: string, usage: ModelUsage[]): Promise<WikipediaFacts | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  const res = await new Anthropic().beta.messages.create({
+    model: "claude-opus-5-5",
+    max_tokens: 4000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "low", format: { type: "json_schema", schema: WIKI_FACTS_SCHEMA } },
+    system: "You extract facts from a Wikipedia excerpt. Use only what the excerpt states; never add facts from memory.",
+    messages: [{
+      role: "user",
+      content: `Song: "${title}"\n\nWikipedia excerpt:\n${extract}\n\nReturn JSON with:
+- notes: two or three sentences, in your own words (do not copy phrasing), on the song's origin and history that a musician would find useful. Null if the excerpt has nothing useful.
+- productions: the film, musical or TV show the excerpt says the song was written for or first introduced in. Not productions that later used an existing song or recording. Empty if none.
+- alternate_titles: other titles the excerpt says the song is known by, excluding "${title}". Empty if none.`,
+    }],
+  });
+  usage.push({ model: res.model, input: res.usage.input_tokens, output: res.usage.output_tokens });
+  if (res.stop_reason === "refusal") return null;
+  const text = res.content.find((b) => b.type === "text");
+  return text && text.type === "text" ? JSON.parse(text.text) : null;
+}
+
+// Genius search does badly with bracketed subtitles, so it gets the bare title,
+// once per recording artist until one matches.
+async function lookUpGenius(title: string, artists: string[]): Promise<string | null> {
+  const token = process.env.GENIUS_ACCESS_TOKEN;
+  if (!token) return null;
+  const bare = title.replace(/\s*\([^)]*\)/g, "").trim() || title;
+  for (const artist of artists.slice(0, 4)) {
+    const res = await fetch(`https://api.genius.com/search?q=${encodeURIComponent(`${bare} ${artist}`)}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) continue;
+    const hits: any[] = (await res.json()).response?.hits ?? [];
+    const hit = hits.map((h) => h.result).find((r) => r && matchesGeniusHit({ title, artist }, { title: r.title ?? "", artist: r.primary_artist?.name ?? "" }));
+    if (hit?.url) return hit.url;
+  }
+  return null;
+}
+
+// ---- Gathering every source, the one way all enrichment does it ----
+
+export type SourceCheck = { name: string; ok: boolean };
+
+// Each source gets a deadline; one that errors or runs over counts as having no
+// answer, so a slow or broken source can never stall or fail a run.
+async function timed<T>(name: string, ms: number, checks: SourceCheck[], work: () => Promise<T | null>): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      console.error(`[song-enrichment] ${name} timed out after ${ms}ms`);
+      resolve(null);
+    }, ms);
+  });
+  const result = await Promise.race([
+    work().catch((e) => {
+      console.error(`[song-enrichment] ${name} failed:`, e instanceof Error ? e.message : e);
+      return null;
+    }),
+    timeout,
+  ]);
+  clearTimeout(timer);
+  checks.push({ name, ok: result !== null });
+  return result;
+}
+
+export type GatheredSources = {
+  sources: EnrichmentSources;
+  wikipedia: (WikipediaFacts & { title: string; url: string }) | null;
+  geniusUrl: string | null;
+  checks: SourceCheck[];
+  usage: ModelUsage[];
+};
+
+// Asks each source only when a wanted field needs it. Both the automatic fill
+// and the editor's review go through here.
+export async function gatherSources(
+  song: SongContext,
+  opts: { spotifyReleaseYear?: number | null; links?: boolean } = {},
+): Promise<GatheredSources> {
+  const { title, artist, wanted } = song;
+  const usage: ModelUsage[] = [];
+  const checks: SourceCheck[] = [];
+  const wants = (...f: Field[]) => f.some((x) => wanted.includes(x));
+  const [gpt, claude, musicbrainz, lyrics, wikipedia, geniusUrl] = await Promise.all([
+    timed("GPT", 150_000, checks, () => askGpt(song, usage)),
+    timed("Claude", 150_000, checks, () => askClaude(song, usage)),
+    artist && wants("recording_year", "composers") ? timed("MusicBrainz", 60_000, checks, () => lookUpMusicBrainz(title, artist)) : null,
+    artist && wants("first_line", "hook") ? timed("LRCLIB", 20_000, checks, () => lookUpLyrics(title, artist)) : null,
+    wants("notes", "productions", "alternate_titles")
+      ? timed("Wikipedia", 90_000, checks, async () => {
+          const page = await lookUpWikipedia(title, artist);
+          const facts = page && (await extractWikipediaFacts(title, page.extract, usage));
+          return page && facts ? { ...facts, title: page.title, url: page.url } : null;
+        })
+      : null,
+    opts.links ? timed("Genius", 20_000, checks, () => lookUpGenius(title, song.artists ?? (artist ? [artist] : []))) : null,
+  ]);
+  const order = ["GPT", "Claude", "MusicBrainz", "LRCLIB", "Wikipedia", "Genius"];
+  return {
+    sources: { gpt, claude, musicbrainz, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics },
+    wikipedia,
+    geniusUrl,
+    checks: checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name)),
+    usage,
+  };
 }
 
 // ---- Other recordings worth listing (landmarkRecordings in core decides) ----
@@ -344,7 +512,7 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   const { data: song, error } = await admin
     .from("songs")
     .select(
-      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_genres(count), song_themes(count), song_languages(count), song_cultures(context), song_productions(productions(name)), song_recording_artists(artist_id, year, position, artists(name))"
+      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_genres(count), song_themes(count), song_languages(count), song_cultures(context), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
     )
     .eq("id", songId)
     .single();
@@ -367,6 +535,8 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   if (!(s.song_cultures ?? []).some((c: any) => !c.context)) wanted.push("cultures");
   if (!s.first_line) wanted.push("first_line");
   if (!s.hook) wanted.push("hook");
+  if (!(s.song_productions ?? []).length) wanted.push("productions");
+  if (empty(s.song_alternate_titles)) wanted.push("alternate_titles");
   if (!wanted.length) return { songId, decision: {} as EnrichmentDecision, usage: [] as ModelUsage[] };
 
   if (!opts.dryRun) await admin.from("songs").update({ enrichment_started_at: new Date().toISOString() }).eq("id", songId);
@@ -397,18 +567,9 @@ async function fillSong(
     production: (s.song_productions ?? []).map((p: any) => p.productions?.name).filter(Boolean).join(", ") || null,
     wanted,
   };
-  const needsMb = artist && (wanted.includes("recording_year") || wanted.includes("composers"));
-  const needsLyrics = artist && (wanted.includes("first_line") || wanted.includes("hook"));
-  const usage: ModelUsage[] = [];
-  const [gpt, claude, mb, lyrics] = await Promise.all([
-    askGpt(context, usage),
-    askClaude(context, usage),
-    needsMb ? lookUpMusicBrainz(s.title, artist!) : Promise.resolve(null),
-    needsLyrics ? lookUpLyrics(s.title, artist!) : Promise.resolve(null),
-  ]);
-  const sources: EnrichmentSources = { gpt, claude, musicbrainz: mb, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics };
-  const decision = decideEnrichment(sources);
-  if (opts.dryRun) return { songId, decision, usage, sources: { gpt: !!gpt, claude: !!claude, musicbrainz: !!mb, lyrics: !!lyrics } };
+  const { sources, wikipedia, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear });
+  const decision = { ...decideEnrichment(sources), ...decideListedFacts(sources, wikipedia) };
+  if (opts.dryRun) return { songId, decision, usage, checks };
 
   const scalar: Record<string, unknown> = {};
   for (const f of ["year_written", "tonality", "meter", "vibe", "first_line", "hook"] as const)
@@ -440,5 +601,68 @@ async function fillSong(
     const ids = await idsFor(admin, "languages", decision.languages);
     if (ids.length) await admin.from("song_languages").insert(ids.map((language_id) => ({ song_id: songId, language_id })));
   }
+  if (decision.productions && wanted.includes("productions")) {
+    for (const name of decision.productions) {
+      const { data: found } = await admin.from("productions").select("id").ilike("name", name).limit(1).maybeSingle();
+      const id = found?.id ?? (await admin.from("productions").insert({ name, year: null }).select("id").single()).data?.id;
+      if (id) await admin.from("song_productions").insert({ song_id: songId, production_id: id });
+    }
+  }
+  if (decision.alternate_titles && wanted.includes("alternate_titles")) {
+    const titles = decision.alternate_titles.filter((t, i, all) => norm(t) !== norm(s.title) && all.findIndex((x) => norm(x) === norm(t)) === i);
+    if (titles.length) await admin.from("song_alternate_titles").insert(titles.map((title) => ({ song_id: songId, title })));
+  }
   return { songId, decision, usage };
+}
+
+// Review mode for the song editor: asks every source about every field, saves
+// nothing, and returns suggestions a person ticks before they're applied.
+export async function proposeEnrichment(admin: SupabaseClient, songId: string) {
+  const { data: song, error } = await admin
+    .from("songs")
+    .select("title, display_artist, song_alternate_titles(title), song_productions(productions(name)), song_recording_artists(position, artists(name))")
+    .eq("id", songId)
+    .single();
+  if (error || !song) throw error ?? new Error(`song ${songId} not found`);
+
+  const s = song as any;
+  const primary = [...(s.song_recording_artists ?? [])].sort((a: any, b: any) => (a.position ?? 99) - (b.position ?? 99))[0];
+  const context: SongContext = {
+    title: s.title,
+    artist: primary?.artists?.name ?? s.display_artist ?? null,
+    artists: [...(s.song_recording_artists ?? [])]
+      .sort((a: any, b: any) => (a.position ?? 99) - (b.position ?? 99))
+      .map((r: any) => r.artists?.name)
+      .filter(Boolean),
+    production: (s.song_productions ?? []).map((p: any) => p.productions?.name).filter(Boolean).join(", ") || null,
+    wanted: ALL_FIELDS,
+  };
+  const [gathered, landmarks] = await Promise.all([
+    gatherSources(context, { links: true }),
+    addLandmarkRecordings(admin, songId, { dryRun: true }).catch(() => ({ added: [] as LandmarkResult[], usage: [] as ModelUsage[] })),
+  ]);
+  const review = reviewEnrichment(gathered.sources, landmarks.added, { wikipedia: gathered.wikipedia, geniusUrl: gathered.geniusUrl });
+  const existingTitles = new Set([s.title, ...(s.song_alternate_titles ?? []).map((t: any) => t.title)].map(norm));
+  review.suggestions.alternate_titles = review.suggestions.alternate_titles.filter((t) => !existingTitles.has(norm(t)));
+  return {
+    ...review,
+    checks: gathered.checks,
+    wikipedia: gathered.wikipedia ? { title: gathered.wikipedia.title, url: gathered.wikipedia.url } : null,
+    usage: [...gathered.usage, ...landmarks.usage],
+  };
+}
+
+// Runs a review and stores it on the song for the editor to pick up. The
+// requested-at stamp lets the editor ignore an older run that finishes late.
+export async function runEnrichmentReview(admin: SupabaseClient, songId: string, requestedAt: string) {
+  let proposal: Record<string, unknown>;
+  try {
+    const { usage, ...review } = await proposeEnrichment(admin, songId);
+    console.log(`[enrich-review] ${songId}: usage ${JSON.stringify(usage)}`);
+    proposal = { requested_at: requestedAt, finished_at: new Date().toISOString(), ...review };
+  } catch (e) {
+    console.error(`[enrich-review] ${songId} failed: ${e instanceof Error ? e.message : String(e)}`);
+    proposal = { requested_at: requestedAt, finished_at: new Date().toISOString(), error: true };
+  }
+  await admin.from("songs").update({ enrichment_proposal: proposal }).eq("id", songId).eq("enrichment_proposal->>requested_at", requestedAt);
 }
