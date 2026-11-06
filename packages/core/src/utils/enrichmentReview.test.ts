@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
+import { decideListedFacts, reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const base = (over: Partial<EnrichmentSources> = {}): EnrichmentSources => ({
   gpt: null, claude: null, musicbrainz: null, spotifyReleaseYear: null, lyrics: null, ...over,
@@ -89,5 +89,22 @@ describe("reviewEnrichment", () => {
     const r = reviewEnrichment(base(), [], { geniusUrl: "https://genius.com/x" });
     expect(r.suggestions.genius_url).toBe("https://genius.com/x");
     expect(r.agreed).toContain("genius_url");
+  });
+});
+
+describe("decideListedFacts", () => {
+  const wiki = { notes: null, productions: ["Pitch Perfect"], alternate_titles: ["When I'm Gone"] };
+  it("fills what a model and the article both name", () => {
+    expect(decideListedFacts({ gpt: { productions: hi(["Pitch Perfect"]) }, claude: null }, wiki)).toEqual({ productions: ["Pitch Perfect"] });
+  });
+  it("fills what both models name, even without an article", () => {
+    expect(decideListedFacts({ gpt: { alternate_titles: hi(["Cups"]) }, claude: { alternate_titles: hi(["Cups"]) } }, null)).toEqual({ alternate_titles: ["Cups"] });
+  });
+  it("fills nothing from a single source", () => {
+    expect(decideListedFacts({ gpt: { productions: hi(["Glee"]) }, claude: null }, null)).toEqual({});
+    expect(decideListedFacts({ gpt: null, claude: null }, wiki)).toEqual({});
+  });
+  it("ignores low-confidence answers", () => {
+    expect(decideListedFacts({ gpt: { productions: low(["Pitch Perfect"]) }, claude: null }, wiki)).toEqual({});
   });
 });

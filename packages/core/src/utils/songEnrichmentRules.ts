@@ -50,6 +50,7 @@ export type EnrichmentDecision = {
 };
 
 const MAX_TAGS = 3;
+const HIGH_OR_MEDIUM: Confidence[] = ["high", "medium"];
 
 const norm = (s: string) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -144,6 +145,27 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   return out;
 }
 
+// Items at least two of the lists name (GPT, Claude, the Wikipedia article),
+// in the order first given.
+function namedByTwo(lists: string[][]): string[] {
+  const all = lists.flat().filter((x, i, arr) => arr.findIndex((y) => norm(y) === norm(x)) === i);
+  return all.filter((x) => lists.filter((l) => l.some((y) => norm(y) === norm(x))).length >= 2);
+}
+
+// Productions and alternate titles for the automatic fill: only what two of
+// GPT, Claude and the song's Wikipedia article name.
+export function decideListedFacts(
+  src: Pick<EnrichmentSources, "gpt" | "claude">,
+  wiki: WikipediaFacts | null,
+): { productions?: string[]; alternate_titles?: string[] } {
+  const out: { productions?: string[]; alternate_titles?: string[] } = {};
+  for (const f of ["productions", "alternate_titles"] as const) {
+    const agreed = namedByTwo([value(src.gpt?.[f], HIGH_OR_MEDIUM) ?? [], value(src.claude?.[f], HIGH_OR_MEDIUM) ?? [], wiki?.[f] ?? []]);
+    if (agreed.length) out[f] = agreed;
+  }
+  return out;
+}
+
 export type EnrichmentReview = {
   suggestions: {
     year_written: number | null;
@@ -198,8 +220,7 @@ export function reviewEnrichment(
   // Two of the three (GPT, Claude, the Wikipedia article) naming an item confirms it.
   const bothLists = (key: string, f: "productions" | "alternate_titles") => {
     const lists = [value(g[f], SURE) ?? [], value(c[f], SURE) ?? [], wiki?.[f] ?? []];
-    const all = lists.flat().filter((x, i, arr) => arr.findIndex((y) => norm(y) === norm(x)) === i);
-    const shared = all.filter((x) => lists.filter((l) => l.some((y) => norm(y) === norm(x))).length >= 2);
+    const shared = namedByTwo(lists);
     if (shared.length) { agreed.add(key); return shared; }
     if (wiki?.[f].length) { fromWikipedia.add(key); return wiki[f]; }
     return lists[0].length ? lists[0] : lists[1];

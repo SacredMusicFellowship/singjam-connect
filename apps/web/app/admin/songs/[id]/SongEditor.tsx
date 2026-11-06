@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -75,6 +75,18 @@ type Song = {
   song_recording_artists: { artist_id: string; year: number | null; position: number | null; youtube_url: string | null; spotify_url: string | null }[];
   song_alternate_titles: AltTitle[];
   song_productions: { production_id: string }[];
+  enrichment_proposal?: Proposal | null;
+};
+
+type Proposal = {
+  requested_at: string;
+  finished_at?: string;
+  error?: boolean;
+  suggestions?: EnrichmentReview["suggestions"];
+  agreed?: string[];
+  fromWikipedia?: string[];
+  wikipedia?: { title: string; url: string } | null;
+  checks?: { name: string; ok: boolean }[];
 };
 
 type Props = {
@@ -196,6 +208,7 @@ export default function SongEditor({
     checks: { name: string; ok: boolean }[];
   }>({ fromWikipedia: new Set(), wikipedia: null, checks: [] });
   const [suggesting, setSuggesting] = useState(false);
+  const [showLessCertain, setShowLessCertain] = useState(false);
   const [acceptedFields, setAcceptedFields] = useState<Set<string>>(new Set());
 
   const [newComposerName, setNewComposerName] = useState("");
@@ -268,28 +281,35 @@ export default function SongEditor({
     if (formSnapshot !== savedSnapshot && !confirm("You have unsaved changes. Leave without saving?")) e.preventDefault();
   }
 
-  async function handleSuggest() {
-    if (!song?.id) return;
+  function showProposal(proposal: Proposal) {
+    if (!proposal.suggestions) return;
+    const agreed = new Set(proposal.agreed ?? []);
+    // Genres, themes and vibe are matters of taste: two AIs agreeing is no reason
+    // to pre-tick replacing what someone already chose.
+    const taste = new Set(["genres", "themes", "vibe"]);
+    const preTicked = suggestionRows(proposal.suggestions)
+      .filter((r) => agreed.has(r.key) && !(taste.has(r.key) && r.current))
+      .map((r) => r.key);
+    setAiSuggestions(proposal.suggestions);
+    setAgreedFields(agreed);
+    setAcceptedFields(new Set(preTicked));
+    setReviewInfo({ fromWikipedia: new Set(proposal.fromWikipedia ?? []), wikipedia: proposal.wikipedia ?? null, checks: proposal.checks ?? [] });
+    setShowLessCertain(false);
+  }
+
+  async function waitForReview(requestedAt: string) {
     setSuggesting(true);
-    setError(null);
-    setAiSuggestions(null);
     try {
-      const res = await fetch(`/api/songs/${song.id}/enrich`, { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { requestedAt } = await res.json();
-      const deadline = Date.now() + 4 * 60_000;
+      const deadline = new Date(requestedAt).getTime() + 4 * 60_000;
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 4000));
-        const poll = await fetch(`/api/songs/${song.id}/enrich`);
+        const poll = await fetch(`/api/songs/${song!.id}/enrich`);
         if (!poll.ok) continue;
         const { proposal } = await poll.json();
         if (proposal?.requested_at !== requestedAt) throw new Error("superseded");
         if (!proposal.finished_at) continue;
         if (proposal.error) throw new Error("failed");
-        setAiSuggestions(proposal.suggestions);
-        setAgreedFields(new Set(proposal.agreed));
-        setReviewInfo({ fromWikipedia: new Set(proposal.fromWikipedia ?? []), wikipedia: proposal.wikipedia ?? null, checks: proposal.checks ?? [] });
-        setAcceptedFields(new Set(proposal.agreed));
+        showProposal(proposal);
         return;
       }
       throw new Error("timed out");
@@ -299,6 +319,35 @@ export default function SongEditor({
       setSuggesting(false);
     }
   }
+
+  async function handleSuggest() {
+    if (!song?.id) return;
+    setError(null);
+    setAiSuggestions(null);
+    const res = await fetch(`/api/songs/${song.id}/enrich`, { method: "POST" });
+    if (!res.ok) {
+      setError("Couldn't start gathering suggestions. Try again in a minute.");
+      return;
+    }
+    const { requestedAt } = await res.json();
+    await waitForReview(requestedAt);
+  }
+
+  function closeReview() {
+    setAiSuggestions(null);
+    if (song?.id) void fetch(`/api/songs/${song.id}/enrich`, { method: "DELETE" });
+  }
+
+  // Coming back to the editor picks up a review that is still running or
+  // finished in the last half hour.
+  useEffect(() => {
+    const p = song?.enrichment_proposal;
+    if (!p?.requested_at) return;
+    const age = Date.now() - new Date(p.requested_at).getTime();
+    if (p.finished_at && !p.error && age < 30 * 60_000) showProposal(p);
+    else if (!p.finished_at && age < 4 * 60_000) void waitForReview(p.requested_at);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Only fields where a suggestion differs from what's in the form are shown
   // (and applied), so a review lists real changes.
@@ -431,7 +480,7 @@ export default function SongEditor({
         }
       }
     }
-    setAiSuggestions(null);
+    closeReview();
     setAcceptedFields(new Set());
   }
 
@@ -710,38 +759,67 @@ export default function SongEditor({
         </div>
       )}
 
+      {suggesting && (
+        <div role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-5 py-4 text-sm text-violet-800">
+          Checking GPT, Claude, MusicBrainz, LRCLIB, Wikipedia and Genius — usually about 20 seconds. You can keep editing meanwhile.
+        </div>
+      )}
+
       {aiSuggestions && (() => {
         const rows = suggestionRows(aiSuggestions);
+        const sourceOf = (key: string) =>
+          agreedFields.has(key) ? null : reviewInfo.fromWikipedia.has(key) && reviewInfo.wikipedia ? reviewInfo.wikipedia : ("unconfirmed" as const);
+        const rank = (r: (typeof rows)[number]) => (agreedFields.has(r.key) ? 0 : reviewInfo.fromWikipedia.has(r.key) ? 1 : 2);
+        // An unconfirmed answer that would overwrite something already filled in
+        // is the least useful suggestion, so those wait behind a toggle.
+        const lessCertain = (r: (typeof rows)[number]) => sourceOf(r.key) === "unconfirmed" && !!r.current;
+        const main = rows.filter((r) => !lessCertain(r)).sort((x, y) => rank(x) - rank(y));
+        const extra = rows.filter(lessCertain);
         const acceptedCount = rows.filter((r) => acceptedFields.has(r.key)).length;
         const toggleField = (field: string) => (on: boolean) =>
           setAcceptedFields((prev) => { const s = new Set(prev); on ? s.add(field) : s.delete(field); return s; });
+        const renderRow = (r: (typeof rows)[number]) => (
+          <SuggestionRow
+            key={r.key}
+            label={r.label}
+            current={r.current}
+            suggested={r.suggested}
+            source={sourceOf(r.key)}
+            accepted={acceptedFields.has(r.key)}
+            onChange={toggleField(r.key)}
+          />
+        );
         return (
           <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-violet-900">Suggested improvements</h2>
-                <p className="mt-0.5 text-xs text-violet-700">Ticked items were confirmed by two sources. Check anything labelled before ticking it.</p>
+                <p className="mt-0.5 text-xs text-violet-700">Unlabelled items were confirmed by two sources. Genres, themes and vibe you&apos;ve already set are never pre-ticked.</p>
               </div>
-              <button onClick={() => setAiSuggestions(null)} aria-label="Close suggestions" className="text-violet-400 hover:text-violet-600 text-lg leading-none">×</button>
+              <button onClick={closeReview} aria-label="Close suggestions" className="text-violet-400 hover:text-violet-600 text-lg leading-none">×</button>
             </div>
 
             {rows.length === 0 ? (
               <p className="text-sm text-violet-800">No changes to suggest — the sources match what&apos;s already here.</p>
             ) : (
               <>
-                <div className="space-y-2">
-                  {rows.map((r) => (
-                    <SuggestionRow
-                      key={r.key}
-                      label={r.label}
-                      current={r.current}
-                      suggested={r.suggested}
-                      source={agreedFields.has(r.key) ? null : reviewInfo.fromWikipedia.has(r.key) && reviewInfo.wikipedia ? reviewInfo.wikipedia : "unconfirmed"}
-                      accepted={acceptedFields.has(r.key)}
-                      onChange={toggleField(r.key)}
-                    />
-                  ))}
-                </div>
+                {main.length > 0 ? (
+                  <div className="space-y-2">{main.map(renderRow)}</div>
+                ) : (
+                  <p className="text-sm text-violet-800">Nothing confirmed to change.</p>
+                )}
+                {extra.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setShowLessCertain((v) => !v)}
+                      aria-expanded={showLessCertain}
+                      className="text-xs font-medium text-violet-700 hover:text-violet-900"
+                    >
+                      {showLessCertain ? "Hide" : "Show"} {extra.length} less certain change{extra.length !== 1 ? "s" : ""} to filled-in fields
+                    </button>
+                    {showLessCertain && extra.map(renderRow)}
+                  </div>
+                )}
                 <button
                   onClick={applyAISuggestions}
                   disabled={acceptedCount === 0}

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   agreedLandmarks,
   decideEnrichment,
+  decideListedFacts,
   matchesGeniusHit,
   matchesWikipediaArticle,
   landmarkYear,
@@ -511,7 +512,7 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   const { data: song, error } = await admin
     .from("songs")
     .select(
-      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_genres(count), song_themes(count), song_languages(count), song_cultures(context), song_productions(productions(name)), song_recording_artists(artist_id, year, position, artists(name))"
+      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_genres(count), song_themes(count), song_languages(count), song_cultures(context), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
     )
     .eq("id", songId)
     .single();
@@ -534,6 +535,8 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   if (!(s.song_cultures ?? []).some((c: any) => !c.context)) wanted.push("cultures");
   if (!s.first_line) wanted.push("first_line");
   if (!s.hook) wanted.push("hook");
+  if (!(s.song_productions ?? []).length) wanted.push("productions");
+  if (empty(s.song_alternate_titles)) wanted.push("alternate_titles");
   if (!wanted.length) return { songId, decision: {} as EnrichmentDecision, usage: [] as ModelUsage[] };
 
   if (!opts.dryRun) await admin.from("songs").update({ enrichment_started_at: new Date().toISOString() }).eq("id", songId);
@@ -564,8 +567,8 @@ async function fillSong(
     production: (s.song_productions ?? []).map((p: any) => p.productions?.name).filter(Boolean).join(", ") || null,
     wanted,
   };
-  const { sources, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear });
-  const decision = decideEnrichment(sources);
+  const { sources, wikipedia, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear });
+  const decision = { ...decideEnrichment(sources), ...decideListedFacts(sources, wikipedia) };
   if (opts.dryRun) return { songId, decision, usage, checks };
 
   const scalar: Record<string, unknown> = {};
@@ -597,6 +600,17 @@ async function fillSong(
   if (decision.languages && wanted.includes("languages")) {
     const ids = await idsFor(admin, "languages", decision.languages);
     if (ids.length) await admin.from("song_languages").insert(ids.map((language_id) => ({ song_id: songId, language_id })));
+  }
+  if (decision.productions && wanted.includes("productions")) {
+    for (const name of decision.productions) {
+      const { data: found } = await admin.from("productions").select("id").ilike("name", name).limit(1).maybeSingle();
+      const id = found?.id ?? (await admin.from("productions").insert({ name, year: null }).select("id").single()).data?.id;
+      if (id) await admin.from("song_productions").insert({ song_id: songId, production_id: id });
+    }
+  }
+  if (decision.alternate_titles && wanted.includes("alternate_titles")) {
+    const titles = decision.alternate_titles.filter((t, i, all) => norm(t) !== norm(s.title) && all.findIndex((x) => norm(x) === norm(t)) === i);
+    if (titles.length) await admin.from("song_alternate_titles").insert(titles.map((title) => ({ song_id: songId, title })));
   }
   return { songId, decision, usage };
 }
