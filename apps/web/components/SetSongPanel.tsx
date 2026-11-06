@@ -7,11 +7,7 @@ import { useSongSearch } from "@/hooks/useSongSearch";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import { type SharedSong, type SortMode, displayedSongs } from "@/lib/setDisplayedSongs";
 import SearchInput from "@/components/SearchInput";
-
-function ArtistOrShow({ productions, artist }: { productions: string[] | undefined; artist: string | null }) {
-  if (productions?.length) return <span className="text-xs text-zinc-400">from <em>{productions.join(", ")}</em></span>;
-  return artist ? <span className="text-xs text-zinc-400">{artist}</span> : null;
-}
+import SongSubtitle from "@/components/SongSubtitle";
 
 function WhoKnows({ s }: { s: SharedSong }) {
   const leadsSet = new Set(s.who_else_leads);
@@ -354,7 +350,7 @@ export default function SetSongPanel({
                     <div className={`min-w-0 flex-1 ${inSet ? "opacity-40" : ""}`}>
                       <div className="flex items-baseline gap-1.5 flex-wrap">
                         <span className="text-sm font-medium text-zinc-900">{song.title}</span>
-                        <ArtistOrShow productions={song.productions} artist={song.display_artist} />
+                        <SongSubtitle productions={song.productions} artist={song.display_artist} className="text-xs text-zinc-400" />
                       </div>
                       {shared && <WhoKnows s={shared} />}
                       {inSet && <p className="text-xs text-zinc-400">Already in set</p>}
@@ -463,7 +459,7 @@ export default function SetSongPanel({
                       ) : (
                         <span className="text-sm font-medium text-zinc-900">{s.title}</span>
                       )}
-                      <ArtistOrShow productions={productionsBySong.get(s.song_id)} artist={s.display_artist} />
+                      <SongSubtitle productions={productionsBySong.get(s.song_id)} artist={s.display_artist} className="text-xs text-zinc-400" />
                     </div>
                     {!isSolo && <WhoKnows s={s} />}
                   </div>

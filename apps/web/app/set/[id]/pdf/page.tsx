@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
+import { songSubtitleText } from "@singjam/core";
 import PDFBuilderLoader from "./PDFBuilderLoader";
 
 const getSet = cache(async (id: string) => {
@@ -75,7 +76,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     return {
       song_id: s.song_id as string,
       title: (s.songs?.title ?? "") as string,
-      artist: (productions.length > 0 ? `from ${productions.join(", ")}` : s.songs?.display_artist ?? null) as string | null,
+      artist: songSubtitleText(productions, s.songs?.display_artist),
       key: (s.key_note ?? null) as string | null,
       tonality: (s.songs?.tonality ?? null) as string | null,
       songwriters,

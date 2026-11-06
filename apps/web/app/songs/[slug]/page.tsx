@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { supabaseAnon } from "@/lib/supabase/anon";
+import { resolveSongId } from "@/lib/resolveSongId";
 import SongPageContent from "@/components/SongPageContent";
 
 export const revalidate = 3600;
@@ -15,9 +16,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const supabase = supabaseAnon();
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
-  const query = supabase.from("songs").select("title, display_artist, first_line");
-  const { data } = await (isUuid ? query.eq("id", slug) : query.or(`slug.eq.${slug},former_slug.eq.${slug}`)).single();
+  const songId = await resolveSongId(supabase, slug).catch(() => null);
+  const { data } = songId
+    ? await supabase.from("songs").select("title, display_artist, first_line").eq("id", songId).single()
+    : { data: null };
   if (!data) return { title: "Song" };
   const title = data.title;
   const artist = (data as any).display_artist;

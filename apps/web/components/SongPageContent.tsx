@@ -1,6 +1,6 @@
 "use client";
 
-import { CONFIDENCE_STYLES, type ConfidenceLevel } from "@singjam/core";
+import { CONFIDENCE_STYLES, formatJammers, isUuid, type ConfidenceLevel } from "@singjam/core";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +13,7 @@ import UgBackTip from "@/components/UgBackTip";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import ChordChartSlot from "@/components/ChordChartSlot";
 import ReportChartButton from "@/components/ReportChartButton";
+import { resolveSongId } from "@/lib/resolveSongId";
 
 function TagRow({ label, tags }: { label: string; tags: string[] }) {
   return (
@@ -143,17 +144,17 @@ export default function SongPageContent() {
       setSongUsersLoading(false);
       setNotFound(false);
 
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
-      const songQuery = supabase.from("songs").select(SONG_SELECT);
       const [{ data: { user } }, songRes] = await Promise.all([
         supabase.auth.getUser(),
-        (isUuid ? songQuery.eq("id", slug) : songQuery.or(`slug.eq.${slug},former_slug.eq.${slug}`)).single(),
+        resolveSongId(supabase, slug).catch(() => null).then(async (id) =>
+          id ? (await supabase.from("songs").select(SONG_SELECT).eq("id", id).single()) : { data: null }
+        ),
       ]);
 
       if (!songRes.data) { setNotFound(true); return; }
 
-      if (!isUuid && songRes.data.slug !== slug) {
+      if (!isUuid(slug) && songRes.data.slug !== slug) {
         router.replace(`/songs/${songRes.data.slug}`);
       }
 
@@ -355,7 +356,7 @@ export default function SongPageContent() {
             </div>
             <div className="flex shrink-0 items-center gap-3">
               {popularity > 0 && (
-                <span className="text-sm text-slate-400">{popularity} {popularity === 1 ? "jammer" : "jammers"}</span>
+                <span className="text-sm text-slate-400">{formatJammers(popularity)}</span>
               )}
               {earliestYear && (
                 <span className="text-sm text-slate-400">{earliestYear}</span>

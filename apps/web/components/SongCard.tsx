@@ -1,6 +1,6 @@
 "use client";
 
-import { formatRecordingArtists, hasLeadVoice, productionCredits, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { formatJammers, formatRecordingArtists, hasLeadVoice, productionCredits, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import { Fragment, useState } from "react";
 import Link from "next/link";
 import { formatComposers } from "@/lib/formatComposers";
@@ -171,7 +171,7 @@ export default function SongCard({
             </span>
           ))}
           {(popularity ?? 0) > 0 && (
-            <span className="text-xs text-zinc-400">{popularity} {popularity === 1 ? "jammer" : "jammers"}</span>
+            <span className="text-xs text-zinc-400">{formatJammers(popularity ?? 0)}</span>
           )}
         </div>
       )}

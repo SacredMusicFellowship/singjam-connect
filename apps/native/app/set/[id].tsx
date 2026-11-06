@@ -12,7 +12,8 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, formatComposers, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, formatComposers, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
+import SubtitleText from '@/components/SubtitleText';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
@@ -194,13 +195,11 @@ function AddSongModal({
                 <View className="flex-row items-center px-4 py-3 border-b border-zinc-100">
                   <View className="flex-1 mr-3">
                     <Text className="text-zinc-900 font-medium" numberOfLines={1}>{item.title}</Text>
-                    {item.productions?.length ? (
+                    {songSubtitle(item.productions, item.display_artist) && (
                       <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>
-                        from <Text className="italic">{item.productions.join(', ')}</Text>
+                        <SubtitleText productions={item.productions} artist={item.display_artist} />
                       </Text>
-                    ) : item.display_artist ? (
-                      <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>{item.display_artist}</Text>
-                    ) : null}
+                    )}
                   </View>
                   {already ? (
                     <Text className="text-zinc-400 text-sm">Added</Text>
@@ -427,13 +426,11 @@ function SongRow({
             <View className="flex-1 min-w-0">
               <Text className="text-zinc-900 font-medium" numberOfLines={2}>{song.songs.title}</Text>
               <View className="flex-row items-center mt-0.5">
-                {productions.length > 0 ? (
+                {songSubtitle(productions, artist) && (
                   <Text className="text-zinc-500 text-sm flex-shrink mr-3" numberOfLines={1}>
-                    from <Text className="italic">{productions.join(', ')}</Text>
+                    <SubtitleText productions={productions} artist={artist} />
                   </Text>
-                ) : artist ? (
-                  <Text className="text-zinc-500 text-sm flex-shrink mr-3" numberOfLines={1}>{artist}</Text>
-                ) : null}
+                )}
                 {canManage ? (
                   <TouchableOpacity
                     onPress={() => setKeyPickerVisible(true)}
