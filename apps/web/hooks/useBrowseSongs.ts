@@ -28,6 +28,14 @@ export type BrowseSong = {
   total_count: number;
 };
 
+const MAX_RPC_ROWS = 200;
+
+export function firstLoadPages(limit: number): { offset: number; limit: number }[] {
+  const pages = [];
+  for (let offset = 0; offset < limit; offset += MAX_RPC_ROWS) pages.push({ offset, limit: Math.min(MAX_RPC_ROWS, limit - offset) });
+  return pages;
+}
+
 export function useBrowseSongs(
   filters: BrowseFilters,
   { pageSize = 20, initialCount = pageSize }: { pageSize?: number; initialCount?: number } = {}
@@ -52,16 +60,20 @@ export function useBrowseSongs(
     isFirstLoad.current = false;
     setLoading(true);
     setLoadingMore(false);
-    supabase.rpc("browse_songs", browseRpcParams(f, 0, limit)).then(({ data, error: rpcError }) => {
+    // browse_songs caps a page at 200 rows, so a return visit that had scrolled
+    // further reloads in 200-row pages, all at once.
+    Promise.all(
+      firstLoadPages(limit).map((p) => supabase.rpc("browse_songs", browseRpcParams(f, p.offset, p.limit)))
+    ).then((pages) => {
       if (seq !== requestSeq.current) return;
       setLoading(false);
-      if (rpcError) {
+      if (pages.some((p) => p.error)) {
         setError("Could not load songs. Please try again.");
         setSongs([]);
         setTotal(null);
         return;
       }
-      const rows = (data ?? []) as BrowseSong[];
+      const rows = pages.flatMap((p) => (p.data ?? []) as BrowseSong[]);
       setError(null);
       setSongs(rows);
       setTotal(rows[0]?.total_count ?? 0);

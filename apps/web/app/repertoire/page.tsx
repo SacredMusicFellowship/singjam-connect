@@ -8,6 +8,7 @@ import { matchesSearch } from "@/lib/normalizeSearch";
 import { mergeSuggestionsById } from "@/lib/mergeSuggestionsById";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
+import { useProgressiveRows } from "@/hooks/useProgressiveRows";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { useSongSearch, type SongSearchResult } from "@/hooks/useSongSearch";
 import { sortRepertoireSearchResults } from "@/lib/sortRepertoireSearchResults";
@@ -239,7 +240,10 @@ export default function RepertoirePage() {
     sortBy, setSortBy,
   } = useSongFilters(items, "title_asc");
 
-  const saveScrollPosition = useScrollRestoration("scroll:/repertoire", !loading);
+  const saveScrollPosition = useScrollRestoration(
+    "scroll:/repertoire",
+    !loading && (!query.trim() || (!searchLoading && searchResults.length > 0))
+  );
 
   // Show the cached repertoire immediately on return visits (the fresh fetch
   // below still runs and silently replaces it). Layout effect so the cached
@@ -470,6 +474,7 @@ export default function RepertoirePage() {
     if (sortBy === "title_desc") return list.sort((a, b) => b.title.localeCompare(a.title));
     return list.sort((a, b) => a.title.localeCompare(b.title));
   }, [filtered, sortBy]);
+  const rowsToDraw = useProgressiveRows(sortedFiltered.length, "scroll:/repertoire");
 
   useEffect(() => {
     const el = selectAllRef.current;
@@ -795,7 +800,12 @@ export default function RepertoirePage() {
           <div className="text-sm text-zinc-500 px-1">
             {searchLoading ? "Searching…" : `${sortedSearchResults.length} result${sortedSearchResults.length === 1 ? "" : "s"}`}
           </div>
-          <div className="grid gap-2">
+          <div
+            className="grid gap-2"
+            onClickCapture={(e) => {
+              if ((e.target as HTMLElement).closest('a[href^="/songs/"]')) saveScrollPosition();
+            }}
+          >
             {!searchLoading && sortedSearchResults.length === 0 ? (
               <div className="rounded-md border p-4 text-sm text-zinc-500">No songs found.</div>
             ) : (
@@ -1047,7 +1057,7 @@ export default function RepertoirePage() {
                   />
                   <span className="text-xs text-zinc-400">Select all</span>
                 </div>
-                {sortedFiltered.map((it) => renderRepertoireRow(it, true))}
+                {sortedFiltered.slice(0, rowsToDraw).map((it) => renderRepertoireRow(it, true))}
               </>
             )}
           </div>
