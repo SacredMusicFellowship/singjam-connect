@@ -23,6 +23,7 @@ export * from './utils/jamImageCrops';
 export * from './utils/jamImageTypes';
 export * from './utils/jamPreviewText';
 export * from './utils/jamTicketState';
+export * from './utils/pastJams';
 export * from './utils/mergeSuggestionsById';
 export * from './utils/musicalKeys';
 export * from './utils/normalizeSearch';
