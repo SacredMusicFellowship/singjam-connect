@@ -46,6 +46,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   timeout: 60_000,
+  // next dev compiles each route on its first request, which can take several seconds.
+  expect: { timeout: 15_000, toPass: { timeout: 15_000 } },
   reporter: [[process.env.CI ? "github" : "list"], ["html", { open: "never", outputFolder: "e2e/.report" }]],
   use: { baseURL, trace: "retain-on-failure" },
   projects: [
