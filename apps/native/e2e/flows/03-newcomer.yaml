@@ -1,0 +1,13 @@
+appId: org.singjam.app
+name: A newcomer sees public jams but not someone else's private jam
+---
+- runFlow: common/start.yaml
+- runFlow:
+    file: common/sign-in.yaml
+    env:
+      EMAIL: ${NEWCOMER_EMAIL}
+- tapOn: "Jams"
+- assertVisible: ${OFFICIAL_JAM}
+- assertNotVisible: ${PRIVATE_JAM}
+- tapOn: "Repertoire"
+- takeScreenshot: repertoire-empty

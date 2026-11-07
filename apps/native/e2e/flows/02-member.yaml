@@ -1,0 +1,26 @@
+appId: org.singjam.app
+name: The member sees their jams, including the private one they're invited to, and their top match
+---
+- runFlow: common/start.yaml
+- runFlow:
+    file: common/sign-in.yaml
+    env:
+      EMAIL: ${MEMBER_EMAIL}
+- tapOn: "Jams"
+- assertVisible: ${OFFICIAL_JAM}
+- scrollUntilVisible:
+    element: ${PRIVATE_JAM}
+- takeScreenshot: jams
+- tapOn: ${OFFICIAL_JAM}
+- assertVisible: ${OFFICIAL_JAM}
+- takeScreenshot: jam
+- back
+- tapOn: "Sets"
+- takeScreenshot: sets
+- tapOn: "Friends"
+- assertVisible: ${HOST_NAME}
+- takeScreenshot: friends
+- tapOn: "Repertoire"
+- takeScreenshot: repertoire
+- tapOn: "Profile"
+- takeScreenshot: profile

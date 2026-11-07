@@ -1,0 +1,15 @@
+# Signs in from the welcome screen as ${EMAIL}.
+appId: org.singjam.app
+---
+- tapOn: "Sign in"
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+- tapOn: "••••••••"
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    text: "Sign in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Jams"
+    timeout: 30000

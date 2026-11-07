@@ -1,0 +1,23 @@
+# Opens the app from a clean state with its JavaScript from the e2e Metro (DEV_CLIENT_URL).
+appId: org.singjam.app
+---
+- runFlow:
+    when:
+      true: ${PLATFORM == 'ios'}
+    commands:
+      - clearKeychain
+- launchApp:
+    clearState: true
+    stopApp: true
+- openLink: ${DEV_CLIENT_URL}
+# iOS asks before a link opens an app.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "SingJam"
+    timeout: 180000
+# The dev client's first-launch tour.
+- tapOn:
+    text: "Continue"
+    optional: true

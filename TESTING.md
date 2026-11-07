@@ -28,10 +28,11 @@ screenshots are safe to share in this public repo.
 | `cd apps/native && npx jest` | Native unit tests |
 | `npm run test:rls` | Row-level security, signed in as fake members against local Supabase |
 | `npm run e2e` | Playwright on desktop Chrome, iPhone Safari (WebKit) and Android Chrome |
+| `npm run e2e:native` | Maestro flows and screenshots on the iOS simulator and the Android emulator (see below) |
 | `npm run e2e:screenshots` | Every main screen at phone and desktop size into `pr-assets/<branch>/web/` |
 | `npm run e2e:db:reset` | Reload the migrations and the fake seed |
 
-CI runs all of these except the screenshots on every pull request (`.github/workflows/ci.yml`).
+CI runs all of these except the screenshots and native e2e on every pull request (`.github/workflows/ci.yml`).
 
 ## The fake world
 
@@ -66,6 +67,43 @@ Rules of thumb:
   `/api/e2e/mock-calls?service=resend`. It only exists in the e2e server.
 - New main pages go in `support/screens.ts`. That one list drives both the page and accessibility
   checks and the screenshots.
+
+## Native e2e (Maestro)
+
+`npm run e2e:native` runs the Maestro flows in `apps/native/e2e/flows/` on an iOS simulator and an
+Android emulator, against the same local Supabase and fake members. Screenshots go to
+`pr-assets/<branch>/native/ios/` and `native/android/`. Use `-- --platform ios` (or `android`) for
+one platform, or `-- --serve ios` to start just the servers while writing a flow.
+
+The runner starts the e2e web server and a Metro bundler per platform (8082 for iOS, 8083 for
+Android), with `EXPO_PUBLIC_E2E=1` so the app answers outside services from the shared MSW handlers.
+The iOS simulator reaches local Supabase at `localhost`; the Android emulator reaches it at
+`10.0.2.2`.
+
+**Before each run, the runner quits Native Instruments' NTKDaemon** if it's running. It listens on
+port 5563, inside the emulator port range Maestro probes before every run, and makes Maestro hang.
+Native Access starts it again when it's next needed.
+
+One-time setup:
+
+1. `brew install maestro openjdk@17` (Maestro and the Android build use JDK 17).
+2. iOS: create the simulator and install a dev build on it:
+   ```bash
+   xcrun simctl create "SingJam E2E" "iPhone 17 Pro"
+   cd apps/native && npx expo run:ios --device "SingJam E2E"
+   ```
+   It's a separate simulator, so your everyday one keeps its own sign-in.
+3. Android:
+   ```bash
+   brew install --cask android-commandlinetools
+   export JAVA_HOME=/opt/homebrew/opt/openjdk@17 ANDROID_HOME=~/Library/Android/sdk
+   yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses
+   sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "emulator" "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis;arm64-v8a"
+   avdmanager create avd -n SingJamE2E -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_7
+   cd apps/native && npx expo run:android
+   ```
+
+Native e2e isn't in CI yet; it needs a macOS runner.
 
 ## How outside services are mocked
 
