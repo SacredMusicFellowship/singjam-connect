@@ -83,7 +83,7 @@ beforeEach(() => {
 describe("POST /api/jam/[id]/invite", () => {
   it("returns 401 when neither cookie session nor bearer token authenticates", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
-    const res = await POST(makeReq({ inviteeUserId: INVITEE_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+    const res = (await POST(makeReq({ inviteeUserId: INVITEE_ID }), { params: Promise.resolve({ id: JAM_ID }) }))!;
     expect(res.status).toBe(401);
     expect(mockAdminFrom).not.toHaveBeenCalled();
   });
@@ -99,7 +99,7 @@ describe("POST /api/jam/[id]/invite", () => {
       .mockReturnValueOnce(chain({ data: { token: "tok-1" } })) // insert
       .mockReturnValueOnce(chain({ data: { display_name: "Scott" } })); // invitee profile
 
-    const res = await POST(makeReq({ inviteeUserId: INVITEE_ID }, { Authorization: "Bearer tok" }), { params: Promise.resolve({ id: JAM_ID }) });
+    const res = (await POST(makeReq({ inviteeUserId: INVITEE_ID }, { Authorization: "Bearer tok" }), { params: Promise.resolve({ id: JAM_ID }) }))!;
 
     expect(res.status).toBe(200);
     // RLS requires invited_by = the inviter; the old native path left it out and every insert failed.
@@ -119,7 +119,7 @@ describe("POST /api/jam/[id]/invite", () => {
       .mockReturnValueOnce(chain({ data: { display_name: "Ben" } }))
       .mockReturnValueOnce(chain({ data: [{ id: "inv-1", status: "pending" }] }));
 
-    const res = await POST(makeReq({ inviteeUserId: INVITEE_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+    const res = (await POST(makeReq({ inviteeUserId: INVITEE_ID }), { params: Promise.resolve({ id: JAM_ID }) }))!;
 
     expect(res.status).toBe(409);
     expect(mockSend).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ describe("POST /api/jam/[id]/invite", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "guest-1" } } });
     mockAdminFrom.mockReturnValueOnce(chain({ data: JAM }));
 
-    const res = await POST(makeReq({ inviteeUserId: INVITEE_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+    const res = (await POST(makeReq({ inviteeUserId: INVITEE_ID }), { params: Promise.resolve({ id: JAM_ID }) }))!;
 
     expect(res.status).toBe(403);
     expect(mockCreateNotification).not.toHaveBeenCalled();

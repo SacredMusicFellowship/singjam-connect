@@ -79,3 +79,20 @@ updates:
       # Pinned by the root `overrides` and a postinstall symlink; bumping it
       # from here has broken the native build before.
       - dependency-name: react-native-css-interop
+
+  # Workflow actions are pinned to commit SHAs; this keeps the pins (and their tag comments) current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns:
+          - "*"
