@@ -11,7 +11,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "seed:write": "tsx scripts/write-seed.ts"
+    "seed:write": "tsx scripts/write-seed.ts",
+    "test:rls": "vitest run --config vitest.rls.config.ts"
   },
   "dependencies": {
     "@singjam/core": "*",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.16",
+    "@supabase/supabase-js": "^2.45.4",
     "@types/node": "^20.19.43",
     "tsx": "^4.23.15"
   }
