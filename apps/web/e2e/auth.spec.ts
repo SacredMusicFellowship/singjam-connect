@@ -37,7 +37,7 @@ test("signing out ends the session", async ({ page, freshMember }) => {
   await openPage(page, "/account");
   await expect(page.getByText(freshMember.email)).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("banner").getByRole("link", { name: "Sign in" })).toBeVisible();
   await openPage(page, "/account");
   await expect(page).toHaveURL(/\/auth/);
 });
