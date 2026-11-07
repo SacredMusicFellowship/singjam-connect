@@ -22,7 +22,8 @@ Musicians add songs they know to their repertoire, rate their confidence on each
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+ or 22.12+
+- Docker Desktop and the Supabase CLI, for the tests (see [Running the tests](#running-the-tests))
 - A [Supabase](https://supabase.com) project
 - A [Netlify](https://netlify.com) account (for deployment)
 
@@ -58,6 +59,19 @@ Musicians add songs they know to their repertoire, rate their confidence on each
    ```
    Open [http://localhost:3000](http://localhost:3000).
 
+## Running the tests
+
+Tests use fake members and a local Supabase, never production. You'll need Docker Desktop and the
+Supabase CLI (`brew install supabase/tap/supabase`), then one command sets up the rest:
+
+```bash
+npm install
+npm run e2e:setup
+```
+
+Then `npm run e2e` runs the browser tests and `npm run test:rls` the database security tests.
+[TESTING.md](TESTING.md) covers every test command, the fake data, and how to write a new test.
+
 ## Contributing
 
 This is an open source project. All contributions are welcome.
@@ -65,6 +79,7 @@ This is an open source project. All contributions are welcome.
 - Read [CLAUDE.md](CLAUDE.md) before starting — it covers branching, commit style, code standards, and PR requirements
 - All work must be done in a new branch; never commit directly to `main`
 - Open a pull request and fill in the template
+- Screenshots and test output go in the PR description, not the diff: `pr-assets/` is gitignored, and `npm run pr-assets:publish` publishes them to the `pr-assets` branch and prints links (see [TESTING.md](TESTING.md#screenshots-for-pull-requests)). Fake data only
 
 ## License
 
