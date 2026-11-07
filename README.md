@@ -22,7 +22,8 @@ Musicians add songs they know to their repertoire, rate their confidence on each
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+ or 22.12+
+- Docker Desktop and the Supabase CLI, for the tests (see [Running the tests](#running-the-tests))
 - A [Supabase](https://supabase.com) project
 - A [Netlify](https://netlify.com) account (for deployment)
 
@@ -57,6 +58,19 @@ Musicians add songs they know to their repertoire, rate their confidence on each
    npm run dev
    ```
    Open [http://localhost:3000](http://localhost:3000).
+
+## Running the tests
+
+Tests use fake members and a local Supabase, never production. You'll need Docker Desktop and the
+Supabase CLI (`brew install supabase/tap/supabase`), then one command sets up the rest:
+
+```bash
+npm install
+npm run e2e:setup
+```
+
+Then `npm run e2e` runs the browser tests and `npm run test:rls` the database security tests.
+[TESTING.md](TESTING.md) covers every test command, the fake data, and how to write a new test.
 
 ## Contributing
 

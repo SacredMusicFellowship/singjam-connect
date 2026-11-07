@@ -34,7 +34,10 @@ jobs:
         run: npx tsc --noEmit
         working-directory: apps/web
       - name: Type check native
-        run: npx tsc --noEmit
+        # NativeWind writes this file when Metro starts; it's gitignored, so CI writes the same line.
+        run: |
+          echo '/// <reference types="nativewind/types" />' > nativewind-env.d.ts
+          npx tsc --noEmit
         working-directory: apps/native
 
       - name: Web unit tests
