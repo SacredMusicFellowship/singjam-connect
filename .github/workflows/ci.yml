@@ -1,6 +1,8 @@
 # Runs on every pull request and on main. Everything uses fake data: unit tests mock outside
 # services with MSW, and the e2e job runs a local Supabase seeded from packages/test-fixtures.
 # Actions are pinned to full commit SHAs (Dependabot keeps them current); the comment is the tag.
+# This repository only allows GitHub's own actions plus a short allowlist, so tools are
+# installed directly where an action would pull in others.
 name: CI
 
 on:
@@ -63,9 +65,20 @@ jobs:
           cache: npm
       - run: npm ci
 
-      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
-        with:
-          version: 3.0.0
+      # Installed from the release rather than supabase/setup-cli, which pulls in an action
+      # (oven-sh/setup-bun) this repository doesn't allow. The checksum is verified.
+      - name: Install the Supabase CLI
+        env:
+          SUPABASE_CLI_VERSION: 3.0.0
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP"
+          gh release download "v${SUPABASE_CLI_VERSION}" --repo supabase/cli \
+            --pattern "supabase_${SUPABASE_CLI_VERSION}_linux_amd64.tar.gz" --pattern checksums.txt
+          grep " supabase_${SUPABASE_CLI_VERSION}_linux_amd64.tar.gz$" checksums.txt | sha256sum --check
+          tar -xzf "supabase_${SUPABASE_CLI_VERSION}_linux_amd64.tar.gz" supabase
+          sudo install supabase /usr/local/bin/supabase
+          supabase --version
       - name: Start local Supabase (every migration, then the fake seed)
         run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
 
