@@ -9,8 +9,12 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The e2e server builds into its own folder so it never disturbs a running `npm run dev`.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   outputFileTracingRoot: path.join(__dirname, '../..'),
   reactStrictMode: true,
+  // MSW only loads under the e2e suite (instrumentation.ts); Node resolves it rather than webpack.
+  serverExternalPackages: ['msw', '@mswjs/interceptors'],
   devIndicators: false,
   images: {
     remotePatterns: [
