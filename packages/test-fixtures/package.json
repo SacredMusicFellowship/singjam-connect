@@ -5,9 +5,15 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:write": "tsx scripts/write-seed.ts"
   },
   "dependencies": {
     "@singjam/core": "*"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
+    "@types/node": "^20.19.43",
+    "tsx": "^4.23.15"
   }
 }
