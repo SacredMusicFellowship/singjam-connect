@@ -1,0 +1,18 @@
+Checking prerequisites
+  ✓ Node 24.19.0
+  ✓ Docker is running
+  ✓ Supabase CLI 3.0.0
+
+Installing Playwright browsers (Chromium and WebKit)
+
+Starting local Supabase (first run downloads images; migrations and the fake seed load on a new database)
+Stopped services: [supabase_imgproxy_singjam supabase_pooler_singjam]
+
+Ready. Everything runs against fake members on this machine:
+  npm run e2e               Playwright on desktop Chrome, iPhone Safari and Android Chrome
+  npm run test:rls          RLS tests against the local database
+  npm run e2e:screenshots   screenshots of every main screen into pr-assets/<branch>/web/
+  npm run e2e:db:reset      reload the migrations and the fake seed
+
+Signed-in fake members all use the password in packages/test-fixtures/src/constants.ts.
+See TESTING.md for the rest.
