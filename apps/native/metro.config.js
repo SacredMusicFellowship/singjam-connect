@@ -14,8 +14,4 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, 'node_modules'),
 ];
 
-config.resolver.extraNodeModules = {
-  'react-native-worklets': path.resolve(projectRoot, 'node_modules/react-native-worklets'),
-};
-
 module.exports = withNativeWind(config, { input: './global.css' });
