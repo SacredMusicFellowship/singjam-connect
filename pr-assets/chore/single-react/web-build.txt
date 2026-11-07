@@ -1,0 +1,151 @@
+
+> singjam-connect@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.25
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (133kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled successfully in 7.1s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/64) ...
+   Generating static pages (16/64) 
+   Generating static pages (32/64) 
+   Generating static pages (48/64) 
+ ✓ Generating static pages (64/64)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS  Revalidate  Expire
+┌ ○ /                                      857 B         113 kB          1m      1y
+├ ○ /_not-found                            995 B         104 kB
+├ ○ /about                                 393 B         104 kB
+├ ○ /account                              7.2 kB         179 kB
+├ ƒ /admin                                 393 B         104 kB
+├ ƒ /admin/attendance                    2.34 kB         111 kB
+├ ƒ /admin/settings                      2.65 kB         161 kB
+├ ƒ /admin/song-history                   1.5 kB         108 kB
+├ ƒ /admin/songs                         4.43 kB         171 kB
+├ ƒ /admin/songs/[id]                    28.6 kB         192 kB
+├ ƒ /admin/songs/backfill-spotify        1.85 kB         105 kB
+├ ƒ /admin/songs/enrich                  2.27 kB         160 kB
+├ ƒ /admin/songs/import                  3.42 kB         167 kB
+├ ƒ /admin/songs/review                    857 B         108 kB
+├ ƒ /admin/users                         3.68 kB         121 kB
+├ ƒ /api/account/delete                    393 B         104 kB
+├ ƒ /api/account/sync-ac                   393 B         104 kB
+├ ƒ /api/account/update-name               393 B         104 kB
+├ ƒ /api/admin/ac-sync                     393 B         104 kB
+├ ƒ /api/admin/backfill-locations          393 B         104 kB
+├ ƒ /api/admin/event-attendance            393 B         104 kB
+├ ƒ /api/admin/feature-flags               393 B         104 kB
+├ ƒ /api/admin/revalidate-jams             393 B         104 kB
+├ ƒ /api/admin/songs/[id]/ai-enrich        393 B         104 kB
+├ ƒ /api/admin/songs/[id]/users            393 B         104 kB
+├ ƒ /api/admin/songs/ai-lookup             393 B         104 kB
+├ ƒ /api/admin/songs/approve               393 B         104 kB
+├ ƒ /api/admin/songs/backfill-spotify      393 B         104 kB
+├ ƒ /api/admin/songs/spotify-search        393 B         104 kB
+├ ƒ /api/admin/trigger-jam-reminders       393 B         104 kB
+├ ƒ /api/admin/users/[id]/role             393 B         104 kB
+├ ƒ /api/auth/complete                     393 B         104 kB
+├ ƒ /api/enrich                            393 B         104 kB
+├ ƒ /api/feedback                          393 B         104 kB
+├ ƒ /api/invite/claim                      393 B         104 kB
+├ ƒ /api/jam/[id]                          393 B         104 kB
+├ ƒ /api/jam/[id]/attendees/guests         393 B         104 kB
+├ ƒ /api/jam/[id]/cohosts                  393 B         104 kB
+├ ƒ /api/jam/[id]/ics                      393 B         104 kB
+├ ƒ /api/jam/[id]/invite                   393 B         104 kB
+├ ƒ /api/jam/[id]/invite/link              393 B         104 kB
+├ ƒ /api/jam/[id]/invite/nudge             393 B         104 kB
+├ ƒ /api/jam/[id]/invite/respond           393 B         104 kB
+├ ƒ /api/jam/[id]/leaders                  393 B         104 kB
+├ ƒ /api/jam/[id]/message                  393 B         104 kB
+├ ƒ /api/jam/[id]/rsvp                     393 B         104 kB
+├ ƒ /api/jam/[id]/set                      393 B         104 kB
+├ ƒ /api/jam/[id]/tickets/checkin          393 B         104 kB
+├ ƒ /api/jam/[id]/tickets/checkout         393 B         104 kB
+├ ƒ /api/jam/[id]/tickets/copy             393 B         104 kB
+├ ƒ /api/jam/[id]/tickets/orders           393 B         104 kB
+├ ƒ /api/jam/[id]/tickets/promo            393 B         104 kB
+├ ƒ /api/jam/[id]/tickets/promos           393 B         104 kB
+├ ƒ /api/jam/[id]/tickets/types            393 B         104 kB
+├ ƒ /api/jam/confirm                       393 B         104 kB
+├ ƒ /api/lead/[token]                      393 B         104 kB
+├ ƒ /api/notifications/read                393 B         104 kB
+├ ƒ /api/sets                              393 B         104 kB
+├ ƒ /api/sets/[id]                         393 B         104 kB
+├ ƒ /api/sets/[id]/collaborators           393 B         104 kB
+├ ƒ /api/sets/[id]/copy                    393 B         104 kB
+├ ƒ /api/sets/[id]/invite                  393 B         104 kB
+├ ƒ /api/sets/[id]/invite/claim            393 B         104 kB
+├ ƒ /api/sets/[id]/invite/link             393 B         104 kB
+├ ƒ /api/sets/[id]/playlists/spotify       393 B         104 kB
+├ ƒ /api/sets/[id]/playlists/youtube       393 B         104 kB
+├ ƒ /api/sets/[id]/request-access          393 B         104 kB
+├ ƒ /api/sets/[id]/songs                   393 B         104 kB
+├ ƒ /api/sets/[id]/songs/[songId]          393 B         104 kB
+├ ƒ /api/sets/[id]/songs/reorder           393 B         104 kB
+├ ƒ /api/song-editor/songs/[id]/links      393 B         104 kB
+├ ƒ /api/songs/[id]/chord-chart            393 B         104 kB
+├ ƒ /api/songs/[id]/count                  393 B         104 kB
+├ ƒ /api/songs/[id]/media                  393 B         104 kB
+├ ƒ /api/songs/[id]/users                  393 B         104 kB
+├ ƒ /api/songs/lookup                      393 B         104 kB
+├ ƒ /api/songs/submit                      393 B         104 kB
+├ ƒ /api/stripe/webhook                    393 B         104 kB
+├ ƒ /api/tickets/claim                     393 B         104 kB
+├ ƒ /api/timezone                          393 B         104 kB
+├ ƒ /api/users/search                      393 B         104 kB
+├ ƒ /api/youtube                           393 B         104 kB
+├ ƒ /auth                                3.35 kB         161 kB
+├ ƒ /auth/callback                         393 B         104 kB
+├ ƒ /auth/confirm                          393 B         104 kB
+├ ○ /auth/reset-password                 1.25 kB         159 kB
+├ ○ /feedback                             1.4 kB         160 kB
+├ ○ /friends                             4.93 kB         177 kB
+├ ○ /icon                                  393 B         104 kB
+├ ƒ /jam/[id]                              14 kB         191 kB
+├ ƒ /jam/[id]/edit                       3.47 kB         185 kB
+├ ƒ /jam/[id]/opengraph-image              393 B         104 kB
+├ ƒ /jam/[id]/tickets/complete           2.22 kB         109 kB
+├ ƒ /jam/[id]/tickets/manage               181 B         118 kB
+├ ƒ /jam/[id]/tickets/pay                8.63 kB         121 kB
+├ ƒ /jam/new                             3.84 kB         186 kB
+├ ○ /jams                                5.64 kB         177 kB
+├ ○ /matches                               393 B         104 kB
+├ ○ /notifications                       1.49 kB         163 kB
+├ ○ /opengraph-image                       393 B         104 kB
+├ ○ /privacy                               393 B         104 kB
+├ ○ /profile                               785 B         177 kB
+├ ƒ /profile/[id]                        2.29 kB         169 kB
+├ ○ /repertoire                          8.07 kB         182 kB
+├ ○ /search                              4.12 kB         178 kB
+├ ƒ /set/[id]                            19.4 kB         191 kB
+├ ƒ /set/[id]/opengraph-image              393 B         104 kB
+├ ƒ /set/[id]/pdf                        1.33 kB         105 kB
+├ ƒ /set/new                             1.09 kB         109 kB
+├ ○ /sets                                3.34 kB         170 kB
+├ ƒ /song-editor                         2.59 kB         166 kB
+├ ƒ /song-editor/history                  1.5 kB         108 kB
+├ ○ /songs                                 393 B         104 kB
+├ ● /songs/[slug]                        10.5 kB         177 kB
+├ ƒ /songs/[slug]/opengraph-image          393 B         104 kB
+├ ○ /terms                                 393 B         104 kB
+├ ● /u/[username]                          970 B         177 kB
+└ ƒ /u/[username]/opengraph-image          393 B         104 kB
++ First Load JS shared by all             103 kB
+  ├ chunks/18-12ff71d60356055b.js        46.8 kB
+  ├ chunks/87c73c54-09e1ba5c70e60a51.js  54.2 kB
+  └ other shared chunks (total)          2.27 kB
+
+
+ƒ Middleware                             82.1 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+
