@@ -6,14 +6,41 @@ import { supabase } from '@/lib/supabase';
 import ContentContainer from '@/components/ContentContainer';
 import { nativeBrowseHref } from '@/lib/browseLinks';
 
-function ChipCloud({ chips, onPress }: { chips: BrowseChip[]; onPress: (href: string) => void }) {
+const TOP_N = 24;
+
+// A section's most-used entries, and everything on "Show all" (for genres,
+// occasions and communities that adds the kinds within each) — as on web.
+function ChipCloud({ chips, all, more, onPress }: {
+  chips: BrowseChip[];
+  all?: BrowseChip[];
+  more?: { href: string; label: string };
+  onPress: (href: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const full = all ?? chips;
+  const shown = expanded ? full : chips.slice(0, TOP_N);
   return (
     <View className="flex-row flex-wrap">
-      {chips.map(c => (
+      {shown.map(c => (
         <TouchableOpacity key={c.href} onPress={() => onPress(c.href)} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white mr-2 mb-2">
           <Text className="text-sm text-slate-700">{c.label}<Text className="text-slate-400">{`  ${c.count}`}</Text></Text>
         </TouchableOpacity>
       ))}
+      {!expanded && full.length > shown.length && (
+        <TouchableOpacity onPress={() => setExpanded(true)} className="px-3 py-1.5 mb-2">
+          <Text className="text-sm font-medium text-amber-600">Show all {full.length}</Text>
+        </TouchableOpacity>
+      )}
+      {expanded && full.length > TOP_N && (
+        <TouchableOpacity onPress={() => setExpanded(false)} className="px-3 py-1.5 mb-2">
+          <Text className="text-sm font-medium text-amber-600">Show fewer</Text>
+        </TouchableOpacity>
+      )}
+      {more && (
+        <TouchableOpacity onPress={() => onPress(more.href)} className="px-3 py-1.5 mb-2">
+          <Text className="text-sm font-medium text-amber-600">{more.label}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -42,11 +69,15 @@ export default function BrowseHubScreen() {
             {hub?.sections.map(s => (
               <View key={s.type}>
                 <Heading title={s.title} />
-                <ChipCloud chips={s.chips} onPress={open} />
+                <ChipCloud chips={s.chips} all={s.all} onPress={open} />
               </View>
             ))}
-            {hub && hub.writers.length > 0 && (<><Heading title="Songwriters" /><ChipCloud chips={hub.writers} onPress={open} /></>)}
-            {hub && hub.artists.length > 0 && (<><Heading title="Recording artists" /><ChipCloud chips={hub.artists} onPress={open} /></>)}
+            {hub && hub.writers.length > 0 && (
+              <><Heading title="Songwriters" /><ChipCloud chips={hub.writers} more={{ href: '/people', label: `See all ${hub.writerTotal} songwriters` }} onPress={open} /></>
+            )}
+            {hub && hub.artists.length > 0 && (
+              <><Heading title="Recording artists" /><ChipCloud chips={hub.artists} more={{ href: '/artists', label: `See all ${hub.artistTotal} recording artists` }} onPress={open} /></>
+            )}
             {hub && hub.shows.length > 0 && (
               <>
                 <Heading title="Shows" />

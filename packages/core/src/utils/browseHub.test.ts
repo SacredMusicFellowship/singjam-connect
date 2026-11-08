@@ -48,11 +48,13 @@ describe("loadBrowseHub", () => {
       { href: "/genres/rock", label: "Rock", count: 5 },
     ]);
     expect(hub.sections.find((s) => s.type === "form")?.chips.map((c) => c.label)).toEqual(["Hymn"]);
+    expect(hub.sections.find((s) => s.type === "genre")?.all.map((c) => c.label)).toEqual(["Folk", "Rock", "Classic Rock"]);
   });
 
   it("leaves out Traditional and one-song writers, and shows without songs", async () => {
     const hub = await loadBrowseHub(db);
     expect(hub.writers).toEqual([{ href: "/people/john-newton", label: "John Newton", count: 2 }]);
+    expect(hub.writerTotal).toBe(2);
     expect(hub.artists.map((a) => a.label)).toEqual(["The Weavers"]);
     expect(hub.shows).toEqual([{ medium: "animated", label: "Animated film", chips: [{ href: "/shows/cinderella-1950", label: "Cinderella (1950)", count: 1 }] }]);
   });

@@ -42,7 +42,7 @@ export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string):
     const roles = new Map<string, string>();
     const music = new Set(composed.map((r) => r.song_id)), words = new Set(wrote.map((r) => r.song_id));
     for (const id of new Set([...music, ...words])) roles.set(id, music.has(id) && words.has(id) ? "Music & words" : music.has(id) ? "Music" : "Words");
-    return { kind, name: person.name, subtitle: "Songwriter", notes: person.notes ?? null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
+    return { kind, name: person.name, subtitle: null, notes: person.notes ?? null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
   }
   if (kind === "artist") {
     const { data: artist } = await db.from("artists").select("id, name").eq("slug", slug).maybeSingle();
@@ -51,7 +51,7 @@ export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string):
       db.from("song_recording_artists").select("song_id, year").eq("artist_id", artist.id).order("song_id").range(f, t)
     );
     const roles = new Map(rows.map((r) => [r.song_id, r.year ? `Recorded ${r.year}` : "Recording"]));
-    return { kind, name: artist.name, subtitle: "Recording artist", notes: null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
+    return { kind, name: artist.name, subtitle: null, notes: null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
   }
   if (kind === "show") {
     const { data: show } = await db.from("productions").select("id, name, year, medium").eq("slug", slug).maybeSingle();
@@ -61,7 +61,7 @@ export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string):
     );
     const medium = show.medium ? SHOW_MEDIUM_LABEL[show.medium] ?? null : null;
     return {
-      kind, name: show.name, subtitle: [medium, show.year].filter(Boolean).join(" · ") || "Show", notes: null,
+      kind, name: show.name, subtitle: [medium, show.year].filter(Boolean).join(" · ") || null, notes: null,
       parents: [], children: [], related: [], songIds: rows.map((r) => r.song_id), roles: new Map(),
     };
   }

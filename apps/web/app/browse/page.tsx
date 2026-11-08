@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { loadBrowseHub, type BrowseChip } from "@singjam/core";
+import { loadBrowseHub } from "@singjam/core";
 import { supabaseAnon } from "@/lib/supabase/anon";
+import ChipSection from "@/components/browse/ChipSection";
 
 export const revalidate = 3600;
 
@@ -9,58 +9,22 @@ export const metadata = {
   description: "Browse SingJam's songs by genre, form, occasion, community, culture, language, theme, songwriter, recording artist and show.",
 };
 
-type Chip = BrowseChip;
-
-function ChipCloud({ chips }: { chips: Chip[] }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {chips.map((c) => (
-        <Link key={c.href} href={c.href} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 hover:border-amber-300 hover:text-amber-700">
-          {c.label} <span className="tabular-nums text-slate-400">{c.count}</span>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
 export default async function BrowseHub() {
-  const { sections, writers, artists: recording, shows } = await loadBrowseHub(supabaseAnon());
-
+  const hub = await loadBrowseHub(supabaseAnon());
   return (
     <div className="space-y-8 pb-16">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold text-slate-900">Browse songs</h1>
         <p className="text-sm text-slate-500">Numbers are songs on SingJam. A genre or occasion includes the kinds within it.</p>
       </div>
-      {sections.map((s) => (
-        <section key={s.type} className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{s.title}</h2>
-          <ChipCloud chips={s.chips} />
-        </section>
-      ))}
-      {writers.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Songwriters</h2>
-          <ChipCloud chips={writers} />
-        </section>
+      {hub.sections.map((s) => <ChipSection key={s.type} title={s.title} chips={s.chips} all={s.all} />)}
+      {hub.writers.length > 0 && (
+        <ChipSection title="Songwriters" chips={hub.writers} more={{ href: "/people", label: `See all ${hub.writerTotal} songwriters` }} />
       )}
-      {recording.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recording artists</h2>
-          <ChipCloud chips={recording} />
-        </section>
+      {hub.artists.length > 0 && (
+        <ChipSection title="Recording artists" chips={hub.artists} more={{ href: "/artists", label: `See all ${hub.artistTotal} recording artists` }} />
       )}
-      {shows.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Shows</h2>
-          {shows.map((g) => (
-            <div key={g.medium} className="space-y-1.5">
-              <h3 className="text-sm text-slate-600">{g.label}</h3>
-              <ChipCloud chips={g.chips} />
-            </div>
-          ))}
-        </section>
-      )}
+      {hub.shows.map((g) => <ChipSection key={g.medium} title={`Shows · ${g.label}`} chips={g.chips} />)}
     </div>
   );
 }
