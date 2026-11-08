@@ -105,7 +105,7 @@ export default function SongCard({
   const pills = songCardPills({ forms, occasions, genres, communities, languages });
 
   return (
-    <div className="relative rounded-2xl border border-zinc-200 p-4 shadow-sm hover:border-zinc-300">
+    <div className="relative isolate rounded-2xl border border-zinc-200 p-4 shadow-sm hover:border-zinc-300">
       <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
           <div className="font-medium">
