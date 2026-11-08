@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-// The YouTube and Spotify players weigh ~1.7 MB and 100+ requests between
-// them, so the song page shows a stand-in and loads the real player on tap.
-// Same pattern as native's YouTubePlayer.
+// The YouTube player is ~1 MB, so the song page shows a thumbnail and loads
+// the real player on tap. Same pattern as native's YouTubePlayer.
 
 export function YouTubeEmbed({ videoId, title }: { videoId: string; title: string }) {
   const [playing, setPlaying] = useState(false);
@@ -45,11 +44,13 @@ export function YouTubeEmbed({ videoId, title }: { videoId: string; title: strin
   );
 }
 
-export function SpotifyEmbed({ trackId, title, subtitle }: { trackId: string; title: string; subtitle?: string | null }) {
-  const [open, setOpen] = useState(false);
+// Unlike YouTube, Spotify's player ignores autoplay (URL param and its iFrame
+// API's play() alike), so a tap-to-load stand-in would need a second tap.
+// It loads as it comes into view instead.
+export function SpotifyEmbed({ trackId, title }: { trackId: string; title: string }) {
   return (
-    <section className="h-20 overflow-hidden rounded-xl border border-slate-200">
-      {open ? (
+    <section className="h-20 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+      <WhenVisible className="h-full">
         <iframe
           src={`https://open.spotify.com/embed/track/${trackId}`}
           title={`${title} on Spotify`}
@@ -57,26 +58,7 @@ export function SpotifyEmbed({ trackId, title, subtitle }: { trackId: string; ti
           height="80"
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
         />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="flex h-full w-full items-center gap-3 bg-white px-4 text-left transition-colors hover:bg-green-50"
-          aria-label={`Play ${title} on Spotify`}
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-500">
-            <svg viewBox="0 0 24 24" className="ml-0.5 h-5 w-5 fill-white" aria-hidden="true">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-slate-900">{title}</span>
-            <span className="block truncate text-xs text-slate-500">
-              {subtitle ? `${subtitle} · ` : ""}Play on Spotify
-            </span>
-          </span>
-        </button>
-      )}
+      </WhenVisible>
     </section>
   );
 }

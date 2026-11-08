@@ -516,7 +516,7 @@ export default function SongPageContent() {
                   </p>
                 )}
                 {e.videoId && <YouTubeEmbed videoId={e.videoId} title={song.title} />}
-                {e.trackId && <SpotifyEmbed trackId={e.trackId} title={song.title} subtitle={e.name} />}
+                {e.trackId && <SpotifyEmbed trackId={e.trackId} title={song.title} />}
               </div>
             ))}
             {fallbackVideoId && (
