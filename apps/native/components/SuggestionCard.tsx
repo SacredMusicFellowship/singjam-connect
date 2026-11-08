@@ -2,13 +2,14 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { formatComposers, formatJammers, formatRecordingArtists, productionCredits, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { formatComposers, formatJammers, formatRecordingArtists, productionCredits, songCardSecondLine, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 
 export type Suggestion = {
   song_id: string;
   title: string;
   display_artist: string | null;
+  byline?: string | null;
   first_line: string | null;
   slug: string | null;
   composers: string[];
@@ -70,7 +71,12 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
   const composersLabel = song.composers.length > 0
     ? formatComposers(song.composers, [...song.cultures, ...(song.communities ?? [])])
     : null;
-  const artistsLine = formatRecordingArtists(song.recording_artists, song.display_artist);
+  const artistsLine = songCardSecondLine({
+    byline: song.byline,
+    displayArtist: song.display_artist,
+    hasWriters: song.composers.length > 0,
+    recordingsLine: formatRecordingArtists(song.recording_artists, song.display_artist),
+  });
   const shows = productionCredits(song.production_credits, song.productions);
   const genres = [...song.genres].sort();
   const isLead = confidence === 'lead';

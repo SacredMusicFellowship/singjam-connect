@@ -62,6 +62,8 @@ type Song = {
   tonality: string | null;
   meter: string | null;
   vibe: "Banger" | "Ballad" | null;
+  known_by_recording?: boolean | null;
+  byline?: string | null;
   song_tags: SongTagRow[];
   song_composers: { person_id: string }[];
   song_lyricists: { person_id: string }[];
@@ -138,6 +140,7 @@ export default function SongEditor({
     song?.meter ? song.meter.split(",").map((s) => s.trim()).filter(Boolean) : []
   );
   const [vibe, setVibe] = useState<"Banger" | "Ballad" | null>(song?.vibe ?? null);
+  const [knownByRecording, setKnownByRecording] = useState<boolean | null>(song?.known_by_recording ?? null);
 
   const initialComposerIds = song?.song_composers.map((x) => x.person_id) ?? [];
   const initialLyricistIds = song?.song_lyricists.map((x) => x.person_id) ?? [];
@@ -258,7 +261,7 @@ export default function SongEditor({
     title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
     [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
     isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
-    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture,
+    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, knownByRecording,
   ]);
   const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
 
@@ -497,7 +500,7 @@ export default function SongEditor({
         p_song_id: song!.id,
         p: songSavePayload(
           {
-            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
+            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording,
             genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
             composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
             productions, pendingProductionNames, productionYears,
@@ -667,6 +670,21 @@ export default function SongEditor({
           <Field label="Address">
             <p className="py-2 font-mono text-xs text-slate-500 break-all">/songs/{slug || "…"}</p>
             <p className="text-xs text-slate-400">Set automatically from the title, first three writers and music culture. Old addresses keep working.</p>
+          </Field>
+          <Field label="Line under the title">
+            <select
+              value={knownByRecording === null ? "auto" : knownByRecording ? "recording" : "writers"}
+              onChange={(e) => setKnownByRecording(e.target.value === "auto" ? null : e.target.value === "recording")}
+              className="input"
+            >
+              <option value="auto">Automatic</option>
+              <option value="recording">Recording artists (known by its recording)</option>
+              <option value="writers">Writers or tradition</option>
+            </select>
+            <p className="text-xs text-slate-400">
+              Automatic shows the writers, or &ldquo;Traditional · culture&rdquo;, for traditional songs and hymns, nigunim and other traditional forms, and the recording artists for everything else.
+              {song?.byline ? <> Now: <span className="text-slate-600">{song.byline}</span></> : null}
+            </p>
           </Field>
         </div>
 

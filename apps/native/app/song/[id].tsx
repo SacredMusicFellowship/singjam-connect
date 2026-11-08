@@ -55,6 +55,7 @@ type SongDetail = {
   slug: string | null;
   title: string;
   display_artist: string | null;
+  byline: string | null;
   first_line: string | null;
   hook: string | null;
   notes: string | null;
@@ -255,7 +256,7 @@ export default function SongDetailScreen() {
       supabase
         .from('songs')
         .select(`
-          id, slug, title, display_artist, first_line, hook, notes,
+          id, slug, title, display_artist, byline, first_line, hook, notes,
           genius_url, chord_chart_url, chord_chart_pending, youtube_url,
           year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_alternate_titles(title),
@@ -303,6 +304,7 @@ export default function SongDetailScreen() {
       slug: s.slug ?? null,
       title: s.title ?? '',
       display_artist: s.display_artist ?? null,
+      byline: s.byline ?? s.display_artist ?? null,
       first_line: s.first_line ?? null,
       hook: s.hook ?? null,
       notes: s.notes ?? null,
@@ -637,8 +639,8 @@ export default function SongDetailScreen() {
                 </Text>
               ))}
             </Text>
-          ) : song.display_artist ? (
-            <Text className="text-base text-slate-500 mt-0.5">{song.display_artist}</Text>
+          ) : song.byline ? (
+            <Text className="text-base text-slate-500 mt-0.5">{song.byline}</Text>
           ) : null}
 
           {song.altTitles.length > 0 ? (

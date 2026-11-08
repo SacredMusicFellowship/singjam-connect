@@ -1,6 +1,6 @@
 "use client";
 
-import { formatJammers, formatRecordingArtists, hasLeadVoice, productionCredits, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { formatJammers, formatRecordingArtists, songCardSecondLine, hasLeadVoice, productionCredits, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import { Fragment, useState } from "react";
 import Link from "next/link";
 import { formatComposers } from "@/lib/formatComposers";
@@ -34,6 +34,7 @@ export default function SongCard({
   title,
   slug,
   displayArtist,
+  byline,
   composers,
   cultures,
   productions,
@@ -57,6 +58,7 @@ export default function SongCard({
   title: string;
   slug: string | null;
   displayArtist: string | null;
+  byline?: string | null;
   composers: string[];
   cultures: string[];
   productions: string[];
@@ -84,7 +86,12 @@ export default function SongCard({
   const confidenceLabel = LEVELS.find((l) => l.key === confidence)?.label ?? confidence;
   const picking = pendingAddId === songId;
   const href = `/songs/${slug ?? songId}`;
-  const artistsLine = formatRecordingArtists(recordingArtists, displayArtist);
+  const artistsLine = songCardSecondLine({
+    byline,
+    displayArtist,
+    hasWriters: composers.length > 0,
+    recordingsLine: formatRecordingArtists(recordingArtists, displayArtist),
+  });
   const shows = productionCredits(productionCreditsProp, productions);
 
   return (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { songSubtitle, songSubtitleText } from "./songSubtitle";
+import { songCardSecondLine, songSubtitle, songSubtitleText } from "./songSubtitle";
 
 describe("songSubtitle", () => {
   it("names the show when the song is from one", () => {
@@ -18,5 +18,19 @@ describe("songSubtitle", () => {
     expect(songSubtitleText(["Hamilton"], "Lin-Manuel Miranda")).toBe("from Hamilton");
     expect(songSubtitleText([], "Dolly Parton")).toBe("Dolly Parton");
     expect(songSubtitleText(null, null)).toBeNull();
+  });
+});
+
+describe("songCardSecondLine", () => {
+  const recordingsLine = "Isaac Zones (rec. 2015)";
+  it("lists recordings for a song known by its recording, or a row from before byline existed", () => {
+    expect(songCardSecondLine({ byline: "Van Morrison", displayArtist: "Van Morrison", hasWriters: true, recordingsLine })).toBe(recordingsLine);
+    expect(songCardSecondLine({ displayArtist: "Van Morrison", hasWriters: true, recordingsLine })).toBe(recordingsLine);
+  });
+  it("shows how a traditional song is known instead of its recordings", () => {
+    expect(songCardSecondLine({ byline: "Traditional · Jewish", displayArtist: "Isaac Zones", hasWriters: false, recordingsLine })).toBe("Traditional · Jewish");
+  });
+  it("shows nothing extra when the writers are already in the title line", () => {
+    expect(songCardSecondLine({ byline: "John Newton", displayArtist: "Aretha Franklin, Elvis Presley", hasWriters: true, recordingsLine })).toBeNull();
   });
 });

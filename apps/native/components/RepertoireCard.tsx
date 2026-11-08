@@ -14,6 +14,7 @@ export type RepertoireCardSong = {
   confidence: string;
   key_note: string | null;
   display_artist: string | null;
+  byline?: string | null;
   composers: string[];
   cultures: string[];
   communities?: string[];
@@ -87,7 +88,7 @@ function RepertoireCard({
             </Text>
           </TouchableOpacity>
           <Text className="text-sm text-zinc-500 mt-0.5" numberOfLines={1}>
-            <SubtitleText productions={song.productions} artist={song.display_artist} fallback="—" />
+            <SubtitleText productions={song.productions} artist={song.byline ?? song.display_artist} fallback="—" />
           </Text>
           {song.popularity > 0 && (
             <Text className="text-xs text-zinc-400 mt-0.5">

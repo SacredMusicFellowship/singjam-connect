@@ -163,8 +163,8 @@ export default function ProfileDisplay({
               {sharedSongs.map((s) => (
                 <li key={s.song_id} className={`text-sm ${s.confidence === "lead" ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
                   <a href={`/songs/${s.slug ?? s.song_id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                    {titleCounts[s.title] > 1 && s.display_artist
-                      ? `${s.title} (${s.display_artist})`
+                    {titleCounts[s.title] > 1 && (s.byline ?? s.display_artist)
+                      ? `${s.title} (${s.byline ?? s.display_artist})`
                       : s.title}
                   </a>
                 </li>
@@ -185,7 +185,7 @@ export default function ProfileDisplay({
             {additionalSongs.map((s) => (
               <li key={s.song_id} className={`text-sm ${s.confidence === "lead" ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
                 <a href={`/songs/${s.slug ?? s.song_id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                  {s.title}{s.display_artist ? ` · ${s.display_artist}` : ""}
+                  {s.title}{(s.byline ?? s.display_artist) ? ` · ${s.byline ?? s.display_artist}` : ""}
                 </a>
               </li>
             ))}
@@ -203,7 +203,7 @@ export default function ProfileDisplay({
             {wantsToLearnSongs.map((s) => (
               <li key={s.song_id} className="text-sm text-zinc-700">
                 <a href={`/songs/${s.slug ?? s.song_id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                  {s.title}{s.display_artist ? ` · ${s.display_artist}` : ""}
+                  {s.title}{(s.byline ?? s.display_artist) ? ` · ${s.byline ?? s.display_artist}` : ""}
                 </a>
               </li>
             ))}

@@ -10,6 +10,7 @@ export type BrowseSong = {
   title: string;
   slug: string | null;
   display_artist: string | null;
+  byline?: string | null;
   composers: string[];
   cultures: string[];
   productions: string[];

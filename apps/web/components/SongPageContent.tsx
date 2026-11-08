@@ -105,7 +105,7 @@ function usePinToTopOnLoad(loaded: boolean) {
 }
 
 const SONG_SELECT = `
-          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          id, title, slug, display_artist, byline, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_composers(people(name)),
           song_lyricists(people(name)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
@@ -369,8 +369,8 @@ export default function SongPageContent() {
                 </Fragment>
               ))}
             </p>
-          ) : song.display_artist ? (
-            <p className="mt-0.5 text-base text-slate-500">{song.display_artist}</p>
+          ) : (song.byline ?? song.display_artist) ? (
+            <p className="mt-0.5 text-base text-slate-500">{song.byline ?? song.display_artist}</p>
           ) : null}
           {altTitles.length > 0 && (
             <p className="mt-1 text-sm text-slate-400">aka: {altTitles.join(" · ")}</p>

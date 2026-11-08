@@ -6,6 +6,7 @@ export type SongSearchResult = {
   song_id: string;
   title: string;
   display_artist: string | null;
+  byline?: string | null;
   first_line: string | null;
   aka: string[] | null;
   score: number;

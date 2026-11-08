@@ -21,6 +21,7 @@ type SongMeta = {
   song_id: string;
   title: string;
   display_artist: string | null;
+  byline: string | null;
   first_line: string | null;
   slug: string | null;
   composers: string[];
@@ -89,6 +90,7 @@ function toSongMeta(r: any): SongMeta {
     song_id: r.song_id,
     title: r.title ?? '',
     display_artist: r.display_artist ?? null,
+    byline: r.byline ?? null,
     first_line: r.first_line ?? null,
     slug: r.slug ?? null,
     youtube_id: r.youtube_id ?? null,

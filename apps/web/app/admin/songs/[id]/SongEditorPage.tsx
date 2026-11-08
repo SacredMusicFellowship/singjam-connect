@@ -13,6 +13,7 @@ export const getSong = cache(async (id: string) => {
     .from("songs")
     .select(`
       *,
+      byline,
       song_tags(context, tags(id, name, type)),
       song_composers(person_id),
       song_lyricists(person_id),

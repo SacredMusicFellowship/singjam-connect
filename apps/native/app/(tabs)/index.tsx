@@ -93,6 +93,7 @@ async function fetchRichUserSongs(): Promise<RichUserSong[]> {
     updated_at: row.updated_at,
     title: row.title ?? '',
     display_artist: row.display_artist ?? null,
+    byline: row.byline ?? null,
     composers: row.composers ?? [],
     cultures: row.cultures ?? [],
     genres: row.genres ?? [],

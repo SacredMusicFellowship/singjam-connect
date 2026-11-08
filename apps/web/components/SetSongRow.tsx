@@ -283,7 +283,7 @@ export default function SetSongRow({
             )}
           </div>
           <div className="flex items-center gap-3 min-w-0 mt-0.5">
-            <SongSubtitle productions={productions} artist={song.songs.display_artist} className="block min-w-0 truncate text-xs text-zinc-500" />
+            <SongSubtitle productions={productions} artist={song.songs.byline ?? song.songs.display_artist} className="block min-w-0 truncate text-xs text-zinc-500" />
             {showKeyLine && (
             <span className="flex shrink-0 items-center gap-1">
             {canManage ? (

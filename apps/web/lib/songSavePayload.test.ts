@@ -6,7 +6,7 @@ const artists = [{ id: "a1", name: "The Beatles" }];
 const form = (over: Partial<SongForm> = {}): SongForm => ({
   title: "  Twist and Shout ", displayArtist: "", firstLine: "", hook: "", notes: "", geniusUrl: "", chordChartUrl: "",
   year: "", yearWritten: "1961", tonalities: ["Major"], meters: [], vibe: null,
-  genres: [], themes: [], languages: [], cultures: [], forms: [], occasions: [], communities: [], composers: [], lyricists: [],
+  knownByRecording: null, genres: [], themes: [], languages: [], cultures: [], forms: [], occasions: [], communities: [], composers: [], lyricists: [],
   pendingComposerNames: [], pendingLyricistNames: [], composerTraditionalCulture: "Irish", lyricistTraditionalCulture: "Scottish",
   recordingArtists: [], pendingRecordingArtists: [], productions: [], pendingProductionNames: [], productionYears: {},
   hadRecordingArtists: false, ...over,

@@ -16,6 +16,7 @@ export type Song = {
   songs: {
     title: string;
     display_artist: string | null;
+    byline?: string | null;
     slug: string | null;
     chord_chart_url: string | null;
     chord_chart_pending?: boolean;

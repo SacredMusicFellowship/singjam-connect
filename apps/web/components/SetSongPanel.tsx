@@ -348,7 +348,7 @@ export default function SetSongPanel({
                     <div className={`min-w-0 flex-1 ${inSet ? "opacity-40" : ""}`}>
                       <div className="flex items-baseline gap-1.5 flex-wrap">
                         <span className="text-sm font-medium text-zinc-900">{song.title}</span>
-                        <SongSubtitle productions={song.productions} artist={song.display_artist} className="text-xs text-zinc-400" />
+                        <SongSubtitle productions={song.productions} artist={song.byline ?? song.display_artist} className="text-xs text-zinc-400" />
                       </div>
                       {shared && <WhoKnows s={shared} />}
                       {inSet && <p className="text-xs text-zinc-400">Already in set</p>}

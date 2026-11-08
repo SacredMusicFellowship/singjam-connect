@@ -42,6 +42,7 @@ const SORT_OPTIONS = [
 
 type Item = {
   song_id: string;
+  byline?: string | null;
   slug: string | null;
   confidence: string | null;
   key_note: string | null;
@@ -82,6 +83,7 @@ type RepertoireCache = {
 
 type SuggestionResult = {
   song_id: string;
+  byline?: string | null;
   title: string;
   display_artist: string | null;
   first_line: string | null;
@@ -158,6 +160,7 @@ function SuggestionsPanel({
             slug={s.slug}
             title={s.title}
             displayArtist={s.display_artist}
+            byline={s.byline}
             composers={s.composers}
             cultures={[...s.cultures, ...(s.communities ?? [])]}
             productions={s.productions}
@@ -241,7 +244,7 @@ const RepertoireRow = memo(function RepertoireRow({
             </span>
           )}
         </div>
-        <SongSubtitle productions={it.productions} artist={it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
+        <SongSubtitle productions={it.productions} artist={it.byline ?? it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
         {(it.popularity ?? 0) > 0 && (
           <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
         )}
@@ -419,6 +422,7 @@ export default function RepertoirePage() {
           updated_at: r.updated_at,
           title: r.title,
           display_artist: r.display_artist,
+          byline: r.byline ?? null,
           first_line: r.first_line ?? null,
           hook: r.hook ?? null,
           notes: r.notes ?? null,
@@ -904,6 +908,7 @@ export default function RepertoirePage() {
                       slug={result.slug}
                       title={result.title}
                       displayArtist={result.display_artist}
+                      byline={result.byline}
                       composers={result.composers}
                       cultures={[...(result.cultures ?? []), ...(result.communities ?? [])]}
                       productions={result.productions}

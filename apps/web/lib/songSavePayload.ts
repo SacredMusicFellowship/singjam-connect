@@ -15,6 +15,7 @@ export type SongForm = {
   tonalities: string[];
   meters: string[];
   vibe: "Banger" | "Ballad" | null;
+  knownByRecording: boolean | null;
   genres: string[];
   themes: string[];
   languages: string[];
@@ -73,6 +74,7 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       tonality: form.tonalities.join(", "),
       meter: form.meters.join(", "),
       vibe: form.vibe,
+      known_by_recording: form.knownByRecording,
     },
     tags: {
       genre: form.genres,

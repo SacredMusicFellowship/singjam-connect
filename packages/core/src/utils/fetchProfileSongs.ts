@@ -2,6 +2,8 @@ export type ProfileSong = {
   song_id: string;
   title: string;
   display_artist: string | null;
+  // How the song is known (byline, migration 204): show this, not display_artist.
+  byline: string | null;
   confidence: string | null;
   slug: string | null;
 };
@@ -23,10 +25,17 @@ export async function fetchProfileSongs(
     (theirSongs ?? []).map((r: any) => [r.song_id, r.confidence])
   );
 
+  const sharedIdList = (shared ?? []).map((s: any) => s.song_id as string);
+  const { data: sharedBylines } = sharedIdList.length
+    ? await supabase.from("songs").select("id, byline").in("id", sharedIdList)
+    : { data: [] };
+  const bylineById = new Map<string, string | null>((sharedBylines ?? []).map((s: any) => [s.id, s.byline ?? null]));
+
   const sharedSongs: ProfileSong[] = (shared ?? []).map((s: any) => ({
     song_id: s.song_id as string,
     title: s.title as string,
     display_artist: (s.display_artist ?? null) as string | null,
+    byline: bylineById.has(s.song_id) ? bylineById.get(s.song_id)! : ((s.display_artist ?? null) as string | null),
     confidence: (confidenceMap.get(s.song_id) ?? null) as string | null,
     slug: (s.slug ?? null) as string | null,
   }));
@@ -45,7 +54,7 @@ export async function fetchProfileSongs(
   if (otherIds.length > 0) {
     const { data: songDetails } = await supabase
       .from("songs")
-      .select("id, title, display_artist, slug")
+      .select("id, title, display_artist, byline, slug")
       .in("id", otherIds);
     const detailsMap = new Map<string, any>(
       (songDetails ?? []).map((s: any) => [s.id, s])
@@ -58,6 +67,7 @@ export async function fetchProfileSongs(
         song_id: s.id as string,
         title: s.title as string,
         display_artist: (s.display_artist ?? null) as string | null,
+        byline: (s.byline ?? null) as string | null,
         confidence: (confidenceMap.get(s.id) ?? null) as string | null,
         slug: (s.slug ?? null) as string | null,
       };
