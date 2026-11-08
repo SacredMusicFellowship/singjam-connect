@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { browsePath, BROWSE_LIMIT, loadBrowseEntity, loadBrowseSongs, type BrowseEntity, type BrowseKind, type BrowseSongRow, type LinkedTag } from '@singjam/core';
+import {
+  browsePath, countActiveFilters, deriveFilterFacets, deriveFilterOptions, expandFilterState, loadBrowseEntity, loadBrowseRelated, loadBrowseSongs,
+  songMatchesFilters, type BrowseEntity, type BrowseKind, type BrowseRelatedGroup, type BrowseSongRow, type FilterableSong, type LinkedTag, type SongFilterState,
+} from '@singjam/core';
+import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
+import { useTagHierarchy } from '@/lib/useTagHierarchy';
 import { supabase } from '@/lib/supabase';
 import ContentContainer from '@/components/ContentContainer';
 import { browseKindFromSegment, nativeBrowseHref } from '@/lib/browseLinks';
@@ -33,6 +38,11 @@ export default function BrowseScreen() {
   const [entity, setEntity] = useState<BrowseEntity | null | undefined>(undefined);
   const [songs, setSongs] = useState<BrowseSongRow[]>([]);
   const [members, setMembers] = useState(0);
+  const [meta, setMeta] = useState<(FilterableSong & { song_id: string })[]>([]);
+  const [related, setRelated] = useState<BrowseRelatedGroup[]>([]);
+  const [filters, setFilters] = useState<SongFilterState>(emptyFilterDimensions());
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const hierarchy = useTagHierarchy();
 
   useEffect(() => {
     if (!kind || !slug) { setEntity(null); return; }
@@ -42,14 +52,33 @@ export default function BrowseScreen() {
       if (!live) return;
       setEntity(e);
       if (e) {
-        const r = await loadBrowseSongs(supabase, e.songIds).catch(() => ({ songs: [], members: 0 }));
-        if (live) { setSongs(r.songs); setMembers(r.members); }
+        const ids = new Set(e.songIds);
+        const [r, m, rel] = await Promise.all([
+          loadBrowseSongs(supabase, e.songIds).catch(() => ({ songs: [] as BrowseSongRow[], members: 0 })),
+          supabase.rpc('song_filter_meta').then(({ data }) => ((data ?? []) as (FilterableSong & { song_id: string })[]).filter(x => ids.has(x.song_id))),
+          loadBrowseRelated(supabase, e.songIds, { kind: kind!, slug: slug! }).catch(() => [] as BrowseRelatedGroup[]),
+        ]);
+        if (live) { setSongs(r.songs); setMembers(r.members); setMeta(m); setRelated(rel); }
       }
     })();
     return () => { live = false; };
   }, [kind, slug]);
 
   const openTag = (t: LinkedTag) => router.push(nativeBrowseHref(browsePath(t.type, t.slug)) as any);
+  // The Song Library's filters, scoped to this page's songs.
+  const expanded = useMemo(() => expandFilterState(filters, hierarchy), [filters, hierarchy]);
+  const facets = useMemo(() => deriveFilterFacets(meta, filters, hierarchy), [meta, filters, hierarchy]);
+  const options = useMemo(() => deriveFilterOptions(meta, expanded), [meta, expanded]);
+  const yearBounds = useMemo(() => {
+    const years = meta.map(m => m.year).filter((y): y is number => y != null);
+    return years.length ? { min: Math.min(...years), max: Math.max(...years) } : { min: null, max: null };
+  }, [meta]);
+  const activeCount = countActiveFilters(filters);
+  const metaById = useMemo(() => new Map(meta.map(m => [m.song_id, m])), [meta]);
+  const shownSongs = useMemo(
+    () => (activeCount === 0 ? songs : songs.filter(s => { const m = metaById.get(s.song_id); return m ? songMatchesFilters(m, expanded) : false; })),
+    [songs, activeCount, metaById, expanded]
+  );
 
   if (entity === undefined) {
     return (<><Stack.Screen options={{ title: '', headerTintColor: '#d97706' }} /><ActivityIndicator className="mt-16" color="#d97706" /></>);
@@ -89,10 +118,21 @@ export default function BrowseScreen() {
               </View>
             )}
 
-            <View className="mt-4 rounded-2xl border border-zinc-200 bg-white overflow-hidden">
-              {songs.length === 0 ? (
-                <Text className="text-sm text-zinc-500 text-center py-8">No songs here yet.</Text>
-              ) : songs.map((s, i) => {
+            {songs.length > 1 && (
+              <View className="flex-row items-center mt-4">
+                <TouchableOpacity
+                  onPress={() => setSheetOpen(true)}
+                  className={`px-3 py-1.5 rounded-full border ${activeCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200 bg-white'}`}
+                >
+                  <Text className={`text-xs font-medium ${activeCount > 0 ? 'text-amber-700' : 'text-zinc-500'}`}>Filters{activeCount > 0 ? ` · ${activeCount}` : ''}</Text>
+                </TouchableOpacity>
+                {activeCount > 0 ? <Text className="text-xs text-zinc-500 ml-2">{shownSongs.length} of {songs.length}</Text> : null}
+              </View>
+            )}
+            <View className="mt-2 rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+              {shownSongs.length === 0 ? (
+                <Text className="text-sm text-zinc-500 text-center py-8">{songs.length === 0 ? 'No songs here yet.' : 'No songs here match these filters.'}</Text>
+              ) : shownSongs.map((s, i) => {
                 const show = s.production_credits?.[0];
                 const line = [entity.roles.get(s.song_id), s.byline ?? s.display_artist].filter(Boolean).join(' · ');
                 return (
@@ -108,12 +148,36 @@ export default function BrowseScreen() {
                 );
               })}
             </View>
-            {total > BROWSE_LIMIT && (
-              <Text className="text-sm text-zinc-500 mt-2">Showing the {BROWSE_LIMIT} best-known.</Text>
+            {related.length > 0 && (
+              <View className="mt-6">
+                <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Explore from here</Text>
+                {related.map(g => (
+                  <View key={g.key} className="mb-2">
+                    <Text className="text-xs text-slate-500 mb-1">{g.title}</Text>
+                    <View className="flex-row flex-wrap">
+                      {g.chips.map(c => (
+                        <TouchableOpacity key={c.href} onPress={() => router.push(nativeBrowseHref(c.href) as any)} className="px-2.5 py-1 rounded-full border border-slate-200 bg-white mr-1.5 mb-1.5">
+                          <Text className="text-xs text-slate-700">{c.label}<Text className="text-slate-400">{`  ${c.count}`}</Text></Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </View>
             )}
           </View>
         </ContentContainer>
       </ScrollView>
+      <SongFilterSheet
+        visible={sheetOpen}
+        filters={filters}
+        options={options}
+        facets={facets}
+        hierarchy={hierarchy}
+        yearBounds={yearBounds}
+        onChange={setFilters}
+        onClose={() => setSheetOpen(false)}
+      />
     </>
   );
 }

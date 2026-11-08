@@ -1,5 +1,5 @@
 import { fetchAllRows } from "./fetchAllRows";
-import { SHOW_MEDIUM_LABEL, type BrowseKind } from "./browsePaths";
+import { browsePath, SHOW_MEDIUM_LABEL, type BrowseKind } from "./browsePaths";
 import type { TagType } from "./songTags";
 
 export const BROWSE_LIMIT = 200;
@@ -92,12 +92,54 @@ export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string):
   };
 }
 
-// The page's songs, most-known first, as the Song Library orders them.
+// All of the page's songs, most-known first, as the Song Library orders them
+// (browse_songs returns at most 200 rows a call, so this pages through).
 export async function loadBrowseSongs(db: any, songIds: string[]): Promise<{ songs: BrowseSongRow[]; members: number }> {
   if (songIds.length === 0) return { songs: [], members: 0 };
-  const [{ data: songs }, { data: members }] = await Promise.all([
-    db.rpc("browse_songs", { p_song_ids: songIds, p_limit: BROWSE_LIMIT, p_sort: "popularity" }),
-    db.rpc("members_knowing", { p_song_ids: songIds }),
-  ]);
-  return { songs: (songs ?? []) as BrowseSongRow[], members: (members as number | null) ?? 0 };
+  const songs: BrowseSongRow[] = [];
+  const membersCall = db.rpc("members_knowing", { p_song_ids: songIds });
+  for (let offset = 0; offset < songIds.length; offset += BROWSE_LIMIT) {
+    const { data, error } = await db.rpc("browse_songs", { p_song_ids: songIds, p_limit: BROWSE_LIMIT, p_offset: offset, p_sort: "popularity" });
+    if (error) throw error;
+    songs.push(...((data ?? []) as BrowseSongRow[]));
+    if ((data ?? []).length < BROWSE_LIMIT) break;
+  }
+  const { data: members } = await membersCall;
+  return { songs, members: (members as number | null) ?? 0 };
+}
+
+export type BrowseRelatedChip = { href: string; label: string; count: number };
+export type BrowseRelatedGroup = { key: string; title: string; chips: BrowseRelatedChip[] };
+
+const RELATED_GROUPS: { key: string; kind: string; type: string | null; title: string }[] = [
+  { key: "genre", kind: "tag", type: "genre", title: "Genres" },
+  { key: "form", kind: "tag", type: "form", title: "Forms" },
+  { key: "occasion", kind: "tag", type: "occasion", title: "Occasions" },
+  { key: "community", kind: "tag", type: "community", title: "Communities" },
+  { key: "person", kind: "person", type: null, title: "Songwriters" },
+  { key: "artist", kind: "artist", type: null, title: "Recording artists" },
+  { key: "show", kind: "show", type: null, title: "Shows" },
+  { key: "culture", kind: "tag", type: "culture", title: "Cultures" },
+  { key: "theme", kind: "tag", type: "theme", title: "Themes" },
+];
+
+// What's most common among a page's songs (browse_related, migration 207), as
+// links onward: a songwriter's genres and co-writers, a genre's songwriters…
+// The page's own entry is left out.
+export async function loadBrowseRelated(db: any, songIds: string[], self: { kind: BrowseKind; slug: string }): Promise<BrowseRelatedGroup[]> {
+  if (songIds.length === 0) return [];
+  const { data } = await db.rpc("browse_related", { p_song_ids: songIds, p_limit: 8 });
+  const rows = (data ?? []) as { kind: string; type: string | null; name: string; slug: string; songs: number }[];
+  return RELATED_GROUPS.map((g) => ({
+    key: g.key,
+    title: g.title,
+    chips: rows
+      .filter((r) => r.kind === g.kind && r.type === g.type)
+      .map((r) => {
+        const kind = (r.kind === "tag" ? r.type : r.kind) as BrowseKind;
+        return { kind, href: browsePath(kind, r.slug), label: r.name, count: r.songs, slug: r.slug };
+      })
+      .filter((c) => !(c.kind === self.kind && c.slug === self.slug))
+      .map(({ href, label, count }) => ({ href, label, count })),
+  })).filter((g) => g.chips.length > 0);
 }
