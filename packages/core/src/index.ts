@@ -9,6 +9,7 @@ export * from './utils/productionCredits';
 export * from './utils/songVocabulary';
 export * from './utils/songTags';
 export * from './utils/songCard';
+export * from './utils/scripture';
 export * from './utils/browsePaths';
 export * from './utils/browseEntity';
 export * from './utils/browseHub';

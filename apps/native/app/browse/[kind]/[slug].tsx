@@ -15,7 +15,7 @@ import { browseKindFromSegment, nativeBrowseHref } from '@/lib/browseLinks';
 
 const KIND_LABEL: Record<BrowseKind, string> = {
   genre: 'Genre', form: 'Form', occasion: 'Occasion', community: 'Community', culture: 'Culture',
-  language: 'Language', theme: 'Theme', person: 'Songwriter', artist: 'Recording artist', show: 'Show',
+  language: 'Language', theme: 'Theme', mode: 'Mode', rhythm: 'Rhythm', person: 'Songwriter', artist: 'Recording artist', show: 'Show',
 };
 
 function TagLinks({ label, tags, onPress }: { label: string; tags: LinkedTag[]; onPress: (t: LinkedTag) => void }) {

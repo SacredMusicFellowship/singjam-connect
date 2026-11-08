@@ -3,7 +3,7 @@
 // the rows Supabase returns for SONG_TAGS_SELECT / JAM_TAGS_SELECT into the
 // per-type name lists the apps display, so web and native read tags the same way.
 
-export const TAG_TYPES = ["genre", "theme", "culture", "language", "form", "occasion", "community"] as const;
+export const TAG_TYPES = ["genre", "theme", "culture", "language", "form", "occasion", "community", "mode", "rhythm"] as const;
 export type TagType = (typeof TAG_TYPES)[number];
 export type TagContext = "general" | "music" | "lyrics";
 
@@ -15,6 +15,8 @@ export const TAG_TYPE_LABELS: Record<TagType, string> = {
   form: "Forms",
   occasion: "Occasions",
   community: "Communities",
+  mode: "Modes",
+  rhythm: "Rhythms",
 };
 
 export type TagRef = { id?: string; name: string; type: string; slug?: string };

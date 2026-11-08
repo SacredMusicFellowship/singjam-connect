@@ -33,7 +33,7 @@ export default async function SongEditorPage({ id, basePath, isAdmin }: { id: st
   if (id === "new") redirect(basePath);
   const supabase = await getServerSupabase();
 
-  const [song, tags, peopleRes, artistsRes, productionsRes] =
+  const [song, tags, peopleRes, artistsRes, productionsRes, texts, tunes] =
     await Promise.all([
       getSong(id),
       fetchAllRows<{ id: string; name: string; type: string }>((from, to) =>
@@ -42,6 +42,8 @@ export default async function SongEditorPage({ id, basePath, isAdmin }: { id: st
       supabase.from("people").select("id, name").order("name").limit(10000),
       supabase.from("artists").select("id, name").order("name").limit(10000),
       supabase.from("productions").select("id, name, year").order("name").order("year"),
+      fetchAllRows<{ id: string; title: string; slug: string }>((from, to) => supabase.from("texts").select("id, title, slug").order("title").order("id").range(from, to)),
+      fetchAllRows<{ id: string; slug: string; tune_label: string }>((from, to) => supabase.from("tunes").select("id, slug, tune_label").order("id").range(from, to)),
     ]);
 
   if (!song) notFound();
@@ -58,6 +60,8 @@ export default async function SongEditorPage({ id, basePath, isAdmin }: { id: st
       allForms={ofType("form")}
       allOccasions={ofType("occasion")}
       allCommunities={ofType("community")}
+      allTexts={texts}
+      allTunes={tunes.sort((a, b) => a.tune_label.localeCompare(b.tune_label))}
       allPeople={peopleRes.data ?? []}
       allArtists={artistsRes.data ?? []}
       allProductions={productionsRes.data ?? []}

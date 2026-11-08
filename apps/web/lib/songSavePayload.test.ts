@@ -21,6 +21,11 @@ describe("songSavePayload", () => {
     expect(p.fields.year).toBeNull();
   });
 
+  it("sends the linked text and tune, clearing them with null and leaving them alone when absent", () => {
+    expect(build({ textId: "t1", tuneId: "" }).fields).toMatchObject({ text_id: "t1", tune_id: null });
+    expect(build({}).fields).not.toHaveProperty("text_id");
+  });
+
   it("sends every tag type as one tags object", () => {
     expect(build({ genres: ["Folk"], forms: ["Hymn"], communities: ["Jewish"] }).tags).toEqual({
       genre: ["Folk"], theme: [], language: [], culture: [], form: ["Hymn"], occasion: [], community: ["Jewish"],

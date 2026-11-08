@@ -12,6 +12,8 @@ export const KIND_LABEL: Record<BrowseKind, string> = {
   culture: "Culture",
   language: "Language",
   theme: "Theme",
+  mode: "Mode",
+  rhythm: "Rhythm",
   person: "Songwriter",
   artist: "Recording artist",
   show: "Show",

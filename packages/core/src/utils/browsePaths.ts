@@ -10,6 +10,8 @@ export const TAG_TYPE_PATH: Record<TagType, string> = {
   culture: "cultures",
   language: "languages",
   theme: "themes",
+  mode: "modes",
+  rhythm: "rhythms",
 };
 
 export const TAG_PATH_TYPE: Record<string, TagType> = Object.fromEntries(

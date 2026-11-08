@@ -16,6 +16,8 @@ export type SongForm = {
   meters: string[];
   vibe: "Banger" | "Ballad" | null;
   knownByRecording: boolean | null;
+  textId?: string;
+  tuneId?: string;
   genres: string[];
   themes: string[];
   languages: string[];
@@ -75,6 +77,8 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       meter: form.meters.join(", "),
       vibe: form.vibe,
       known_by_recording: form.knownByRecording,
+      ...(form.textId !== undefined ? { text_id: form.textId || null } : {}),
+      ...(form.tuneId !== undefined ? { tune_id: form.tuneId || null } : {}),
     },
     tags: {
       genre: form.genres,

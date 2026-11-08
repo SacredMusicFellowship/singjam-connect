@@ -63,6 +63,8 @@ type Song = {
   meter: string | null;
   vibe: "Banger" | "Ballad" | null;
   known_by_recording?: boolean | null;
+  text_id?: string | null;
+  tune_id?: string | null;
   byline?: string | null;
   song_tags: SongTagRow[];
   song_composers: { person_id: string }[];
@@ -93,6 +95,8 @@ type Props = {
   allForms: Lookup[];
   allOccasions: Lookup[];
   allCommunities: Lookup[];
+  allTexts: { id: string; title: string; slug: string }[];
+  allTunes: { id: string; slug: string; tune_label: string }[];
   allPeople: Lookup[];
   allArtists: Lookup[];
   allProductions: ProductionLookup[];
@@ -113,6 +117,8 @@ export default function SongEditor({
   allForms,
   allOccasions,
   allCommunities,
+  allTexts: initialTexts,
+  allTunes: initialTunes,
   allPeople,
   allArtists,
   allProductions,
@@ -141,6 +147,11 @@ export default function SongEditor({
   );
   const [vibe, setVibe] = useState<"Banger" | "Ballad" | null>(song?.vibe ?? null);
   const [knownByRecording, setKnownByRecording] = useState<boolean | null>(song?.known_by_recording ?? null);
+  // Which text this song sings, to which tune (migration 208).
+  const [textId, setTextId] = useState<string>(song?.text_id ?? "");
+  const [tuneId, setTuneId] = useState<string>(song?.tune_id ?? "");
+  const [allTexts, setAllTexts] = useState(initialTexts);
+  const [allTunes, setAllTunes] = useState(initialTunes);
 
   const initialComposerIds = song?.song_composers.map((x) => x.person_id) ?? [];
   const initialLyricistIds = song?.song_lyricists.map((x) => x.person_id) ?? [];
@@ -261,7 +272,7 @@ export default function SongEditor({
     title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
     [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
     isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
-    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, knownByRecording,
+    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, knownByRecording, textId, tuneId,
   ]);
   const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
 
@@ -500,7 +511,7 @@ export default function SongEditor({
         p_song_id: song!.id,
         p: songSavePayload(
           {
-            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording,
+            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, textId, tuneId,
             genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
             composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
             productions, pendingProductionNames, productionYears,
@@ -894,6 +905,50 @@ export default function SongEditor({
         <TagPillsField label="Occasions" value={occasions} onChange={setOccasions} suggestions={allOccasions.map((o) => o.name)} allowNew placeholder="Search occasions…" />
         <TagPillsField label="Communities" value={communities} onChange={setCommunities} suggestions={allCommunities.map((c) => c.name)} allowNew placeholder="Search communities…" />
       </section>
+      {/* Text & tune */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Text &amp; tune</h2>
+        <p className="text-xs text-slate-500">For songs whose words are sung to more than one melody (hymns, psalms, liturgy) or a melody that carries several texts. Most songs need neither.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label htmlFor="song-text" className="text-xs font-medium text-slate-600">Text</label>
+            <select id="song-text" value={textId} onChange={(e) => setTextId(e.target.value)} className="input">
+              <option value="">— none —</option>
+              {allTexts.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+            </select>
+            <div className="flex gap-3 text-xs">
+              {textId ? (
+                <Link href={`/song-editor/texts/${allTexts.find((t) => t.id === textId)?.slug ?? ""}`} className="text-teal-700 hover:underline">Edit text</Link>
+              ) : (
+                <button type="button" className="text-teal-700 hover:underline" onClick={async () => {
+                  const { data, error: e } = await supabase.from("texts").insert({ title: title.trim() || "Untitled", slug: "x" }).select("id, title, slug").single();
+                  if (e || !data) { setError(e?.message ?? "Couldn't create the text."); return; }
+                  setAllTexts((prev) => [...prev, data]); setTextId(data.id);
+                }}>New text from this title</button>
+              )}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="song-tune" className="text-xs font-medium text-slate-600">Tune</label>
+            <select id="song-tune" value={tuneId} onChange={(e) => setTuneId(e.target.value)} className="input">
+              <option value="">— none —</option>
+              {allTunes.map((t) => <option key={t.id} value={t.id}>{t.tune_label}</option>)}
+            </select>
+            <div className="flex gap-3 text-xs">
+              {tuneId ? (
+                <Link href={`/song-editor/tunes/${allTunes.find((t) => t.id === tuneId)?.slug ?? ""}`} className="text-teal-700 hover:underline">Edit tune</Link>
+              ) : (
+                <button type="button" className="text-teal-700 hover:underline" onClick={async () => {
+                  const { data, error: e } = await supabase.from("tunes").insert({ name: null, slug: "x" }).select("id, slug, tune_label").single();
+                  if (e || !data) { setError(e?.message ?? "Couldn't create the tune."); return; }
+                  setAllTunes((prev) => [...prev, data as any]); setTuneId(data.id);
+                }}>New tune</button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Alternate titles */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
         <h2 className="text-sm font-semibold text-slate-700">Alternate titles (AKA)</h2>

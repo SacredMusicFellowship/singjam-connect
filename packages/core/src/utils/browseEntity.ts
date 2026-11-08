@@ -93,13 +93,30 @@ export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string):
   }
   const byName = (a: LinkedTag, b: LinkedTag) => (a.name < b.name ? -1 : 1);
   const tagIds = ((descendants ?? []) as { tag_id: string }[]).map((d) => d.tag_id);
-  const rows = await fetchAllRows<{ song_id: string }>((f: number, t: number) =>
-    db.from("song_tags").select("song_id").in("tag_id", tagIds.length ? tagIds : [tag.id]).order("song_id").order("tag_id").range(f, t)
-  );
+  const ids = tagIds.length ? tagIds : [tag.id];
+  // Songs tagged directly, and songs whose tune or text carries the tag (a raga
+  // or maqam usually belongs to the tune; a language or source to the text).
+  const [rows, tuneRows, textRows] = await Promise.all([
+    fetchAllRows<{ song_id: string }>((f: number, t: number) =>
+      db.from("song_tags").select("song_id").in("tag_id", ids).order("song_id").order("tag_id").range(f, t)
+    ),
+    fetchAllRows<{ tune_id: string }>((f: number, t: number) =>
+      db.from("tune_tags").select("tune_id").in("tag_id", ids).order("tune_id").order("tag_id").range(f, t)
+    ),
+    fetchAllRows<{ text_id: string }>((f: number, t: number) =>
+      db.from("text_tags").select("text_id").in("tag_id", ids).order("text_id").order("tag_id").range(f, t)
+    ),
+  ]);
+  const viaTunes = tuneRows.length
+    ? await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").in("tune_id", [...new Set(tuneRows.map((r) => r.tune_id))]).order("id").range(f, t))
+    : [];
+  const viaTexts = textRows.length
+    ? await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").in("text_id", [...new Set(textRows.map((r) => r.text_id))]).order("id").range(f, t))
+    : [];
   return {
     kind, name: tag.name, subtitle: null, notes: tag.description ?? null,
     parents: parents.sort(byName), children: children.sort(byName), related: related.sort(byName),
-    songIds: [...new Set(rows.map((r) => r.song_id))], roles: new Map(),
+    songIds: [...new Set([...rows.map((r) => r.song_id), ...viaTunes.map((r) => r.id), ...viaTexts.map((r) => r.id)])], roles: new Map(),
   };
 }
 
