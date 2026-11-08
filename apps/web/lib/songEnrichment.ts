@@ -498,7 +498,7 @@ export async function addLandmarkRecordings(admin: SupabaseClient, songId: strin
   return { added, usage };
 }
 
-async function idsFor(admin: SupabaseClient, table: "people" | "languages" | "artists", names: string[]) {
+export async function idsFor(admin: SupabaseClient, table: "people" | "languages" | "artists", names: string[]) {
   const ids: string[] = [];
   for (const name of names) {
     const { data: found } = await admin.from(table).select("id").ilike("name", name).limit(1).maybeSingle();
@@ -510,7 +510,7 @@ async function idsFor(admin: SupabaseClient, table: "people" | "languages" | "ar
 
 // Tags of one type by exact name. Only languages may be created; every other
 // vocabulary is fixed (the decision already kept to the approved lists).
-async function tagIds(admin: SupabaseClient, type: TagType, names: string[]) {
+export async function tagIds(admin: SupabaseClient, type: TagType, names: string[]) {
   const { data } = await admin.from("tags").select("id, name").eq("type", type).in("name", names);
   const ids = (data ?? []).map((r) => r.id as string);
   if (type === "language") {

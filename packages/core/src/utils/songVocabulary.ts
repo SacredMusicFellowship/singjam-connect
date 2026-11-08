@@ -10,17 +10,17 @@ export const SONG_TONALITIES = [
 export const SONG_METERS = ["4", "3", "5", "7", "9", "11", "Free", "Irregular"];
 
 export const SONG_GENRES = [
-  "Afropop", "Alternative Rock", "Americana", "Bluegrass", "Blues", "Bossa Nova",
+  "Afropop", "Alternative Rock", "Americana", "Barbershop", "Bluegrass", "Blues", "Bossa Nova",
   "Broadway & Musical Theatre", "Cajun", "Calypso", "Cantorial", "Caribbean", "Celtic",
   "Children's Music", "Circle Songs", "Classic Rock", "Contemporary Christian", "Contemporary Gospel", "Contemporary Jewish",
-  "Country", "Disco", "Disney & Animation", "Doo-Wop", "Emo", "Film",
+  "Country", "Country Gospel", "Cowboy & Western", "Disco", "Disney & Animation", "Doo-Wop", "Emo", "Film",
   "Flamenco", "Folk", "Folk Rock", "Funk", "Gospel", "Grunge",
   "Hard Rock", "Heartland Rock", "Hip-Hop & Rap", "Indie Rock", "Israeli Folk", "Jam Band",
   "Jazz", "Jewish Music", "Kirtan", "Klezmer", "Latin", "Metal",
   "Motown", "New Wave", "Opera & Operetta", "Pop", "Progressive Rock", "Psychedelic Rock",
   "Punk", "Qawwali", "R&B", "Reggae", "Rock", "Rockabilly",
   "Roots Rock", "Sacred", "Salsa", "Ska", "Soft Rock", "Soul",
-  "Spiritual", "Stage & Screen", "Traditional Gospel", "TV", "Zydeco",
+  "Southern Gospel", "Spiritual", "Stage & Screen", "Traditional Gospel", "TV", "Zydeco",
 ];
 
 export const SONG_THEMES = [
@@ -44,7 +44,7 @@ export const SONG_CULTURES = [
   "French", "German", "Ghanaian", "Greek", "Haitian", "Hawaiian",
   "Hungarian", "Icelandic", "Indian", "Indonesian", "Irish", "Israeli",
   "Italian", "Jamaican", "Japanese", "Kenyan", "Korean", "Latin American",
-  "Māori", "Mexican", "Nepali", "Nigerian", "Norwegian", "Pakistani",
+  "Māori", "Mexican", "Nepali", "New Zealand", "Nigerian", "Norwegian", "Pakistani",
   "Peruvian", "Polish", "Portuguese", "Puerto Rican", "Romani", "Romanian",
   "Russian", "Scandinavian", "Scottish", "South African", "Spanish", "Sri Lankan",
   "Swedish", "Swiss", "Tex-Mex", "Thai", "Trinidadian", "Turkish",
@@ -55,15 +55,15 @@ export const SONG_CULTURES = [
 // What kind of piece a song is, separate from its musical style.
 export const SONG_FORMS = [
   "Action song", "Anthem", "Ballad", "Call and response", "Carol", "Chant",
-  "Circle song", "Drinking song", "Freedom song", "Hymn", "Lament", "Lined hymn",
-  "Liturgical setting", "Lullaby", "Mantra", "Nigun", "Piyyut", "Psalm setting",
-  "Round / Canon", "Shanty", "Work song", "Worship song", "Zemer",
+  "Circle song", "Cumulative song", "Drinking song", "Freedom song", "Hymn", "Lament", "Lined hymn",
+  "Liturgical setting", "Lullaby", "Mantra", "Nigun", "Nursery rhyme", "Piyyut", "Psalm setting",
+  "Round / Canon", "Sea song", "Shanty", "Singing game", "Work song", "Worship song", "Zemer",
 ];
 
 // When a song is sung. The group headings (Gatherings, Life events, …) are left out: tag the specific occasion.
 export const SONG_OCCASIONS = [
-  "Advent", "Anniversary", "Baby naming", "Bar/Bat Mitzvah", "Bedside / hospice", "Birthday",
-  "Campfire", "Christmas", "Easter", "Epiphany", "Friday night (Kabbalat Shabbat)", "Funeral and memorial",
+  "Advent", "Anniversary", "Baby naming", "Baptism", "Bar/Bat Mitzvah", "Bedside / hospice", "Birthday",
+  "Campfire", "Christmas", "Communion", "Easter", "Epiphany", "Friday night (Kabbalat Shabbat)", "Funeral and memorial",
   "Graduation", "Halloween", "Hanukkah", "Havdalah", "Holy Week", "Hymn sing",
   "Kumzitz", "Lent", "New Year", "Passover", "Pentecost", "Protest and march",
   "Pub sing", "Purim", "Retreat", "Rosh Hashanah", "Shabbat", "Shabbat table (zemirot)",

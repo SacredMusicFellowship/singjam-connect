@@ -4,6 +4,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { findExistingSong, findOnSpotify } from "@/lib/songLookup";
 import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
+import { idsFor, tagIds } from "@/lib/songEnrichment";
+import { parseTagSpecs, parseWriters } from "@/lib/songAddDetails";
 
 async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): Promise<string | null> {
   const { data: found } = await db.from("artists").select("id").ilike("name", name).limit(1).maybeSingle();
@@ -16,6 +18,9 @@ async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): P
 // from /api/songs/lookup). Everything else — writers, years, key, tags, lyrics —
 // is filled in afterwards by the enrichment job; nobody reviews it by hand.
 // Older clients send only title/artist; those are matched on Spotify here.
+// Admins and song editors (the CSV import) may also send sourced writers and
+// tags, which enrichment then leaves alone, and no_recording for a traditional
+// song that has no recording to match.
 export async function POST(req: Request) {
   const supabase = await supabaseServer();
   let user = (await supabase.auth.getUser()).data.user ?? null;
@@ -29,18 +34,27 @@ export async function POST(req: Request) {
   if (!body.title?.trim()) return NextResponse.json({ error: "Title is required" }, { status: 400 });
 
   let title: string = body.title.trim();
-  let artist: string | null = body.artist?.trim() || null;
+  const noRecording = body.no_recording === true;
+  let artist: string | null = noRecording ? null : body.artist?.trim() || null;
   let spotifyUrl: string | null = body.spotify_url ?? null;
   let releaseYear: number | null = typeof body.release_year === "number" ? body.release_year : null;
   const youtubeUrl: string | null =
     body.youtube_official && /^[A-Za-z0-9_-]{11}$/.test(body.youtube_id ?? "") ? `https://www.youtube.com/watch?v=${body.youtube_id}` : null;
 
-  if (!body.confirmed) {
+  if (!body.confirmed && !noRecording) {
     const match = await findOnSpotify(title, artist ?? "").catch(() => null);
     if (match) ({ title, artist, spotify_url: spotifyUrl, release_year: releaseYear } = match);
   }
 
   const db = admin();
+  const writers = parseWriters(body.writers);
+  const tagSpecs = parseTagSpecs(body.tags);
+  if (writers.length || tagSpecs.length) {
+    const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).single();
+    if (!["admin", "song_editor"].includes(profile?.role)) {
+      return NextResponse.json({ error: "Only song editors can set writers and tags when adding a song" }, { status: 403 });
+    }
+  }
   const existing = await findExistingSong(db, [title, body.title.trim()], artist);
   if (existing && (existing.match === "same" || !body.add_anyway)) {
     return NextResponse.json({ error: "This song is already in our library.", id: existing.id, slug: existing.slug }, { status: 409 });
@@ -67,6 +81,16 @@ export async function POST(req: Request) {
         ...(youtubeUrl ? { youtube_ok: true } : {}),
       });
     }
+  }
+
+  if (writers.length) {
+    const people = (await idsFor(db, "people", writers)).map((person_id) => ({ song_id: song.id, person_id }));
+    await db.from("song_composers").insert(people);
+    await db.from("song_lyricists").insert(people);
+  }
+  for (const type of new Set(tagSpecs.map((t) => t.type))) {
+    const ids = await tagIds(db, type, tagSpecs.filter((t) => t.type === type).map((t) => t.name));
+    if (ids.length) await db.from("song_tags").insert(ids.map((tag_id) => ({ song_id: song.id, tag_id, context: "general" })));
   }
 
   await triggerSongEnrichment(song.id, releaseYear);
