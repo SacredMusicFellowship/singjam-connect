@@ -1,3 +1,4 @@
+import './e2ePolyfills';
 import { setupServer } from 'msw/native';
 import { handlers, onUnhandledRequest } from '@singjam/test-fixtures/msw';
 

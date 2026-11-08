@@ -98,8 +98,9 @@ One-time setup:
    brew install --cask android-commandlinetools
    export JAVA_HOME=/opt/homebrew/opt/openjdk@17 ANDROID_HOME=~/Library/Android/sdk
    yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses
-   sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "emulator" "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis;arm64-v8a"
-   avdmanager create avd -n SingJamE2E -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_7
+   sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "emulator" "cmdline-tools;latest" "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis;arm64-v8a"
+   # The SDK's own avdmanager: Homebrew's looks for system images in its own folder and finds none.
+   $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n SingJamE2E -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_7
    cd apps/native && npx expo run:android
    ```
 

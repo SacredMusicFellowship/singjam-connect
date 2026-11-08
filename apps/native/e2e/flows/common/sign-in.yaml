@@ -4,12 +4,16 @@ appId: org.singjam.app
 - tapOn: "Sign in"
 - tapOn: "you@example.com"
 - inputText: ${EMAIL}
-- tapOn: "••••••••"
+# Return moves focus to the password field.
+- pressKey: Enter
 - inputText: ${PASSWORD}
 - hideKeyboard
-- tapOn:
-    text: "Sign in"
-    index: 1
+- tapOn: "Sign in"
+# iOS offers to save the password, hiding the screen underneath until it's dismissed.
 - extendedWaitUntil:
-    visible: "Jams"
+    visible: "Not Now|My Repertoire"
     timeout: 30000
+- tapOn:
+    text: "Not Now"
+    optional: true
+- assertVisible: "My Repertoire"

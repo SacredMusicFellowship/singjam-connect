@@ -97,7 +97,7 @@ async function androidDevice(): Promise<string> {
       .map((line) => line.split("\t"))
       .find(([serial, state]) => serial.startsWith("emulator-") && state === "device")?.[0];
   if (!running()) {
-    start(path.join(androidHome, "emulator", "emulator"), ["-avd", ANDROID_AVD, "-no-snapshot-save", "-no-audio"], nativeDir, {});
+    start(path.join(androidHome, "emulator", "emulator"), ["-avd", ANDROID_AVD, "-no-snapshot-save", "-no-audio", "-gpu", "host"], nativeDir, {});
   }
   await waitFor(() => Boolean(running()), "The Android emulator");
   const serial = running()!;
@@ -105,8 +105,20 @@ async function androidDevice(): Promise<string> {
     () => execFileSync(adb, ["-s", serial, "shell", "getprop", "sys.boot_completed"], { encoding: "utf8" }).trim() === "1",
     "Android boot",
   );
-  if (!execFileSync(adb, ["-s", serial, "shell", "pm", "list", "packages", APP_ID], { encoding: "utf8" }).includes(APP_ID)) {
-    throw new Error(`SingJam isn't installed on the ${ANDROID_AVD} emulator. From apps/native: npx expo run:android`);
+  // Animations slow the emulator down and make taps land mid-transition.
+  for (const setting of ["window_animation_scale", "transition_animation_scale", "animator_duration_scale"]) {
+    execFileSync(adb, ["-s", serial, "shell", "settings", "put", "global", setting, "0"]);
+  }
+  // The emulator's data partition doesn't survive a cold boot, so reinstall the last dev build.
+  const installed = () =>
+    execFileSync(adb, ["-s", serial, "shell", "pm", "list", "packages", APP_ID], { encoding: "utf8" }).includes(APP_ID);
+  const apk = path.join(nativeDir, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk");
+  if (!installed() && fs.existsSync(apk)) {
+    await waitFor(() => execFileSync(adb, ["-s", serial, "shell", "pm", "path", "android"], { encoding: "utf8" }).includes("package:"), "The package manager");
+    execFileSync(adb, ["-s", serial, "install", "-r", apk], { stdio: "ignore" });
+  }
+  if (!installed()) {
+    throw new Error(`SingJam isn't installed on the ${ANDROID_AVD} emulator. From apps/native: npx expo run:android --no-bundler`);
   }
   return serial;
 }
@@ -152,11 +164,22 @@ function runFlows(platform: Platform, device: string, metroUrl: string, maestroE
     HOST_NAME: `${refs.members.host.profile.display_name} ${refs.members.host.profile.last_name}`,
   };
   console.log(`\nRunning the Maestro flows on ${platform} (${device})`);
+  const debugDir = fs.mkdtempSync(path.join(os.tmpdir(), `maestro-${platform}-`));
   const result = spawnSync(
     "maestro",
-    ["--device", device, "test", path.join(nativeDir, "e2e", "flows"), ...Object.entries(flowEnv).flatMap(([k, v]) => ["-e", `${k}=${v}`])],
+    [
+      "--device", device, "test", `--debug-output=${debugDir}`, path.join(nativeDir, "e2e", "flows"),
+      ...Object.entries(flowEnv).flatMap(([k, v]) => ["-e", `${k}=${v}`]),
+    ],
     { cwd: screenshotDir, stdio: ["ignore", "inherit", "inherit"], env: { ...process.env, ...maestroEnv } },
   );
+  // Maestro writes takeScreenshot images into its debug output, one folder per flow.
+  for (const file of fs.readdirSync(debugDir, { recursive: true }) as string[]) {
+    if (path.basename(path.dirname(file)) === "takeScreenshot" && file.endsWith(".png")) {
+      fs.copyFileSync(path.join(debugDir, file), path.join(screenshotDir, path.basename(file)));
+    }
+  }
+  fs.rmSync(debugDir, { recursive: true, force: true });
   console.log(`Screenshots: ${path.relative(repoRoot, screenshotDir)}`);
   if (result.status !== 0) throw new Error(`Maestro flows failed on ${platform}`);
 }
