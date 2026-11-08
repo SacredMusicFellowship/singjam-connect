@@ -165,7 +165,7 @@ export default async function SetPage({
       if (invite && (!(invite as any).user_id || (invite as any).user_id === user.id)) {
         const { data: claimed } = await admin
           .from("set_collaborators")
-          .update({ user_id: user.id, status: "accepted" })
+          .update({ user_id: user.id, status: "accepted", invitee_email: null })
           .eq("id", (invite as any).id)
           .select("id, user_id, status, role, profiles!user_id(display_name, last_name, username, avatar_url)")
           .single();

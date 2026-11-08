@@ -15,7 +15,10 @@ export async function POST(
   const user = await resolveApiUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { inviteeUserId, inviteeEmail, role } = await req.json();
+  const body = await req.json();
+  const { inviteeUserId, role } = body;
+  // Stored lowercase so sign-in can claim it by the authenticated address.
+  const inviteeEmail = typeof body.inviteeEmail === "string" ? body.inviteeEmail.trim().toLowerCase() : body.inviteeEmail;
   if (!inviteeUserId && !inviteeEmail) {
     return NextResponse.json({ error: "Provide inviteeUserId or inviteeEmail" }, { status: 400 });
   }
@@ -116,7 +119,7 @@ export async function POST(
     // Non-member: generate a link invite and email it
     const { data: inserted } = await admin
       .from("set_collaborators")
-      .insert({ set_id: setId, invited_by: user.id, role: collaboratorRole })
+      .insert({ set_id: setId, invited_by: user.id, role: collaboratorRole, invitee_email: inviteeEmail })
       .select("token")
       .single();
     const token = (inserted as any).token;
