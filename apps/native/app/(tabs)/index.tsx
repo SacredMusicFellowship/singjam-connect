@@ -27,6 +27,9 @@ type RichUserSong = UserSong & {
   genres: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   productions: string[];
   vibe: string | null;
   tonality: string | null;
@@ -95,6 +98,9 @@ async function fetchRichUserSongs(): Promise<RichUserSong[]> {
     genres: row.genres ?? [],
     languages: row.languages ?? [],
     themes: row.themes ?? [],
+    forms: row.forms ?? [],
+    occasions: row.occasions ?? [],
+    communities: row.communities ?? [],
     productions: row.productions ?? [],
     vibe: row.vibe ?? null,
     tonality: row.tonality ?? null,
@@ -300,6 +306,9 @@ export default function RepertoireScreen() {
         genres: s.genres,
         languages: s.languages,
         themes: [],
+        forms: [],
+        occasions: [],
+        communities: s.communities ?? [],
         productions: s.productions,
         vibe: null,
         tonality: null,

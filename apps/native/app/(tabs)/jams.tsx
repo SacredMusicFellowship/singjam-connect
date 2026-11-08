@@ -6,7 +6,7 @@ import {
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { canEditJam, fetchAllRows, OLDER_PAST_JAMS_PAGE, pastJamsOrFilter, pastJamsWindowStart, summarizeTicketTiers, type JamTicketTier } from '@singjam/core';
+import { canEditJam, fetchAllRows, jamTags, OLDER_PAST_JAMS_PAGE, pastJamsOrFilter, pastJamsWindowStart, summarizeTicketTiers, type JamTicketTier } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import { readCache, writeCache } from '@/lib/cache';
@@ -26,8 +26,7 @@ const JAM_LIST_SELECT = `
   id, name, visibility, starts_at, ends_at, timezone,
   neighborhood, notes, image_url, image_list_url, tickets_url, capacity, host_user_id,
   profiles!host_user_id ( display_name, username ),
-  jam_genres ( genres ( name ) ),
-  jam_themes ( themes ( name ) )
+  jam_tags ( tags ( name, type ) )
 `;
 
 function toJamItem(j: any, rsvpMap: Map<string, any>, inviteMap: Map<string, string>): JamItem {
@@ -47,10 +46,7 @@ function toJamItem(j: any, rsvpMap: Map<string, any>, inviteMap: Map<string, str
     host_id: j.host_user_id,
     host_display_name: j.profiles?.display_name ?? null,
     host_username: j.profiles?.username ?? null,
-    tags: [
-      ...(j.jam_genres ?? []).map((jg: any) => jg.genres?.name),
-      ...(j.jam_themes ?? []).map((jt: any) => jt.themes?.name),
-    ].filter(Boolean),
+    tags: [...jamTags(j.jam_tags, 'genre'), ...jamTags(j.jam_tags, 'theme')].map((t) => t.name),
     rsvp_status: rsvpMap.get(j.id)?.status ?? null,
     rsvp_waitlist_position: rsvpMap.get(j.id)?.waitlist_position ?? null,
     invite_status: inviteMap.get(j.id) ?? null,

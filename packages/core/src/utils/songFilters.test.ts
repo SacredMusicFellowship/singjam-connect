@@ -13,6 +13,9 @@ function song(overrides: Partial<FilterableSong> = {}): FilterableSong {
     languages: [],
     themes: [],
     cultures: [],
+    forms: [],
+    occasions: [],
+    communities: [],
     vibe: null,
     tonality: null,
     meter: null,
@@ -27,6 +30,9 @@ function emptyState(overrides: Partial<SongFilterState> = {}): SongFilterState {
     languages: new Set(),
     themes: new Set(),
     cultures: new Set(),
+    forms: new Set(),
+    occasions: new Set(),
+    communities: new Set(),
     vibe: "",
     tonality: "",
     meter: "",
@@ -37,6 +43,13 @@ function emptyState(overrides: Partial<SongFilterState> = {}): SongFilterState {
 }
 
 describe("songMatchesFilters", () => {
+  it("filters on forms, occasions and communities like the other tag dimensions", () => {
+    const hymn = song({ forms: ["Hymn"], communities: ["Christian"], occasions: ["Funeral and memorial"] });
+    expect(songMatchesFilters(hymn, emptyState({ forms: new Set(["Hymn", "Carol"]) }))).toBe(true);
+    expect(songMatchesFilters(hymn, emptyState({ communities: new Set(["Jewish"]) }))).toBe(false);
+    expect(songMatchesFilters(hymn, emptyState({ occasions: new Set(["Funeral and memorial"]), forms: new Set(["Hymn"]) }))).toBe(true);
+  });
+
   it("passes a song when no filters are active", () => {
     expect(songMatchesFilters(song({ genres: ["Rock"] }), emptyState())).toBe(true);
   });

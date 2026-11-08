@@ -168,9 +168,7 @@ export default function SetSongPanel({
         meter: null,
         song_composers: [],
         song_lyricists: [],
-        song_cultures: [],
-        song_genres: [],
-        song_themes: [],
+        song_tags: [],
         song_recording_artists: [],
       },
     };

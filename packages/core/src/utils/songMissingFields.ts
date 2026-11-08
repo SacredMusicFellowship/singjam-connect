@@ -1,3 +1,5 @@
+import type { SongTagRow } from "./songTags";
+
 export type SongCompleteness = {
   display_artist: string | null;
   first_line: string | null;
@@ -11,8 +13,7 @@ export type SongCompleteness = {
   song_composers: unknown[];
   song_lyricists: unknown[];
   song_recording_artists: { youtube_url: string | null }[];
-  song_genres: unknown[];
-  song_languages: unknown[];
+  song_tags: SongTagRow[];
 };
 
 export const SONG_COMPLETENESS_FIELDS = [
@@ -33,8 +34,8 @@ export function songMissingFields(s: SongCompleteness): string[] {
   if (!s.genius_url) missing.push("genius");
   if (!s.tonality) missing.push("tonality");
   if (!s.meter) missing.push("meter");
-  if (!s.song_genres.length) missing.push("genre");
-  if (!s.song_languages.length) missing.push("language");
+  if (!s.song_tags.some((t) => t.tags?.type === "genre")) missing.push("genre");
+  if (!s.song_tags.some((t) => t.tags?.type === "language")) missing.push("language");
   if (!s.vibe) missing.push("vibe");
   if (!s.chord_chart_url) missing.push("chord chart");
   if (!s.youtube_url && !s.song_recording_artists.some((a) => a.youtube_url)) missing.push("video");

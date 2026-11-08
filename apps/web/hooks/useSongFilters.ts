@@ -22,6 +22,9 @@ export function useSongFilters<T extends FilterableSong>(
   const [selectedLanguages, setSelectedLanguages] = useState<Set<string>>(() => new Set(readUrlParams().getAll("lang")));
   const [selectedThemes, setSelectedThemes] = useState<Set<string>>(() => new Set(readUrlParams().getAll("theme")));
   const [selectedCultures, setSelectedCultures] = useState<Set<string>>(() => new Set(readUrlParams().getAll("culture")));
+  const [selectedForms, setSelectedForms] = useState<Set<string>>(() => new Set(readUrlParams().getAll("form")));
+  const [selectedOccasions, setSelectedOccasions] = useState<Set<string>>(() => new Set(readUrlParams().getAll("occasion")));
+  const [selectedCommunities, setSelectedCommunities] = useState<Set<string>>(() => new Set(readUrlParams().getAll("community")));
   const [selectedVibe, setSelectedVibe] = useState(() => readUrlParams().get("vibe") ?? "");
   const [selectedTonality, setSelectedTonality] = useState(() => readUrlParams().get("tonality") ?? "");
   const [selectedMeter, setSelectedMeter] = useState(() => readUrlParams().get("meter") ?? "");
@@ -31,11 +34,14 @@ export function useSongFilters<T extends FilterableSong>(
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    ["genre", "lang", "theme", "culture", "vibe", "tonality", "meter", "sort", "yrMin", "yrMax"].forEach((k) => params.delete(k));
+    ["genre", "lang", "theme", "culture", "form", "occasion", "community", "vibe", "tonality", "meter", "sort", "yrMin", "yrMax"].forEach((k) => params.delete(k));
     selectedGenres.forEach((g) => params.append("genre", g));
     selectedLanguages.forEach((l) => params.append("lang", l));
     selectedThemes.forEach((t) => params.append("theme", t));
     selectedCultures.forEach((c) => params.append("culture", c));
+    selectedForms.forEach((f) => params.append("form", f));
+    selectedOccasions.forEach((o) => params.append("occasion", o));
+    selectedCommunities.forEach((c) => params.append("community", c));
     if (selectedVibe) params.set("vibe", selectedVibe);
     if (selectedTonality) params.set("tonality", selectedTonality);
     if (selectedMeter) params.set("meter", selectedMeter);
@@ -44,19 +50,22 @@ export function useSongFilters<T extends FilterableSong>(
     if (sortBy !== initialSortBy) params.set("sort", sortBy);
     const qs = params.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, sortBy, initialSortBy]);
+  }, [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedForms, selectedOccasions, selectedCommunities, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, sortBy, initialSortBy]);
 
   const filterState = useMemo<SongFilterState>(() => ({
     genres: selectedGenres,
     languages: selectedLanguages,
     themes: selectedThemes,
     cultures: selectedCultures,
+    forms: selectedForms,
+    occasions: selectedOccasions,
+    communities: selectedCommunities,
     vibe: selectedVibe,
     tonality: selectedTonality,
     meter: selectedMeter,
     yearMin,
     yearMax,
-  }), [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax]);
+  }), [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedForms, selectedOccasions, selectedCommunities, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax]);
 
   const filterOptions = useMemo(() => deriveFilterOptions(songs, filterState), [songs, filterState]);
 
@@ -85,11 +94,19 @@ export function useSongFilters<T extends FilterableSong>(
   function toggleCulture(c: string) {
     setSelectedCultures((prev) => { const next = new Set(prev); next.has(c) ? next.delete(c) : next.add(c); return next; });
   }
+  const toggleIn = (set: (f: (prev: Set<string>) => Set<string>) => void) => (v: string) =>
+    set((prev) => { const next = new Set(prev); next.has(v) ? next.delete(v) : next.add(v); return next; });
+  const toggleForm = toggleIn(setSelectedForms);
+  const toggleOccasion = toggleIn(setSelectedOccasions);
+  const toggleCommunity = toggleIn(setSelectedCommunities);
   function clearFilters() {
     setSelectedGenres(new Set());
     setSelectedLanguages(new Set());
     setSelectedThemes(new Set());
     setSelectedCultures(new Set());
+    setSelectedForms(new Set());
+    setSelectedOccasions(new Set());
+    setSelectedCommunities(new Set());
     setSelectedVibe("");
     setSelectedTonality("");
     setSelectedMeter("");
@@ -99,6 +116,7 @@ export function useSongFilters<T extends FilterableSong>(
 
   return {
     selectedGenres, selectedLanguages, selectedThemes, selectedCultures,
+    selectedForms, selectedOccasions, selectedCommunities,
     selectedVibe, setSelectedVibe,
     selectedTonality, setSelectedTonality,
     selectedMeter, setSelectedMeter,
@@ -108,7 +126,7 @@ export function useSongFilters<T extends FilterableSong>(
     activeFilterCount,
     filterOptions,
     matchesFilters,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, clearFilters,
+    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, toggleForm, toggleOccasion, toggleCommunity, clearFilters,
     sortBy, setSortBy,
   };
 }

@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { canEditJam, fetchAllRows, jamImageFor, jamTicketCta, OLDER_PAST_JAMS_PAGE, pastJamsOrFilter, pastJamsWindowStart, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
+import { canEditJam, fetchAllRows, jamImageFor, jamTags, jamTicketCta, OLDER_PAST_JAMS_PAGE, pastJamsOrFilter, pastJamsWindowStart, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -25,7 +25,7 @@ type JamsData = {
 
 const CACHE_KEY = "cache:/jams";
 
-const JAM_LIST_SELECT = "id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, image_focal_point, image_list_url, visibility, host_user_id, jam_genres(genres(name)), jam_themes(themes(name)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)";
+const JAM_LIST_SELECT = "id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, image_focal_point, image_list_url, visibility, host_user_id, jam_tags(tags(name, type)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)";
 
 type OlderPast = { cutoff: string; filter: string; loaded: number; hasMore: boolean; loading: boolean };
 
@@ -36,9 +36,9 @@ function indexJams(
   profileById: Map<string, { label: string; username: string | null }>,
 ) {
   for (const j of jams) {
-    const genres = ((j.jam_genres ?? []) as any[]).map((r) => r.genres?.name).filter(Boolean);
+    const genres = jamTags(j.jam_tags, "genre").map((t) => t.name);
     if (genres.length > 0) genresByJam.set(j.id, genres);
-    const themes = ((j.jam_themes ?? []) as any[]).map((r) => r.themes?.name).filter(Boolean);
+    const themes = jamTags(j.jam_tags, "theme").map((t) => t.name);
     if (themes.length > 0) themesByJam.set(j.id, themes);
     if (j.host_user_id && j.host && !profileById.has(j.host_user_id)) {
       profileById.set(j.host_user_id, {

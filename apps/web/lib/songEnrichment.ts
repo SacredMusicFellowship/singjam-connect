@@ -11,11 +11,15 @@ import {
   leadArtist,
   MAX_RECORDINGS,
   sameArtist,
+  SONG_COMMUNITIES,
   SONG_CULTURES,
+  SONG_FORMS,
   SONG_GENRES,
   SONG_METERS,
+  SONG_OCCASIONS,
   SONG_THEMES,
   SONG_TONALITIES,
+  type TagType,
   type EnrichmentDecision,
   type EnrichmentSources,
   reviewEnrichment,
@@ -44,7 +48,10 @@ const FIELD_RULES: Record<Field, string> = {
   genres: `genres: 1 to 3, each from: ${SONG_GENRES.join(", ")}`,
   themes: `themes: 1 to 3 lyrical themes, each from: ${SONG_THEMES.join(", ")}`,
   languages: "languages: languages it is sung in, plain English names",
-  cultures: `cultures: cultural origins or associations, each from: ${SONG_CULTURES.join(", ")}. Never "British"`,
+  cultures: `cultures: where the song comes from (nationality, ethnicity or region), each from: ${SONG_CULTURES.join(", ")}. Never "British". Religious traditions go in communities`,
+  forms: `forms: what kind of piece it is, only if it clearly is one, each from: ${SONG_FORMS.join(", ")}. Empty for an ordinary popular song`,
+  occasions: `occasions: when it is traditionally sung, only if it is strongly tied to one, each from: ${SONG_OCCASIONS.join(", ")}. Empty if none`,
+  communities: `communities: the religious tradition or community it belongs to, only if it clearly belongs to one, each from: ${SONG_COMMUNITIES.join(", ")}. Empty if none`,
   first_line: "first_line: the first sung line, verbatim, without section labels",
   hook: "hook: the most recognisable lyric phrase, usually from the chorus, verbatim and short",
   notes: "notes: a short factual paragraph on the song's origin and history that a musician would find useful (disputed credits, notable recordings; Roud or Child numbers for traditional songs). Null if nothing solid",
@@ -55,7 +62,7 @@ const FIELD_RULES: Record<Field, string> = {
 };
 
 const ALL_FIELDS = Object.keys(FIELD_RULES) as Field[];
-const ARRAY_FIELDS = new Set<Field>(["composers", "lyricists", "genres", "themes", "languages", "cultures", "productions", "alternate_titles"]);
+const ARRAY_FIELDS = new Set<Field>(["composers", "lyricists", "genres", "themes", "languages", "cultures", "forms", "occasions", "communities", "productions", "alternate_titles"]);
 const NUMBER_FIELDS = new Set<Field>(["year_written", "recording_year"]);
 
 function prompt(song: SongContext) {
@@ -501,9 +508,20 @@ async function idsFor(admin: SupabaseClient, table: "people" | "languages" | "ar
   return ids;
 }
 
-async function lookupIds(admin: SupabaseClient, table: "genres" | "themes" | "cultures", names: string[]) {
-  const { data } = await admin.from(table).select("id, name").in("name", names);
-  return (data ?? []).map((r) => r.id as string);
+// Tags of one type by exact name. Only languages may be created; every other
+// vocabulary is fixed (the decision already kept to the approved lists).
+async function tagIds(admin: SupabaseClient, type: TagType, names: string[]) {
+  const { data } = await admin.from("tags").select("id, name").eq("type", type).in("name", names);
+  const ids = (data ?? []).map((r) => r.id as string);
+  if (type === "language") {
+    const known = new Set((data ?? []).map((r) => norm(r.name as string)));
+    for (const name of names.filter((n) => !known.has(norm(n)))) {
+      const { data: found } = await admin.from("tags").select("id").eq("type", "language").ilike("name", name).limit(1).maybeSingle();
+      const id = found?.id ?? (await admin.from("tags").insert({ type: "language", name, slug: name }).select("id").single()).data?.id;
+      if (id) ids.push(id);
+    }
+  }
+  return ids;
 }
 
 // Gathers every source for one song, decides with the shared rules, and fills
@@ -512,7 +530,7 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   const { data: song, error } = await admin
     .from("songs")
     .select(
-      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_genres(count), song_themes(count), song_languages(count), song_cultures(context), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
+      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_tags(context, tags(type)), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
     )
     .eq("id", songId)
     .single();
@@ -529,10 +547,14 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   if (!s.tonality) wanted.push("tonality");
   if (!s.meter) wanted.push("meter");
   if (!s.vibe) wanted.push("vibe");
-  if (empty(s.song_genres)) wanted.push("genres");
-  if (empty(s.song_themes)) wanted.push("themes");
-  if (empty(s.song_languages)) wanted.push("languages");
-  if (!(s.song_cultures ?? []).some((c: any) => !c.context)) wanted.push("cultures");
+  const hasTag = (type: TagType) => (s.song_tags ?? []).some((t: any) => t.tags?.type === type && t.context === "general");
+  if (!hasTag("genre")) wanted.push("genres");
+  if (!hasTag("theme")) wanted.push("themes");
+  if (!hasTag("language")) wanted.push("languages");
+  if (!hasTag("culture")) wanted.push("cultures");
+  if (!hasTag("form")) wanted.push("forms");
+  if (!hasTag("occasion")) wanted.push("occasions");
+  if (!hasTag("community")) wanted.push("communities");
   if (!s.first_line) wanted.push("first_line");
   if (!s.hook) wanted.push("hook");
   if (!(s.song_productions ?? []).length) wanted.push("productions");
@@ -585,21 +607,13 @@ async function fillSong(
     if (c.length) await admin.from("song_composers").insert(c.map((person_id) => ({ song_id: songId, person_id })));
     if (l.length) await admin.from("song_lyricists").insert(l.map((person_id) => ({ song_id: songId, person_id })));
   }
-  if (decision.genres && wanted.includes("genres")) {
-    const ids = await lookupIds(admin, "genres", decision.genres);
-    if (ids.length) await admin.from("song_genres").insert(ids.map((genre_id) => ({ song_id: songId, genre_id })));
-  }
-  if (decision.themes && wanted.includes("themes")) {
-    const ids = await lookupIds(admin, "themes", decision.themes);
-    if (ids.length) await admin.from("song_themes").insert(ids.map((theme_id) => ({ song_id: songId, theme_id })));
-  }
-  if (decision.cultures && wanted.includes("cultures")) {
-    const ids = await lookupIds(admin, "cultures", decision.cultures);
-    if (ids.length) await admin.from("song_cultures").insert(ids.map((culture_id) => ({ song_id: songId, culture_id })));
-  }
-  if (decision.languages && wanted.includes("languages")) {
-    const ids = await idsFor(admin, "languages", decision.languages);
-    if (ids.length) await admin.from("song_languages").insert(ids.map((language_id) => ({ song_id: songId, language_id })));
+  const tagFields = [["genres", "genre"], ["themes", "theme"], ["cultures", "culture"], ["languages", "language"],
+    ["forms", "form"], ["occasions", "occasion"], ["communities", "community"]] as const;
+  for (const [field, type] of tagFields) {
+    const names = decision[field];
+    if (!names?.length || !wanted.includes(field)) continue;
+    const ids = await tagIds(admin, type, names);
+    if (ids.length) await admin.from("song_tags").upsert(ids.map((tag_id) => ({ song_id: songId, tag_id, context: "general" })), { ignoreDuplicates: true });
   }
   if (decision.productions && wanted.includes("productions")) {
     for (const name of decision.productions) {

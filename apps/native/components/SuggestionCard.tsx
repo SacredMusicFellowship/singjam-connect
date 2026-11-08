@@ -13,6 +13,7 @@ export type Suggestion = {
   slug: string | null;
   composers: string[];
   cultures: string[];
+  communities?: string[];
   productions: string[];
   genres: string[];
   languages: string[];
@@ -67,7 +68,7 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
   }
 
   const composersLabel = song.composers.length > 0
-    ? formatComposers(song.composers, song.cultures)
+    ? formatComposers(song.composers, [...song.cultures, ...(song.communities ?? [])])
     : null;
   const artistsLine = formatRecordingArtists(song.recording_artists, song.display_artist);
   const shows = productionCredits(song.production_credits, song.productions);

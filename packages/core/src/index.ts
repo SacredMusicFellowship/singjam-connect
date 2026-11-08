@@ -7,6 +7,7 @@ export * from './utils/formatComposers';
 export * from './utils/formatRecordingArtists';
 export * from './utils/productionCredits';
 export * from './utils/songVocabulary';
+export * from './utils/songTags';
 export * from './utils/officialYouTube';
 export * from './utils/songEnrichmentRules';
 export * from './utils/sameSong';

@@ -6,7 +6,7 @@ const artists = [{ id: "a1", name: "The Beatles" }];
 const form = (over: Partial<SongForm> = {}): SongForm => ({
   title: "  Twist and Shout ", displayArtist: "", firstLine: "", hook: "", notes: "", geniusUrl: "", chordChartUrl: "",
   year: "", yearWritten: "1961", tonalities: ["Major"], meters: [], vibe: null,
-  genres: [], themes: [], languages: [], cultures: [], composers: [], lyricists: [],
+  genres: [], themes: [], languages: [], cultures: [], forms: [], occasions: [], communities: [], composers: [], lyricists: [],
   pendingComposerNames: [], pendingLyricistNames: [], composerTraditionalCulture: "Irish", lyricistTraditionalCulture: "Scottish",
   recordingArtists: [], pendingRecordingArtists: [], productions: [], pendingProductionNames: [], productionYears: {},
   hadRecordingArtists: false, ...over,
@@ -21,10 +21,16 @@ describe("songSavePayload", () => {
     expect(p.fields.year).toBeNull();
   });
 
+  it("sends every tag type as one tags object", () => {
+    expect(build({ genres: ["Folk"], forms: ["Hymn"], communities: ["Jewish"] }).tags).toEqual({
+      genre: ["Folk"], theme: [], language: [], culture: [], form: ["Hymn"], occasion: [], community: ["Jewish"],
+    });
+  });
+
   it("sends traditional cultures only for traditional writers", () => {
-    expect(build({ composers: ["p1"] }).music_culture).toBeNull();
-    expect(build({ composers: ["trad"] }).music_culture).toBe("Irish");
-    expect(build({ pendingLyricistNames: ["[traditional]"] })).toMatchObject({ lyric_culture: "Scottish", lyricist_names: ["Traditional"] });
+    expect(build({ composers: ["p1"] }).music_tag).toBeNull();
+    expect(build({ composers: ["trad"] }).music_tag).toEqual({ type: "culture", name: "Irish" });
+    expect(build({ pendingLyricistNames: ["[traditional]"] })).toMatchObject({ lyric_tag: { type: "culture", name: "Scottish" }, lyricist_names: ["Traditional"] });
   });
 
   it("keeps a recording's stored Spotify link unless the form has one", () => {

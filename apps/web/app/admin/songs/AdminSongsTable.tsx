@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useState, useMemo, useEffect } from "react";
 import DeleteSongButton from "./DeleteSongButton";
-import { fetchAllRows, formatRecordingArtists, songMissingFields, SONG_COMPLETENESS_FIELDS, type ProductionCredit } from "@singjam/core";
+import { fetchAllRows, formatRecordingArtists, songMissingFields, songTagNames, SONG_COMPLETENESS_FIELDS, type ProductionCredit, type SongTagRow } from "@singjam/core";
 import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -25,12 +25,10 @@ type Song = {
   vibe: string | null;
   song_composers: { people: { name: string } | null }[];
   song_lyricists: { people: { name: string } | null }[];
-  song_cultures: { cultures: { name: string } | null }[];
   song_recording_artists: { year: number | null; position: number | null; youtube_url: string | null; artists: { name: string } | null }[];
   song_productions: { productions: ProductionCredit | null }[];
   youtube_url: string | null;
-  song_genres: { genre_id: string }[];
-  song_languages: { language_id: string }[];
+  song_tags: SongTagRow[];
   user_songs: { count: number }[];
   created_at: string;
   submitted_by: string | null;
@@ -125,9 +123,7 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
           song_lyricists(people(name)),
           song_recording_artists(year, position, youtube_url, artists(name)),
           song_productions(productions(name, year)),
-          song_genres(genre_id),
-          song_languages(language_id),
-          song_cultures(cultures(name)),
+          song_tags(context, tags(name, type)),
           user_songs(count),
           created_at, submitted_by,
           profiles!submitted_by(display_name, last_name, username)
@@ -167,7 +163,7 @@ export default function AdminSongsTable({ basePath = "/admin/songs", isAdmin = t
         ...s.song_composers.map((c) => c.people?.name).filter(Boolean) as string[],
         ...s.song_lyricists.map((l) => l.people?.name).filter(Boolean) as string[],
       ]);
-      const cultures = s.song_cultures.map((c) => c.cultures?.name).filter(Boolean) as string[];
+      const cultures = [...songTagNames(s.song_tags, "culture"), ...songTagNames(s.song_tags, "community")];
       const songwriterNamesRaw = [...songwriterNames].sort().join(" ");
       const songwriters = songwriterNames.size ? formatComposers([...songwriterNames].sort(), cultures) : "";
       const years = s.song_recording_artists

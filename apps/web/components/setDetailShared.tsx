@@ -1,3 +1,4 @@
+import type { SongTagRow } from "@singjam/core";
 export { MUSICAL_KEYS } from "@singjam/core";
 
 // A participant's role for a set song, plus the key they play it in.
@@ -24,9 +25,7 @@ export type Song = {
     meter: string | null;
     song_composers: { people: { name: string } | null }[];
     song_lyricists: { people: { name: string } | null }[];
-    song_cultures: { cultures: { name: string } | null; context: string | null }[];
-    song_genres: { genres: { name: string } | null }[];
-    song_themes: { themes: { name: string } | null }[];
+    song_tags: SongTagRow[];
     song_recording_artists: { position: number; youtube_url: string | null; spotify_url: string | null }[];
     song_productions?: { productions: { name: string } | null }[];
   };

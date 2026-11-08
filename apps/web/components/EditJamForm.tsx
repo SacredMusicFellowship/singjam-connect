@@ -102,8 +102,8 @@ export default function EditJamForm({
         setDisplayName((p as any)?.display_name ?? (p as any)?.username ?? null);
       }
       const [{ data: g }, { data: t }] = await Promise.all([
-        supabase.from("genres").select("id, name").order("name"),
-        supabase.from("themes").select("id, name").order("name"),
+        supabase.from("tags").select("id, name").eq("type", "genre").order("name"),
+        supabase.from("tags").select("id, name").eq("type", "theme").order("name"),
       ]);
       setGenres((g as LookupItem[]) ?? []);
       setThemes((t as LookupItem[]) ?? []);

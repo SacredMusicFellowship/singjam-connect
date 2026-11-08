@@ -9,6 +9,9 @@ export type FilterableSong = {
   languages: string[];
   themes: string[];
   cultures: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
@@ -20,6 +23,9 @@ export type SongFilterState = {
   languages: Set<string>;
   themes: Set<string>;
   cultures: Set<string>;
+  forms: Set<string>;
+  occasions: Set<string>;
+  communities: Set<string>;
   vibe: string;
   tonality: string;
   meter: string;
@@ -27,11 +33,12 @@ export type SongFilterState = {
   yearMax: string;
 };
 
+// The tag dimensions: a song passes when it has any selected tag of that type.
+export const MULTI_FILTER_DIMS = ["genres", "forms", "occasions", "communities", "cultures", "languages", "themes"] as const;
+export type MultiFilterDim = (typeof MULTI_FILTER_DIMS)[number];
+
 export type FilterDim =
-  | "genres"
-  | "languages"
-  | "themes"
-  | "cultures"
+  | MultiFilterDim
   | "vibe"
   | "tonality"
   | "meter"
@@ -42,6 +49,9 @@ export type SongFilterOptions = {
   languages: string[];
   themes: string[];
   cultures: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibes: string[];
   tonalities: string[];
   meters: string[];
@@ -55,10 +65,9 @@ export function songMatchesFilters(
   f: SongFilterState,
   exclude?: FilterDim
 ): boolean {
-  if (exclude !== "genres" && f.genres.size > 0 && !song.genres.some((g) => f.genres.has(g))) return false;
-  if (exclude !== "languages" && f.languages.size > 0 && !song.languages.some((l) => f.languages.has(l))) return false;
-  if (exclude !== "themes" && f.themes.size > 0 && !song.themes.some((t) => f.themes.has(t))) return false;
-  if (exclude !== "cultures" && f.cultures.size > 0 && !song.cultures.some((c) => f.cultures.has(c))) return false;
+  for (const dim of MULTI_FILTER_DIMS) {
+    if (exclude !== dim && f[dim].size > 0 && !(song[dim] ?? []).some((x) => f[dim].has(x))) return false;
+  }
   if (exclude !== "vibe" && f.vibe && song.vibe !== f.vibe) return false;
   if (exclude !== "tonality" && f.tonality && !song.tonality?.split(/,\s*/).includes(f.tonality)) return false;
   if (exclude !== "meter" && f.meter && song.meter !== f.meter) return false;
@@ -80,11 +89,15 @@ export function deriveFilterOptions(
 ): SongFilterOptions {
   const sortedUniq = (xs: string[]) => Array.from(new Set(xs)).sort();
   const forDim = (dim: FilterDim) => songs.filter((s) => songMatchesFilters(s, f, dim));
+  const multi = (dim: MultiFilterDim) => sortedUniq([...forDim(dim).flatMap((s) => s[dim] ?? []), ...f[dim]]);
   return {
-    genres: sortedUniq([...forDim("genres").flatMap((s) => s.genres), ...f.genres]),
-    languages: sortedUniq([...forDim("languages").flatMap((s) => s.languages), ...f.languages]),
-    themes: sortedUniq([...forDim("themes").flatMap((s) => s.themes), ...f.themes]),
-    cultures: sortedUniq([...forDim("cultures").flatMap((s) => s.cultures), ...f.cultures]),
+    genres: multi("genres"),
+    languages: multi("languages"),
+    themes: multi("themes"),
+    cultures: multi("cultures"),
+    forms: multi("forms"),
+    occasions: multi("occasions"),
+    communities: multi("communities"),
     vibes: sortedUniq(forDim("vibe").map((s) => s.vibe).filter(Boolean) as string[]),
     tonalities: sortedUniq(forDim("tonality").flatMap((s) => (s.tonality ? s.tonality.split(/,\s*/) : []))),
     meters: sortedUniq(forDim("meter").map((s) => s.meter).filter(Boolean) as string[]),
@@ -95,10 +108,7 @@ export function deriveFilterOptions(
 // as one. Does not count app-specific toggles such as native's "hide my songs".
 export function countActiveFilters(f: SongFilterState): number {
   return (
-    f.genres.size +
-    f.languages.size +
-    f.themes.size +
-    f.cultures.size +
+    MULTI_FILTER_DIMS.reduce((n, dim) => n + f[dim].size, 0) +
     (f.vibe ? 1 : 0) +
     (f.tonality ? 1 : 0) +
     (f.meter ? 1 : 0) +

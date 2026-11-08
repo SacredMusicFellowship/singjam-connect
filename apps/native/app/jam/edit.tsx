@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useAddressTimezone } from '@/lib/useAddressTimezone';
 import {
-  JAM_IMAGE_TYPE_ERROR, isJamImageType, isoToZonedInput, zonedInputToIso, zonedInputToPickerDate, pickersToZonedInput, zoneAbbreviation, resolvePlaceAddress,
+  JAM_IMAGE_TYPE_ERROR, isJamImageType, isoToZonedInput, jamTags, zonedInputToIso, zonedInputToPickerDate, pickersToZonedInput, zoneAbbreviation, resolvePlaceAddress,
 } from '@singjam/core';
 
 const PLACES_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
@@ -248,16 +248,15 @@ export default function EditJamScreen() {
   useEffect(() => {
     if (!id) return;
     async function load() {
-      const [jamResult, genreResult, themeResult, jamGenresResult, jamThemesResult, addressResult] = await Promise.all([
+      const [jamResult, genreResult, themeResult, jamTagsResult, addressResult] = await Promise.all([
         supabase
           .from('jams')
           .select('name, notes, visibility, capacity, guests_can_invite, timezone, starts_at, ends_at, neighborhood, image_url')
           .eq('id', id)
           .single(),
-        supabase.from('genres').select('id, name').order('name'),
-        supabase.from('themes').select('id, name').order('name'),
-        supabase.from('jam_genres').select('genre_id').eq('jam_id', id),
-        supabase.from('jam_themes').select('theme_id').eq('jam_id', id),
+        supabase.from('tags').select('id, name').eq('type', 'genre').order('name'),
+        supabase.from('tags').select('id, name').eq('type', 'theme').order('name'),
+        supabase.from('jam_tags').select('tags(id, name, type)').eq('jam_id', id),
         supabase.rpc('jam_full_address', { jam_id_param: id }),
       ]);
 
@@ -288,8 +287,8 @@ export default function EditJamScreen() {
       setExistingImageUrl(j.image_url ?? null);
       setGenres((genreResult.data as LookupItem[]) ?? []);
       setThemes((themeResult.data as LookupItem[]) ?? []);
-      setSelectedGenres((jamGenresResult.data ?? []).map((r: any) => r.genre_id));
-      setSelectedThemes((jamThemesResult.data ?? []).map((r: any) => r.theme_id));
+      setSelectedGenres(jamTags(jamTagsResult.data as any, 'genre').map((t) => t.id as string));
+      setSelectedThemes(jamTags(jamTagsResult.data as any, 'theme').map((t) => t.id as string));
       setLoadingJam(false);
     }
     load();

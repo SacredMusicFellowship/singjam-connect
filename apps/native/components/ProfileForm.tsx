@@ -379,7 +379,7 @@ export default function ProfileForm({ title, subtitle, submitLabel, onSave }: Pr
       // attached), so the picker is never empty.
       let genreNames = (genreResult.data ?? []).map((g: any) => g.name);
       if (genreNames.length === 0) {
-        const { data: allRows } = await supabase.from('genres').select('name').order('name');
+        const { data: allRows } = await supabase.from('tags').select('name').eq('type', 'genre').order('name');
         genreNames = (allRows ?? []).map((g: any) => g.name);
       }
       setAllGenres(genreNames);

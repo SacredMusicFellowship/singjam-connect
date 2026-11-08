@@ -13,6 +13,9 @@ import { countActiveFilters, type SongFilterState, type SongFilterOptions } from
 export function emptyFilterDimensions(): SongFilterState {
   return {
     genres: new Set(),
+    forms: new Set(),
+    occasions: new Set(),
+    communities: new Set(),
     cultures: new Set(),
     languages: new Set(),
     themes: new Set(),
@@ -30,11 +33,11 @@ export function toggleFilterValue(set: Set<string>, value: string): Set<string> 
   return next;
 }
 
-type MultiDim = 'genres' | 'cultures' | 'languages' | 'themes';
+type MultiDim = 'genres' | 'forms' | 'occasions' | 'communities' | 'cultures' | 'languages' | 'themes';
 type SingleDim = 'vibe' | 'tonality' | 'meter';
 type ChipDim = MultiDim | SingleDim;
 
-const MULTI: MultiDim[] = ['genres', 'cultures', 'languages', 'themes'];
+const MULTI: MultiDim[] = ['genres', 'forms', 'occasions', 'communities', 'cultures', 'languages', 'themes'];
 
 // Memoised, and it reports which dimension it belongs to rather than closing over
 // a handler: the sheet renders ~200 chips off a full catalog, and rebuilding an
@@ -102,7 +105,7 @@ export default function SongFilterSheet<T extends SongFilterState>({
   }, []);
 
   const hasAnyOption =
-    options.genres.length > 0 ||
+    MULTI.some(dim => options[dim].length > 0) ||
     options.cultures.length > 0 ||
     options.languages.length > 0 ||
     options.themes.length > 0 ||
@@ -136,6 +139,16 @@ export default function SongFilterSheet<T extends SongFilterState>({
                 {options.genres.map(g => <Chip key={g} label={g} dim="genres" selected={filters.genres.has(g)} onToggle={handleToggle} />)}
               </View>
             </>
+          )}
+          {([['forms', 'Form'], ['occasions', 'Occasion'], ['communities', 'Community']] as const).map(([dim, title]) =>
+            options[dim].length > 0 ? (
+              <View key={dim}>
+                <SectionLabel title={title} />
+                <View className="flex-row flex-wrap">
+                  {options[dim].map(v => <Chip key={v} label={v} dim={dim} selected={filters[dim].has(v)} onToggle={handleToggle} />)}
+                </View>
+              </View>
+            ) : null
           )}
           {options.cultures.length > 0 && (
             <>

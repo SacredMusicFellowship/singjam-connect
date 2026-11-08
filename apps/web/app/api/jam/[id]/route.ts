@@ -88,14 +88,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-  await Promise.all([
-    admin.from("jam_genres").delete().eq("jam_id", id),
-    admin.from("jam_themes").delete().eq("jam_id", id),
-  ]);
-  await Promise.all([
-    genre_ids?.length > 0 ? admin.from("jam_genres").insert(genre_ids.map((genre_id: string) => ({ jam_id: id, genre_id }))) : Promise.resolve(),
-    theme_ids?.length > 0 ? admin.from("jam_themes").insert(theme_ids.map((theme_id: string) => ({ jam_id: id, theme_id }))) : Promise.resolve(),
-  ]);
+  // A jam's tags are its genres and themes; the form sends both lists in full.
+  await admin.from("jam_tags").delete().eq("jam_id", id);
+  const tagIds = [...(genre_ids ?? []), ...(theme_ids ?? [])] as string[];
+  if (tagIds.length > 0) await admin.from("jam_tags").insert(tagIds.map((tag_id) => ({ jam_id: id, tag_id })));
 
   // Postgres returns "+00:00" while clients send toISOString()'s ".000Z", so compare instants, not strings.
   const sameInstant = (a: string | null, b: string | null) => (a && b ? Date.parse(a) === Date.parse(b) : a === b);

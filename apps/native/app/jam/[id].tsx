@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { attendeeRole, canEditJam, dropUsCountry, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
+import { attendeeRole, canEditJam, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -355,7 +355,7 @@ export default function JamDetailScreen() {
           id, name, visibility, starts_at, ends_at, timezone,
           neighborhood, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
           profiles!host_user_id ( display_name, username, avatar_url ),
-          jam_genres ( genres ( name ) )
+          jam_tags ( tags ( name, type ) )
         `)
         .eq('id', id)
         .single(),
@@ -409,7 +409,7 @@ export default function JamDetailScreen() {
       host_display_name: j.profiles?.display_name ?? null,
       host_username: j.profiles?.username ?? null,
       host_avatar: j.profiles?.avatar_url ?? null,
-      genres: (j.jam_genres ?? []).map((jg: any) => jg.genres?.name).filter(Boolean),
+      genres: jamTags(j.jam_tags, 'genre').map((t) => t.name),
     });
 
     const rawRsvps: Attendee[] = (rsvpsResult.data ?? []).map((r: any) => ({

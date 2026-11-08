@@ -1,4 +1,13 @@
-import { SONG_CULTURES, SONG_GENRES, SONG_METERS, SONG_THEMES, SONG_TONALITIES } from "./songVocabulary";
+import {
+  SONG_COMMUNITIES,
+  SONG_CULTURES,
+  SONG_FORMS,
+  SONG_GENRES,
+  SONG_METERS,
+  SONG_OCCASIONS,
+  SONG_THEMES,
+  SONG_TONALITIES,
+} from "./songVocabulary";
 
 export type Confidence = "high" | "medium" | "low";
 export type ModelField<T> = { v: T | null; c: Confidence } | null | undefined;
@@ -15,6 +24,9 @@ export type ModelAnswer = {
   themes?: ModelField<string[]>;
   languages?: ModelField<string[]>;
   cultures?: ModelField<string[]>;
+  forms?: ModelField<string[]>;
+  occasions?: ModelField<string[]>;
+  communities?: ModelField<string[]>;
   first_line?: ModelField<string>;
   hook?: ModelField<string>;
   // Asked only when a song editor reviews suggestions; never filled automatically.
@@ -45,6 +57,9 @@ export type EnrichmentDecision = {
   themes?: string[];
   languages?: string[];
   cultures?: string[];
+  forms?: string[];
+  occasions?: string[];
+  communities?: string[];
   first_line?: string;
   hook?: string;
 };
@@ -120,8 +135,15 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   if (genres) out.genres = genres;
   const themes = mergeTags(value(g.themes, SURE), value(c.themes, SURE), SONG_THEMES);
   if (themes) out.themes = themes;
-  const cultures = (value(g.cultures, SURE) ?? []).filter((x) => SONG_CULTURES.includes(x) && (value(c.cultures, SURE) ?? []).includes(x));
-  if (cultures.length) out.cultures = cultures.slice(0, MAX_TAGS);
+  // Both models must name a culture, form, occasion or community for it to be used.
+  const bothNamed = (f: "cultures" | "forms" | "occasions" | "communities", allowed: readonly string[]) => {
+    const picked = (value(g[f], SURE) ?? []).filter((x) => allowed.includes(x) && (value(c[f], SURE) ?? []).includes(x));
+    if (picked.length) out[f] = picked.slice(0, MAX_TAGS);
+  };
+  bothNamed("cultures", SONG_CULTURES);
+  bothNamed("forms", SONG_FORMS);
+  bothNamed("occasions", SONG_OCCASIONS);
+  bothNamed("communities", SONG_COMMUNITIES);
   const langs = (value(g.languages, SURE) ?? []).filter((x) => (value(c.languages, SURE) ?? []).map(norm).includes(norm(x)));
   if (langs.length) out.languages = langs.slice(0, MAX_TAGS);
 
@@ -180,6 +202,9 @@ export type EnrichmentReview = {
     genres: string[];
     themes: string[];
     cultures: string[];
+    forms: string[];
+    occasions: string[];
+    communities: string[];
     music_culture: string | null;
     lyric_culture: string | null;
     languages: string[];
@@ -245,6 +270,9 @@ export function reviewEnrichment(
     genres: pick("genres", d.genres, listIn(SONG_GENRES)(one<string[]>("genres")).slice(0, MAX_TAGS)) ?? [],
     themes: pick("themes", d.themes, listIn(SONG_THEMES)(one<string[]>("themes")).slice(0, MAX_TAGS)) ?? [],
     cultures: pick("cultures", d.cultures, listIn(SONG_CULTURES)(one<string[]>("cultures")).slice(0, MAX_TAGS)) ?? [],
+    forms: pick("forms", d.forms, listIn(SONG_FORMS)(one<string[]>("forms")).slice(0, MAX_TAGS)) ?? [],
+    occasions: pick("occasions", d.occasions, listIn(SONG_OCCASIONS)(one<string[]>("occasions")).slice(0, MAX_TAGS)) ?? [],
+    communities: pick("communities", d.communities, listIn(SONG_COMMUNITIES)(one<string[]>("communities")).slice(0, MAX_TAGS)) ?? [],
     languages: pick("languages", d.languages, (one<string[]>("languages") ?? []).slice(0, MAX_TAGS)) ?? [],
     music_culture: culture("music_culture"),
     lyric_culture: culture("lyric_culture"),

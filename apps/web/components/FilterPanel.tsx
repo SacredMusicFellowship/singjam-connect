@@ -7,6 +7,9 @@ type FilterOptions = {
   languages: string[];
   themes: string[];
   cultures: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibes: string[];
   tonalities: string[];
   meters: string[];
@@ -18,6 +21,9 @@ export function FilterPanel({
   selectedLanguages,
   selectedThemes,
   selectedCultures,
+  selectedForms,
+  selectedOccasions,
+  selectedCommunities,
   selectedVibe,
   setSelectedVibe,
   selectedTonality,
@@ -34,6 +40,9 @@ export function FilterPanel({
   toggleLanguage,
   toggleTheme,
   toggleCulture,
+  toggleForm,
+  toggleOccasion,
+  toggleCommunity,
   clearFilters,
 }: {
   filterOptions: FilterOptions;
@@ -41,6 +50,9 @@ export function FilterPanel({
   selectedLanguages: Set<string>;
   selectedThemes: Set<string>;
   selectedCultures: Set<string>;
+  selectedForms: Set<string>;
+  selectedOccasions: Set<string>;
+  selectedCommunities: Set<string>;
   selectedVibe: string;
   setSelectedVibe: (v: string) => void;
   selectedTonality: string;
@@ -57,6 +69,9 @@ export function FilterPanel({
   toggleLanguage: (l: string) => void;
   toggleTheme: (t: string) => void;
   toggleCulture: (c: string) => void;
+  toggleForm: (f: string) => void;
+  toggleOccasion: (o: string) => void;
+  toggleCommunity: (c: string) => void;
   clearFilters: () => void;
 }) {
   return (
@@ -164,6 +179,10 @@ export function FilterPanel({
         )}
       </div>
 
+      <PillSection label="Form" options={filterOptions.forms} selected={selectedForms} onToggle={toggleForm} />
+      <PillSection label="Occasion" options={filterOptions.occasions} selected={selectedOccasions} onToggle={toggleOccasion} />
+      <PillSection label="Community" options={filterOptions.communities} selected={selectedCommunities} onToggle={toggleCommunity} />
+
       {filterOptions.cultures.length > 0 && (
         <div>
           <div className="mb-2 text-xs font-medium text-zinc-500 uppercase tracking-wide">Culture</div>
@@ -235,6 +254,35 @@ export function FilterPanel({
           ✕ Clear {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"}
         </button>
       )}
+    </div>
+  );
+}
+
+function PillSection({ label, options, selected, onToggle }: {
+  label: string;
+  options: string[];
+  selected: Set<string>;
+  onToggle: (v: string) => void;
+}) {
+  if (options.length === 0) return null;
+  return (
+    <div>
+      <div className="mb-2 text-xs font-medium text-zinc-500 uppercase tracking-wide">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((o) => (
+          <button
+            key={o}
+            onClick={() => onToggle(o)}
+            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+              selected.has(o)
+                ? "border-amber-400 bg-amber-50 text-amber-700"
+                : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+            }`}
+          >
+            {o}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

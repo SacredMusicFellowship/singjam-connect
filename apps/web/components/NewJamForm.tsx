@@ -96,8 +96,8 @@ export default function NewJamForm({
         setDisplayName((p as any)?.display_name ?? (p as any)?.username ?? null);
       }
       const [{ data: g }, { data: t }] = await Promise.all([
-        supabase.from("genres").select("id, name").order("name"),
-        supabase.from("themes").select("id, name").order("name"),
+        supabase.from("tags").select("id, name").eq("type", "genre").order("name"),
+        supabase.from("tags").select("id, name").eq("type", "theme").order("name"),
       ]);
       setGenres((g as LookupItem[]) ?? []);
       setThemes((t as LookupItem[]) ?? []);
@@ -175,14 +175,8 @@ export default function NewJamForm({
     }
 
     const jamId = data.id;
-    await Promise.all([
-      selectedGenres.length > 0
-        ? supabase.from("jam_genres").insert(selectedGenres.map((genre_id) => ({ jam_id: jamId, genre_id })))
-        : Promise.resolve(),
-      selectedThemes.length > 0
-        ? supabase.from("jam_themes").insert(selectedThemes.map((theme_id) => ({ jam_id: jamId, theme_id })))
-        : Promise.resolve(),
-    ]);
+    const tagIds = [...selectedGenres, ...selectedThemes];
+    if (tagIds.length > 0) await supabase.from("jam_tags").insert(tagIds.map((tag_id) => ({ jam_id: jamId, tag_id })));
 
     fetch("/api/jam/confirm", {
       method: "POST",

@@ -19,6 +19,9 @@ export type SongForm = {
   themes: string[];
   languages: string[];
   cultures: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   composers: Iterable<string>;
   lyricists: Iterable<string>;
   pendingComposerNames: string[];
@@ -40,7 +43,7 @@ function parseYear(v: string | undefined): number | null {
 
 const personName = (n: string) => (/^\[traditional\]$/i.test(n.trim()) ? "Traditional" : n.trim());
 
-// The argument save_song (migration 200) takes: the whole editor form in one
+// The argument save_song (migrations 200 and 202) takes: the whole editor form in one
 // object, saved in one transaction.
 export function songSavePayload(form: SongForm, lookups: { people: Named[]; artists: Named[] }) {
   const composerIds = [...form.composers];
@@ -71,18 +74,25 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       meter: form.meters.join(", "),
       vibe: form.vibe,
     },
-    genres: form.genres,
-    themes: form.themes,
-    languages: form.languages,
-    cultures: form.cultures,
+    tags: {
+      genre: form.genres,
+      theme: form.themes,
+      language: form.languages,
+      culture: form.cultures,
+      form: form.forms,
+      occasion: form.occasions,
+      community: form.communities,
+    },
     composer_ids: composerIds,
     composer_names: form.pendingComposerNames.map(personName),
     lyricist_ids: lyricistIds,
     lyricist_names: form.pendingLyricistNames.map(personName),
     // Where a traditional melody or text comes from only applies when the
     // composer or lyricist is "Traditional".
-    music_culture: isTraditional(composerIds, form.pendingComposerNames) ? form.composerTraditionalCulture || null : null,
-    lyric_culture: isTraditional(lyricistIds, form.pendingLyricistNames) ? form.lyricistTraditionalCulture || null : null,
+    music_tag: isTraditional(composerIds, form.pendingComposerNames) && form.composerTraditionalCulture
+      ? { type: "culture", name: form.composerTraditionalCulture } : null,
+    lyric_tag: isTraditional(lyricistIds, form.pendingLyricistNames) && form.lyricistTraditionalCulture
+      ? { type: "culture", name: form.lyricistTraditionalCulture } : null,
     recordings: [
       // A recording without a spotify_url key keeps the stored link.
       ...form.recordingArtists.map((e) => ({

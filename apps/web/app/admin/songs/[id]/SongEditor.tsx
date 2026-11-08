@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
-import { MAX_RECORDINGS, samePeople, type EnrichmentReview } from "@singjam/core";
+import { MAX_RECORDINGS, samePeople, songTagNames, songTraditionTag, type EnrichmentReview, type SongTagRow } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -62,10 +62,7 @@ type Song = {
   tonality: string | null;
   meter: string | null;
   vibe: "Banger" | "Ballad" | null;
-  song_genres: { genre_id: string }[];
-  song_themes: { theme_id: string }[];
-  song_cultures: { culture_id: string; context: string | null }[];
-  song_languages: { language_id: string }[];
+  song_tags: SongTagRow[];
   song_composers: { person_id: string }[];
   song_lyricists: { person_id: string }[];
   song_recording_artists: { artist_id: string; year: number | null; position: number | null; youtube_url: string | null; spotify_url: string | null }[];
@@ -91,6 +88,9 @@ type Props = {
   allThemes: Lookup[];
   allCultures: Lookup[];
   allLanguages: Lookup[];
+  allForms: Lookup[];
+  allOccasions: Lookup[];
+  allCommunities: Lookup[];
   allPeople: Lookup[];
   allArtists: Lookup[];
   allProductions: ProductionLookup[];
@@ -108,6 +108,9 @@ export default function SongEditor({
   allThemes,
   allCultures,
   allLanguages,
+  allForms,
+  allOccasions,
+  allCommunities,
   allPeople,
   allArtists,
   allProductions,
@@ -170,21 +173,13 @@ export default function SongEditor({
   ];
 
   // Tag pill arrays
-  const [genres, setGenres] = useState<string[]>(() =>
-    (song?.song_genres ?? []).map((x) => allGenres.find((g) => g.id === x.genre_id)?.name).filter((n): n is string => !!n)
-  );
-  const [themes, setThemes] = useState<string[]>(() =>
-    (song?.song_themes ?? []).map((x) => allThemes.find((t) => t.id === x.theme_id)?.name).filter((n): n is string => !!n)
-  );
-  const [cultures, setCultures] = useState<string[]>(() =>
-    (song?.song_cultures ?? [])
-      .filter((x) => !x.context)
-      .map((x) => allCultures.find((c) => c.id === x.culture_id)?.name)
-      .filter((n): n is string => !!n)
-  );
-  const [languages, setLanguages] = useState<string[]>(() =>
-    (song?.song_languages ?? []).map((x) => allLanguages.find((l) => l.id === x.language_id)?.name).filter((n): n is string => !!n)
-  );
+  const [genres, setGenres] = useState<string[]>(() => songTagNames(song?.song_tags, "genre", "general"));
+  const [themes, setThemes] = useState<string[]>(() => songTagNames(song?.song_tags, "theme", "general"));
+  const [cultures, setCultures] = useState<string[]>(() => songTagNames(song?.song_tags, "culture", "general"));
+  const [languages, setLanguages] = useState<string[]>(() => songTagNames(song?.song_tags, "language", "general"));
+  const [forms, setForms] = useState<string[]>(() => songTagNames(song?.song_tags, "form", "general"));
+  const [occasions, setOccasions] = useState<string[]>(() => songTagNames(song?.song_tags, "occasion", "general"));
+  const [communities, setCommunities] = useState<string[]>(() => songTagNames(song?.song_tags, "community", "general"));
 
   // Alternate titles
   const [altTitles, setAltTitles] = useState<AltTitle[]>(song?.song_alternate_titles ?? []);
@@ -213,14 +208,8 @@ export default function SongEditor({
   const [pendingRecordingArtists, setPendingRecordingArtists] = useState<{ name: string; year: number | null; spotify_url: string | null }[]>([]);
   const [pendingComposerNames, setPendingComposerNames] = useState<string[]>([]);
   const [pendingLyricistNames, setPendingLyricistNames] = useState<string[]>([]);
-  const [composerTraditionalCulture, setComposerTraditionalCulture] = useState(() => {
-    const mc = song?.song_cultures.find((x) => x.context === "music");
-    return mc ? (allCultures.find((c) => c.id === mc.culture_id)?.name ?? "") : "";
-  });
-  const [lyricistTraditionalCulture, setLyricistTraditionalCulture] = useState(() => {
-    const lc = song?.song_cultures.find((x) => x.context === "lyrics");
-    return lc ? (allCultures.find((c) => c.id === lc.culture_id)?.name ?? "") : "";
-  });
+  const [composerTraditionalCulture, setComposerTraditionalCulture] = useState(() => songTraditionTag(song?.song_tags, "music")?.name ?? "");
+  const [lyricistTraditionalCulture, setLyricistTraditionalCulture] = useState(() => songTraditionTag(song?.song_tags, "lyrics")?.name ?? "");
   // Find or create a person/artist by canonical name. Returns the DB id.
   async function resolvePersonName(
     name: string,
@@ -269,7 +258,7 @@ export default function SongEditor({
     title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
     [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
     isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
-    composerTraditionalCulture, lyricistTraditionalCulture,
+    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture,
   ]);
   const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
 
@@ -366,6 +355,9 @@ export default function SongEditor({
       { key: "genres", label: "Genres", current: genres.join(", "), suggested: s.genres.join(", ") },
       { key: "themes", label: "Themes", current: themes.join(", "), suggested: s.themes.join(", ") },
       { key: "cultures", label: "Cultures", current: cultures.join(", "), suggested: s.cultures.join(", ") },
+      { key: "forms", label: "Forms", current: forms.join(", "), suggested: (s.forms ?? []).join(", ") },
+      { key: "occasions", label: "Occasions", current: occasions.join(", "), suggested: (s.occasions ?? []).join(", ") },
+      { key: "communities", label: "Communities", current: communities.join(", "), suggested: (s.communities ?? []).join(", ") },
       { key: "music_culture", label: "Music culture", current: composerTraditionalCulture, suggested: s.music_culture ?? "" },
       { key: "lyric_culture", label: "Lyric culture", current: lyricistTraditionalCulture, suggested: s.lyric_culture ?? "" },
       { key: "languages", label: "Languages", current: languages.join(", "), suggested: s.languages.join(", ") },
@@ -426,6 +418,15 @@ export default function SongEditor({
     }
     if (accept("cultures") && aiSuggestions.cultures.length) {
       setCultures(aiSuggestions.cultures);
+    }
+    if (accept("forms") && aiSuggestions.forms?.length) {
+      setForms(aiSuggestions.forms);
+    }
+    if (accept("occasions") && aiSuggestions.occasions?.length) {
+      setOccasions(aiSuggestions.occasions);
+    }
+    if (accept("communities") && aiSuggestions.communities?.length) {
+      setCommunities(aiSuggestions.communities);
     }
     if (accept("music_culture") && aiSuggestions.music_culture) {
       setComposerTraditionalCulture(aiSuggestions.music_culture);
@@ -497,7 +498,7 @@ export default function SongEditor({
         p: songSavePayload(
           {
             title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
-            genres, themes, languages, cultures, composers, lyricists, pendingComposerNames, pendingLyricistNames,
+            genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
             composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
             productions, pendingProductionNames, productionYears,
             hadRecordingArtists: (song?.song_recording_artists.length ?? 0) > 0,
@@ -871,6 +872,9 @@ export default function SongEditor({
         <TagPillsField label="Themes" value={themes} onChange={setThemes} suggestions={allThemes.map((t) => t.name)} allowNew placeholder="Search themes…" />
         <TagPillsField label="Languages" value={languages} onChange={setLanguages} suggestions={allLanguages.map((l) => l.name)} placeholder="Search languages…" />
         <TagPillsField label="Cultures" value={cultures} onChange={setCultures} suggestions={allCultures.map((c) => c.name)} allowNew placeholder="Search cultures…" />
+        <TagPillsField label="Forms" value={forms} onChange={setForms} suggestions={allForms.map((f) => f.name)} allowNew placeholder="Search forms…" />
+        <TagPillsField label="Occasions" value={occasions} onChange={setOccasions} suggestions={allOccasions.map((o) => o.name)} allowNew placeholder="Search occasions…" />
+        <TagPillsField label="Communities" value={communities} onChange={setCommunities} suggestions={allCommunities.map((c) => c.name)} allowNew placeholder="Search communities…" />
       </section>
       {/* Alternate titles */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">

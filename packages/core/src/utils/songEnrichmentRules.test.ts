@@ -51,6 +51,25 @@ describe("decideEnrichment — tags and musical fields", () => {
   });
 });
 
+describe("decideEnrichment — cultures, forms, occasions and communities", () => {
+  it("keeps only what both models name from the approved lists", () => {
+    const d = decideEnrichment(base({
+      gpt: { forms: hi(["Hymn", "Carol"]), communities: hi(["Christian", "Black Church (US)"]), occasions: med(["Funeral and memorial"]), cultures: hi(["English"]) },
+      claude: { forms: hi(["Hymn"]), communities: hi(["Christian"]), occasions: med(["Funeral and memorial", "Wedding"]), cultures: hi(["Jewish"]) },
+    }));
+    expect(d.forms).toEqual(["Hymn"]);
+    expect(d.communities).toEqual(["Christian"]);
+    expect(d.occasions).toEqual(["Funeral and memorial"]);
+    expect(d.cultures).toBeUndefined();
+  });
+  it("ignores names outside the lists, such as a group heading", () => {
+    const pick = { occasions: hi(["Gatherings"]), communities: hi(["Jewish movements"]) };
+    const d = decideEnrichment(base({ gpt: pick, claude: pick }));
+    expect(d.occasions).toBeUndefined();
+    expect(d.communities).toBeUndefined();
+  });
+});
+
 describe("decideEnrichment — lyrics", () => {
   const lyrics = "Oh\nWhen the night has come\nAnd the land is dark\nStand by me, oh stand by me";
   it("takes a model's first line when it opens the published lyrics, and a hook found in them", () => {

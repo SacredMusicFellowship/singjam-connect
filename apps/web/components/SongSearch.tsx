@@ -19,6 +19,9 @@ type FilterMeta = {
   languages: string[];
   themes: string[];
   cultures: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
@@ -65,7 +68,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
 
   const {
     filterOptions, matchesFilters,
-    selectedGenres, selectedLanguages, selectedThemes, selectedCultures,
+    selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedForms, selectedOccasions, selectedCommunities,
     selectedVibe, setSelectedVibe,
     selectedTonality, setSelectedTonality,
     selectedMeter, setSelectedMeter,
@@ -73,7 +76,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     yearMax, setYearMax,
     yearBounds,
     activeFilterCount,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, clearFilters,
+    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, toggleForm, toggleOccasion, toggleCommunity, clearFilters,
     sortBy, setSortBy,
   } = useSongFilters(filterMeta, "popularity");
 
@@ -82,6 +85,9 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     languages: Array.from(selectedLanguages).sort(),
     themes: Array.from(selectedThemes).sort(),
     cultures: Array.from(selectedCultures).sort(),
+    forms: Array.from(selectedForms).sort(),
+    occasions: Array.from(selectedOccasions).sort(),
+    communities: Array.from(selectedCommunities).sort(),
     vibe: selectedVibe,
     tonality: selectedTonality,
     meter: selectedMeter,
@@ -89,7 +95,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     yearMax,
     excludeMine: hideMySongs,
     sort: sortBy,
-  }), [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, hideMySongs, sortBy]);
+  }), [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedForms, selectedOccasions, selectedCommunities, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, hideMySongs, sortBy]);
 
   const {
     songs: browseSongs,
@@ -275,6 +281,9 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
             selectedLanguages={selectedLanguages}
             selectedThemes={selectedThemes}
             selectedCultures={selectedCultures}
+              selectedForms={selectedForms}
+              selectedOccasions={selectedOccasions}
+              selectedCommunities={selectedCommunities}
             selectedVibe={selectedVibe}
             setSelectedVibe={setSelectedVibe}
             selectedTonality={selectedTonality}
@@ -291,6 +300,9 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
             toggleLanguage={toggleLanguage}
             toggleTheme={toggleTheme}
             toggleCulture={toggleCulture}
+              toggleForm={toggleForm}
+              toggleOccasion={toggleOccasion}
+              toggleCommunity={toggleCommunity}
             clearFilters={clearFilters}
           />
         )}
@@ -306,7 +318,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 slug={r.slug}
                 displayArtist={r.display_artist}
                 composers={r.composers}
-                cultures={r.cultures ?? []}
+                cultures={[...(r.cultures ?? []), ...(r.communities ?? [])]}
                 productions={r.productions}
                 recordingArtists={r.recording_artists}
                 productionCredits={r.production_credits}
@@ -355,7 +367,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 slug={r.slug}
                 displayArtist={r.display_artist}
                 composers={r.composers}
-                cultures={r.cultures}
+                cultures={[...(r.cultures ?? []), ...(r.communities ?? [])]}
                 productions={r.productions}
                 recordingArtists={r.recording_artists}
                 productionCredits={r.production_credits}

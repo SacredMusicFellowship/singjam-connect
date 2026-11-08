@@ -22,6 +22,10 @@ import {
   enrichmentInProgress,
   ENRICHMENT_WAIT_MS,
   formatJammers,
+  songTagNames,
+  TAG_TYPE_LABELS,
+  type SongTagRow,
+  type TagContext,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
@@ -71,10 +75,7 @@ type SongDetail = {
   musicCultures: string[];
   lyricsCultures: string[];
   recordingArtists: RecordingArtist[];
-  genres: string[];
-  themes: string[];
-  cultures: string[];
-  languages: string[];
+  tagLists: { label: string; tags: string[] }[];
   productions: string[];
   production_credits?: ProductionCredit[];
 };
@@ -260,11 +261,8 @@ export default function SongDetailScreen() {
           song_alternate_titles(title),
           song_composers(people(name)),
           song_lyricists(people(name)),
-          song_cultures(context, cultures(name)),
+          song_tags(context, tags(name, type)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
-          song_genres(genres(name)),
-          song_themes(themes(name)),
-          song_languages(languages(name)),
           song_productions(productions(name, year))
         `)
         .eq('id', songId)
@@ -295,10 +293,10 @@ export default function SongDetailScreen() {
     }
 
     const s = songRes.data as any;
-    const cultureRows: any[] = s.song_cultures ?? [];
-    const musicRows = cultureRows.filter((x: any) => x.context === 'music');
-    const lyricsRows = cultureRows.filter((x: any) => x.context === 'lyrics');
-    const noCtx = cultureRows.filter((x: any) => !x.context);
+    const tagRows: SongTagRow[] = s.song_tags ?? [];
+    // Where "Traditional" comes from: the melody's / words' own tradition when
+    // set, otherwise the song's general cultures and communities (as on web).
+    const origins = (context: TagContext) => [...songTagNames(tagRows, 'culture', context), ...songTagNames(tagRows, 'community', context)];
 
     setSong({
       id: s.id,
@@ -322,17 +320,16 @@ export default function SongDetailScreen() {
       altTitles: (s.song_alternate_titles ?? []).map((x: any) => x.title).filter(Boolean),
       composers: sortByLastName((s.song_composers ?? []).map((x: any) => x.people?.name).filter(Boolean)),
       lyricists: sortByLastName((s.song_lyricists ?? []).map((x: any) => x.people?.name).filter(Boolean)),
-      musicCultures: (musicRows.length ? musicRows : noCtx).map((x: any) => x.cultures?.name).filter(Boolean),
-      lyricsCultures: (lyricsRows.length ? lyricsRows : noCtx).map((x: any) => x.cultures?.name).filter(Boolean),
+      musicCultures: origins('music').length ? origins('music') : origins('general'),
+      lyricsCultures: origins('lyrics').length ? origins('lyrics') : origins('general'),
       recordingArtists: sortRecordingsByYear(
         (s.song_recording_artists ?? [])
           .map((x: any) => ({ name: x.artists?.name, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
           .filter((x: any) => x.name)
       ),
-      genres: (s.song_genres ?? []).map((x: any) => x.genres?.name).filter(Boolean).sort(),
-      themes: (s.song_themes ?? []).map((x: any) => x.themes?.name).filter(Boolean).sort(),
-      cultures: [...new Set((cultureRows).map((x: any) => x.cultures?.name).filter(Boolean) as string[])],
-      languages: (s.song_languages ?? []).map((x: any) => x.languages?.name).filter(Boolean),
+      tagLists: (['genre', 'form', 'occasion', 'community', 'theme', 'language', 'culture'] as const)
+        .map((type) => ({ label: TAG_TYPE_LABELS[type], tags: songTagNames(tagRows, type) }))
+        .filter((t) => t.tags.length > 0),
       productions: (s.song_productions ?? []).map((x: any) => x.productions?.name).filter(Boolean),
       production_credits: (s.song_productions ?? [])
         .map((x: any) => x.productions)
@@ -520,7 +517,7 @@ export default function SongDetailScreen() {
   const earliestYear = allYears.length > 0 ? Math.min(...allYears) : null;
 
   const hasMusicalProps = tonalityPills.length > 0 || meterPills.length > 0 || !!song.vibe;
-  const hasTags = song.genres.length > 0 || song.themes.length > 0 || song.cultures.length > 0 || song.languages.length > 0;
+  const hasTags = song.tagLists.length > 0;
   const hasJammers = jammers && (jammers.lead.length > 0 || jammers.support.length > 0 || jammers.learn.length > 0);
 
   // Web repeats this control group at the top and bottom of the page, so a long
@@ -805,10 +802,7 @@ export default function SongDetailScreen() {
         {hasTags ? (
           <View className="px-4 py-4 border-b border-slate-100">
             <SectionHeader title="Tags" />
-            <TagRow label="Genres" tags={song.genres} />
-            <TagRow label="Themes" tags={song.themes} />
-            <TagRow label="Languages" tags={song.languages} />
-            <TagRow label="Cultures" tags={song.cultures} />
+            {song.tagLists.map((t) => <TagRow key={t.label} label={t.label} tags={t.tags} />)}
           </View>
         ) : null}
 

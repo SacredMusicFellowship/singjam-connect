@@ -1,3 +1,4 @@
+import { jamTags } from "@singjam/core";
 import { redirect } from "next/navigation";
 import { getSessionServer, supabaseServer } from "@/lib/supabase/server";
 import NewJamForm, { type NewJamInitialData } from "@/components/NewJamForm";
@@ -12,14 +13,13 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
   if (copy) {
     const supabase = await supabaseServer();
     // Copying a public jam you haven't RSVP'd to doesn't hand you its address.
-    const [jamRes, genresRes, themesRes, addressRes] = await Promise.all([
+    const [jamRes, tagsRes, addressRes] = await Promise.all([
       supabase
         .from("jams")
         .select("name, visibility, notes, neighborhood, capacity, guests_can_invite, tickets_url, image_url, image_focal_point, image_desktop_url, image_mobile_url, image_list_url, image_crops, starts_at, ends_at, timezone")
         .eq("id", copy)
         .maybeSingle(),
-      supabase.from("jam_genres").select("genre_id").eq("jam_id", copy),
-      supabase.from("jam_themes").select("theme_id").eq("jam_id", copy),
+      supabase.from("jam_tags").select("tags(id, name, type)").eq("jam_id", copy),
       supabase.rpc("jam_full_address", { jam_id_param: copy }),
     ]);
 
@@ -51,8 +51,8 @@ export default async function NewJamPage({ searchParams }: { searchParams: Promi
           image_list_url: jam.image_list_url,
           image_crops: jam.image_crops,
         },
-        selectedGenreIds: ((genresRes.data ?? []) as any[]).map((r) => r.genre_id as string),
-        selectedThemeIds: ((themesRes.data ?? []) as any[]).map((r) => r.theme_id as string),
+        selectedGenreIds: jamTags(tagsRes.data as any, "genre").map((t) => t.id as string),
+        selectedThemeIds: jamTags(tagsRes.data as any, "theme").map((t) => t.id as string),
         startTime: fmt(jam.starts_at),
         endTime: fmt(jam.ends_at),
         timezone: jam.timezone ?? null,

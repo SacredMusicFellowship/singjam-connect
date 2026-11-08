@@ -57,6 +57,9 @@ type Item = {
   genres: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
@@ -88,6 +91,7 @@ type SuggestionResult = {
   productions: string[];
   genres: string[];
   languages: string[];
+  communities?: string[];
   year: number | null;
   popularity: number;
   youtube_id: string | null;
@@ -155,7 +159,7 @@ function SuggestionsPanel({
             title={s.title}
             displayArtist={s.display_artist}
             composers={s.composers}
-            cultures={s.cultures}
+            cultures={[...s.cultures, ...(s.communities ?? [])]}
             productions={s.productions}
             recordingArtists={s.recording_artists}
             productionCredits={s.production_credits}
@@ -233,7 +237,7 @@ const RepertoireRow = memo(function RepertoireRow({
           </Link>
           {it.composers.length > 0 && (
             <span className="ml-1 font-normal text-slate-400">
-              ({formatComposers(it.composers, it.cultures)})
+              ({formatComposers(it.composers, [...it.cultures, ...(it.communities ?? [])])})
             </span>
           )}
         </div>
@@ -317,7 +321,7 @@ export default function RepertoirePage() {
 
   const {
     filterOptions, matchesFilters,
-    selectedGenres, selectedLanguages, selectedThemes, selectedCultures,
+    selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedForms, selectedOccasions, selectedCommunities,
     selectedVibe, setSelectedVibe,
     selectedTonality, setSelectedTonality,
     selectedMeter, setSelectedMeter,
@@ -325,7 +329,7 @@ export default function RepertoirePage() {
     yearMax, setYearMax,
     yearBounds,
     activeFilterCount,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, clearFilters,
+    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, toggleForm, toggleOccasion, toggleCommunity, clearFilters,
     sortBy, setSortBy,
   } = useSongFilters(items, "title_asc");
 
@@ -428,6 +432,9 @@ export default function RepertoirePage() {
           genres: r.genres ?? [],
           languages: r.languages ?? [],
           themes: r.themes ?? [],
+          forms: r.forms ?? [],
+          occasions: r.occasions ?? [],
+          communities: r.communities ?? [],
           popularity: r.popularity ?? 0,
           chord_chart_url: r.chord_chart_url ?? null,
         }));
@@ -733,6 +740,9 @@ export default function RepertoirePage() {
         genres: result.genres ?? [],
         languages: result.languages ?? [] as string[],
         themes: [],
+        forms: [],
+        occasions: [],
+        communities: [],
         vibe: null,
         tonality: null,
         meter: null,
@@ -895,7 +905,7 @@ export default function RepertoirePage() {
                       title={result.title}
                       displayArtist={result.display_artist}
                       composers={result.composers}
-                      cultures={result.cultures ?? []}
+                      cultures={[...(result.cultures ?? []), ...(result.communities ?? [])]}
                       productions={result.productions}
                       recordingArtists={result.recording_artists}
                       productionCredits={result.production_credits}
@@ -1092,6 +1102,9 @@ export default function RepertoirePage() {
               selectedLanguages={selectedLanguages}
               selectedThemes={selectedThemes}
               selectedCultures={selectedCultures}
+              selectedForms={selectedForms}
+              selectedOccasions={selectedOccasions}
+              selectedCommunities={selectedCommunities}
               selectedVibe={selectedVibe}
               setSelectedVibe={setSelectedVibe}
               selectedTonality={selectedTonality}
@@ -1108,6 +1121,9 @@ export default function RepertoirePage() {
               toggleLanguage={toggleLanguage}
               toggleTheme={toggleTheme}
               toggleCulture={toggleCulture}
+              toggleForm={toggleForm}
+              toggleOccasion={toggleOccasion}
+              toggleCommunity={toggleCommunity}
               clearFilters={clearFilters}
             />
           )}

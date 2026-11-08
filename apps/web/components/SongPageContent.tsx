@@ -1,6 +1,6 @@
 "use client";
 
-import { CONFIDENCE_STYLES, formatJammers, isUuid, type ConfidenceLevel } from "@singjam/core";
+import { CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
 import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
@@ -110,10 +110,7 @@ const SONG_SELECT = `
           song_lyricists(people(name)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
           song_alternate_titles(title),
-          song_genres(genres(name)),
-          song_themes(themes(name)),
-          song_cultures(context, cultures(name)),
-          song_languages(languages(name)),
+          song_tags(context, tags(name, type)),
           song_productions(productions(name, year))
         `;
 
@@ -309,24 +306,21 @@ export default function SongPageContent() {
 
   const composers = sortByLastName((song.song_composers as any[]).map((x: any) => x.people?.name).filter(Boolean));
   const lyricists = sortByLastName((song.song_lyricists as any[]).map((x: any) => x.people?.name).filter(Boolean));
-  const cultureRows = song.song_cultures as any[];
-  const musicSpecificRows = cultureRows.filter((x: any) => x.context === "music");
-  const lyricsSpecificRows = cultureRows.filter((x: any) => x.context === "lyrics");
-  const noContextRows = cultureRows.filter((x: any) => !x.context);
-  const musicCultures = (musicSpecificRows.length ? musicSpecificRows : noContextRows)
-    .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
-  const lyricsCultures = (lyricsSpecificRows.length ? lyricsSpecificRows : noContextRows)
-    .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
+  const tagRows = song.song_tags as SongTagRow[];
+  // Where "Traditional" comes from: the melody's / words' own tradition when set,
+  // otherwise the song's general cultures and communities.
+  const origins = (context: TagContext) => [...songTagNames(tagRows, "culture", context), ...songTagNames(tagRows, "community", context)];
+  const musicCultures = origins("music").length ? origins("music") : origins("general");
+  const lyricsCultures = origins("lyrics").length ? origins("lyrics") : origins("general");
   const recordingArtists = sortRecordingsByYear(
     (song.song_recording_artists as any[])
       .map((x: any) => ({ name: x.artists?.name as string, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
       .filter((x: any) => x.name)
   );
   const altTitles = (song.song_alternate_titles as any[]).map((x: any) => x.title as string).filter(Boolean);
-  const genres = (song.song_genres as any[]).map((x: any) => x.genres?.name as string).filter(Boolean).sort();
-  const themes = (song.song_themes as any[]).map((x: any) => x.themes?.name as string).filter(Boolean).sort();
-  const cultures = [...new Set((song.song_cultures as any[]).map((x: any) => x.cultures?.name as string).filter(Boolean))];
-  const languages = (song.song_languages as any[]).map((x: any) => x.languages?.name as string).filter(Boolean);
+  const tagLists = (["genre", "form", "occasion", "community", "theme", "language", "culture"] as const)
+    .map((type) => ({ label: TAG_TYPE_LABELS[type], tags: songTagNames(tagRows, type) }))
+    .filter((t) => t.tags.length > 0);
   const songProductions = (song.song_productions as any[])
     .map((x: any) => x.productions)
     .filter((p: any): p is { name: string; year: number | null } => !!p?.name);
@@ -559,13 +553,10 @@ export default function SongPageContent() {
         </section>
       )}
 
-      {(genres.length > 0 || themes.length > 0 || cultures.length > 0 || languages.length > 0) && (
+      {tagLists.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tags</h2>
-          {genres.length > 0 && <TagRow label="Genres" tags={genres} />}
-          {themes.length > 0 && <TagRow label="Themes" tags={themes} />}
-          {languages.length > 0 && <TagRow label="Languages" tags={languages} />}
-          {cultures.length > 0 && <TagRow label="Cultures" tags={cultures} />}
+          {tagLists.map((t) => <TagRow key={t.label} label={t.label} tags={t.tags} />)}
         </section>
       )}
 

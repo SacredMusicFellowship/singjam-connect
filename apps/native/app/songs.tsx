@@ -30,6 +30,9 @@ type SongMeta = {
   cultures: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
@@ -99,6 +102,9 @@ function toSongMeta(r: any): SongMeta {
     cultures: r.cultures ?? [],
     languages: r.languages ?? [],
     themes: r.themes ?? [],
+    forms: r.forms ?? [],
+    occasions: r.occasions ?? [],
+    communities: r.communities ?? [],
     vibe: r.vibe ?? null,
     tonality: r.tonality ?? null,
     meter: r.meter ?? null,
@@ -238,12 +244,12 @@ export default function SongLibraryScreen() {
   // option lists every time you changed the sort order. Likewise `myConfidence`
   // only reaches the pool while "Hide my songs" is on, so ordinary repertoire
   // edits shouldn't rebuild them either.
-  const { genres, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax } = filters;
+  const { genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax } = filters;
   const hiddenIds = hideMySongs ? myConfidence : null;
   const options = useMemo(() => {
     const pool = hiddenIds ? allSongs.filter(s => !hiddenIds.has(s.song_id)) : allSongs;
-    return deriveFilterOptions(pool, { genres, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax });
-  }, [allSongs, hiddenIds, genres, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax]);
+    return deriveFilterOptions(pool, { genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax });
+  }, [allSongs, hiddenIds, genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax]);
 
   const yearBounds = useMemo(() => {
     const years = allSongs.map(s => s.year).filter((y): y is number => y != null);

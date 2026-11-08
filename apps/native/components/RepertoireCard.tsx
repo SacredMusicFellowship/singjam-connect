@@ -16,6 +16,7 @@ export type RepertoireCardSong = {
   display_artist: string | null;
   composers: string[];
   cultures: string[];
+  communities?: string[];
   productions: string[];
   popularity: number;
   chord_chart_url?: string | null;
@@ -54,7 +55,7 @@ function RepertoireCard({
   }
 
   const composersLabel = song.composers.length > 0
-    ? formatComposers(song.composers, song.cultures)
+    ? formatComposers(song.composers, [...song.cultures, ...(song.communities ?? [])])
     : null;
 
   return (
