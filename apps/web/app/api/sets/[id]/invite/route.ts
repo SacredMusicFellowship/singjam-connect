@@ -5,6 +5,7 @@ import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { createNotification } from "@/lib/notifications";
 import { setCollaboratorInviteHtml, setCollaboratorNonMemberInviteHtml } from "@/emails/set-invite";
 import { setPathById } from "@/lib/shortRef";
+import { findAuthUserByEmail } from "@/lib/authUsers";
 
 export async function POST(
   req: Request,
@@ -105,8 +106,7 @@ export async function POST(
 
   // Email invite
   if (inviteeEmail) {
-    const { data: existingUsers } = await admin.auth.admin.listUsers();
-    const match = existingUsers?.users?.find((u) => u.email?.toLowerCase() === inviteeEmail.toLowerCase());
+    const match = await findAuthUserByEmail(admin.auth.admin, inviteeEmail);
 
     if (match) {
       // Redirect caller to use the user ID flow
