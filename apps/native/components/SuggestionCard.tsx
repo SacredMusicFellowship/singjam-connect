@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Pressable, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { browsePath, productionCredits, songCardCredits, songCardPills, type CardCredit, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { browsePath, productionCredits, songCardCredits, songCardPills, type CardCredit, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 
 export type Suggestion = {
@@ -10,6 +10,7 @@ export type Suggestion = {
   title: string;
   display_artist: string | null;
   byline?: string | null;
+  card_identity?: CardIdentity;
   first_line: string | null;
   slug: string | null;
   composers: string[];
@@ -75,6 +76,8 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
   }
 
   const credits = songCardCredits({
+    title: song.title,
+    identity: song.card_identity,
     byline: song.byline,
     displayArtist: song.display_artist,
     composers: song.composers,

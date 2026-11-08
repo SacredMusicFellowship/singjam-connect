@@ -68,6 +68,7 @@ export default function BrowseSongList({ songs, meta, roles }: {
               slug={r.slug}
               displayArtist={r.display_artist}
               byline={r.byline}
+              cardIdentity={r.card_identity}
               composers={r.composers}
               cultures={[...(r.cultures ?? []), ...(r.communities ?? [])]}
               productions={r.productions}

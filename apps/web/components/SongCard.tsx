@@ -1,6 +1,6 @@
 "use client";
 
-import { browsePath, songCardPills, songCardCredits, hasLeadVoice, productionCredits, type CardCredit, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { browsePath, songCardPills, songCardCredits, hasLeadVoice, productionCredits, type CardCredit, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import { Fragment, useState } from "react";
 import Link from "next/link";
 import RoleSelect from "@/components/RoleSelect";
@@ -45,6 +45,7 @@ export default function SongCard({
   slug,
   displayArtist,
   byline,
+  cardIdentity,
   composers,
   cultures,
   productions,
@@ -73,6 +74,7 @@ export default function SongCard({
   slug: string | null;
   displayArtist: string | null;
   byline?: string | null;
+  cardIdentity?: CardIdentity;
   composers: string[];
   cultures: string[];
   productions: string[];
@@ -105,7 +107,7 @@ export default function SongCard({
   const confidenceLabel = LEVELS.find((l) => l.key === confidence)?.label ?? confidence;
   const picking = pendingAddId === songId;
   const href = `/songs/${slug ?? songId}`;
-  const credits = songCardCredits({ byline, displayArtist, composers, cultures: cultures ?? [], recordingArtists });
+  const credits = songCardCredits({ title, byline, displayArtist, composers, cultures: cultures ?? [], recordingArtists, identity: cardIdentity });
   const shows = productionCredits(productionCreditsProp, productions);
   const pills = songCardPills({ forms, occasions, genres, communities, languages });
 

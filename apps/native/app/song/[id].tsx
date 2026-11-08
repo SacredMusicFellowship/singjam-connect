@@ -755,7 +755,7 @@ export default function SongDetailScreen() {
         {/* Songwriters */}
         {(song.composers.length > 0 || song.lyricists.length > 0) ? (
           <View className="px-4 py-4 border-b border-slate-100">
-            <SectionHeader title="Songwriter(s)" />
+            <SectionHeader title="Songwriters" />
             {song.composers.length > 0 ? (
               <Text className="text-sm text-slate-700 mb-1">
                 <Text className="font-medium">Music: </Text>

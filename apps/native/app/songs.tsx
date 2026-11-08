@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { songMatchesFilters, deriveFilterOptions, deriveFilterFacets, expandFilterState, countActiveFilters, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { songMatchesFilters, deriveFilterOptions, deriveFilterFacets, expandFilterState, countActiveFilters, type CardIdentity, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
@@ -24,6 +24,7 @@ type SongMeta = {
   title: string;
   display_artist: string | null;
   byline: string | null;
+  card_identity?: CardIdentity;
   first_line: string | null;
   slug: string | null;
   composers: string[];
@@ -93,6 +94,7 @@ function toSongMeta(r: any): SongMeta {
     title: r.title ?? '',
     display_artist: r.display_artist ?? null,
     byline: r.byline ?? null,
+    card_identity: r.card_identity ?? null,
     first_line: r.first_line ?? null,
     slug: r.slug ?? null,
     youtube_id: r.youtube_id ?? null,
@@ -337,7 +339,7 @@ export default function SongLibraryScreen() {
         </View>
         {searching && (
           <Text className="text-xs text-zinc-500 mt-2">
-            {searchLoading ? 'Searching…' : `${displayedSongs.length} song(s)`}
+            {searchLoading ? 'Searching…' : `${displayedSongs.length} song${displayedSongs.length === 1 ? '' : 's'}`}
           </Text>
         )}
       </View>

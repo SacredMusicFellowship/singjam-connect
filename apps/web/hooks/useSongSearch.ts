@@ -1,4 +1,4 @@
-import type { ProductionCredit, RecordingArtistCredit } from "@singjam/core";
+import type { CardIdentity, ProductionCredit, RecordingArtistCredit } from "@singjam/core";
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -7,6 +7,7 @@ export type SongSearchResult = {
   title: string;
   display_artist: string | null;
   byline?: string | null;
+  card_identity?: CardIdentity;
   first_line: string | null;
   aka: string[] | null;
   score: number;

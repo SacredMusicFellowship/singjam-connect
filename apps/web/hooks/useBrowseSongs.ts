@@ -1,4 +1,4 @@
-import type { ProductionCredit, RecordingArtistCredit } from "@singjam/core";
+import type { CardIdentity, ProductionCredit, RecordingArtistCredit } from "@singjam/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { browseRpcParams, type BrowseFilters } from "@/lib/browseSongsParams";
@@ -11,6 +11,7 @@ export type BrowseSong = {
   slug: string | null;
   display_artist: string | null;
   byline?: string | null;
+  card_identity?: CardIdentity;
   composers: string[];
   cultures: string[];
   productions: string[];

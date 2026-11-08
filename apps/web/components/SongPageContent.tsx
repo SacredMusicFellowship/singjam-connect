@@ -478,7 +478,7 @@ export default function SongPageContent() {
 
         {(composers.length > 0 || lyricists.length > 0) && (
           <div className="mt-3 flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Songwriter(s)</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Songwriters</p>
             {composers.length > 0 && (
               <p className="text-sm text-slate-600">
                 <span className="font-medium">Music:</span> <WriterLinks names={composers} slugs={personSlugs} cultures={musicCultures} />

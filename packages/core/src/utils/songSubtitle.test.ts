@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { songCardCredits, songSubtitle, songSubtitleText } from "./songSubtitle";
+import { songCardCredits, songCardIdentity, songSubtitle, songSubtitleText } from "./songSubtitle";
 
 describe("songSubtitle", () => {
   it("names the show when the song is from one", () => {
@@ -21,26 +21,36 @@ describe("songSubtitle", () => {
   });
 });
 
+describe("songCardIdentity", () => {
+  it("prefers the tune, then the scripture, then the first line", () => {
+    expect(songCardIdentity({ tune: "Nettleton", first_line: "Come, thou Fount" }, "Come Thou Fount")).toBe("Tune: Nettleton");
+    expect(songCardIdentity({ source: { book: "Psalms", chapter_start: 133, verse_start: 1 } }, "Hinei Ma Tov")).toBe("Psalm 133:1");
+    expect(songCardIdentity({ first_line: "Oh Shenandoah, I long to see you," }, "Shenandoah")).toBe("“Oh Shenandoah, I long to see you…”");
+  });
+  it("skips a first line that only repeats the title", () => {
+    expect(songCardIdentity({ first_line: "Come, thou Fount of every blessing," }, "Come Thou Fount of Every Blessing")).toBeNull();
+    expect(songCardIdentity(null, "Anything")).toBeNull();
+  });
+});
+
 describe("songCardCredits", () => {
   const recordingArtists = [{ name: "Isaac Zones", year: 2015 }];
   it("puts writers after the title and recordings under it for a song known by its recording", () => {
-    const c = songCardCredits({ byline: "Van Morrison", displayArtist: "Van Morrison", composers: ["Van Morrison"], cultures: [], recordingArtists: [{ name: "Van Morrison", year: 1967 }] });
+    const c = songCardCredits({ title: "Moondance", byline: "Van Morrison", displayArtist: "Van Morrison", composers: ["Van Morrison"], cultures: [], recordingArtists: [{ name: "Van Morrison", year: 1967 }] });
     expect(c.writers).toEqual([{ text: "V. Morrison", link: { kind: "person", name: "Van Morrison" } }]);
     expect(c.line).toEqual([{ text: "Van Morrison (1967)", link: { kind: "artist", name: "Van Morrison" } }]);
   });
   it("treats a row from before byline existed as known by its recording", () => {
-    expect(songCardCredits({ displayArtist: "Van Morrison", composers: [], cultures: [], recordingArtists: null }).line).toEqual([{ text: "Van Morrison", link: null }]);
+    expect(songCardCredits({ title: "x", displayArtist: "Van Morrison", composers: [], cultures: [], recordingArtists: null }).line).toEqual([{ text: "Van Morrison", link: null }]);
   });
-  it("shows the writers under the title, each linked, for a song not known by its recording", () => {
-    const c = songCardCredits({ byline: "John Newton, William Cowper", displayArtist: "Aretha Franklin", composers: ["John Newton"], cultures: [], recordingArtists });
-    expect(c.writers).toEqual([]);
-    expect(c.line).toEqual([
-      { text: "John Newton", link: { kind: "person", name: "John Newton" } },
-      { text: "William Cowper", link: { kind: "person", name: "William Cowper" } },
-    ]);
+  it("keeps the writers in brackets and shows what identifies a song not known by its recording", () => {
+    const c = songCardCredits({ title: "Come Thou Fount of Every Blessing", byline: "Robert Robinson", displayArtist: "Sufjan Stevens", composers: ["Robert Robinson"], cultures: [], recordingArtists, identity: { tune: "Nettleton" } });
+    expect(c.writers).toEqual([{ text: "R. Robinson", link: { kind: "person", name: "Robert Robinson" } }]);
+    expect(c.line).toEqual([{ text: "Tune: Nettleton", link: null }]);
   });
-  it("shows a traditional byline whole and unlinked", () => {
-    expect(songCardCredits({ byline: "Traditional · Jewish", displayArtist: "Isaac Zones", composers: ["Traditional"], cultures: [], recordingArtists }).line)
-      .toEqual([{ text: "Traditional · Jewish", link: null }]);
+  it("shows a traditional song's origin in the brackets", () => {
+    const c = songCardCredits({ title: "Hinei Ma Tov", byline: "Traditional · Jewish", displayArtist: "Isaac Zones", composers: ["Traditional"], cultures: ["Jewish"], recordingArtists, identity: { source: { book: "Psalms", chapter_start: 133, verse_start: 1 } } });
+    expect(c.writers).toEqual([{ text: "Trad. · Jewish", link: null }]);
+    expect(c.line).toEqual([{ text: "Psalm 133:1", link: null }]);
   });
 });

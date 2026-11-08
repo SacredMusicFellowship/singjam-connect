@@ -20,7 +20,7 @@ import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
 import ChordChartSlot from "@/components/ChordChartSlot";
@@ -86,6 +86,7 @@ type RepertoireCache = {
 type SuggestionResult = {
   song_id: string;
   byline?: string | null;
+  card_identity?: CardIdentity;
   title: string;
   display_artist: string | null;
   first_line: string | null;
@@ -163,6 +164,7 @@ function SuggestionsPanel({
             title={s.title}
             displayArtist={s.display_artist}
             byline={s.byline}
+            cardIdentity={s.card_identity}
             composers={s.composers}
             cultures={[...s.cultures, ...(s.communities ?? [])]}
             productions={s.productions}
@@ -902,6 +904,7 @@ export default function RepertoirePage() {
                       title={result.title}
                       displayArtist={result.display_artist}
                       byline={result.byline}
+                      cardIdentity={result.card_identity}
                       composers={result.composers}
                       cultures={[...(result.cultures ?? []), ...(result.communities ?? [])]}
                       productions={result.productions}

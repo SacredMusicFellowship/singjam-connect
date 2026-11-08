@@ -187,7 +187,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
           {loading
             ? "Searching…"
             : q.trim()
-              ? `${sortedSearch.length} song(s)${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`
+              ? `${sortedSearch.length} song${sortedSearch.length === 1 ? "" : "s"}${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`
               : null}
         </div>
         {(searchError ?? browseError ?? status ?? actions.status) ? <div className="text-sm text-zinc-700">{searchError ?? browseError ?? status ?? actions.status}</div> : null}
@@ -245,6 +245,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 slug={r.slug}
                 displayArtist={r.display_artist}
                 byline={r.byline}
+                cardIdentity={r.card_identity}
                 composers={r.composers}
                 cultures={[...(r.cultures ?? []), ...(r.communities ?? [])]}
                 productions={r.productions}
@@ -292,6 +293,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 slug={r.slug}
                 displayArtist={r.display_artist}
                 byline={r.byline}
+                cardIdentity={r.card_identity}
                 composers={r.composers}
                 cultures={[...(r.cultures ?? []), ...(r.communities ?? [])]}
                 productions={r.productions}

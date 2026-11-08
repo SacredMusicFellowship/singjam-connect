@@ -1,3 +1,4 @@
+import type { CardIdentity } from "./songSubtitle";
 import { fetchAllRows } from "./fetchAllRows";
 import { browsePath, SHOW_MEDIUM_LABEL, type BrowseKind } from "./browsePaths";
 import type { TagType } from "./songTags";
@@ -9,6 +10,7 @@ export type BrowseSongRow = {
   title: string;
   slug: string | null;
   byline: string | null;
+  card_identity?: CardIdentity;
   display_artist: string | null;
   composers: string[];
   cultures: string[];
