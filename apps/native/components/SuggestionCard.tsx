@@ -1,8 +1,8 @@
 import { memo } from 'react';
-import { View, Text, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { formatComposers, formatJammers, formatRecordingArtists, productionCredits, songCardSecondLine, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { browsePath, formatComposers, formatRecordingArtists, productionCredits, songCardPills, songCardSecondLine, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 
 export type Suggestion = {
@@ -17,6 +17,8 @@ export type Suggestion = {
   communities?: string[];
   productions: string[];
   genres: string[];
+  forms?: string[];
+  occasions?: string[];
   languages: string[];
   year: number | null;
   popularity: number;
@@ -41,15 +43,19 @@ type Props = {
   // Set when the song is already in the user's repertoire: the Add button is
   // replaced by web's "✓ In your repertoire" pill plus a role control.
   confidence?: string | null;
+  // One extra line for where the card appears (a songwriter's role, …).
+  context?: string | null;
+  // Opens a browse page (web path); without it the pills aren't tappable.
+  onOpenBrowse?: (webPath: string) => void;
 };
 
-// Mirrors web's SongCard: title + (songwriters), then "from <production>" and/or
-// each recording artist with their recording year,
-// media links, genre chips + jammer count, then Add / View. Web embeds the
+// Mirrors web's SongCard: title + (songwriters), then how the song is known
+// ("from <production>", its tradition, or its recordings), media links, up to
+// three "what it is" pills (songCardPills) + how many know it, then Add. Web embeds the
 // YouTube and Spotify players inline; here they open the apps instead, since a
 // WebView per row would hurt list scrolling and Spotify only plays full tracks
 // in its own app. Spacing is tighter than web's so more songs fit a phone.
-function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
+function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse }: Props) {
   function handleAddTap(event: GestureResponderEvent) {
     // A new add comes from "I know this song!", so it asks lead or support;
     // learning has its own link. Changing an existing role offers all three.
@@ -78,13 +84,14 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
     recordingsLine: formatRecordingArtists(song.recording_artists, song.display_artist),
   });
   const shows = productionCredits(song.production_credits, song.productions);
-  const genres = [...song.genres].sort();
+  const pills = songCardPills({ forms: song.forms, occasions: song.occasions, genres: song.genres, communities: song.communities, languages: song.languages });
   const isLead = confidence === 'lead';
 
   return (
-    <View className="mx-4 mb-2 rounded-2xl border border-zinc-200 bg-white p-4">
+    // The whole card opens the song; its buttons and pills handle their own taps.
+    <Pressable onPress={() => onView(song)} className="mx-4 mb-2 rounded-2xl border border-zinc-200 bg-white p-4">
       <View className="flex-row items-start" style={{ gap: 8 }}>
-        <TouchableOpacity onPress={() => onView(song)} className="flex-1 min-w-0">
+        <View className="flex-1 min-w-0">
           <Text numberOfLines={3}>
             <Text className="font-medium text-zinc-900">{song.title}</Text>
             {composersLabel ? (
@@ -106,7 +113,8 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
           ) : artistsLine ? (
             <Text className="text-sm text-zinc-500">{artistsLine}</Text>
           ) : null}
-        </TouchableOpacity>
+          {context ? <Text className="text-xs text-zinc-500">{context}</Text> : null}
+        </View>
 
         <View className="shrink-0 flex-row items-center">
           {song.youtube_id && (
@@ -132,16 +140,21 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
         </View>
       </View>
 
-      {(genres.length > 0 || song.popularity > 0) && (
+      {(pills.length > 0 || song.popularity > 0) && (
         <View className="mt-2 flex-row flex-wrap items-center" style={{ gap: 6 }}>
-          {genres.map(g => (
-            <View key={g} className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5">
-              <Text className="text-xs text-zinc-500">{g}</Text>
-            </View>
+          {pills.map(p => (
+            <TouchableOpacity
+              key={`${p.type}:${p.name}`}
+              disabled={!onOpenBrowse}
+              onPress={() => onOpenBrowse?.(browsePath(p.type, p.slug))}
+              className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5"
+            >
+              <Text className="text-xs text-zinc-500">{p.name}</Text>
+            </TouchableOpacity>
           ))}
           {song.popularity > 0 && (
             <Text className="text-xs text-zinc-400">
-              {formatJammers(song.popularity)}
+              {song.popularity} know{song.popularity === 1 ? 's' : ''} it
             </Text>
           )}
         </View>
@@ -175,11 +188,8 @@ function SuggestionCard({ song, onAdd, onView, confidence }: Props) {
             </TouchableOpacity>
           </>
         )}
-        <TouchableOpacity onPress={() => onView(song)} className="rounded-full border border-zinc-200 px-3 py-1.5">
-          <Text className="text-sm text-zinc-600">View</Text>
-        </TouchableOpacity>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

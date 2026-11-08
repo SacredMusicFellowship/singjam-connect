@@ -14,6 +14,7 @@ import SubmitMissingSong from '@/components/SubmitMissingSong';
 import SuggestionCard from '@/components/SuggestionCard';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
 import { useTagHierarchy } from '@/lib/useTagHierarchy';
+import { nativeBrowseHref } from '@/lib/browseLinks';
 import InlineDropdown from '@/components/InlineDropdown';
 
 // A superset of SuggestionCard's `Suggestion`, so catalog rows render in the
@@ -298,6 +299,7 @@ export default function SongLibraryScreen() {
   const viewSong = useCallback((song: { song_id: string }) => {
     router.push(`/song/${song.song_id}` as any);
   }, [router]);
+  const openBrowse = useCallback((webPath: string) => router.push(nativeBrowseHref(webPath) as any), [router]);
 
   const renderItem = useCallback(({ item }: { item: SongMeta }) => (
     <SuggestionCard
@@ -305,8 +307,9 @@ export default function SongLibraryScreen() {
       confidence={myConfidence.get(item.song_id) ?? null}
       onAdd={addSong}
       onView={viewSong}
+      onOpenBrowse={openBrowse}
     />
-  ), [myConfidence, addSong, viewSong]);
+  ), [myConfidence, addSong, viewSong, openBrowse]);
 
   const activeFilterCount = countActiveFilters(filters);
   const searching = query.trim().length > 0;

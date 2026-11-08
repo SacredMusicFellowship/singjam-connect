@@ -14,6 +14,7 @@ import { useSongSearch, type SongSearchResult } from "@/hooks/useSongSearch";
 import { sortRepertoireSearchResults } from "@/lib/sortRepertoireSearchResults";
 import { SortDropdown } from "@/components/SortDropdown";
 import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
+import { matchedAlternateTitles } from "@singjam/core";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
@@ -169,6 +170,7 @@ function SuggestionsPanel({
             productionCredits={s.production_credits}
             aka={null}
             genres={s.genres}
+            communities={s.communities}
             languages={s.languages}
             popularity={s.popularity}
             youtubeId={s.youtube_id}
@@ -905,8 +907,11 @@ export default function RepertoirePage() {
                       productions={result.productions}
                       recordingArtists={result.recording_artists}
                       productionCredits={result.production_credits}
-                      aka={result.aka}
+                      aka={matchedAlternateTitles(result.aka, query, result.title)}
                       genres={result.genres}
+                      forms={result.forms}
+                      occasions={result.occasions}
+                      communities={result.communities}
                       languages={result.languages ?? []}
                       youtubeId={result.youtube_id}
                       spotifyTrackId={result.spotify_track_id}

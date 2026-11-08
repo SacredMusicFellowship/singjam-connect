@@ -10,7 +10,18 @@ export type BrowseSongRow = {
   slug: string | null;
   byline: string | null;
   display_artist: string | null;
+  composers: string[];
+  cultures: string[];
+  communities: string[];
+  productions: string[];
+  genres: string[];
+  forms: string[];
+  occasions: string[];
+  languages: string[];
+  recording_artists: { name: string; year: number | null }[] | null;
   production_credits: { name: string; year: number | null }[] | null;
+  youtube_id: string | null;
+  spotify_track_id: string | null;
   popularity: number;
 };
 

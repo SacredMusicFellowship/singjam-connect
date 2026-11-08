@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import type { BrowseKind } from "@singjam/core";
 import type { BrowseFilterMeta, BrowseSongRow } from "@/lib/browse";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
 import { SortDropdown } from "@/components/SortDropdown";
+import SongCard from "@/components/SongCard";
+import { useSongCardActions } from "@/hooks/useSongCardActions";
 
 const SORT_OPTIONS = [
   { value: "popularity" as const, label: "Most known" },
@@ -16,7 +17,7 @@ const SORT_OPTIONS = [
 ];
 
 // A browse page's songs with the Song Library's filters, scoped to this page.
-export default function BrowseSongList({ kind, songs, meta, roles }: {
+export default function BrowseSongList({ songs, meta, roles }: {
   kind: BrowseKind;
   songs: BrowseSongRow[];
   meta: BrowseFilterMeta[];
@@ -27,6 +28,7 @@ export default function BrowseSongList({ kind, songs, meta, roles }: {
   const { matchesFilters, activeFilterCount, sortBy, setSortBy } = filters;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const metaById = useMemo(() => new Map(meta.map((m) => [m.song_id, m])), [meta]);
+  const actions = useSongCardActions();
 
   const shown = useMemo(() => {
     const list = songs.filter((s) => activeFilterCount === 0 || matchesFilters(metaById.get(s.song_id)));
@@ -57,28 +59,34 @@ export default function BrowseSongList({ kind, songs, meta, roles }: {
       {shown.length === 0 ? (
         <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-8 text-center text-sm text-zinc-500">No songs here match these filters.</div>
       ) : (
-        <ul className="divide-y divide-zinc-100 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-          {shown.map((s) => {
-            const show = s.production_credits?.[0];
-            const line = [roles[s.song_id], s.byline ?? s.display_artist].filter(Boolean).join(" · ");
-            return (
-              <li key={s.song_id}>
-                <Link href={`/songs/${s.slug ?? s.song_id}`} className="flex items-baseline justify-between gap-3 px-4 py-3 hover:bg-amber-50/40">
-                  <span className="min-w-0">
-                    <span className="block font-medium text-zinc-900">{s.title}</span>
-                    <span className="block truncate text-sm text-zinc-500">
-                      {kind !== "show" && show ? <>from <em>{show.name}</em>{show.year ? ` (${show.year})` : ""}{line ? " · " : ""}</> : null}
-                      {line}
-                    </span>
-                  </span>
-                  {s.popularity > 0 && (
-                    <span className="shrink-0 text-xs tabular-nums text-zinc-400">{s.popularity} know{s.popularity === 1 ? "s" : ""} it</span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="grid gap-2">
+          {shown.map((r) => (
+            <SongCard
+              key={r.song_id}
+              songId={r.song_id}
+              title={r.title}
+              slug={r.slug}
+              displayArtist={r.display_artist}
+              byline={r.byline}
+              composers={r.composers}
+              cultures={[...(r.cultures ?? []), ...(r.communities ?? [])]}
+              productions={r.productions}
+              recordingArtists={r.recording_artists}
+              productionCredits={r.production_credits}
+              aka={null}
+              genres={r.genres}
+              forms={r.forms}
+              occasions={r.occasions}
+              communities={r.communities}
+              languages={r.languages ?? []}
+              context={roles[r.song_id] ?? null}
+              popularity={r.popularity}
+              youtubeId={r.youtube_id}
+              spotifyTrackId={r.spotify_track_id}
+              {...actions.cardProps}
+            />
+          ))}
+        </div>
       )}
     </section>
   );

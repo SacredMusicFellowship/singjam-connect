@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -6,6 +6,8 @@ import {
   songMatchesFilters, type BrowseEntity, type BrowseKind, type BrowseRelatedGroup, type BrowseSongRow, type FilterableSong, type LinkedTag, type SongFilterState,
 } from '@singjam/core';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
+import SuggestionCard from '@/components/SuggestionCard';
+import { useMySongs } from '@/lib/useMySongs';
 import { useTagHierarchy } from '@/lib/useTagHierarchy';
 import { supabase } from '@/lib/supabase';
 import ContentContainer from '@/components/ContentContainer';
@@ -65,6 +67,9 @@ export default function BrowseScreen() {
   }, [kind, slug]);
 
   const openTag = (t: LinkedTag) => router.push(nativeBrowseHref(browsePath(t.type, t.slug)) as any);
+  const openBrowse = useCallback((webPath: string) => router.push(nativeBrowseHref(webPath) as any), [router]);
+  const viewSong = useCallback((song: { song_id: string }) => router.push(`/song/${song.song_id}` as any), [router]);
+  const { myConfidence, addSong } = useMySongs();
   // The Song Library's filters, scoped to this page's songs.
   const expanded = useMemo(() => expandFilterState(filters, hierarchy), [filters, hierarchy]);
   const facets = useMemo(() => deriveFilterFacets(meta, filters, hierarchy), [meta, filters, hierarchy]);
@@ -129,24 +134,20 @@ export default function BrowseScreen() {
                 {activeCount > 0 ? <Text className="text-xs text-zinc-500 ml-2">{shownSongs.length} of {songs.length}</Text> : null}
               </View>
             )}
-            <View className="mt-2 rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+            <View className="mt-2 -mx-4">
               {shownSongs.length === 0 ? (
                 <Text className="text-sm text-zinc-500 text-center py-8">{songs.length === 0 ? 'No songs here yet.' : 'No songs here match these filters.'}</Text>
-              ) : shownSongs.map((s, i) => {
-                const show = s.production_credits?.[0];
-                const line = [entity.roles.get(s.song_id), s.byline ?? s.display_artist].filter(Boolean).join(' · ');
-                return (
-                  <TouchableOpacity key={s.song_id} onPress={() => router.push(`/song/${s.song_id}` as any)} className={`flex-row items-baseline px-4 py-3 ${i > 0 ? 'border-t border-zinc-100' : ''}`}>
-                    <View className="flex-1 mr-3">
-                      <Text className="font-medium text-zinc-900">{s.title}</Text>
-                      <Text className="text-sm text-zinc-500" numberOfLines={1}>
-                        {kind !== 'show' && show ? `from ${show.name}${show.year ? ` (${show.year})` : ''}${line ? ' · ' : ''}` : ''}{line}
-                      </Text>
-                    </View>
-                    {s.popularity > 0 ? <Text className="text-xs text-zinc-400">{s.popularity} know{s.popularity === 1 ? 's' : ''} it</Text> : null}
-                  </TouchableOpacity>
-                );
-              })}
+              ) : shownSongs.map(s => (
+                <SuggestionCard
+                  key={s.song_id}
+                  song={{ ...s, first_line: null, year: null, recording_artists: s.recording_artists ?? null }}
+                  confidence={myConfidence.get(s.song_id) ?? null}
+                  context={entity.roles.get(s.song_id) ?? null}
+                  onAdd={addSong}
+                  onView={viewSong}
+                  onOpenBrowse={openBrowse}
+                />
+              ))}
             </View>
             {related.length > 0 && (
               <View className="mt-6">

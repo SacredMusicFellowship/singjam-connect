@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
+import { useSongCardActions } from "@/hooks/useSongCardActions";
+import { matchedAlternateTitles } from "@singjam/core";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import { useBrowseSongs, type BrowseFilters } from "@/hooks/useBrowseSongs";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
@@ -42,16 +44,12 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
   const router = useRouter();
 
   const [filterMeta, setFilterMeta] = useState<FilterMeta[]>([]);
-  const [singingVoice, setSingingVoice] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [q, setQ] = useState(() => {
     if (typeof window === "undefined") return initialQuery;
     return new URLSearchParams(window.location.search).get("q") ?? initialQuery;
   });
   const [status, setStatus] = useState<string | null>(null);
-  const [pendingAddId, setPendingAddId] = useState<string | null>(null);
-  const [repertoire, setRepertoire] = useState<Map<string, string>>(new Map());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hideMySongs, setHideMySongs] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -99,24 +97,15 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     removeSong,
   } = useBrowseSongs(browseFilters, { pageSize: PAGE_SIZE, initialCount });
 
+  // The viewer's songs and the add buttons, shared with the browse pages' cards.
+  const actions = useSongCardActions({ onAdded: (songId) => { if (hideMySongs) removeSong(songId); } });
+  const { currentUser, repertoire } = actions;
+
   useEffect(() => {
     if (browseSongs.length > 0) sessionStorage.setItem("vc:/search", String(browseSongs.length));
   }, [browseSongs.length]);
 
   useEffect(() => {
-    // User data — session reads from localStorage (fast), then fetches profile + repertoire
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return;
-      setCurrentUser(session.user);
-      Promise.all([
-        supabase.from("profiles").select("singing_voice").eq("id", session.user.id).single(),
-        supabase.from("user_songs").select("song_id, confidence").eq("user_id", session.user.id),
-      ]).then(([profileRes, repertoireRes]) => {
-        setSingingVoice((profileRes.data as any)?.singing_voice ?? null);
-        setRepertoire(new Map(((repertoireRes.data ?? []) as any[]).map((r) => [r.song_id, r.confidence ?? ""])));
-      });
-    });
-
     // Slim per-song filter fields for the cascading filter-pill options —
     // the browse list itself is paginated via the browse_songs RPC
     supabase.rpc("song_filter_meta").then(({ data }) => {
@@ -167,33 +156,6 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   }, [q, hideMySongs]);
 
-  async function handlePendingAdd(songId: string, slug?: string | null) {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      const next = slug ? `/songs/${slug}` : "/search";
-      router.push(`/auth?next=${encodeURIComponent(next)}`);
-      return;
-    }
-    setPendingAddId(songId);
-  }
-
-  async function addSong(songId: string, level: string) {
-    setPendingAddId(null);
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
-    if (!session) { router.push(`/auth?next=${encodeURIComponent(window.location.pathname)}`); return; }
-    const { error } = await supabase.from("user_songs").upsert(
-      { user_id: session.user.id, song_id: songId, confidence: level, updated_at: new Date().toISOString() },
-      { onConflict: "user_id,song_id" }
-    );
-    if (error) {
-      setStatus(error.message);
-    } else {
-      setRepertoire((prev) => new Map(prev).set(songId, level));
-      if (hideMySongs) removeSong(songId);
-    }
-  }
-
   const searching = q.trim().length > 0;
 
   // Back from a song lands where the visitor was: the query and filters are in
@@ -228,7 +190,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
               ? `${sortedSearch.length} song(s)${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`
               : null}
         </div>
-        {(searchError ?? browseError ?? status) ? <div className="text-sm text-zinc-700">{searchError ?? browseError ?? status}</div> : null}
+        {(searchError ?? browseError ?? status ?? actions.status) ? <div className="text-sm text-zinc-700">{searchError ?? browseError ?? status ?? actions.status}</div> : null}
       </div>
 
       {/* Filter bar */}
@@ -288,19 +250,16 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 productions={r.productions}
                 recordingArtists={r.recording_artists}
                 productionCredits={r.production_credits}
-                aka={r.aka}
+                aka={matchedAlternateTitles(r.aka, q, r.title)}
                 genres={r.genres}
+                forms={r.forms}
+                occasions={r.occasions}
+                communities={r.communities}
                 languages={r.languages ?? []}
                 popularity={r.popularity}
                 youtubeId={r.youtube_id}
                 spotifyTrackId={r.spotify_track_id}
-                repertoire={repertoire}
-                pendingAddId={pendingAddId}
-                singingVoice={singingVoice}
-                setPendingAddId={setPendingAddId}
-                onAdd={handlePendingAdd}
-                addSong={addSong}
-                onVoiceUpdated={(v) => setSingingVoice(v)}
+                {...actions.cardProps}
               />
             ))}
             {!loading && sortedSearch.length === 0 ? (
@@ -340,17 +299,14 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 productionCredits={r.production_credits}
                 aka={null}
                 genres={r.genres}
+                forms={r.forms}
+                occasions={r.occasions}
+                communities={r.communities}
                 languages={r.languages ?? []}
                 popularity={r.popularity}
                 youtubeId={r.youtube_id}
                 spotifyTrackId={r.spotify_track_id}
-                repertoire={repertoire}
-                pendingAddId={pendingAddId}
-                singingVoice={singingVoice}
-                setPendingAddId={setPendingAddId}
-                onAdd={handlePendingAdd}
-                addSong={addSong}
-                onVoiceUpdated={(v) => setSingingVoice(v)}
+                {...actions.cardProps}
               />
             ))}
 
