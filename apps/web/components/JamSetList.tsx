@@ -28,7 +28,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
 
   async function handleCreate() {
     setCreating(true);
-    const name = jamName ? `${jamName} – set list` : "Set list";
+    const name = jamName ? `${jamName} — set list` : "Set list";
     const res = await fetch("/api/sets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

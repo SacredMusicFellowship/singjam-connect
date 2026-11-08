@@ -59,7 +59,7 @@ export default function TextEditor(props: TextEditorProps) {
           <label className="text-sm text-slate-600">Title<input id="text-title" value={details.title} onChange={(e) => setDetails({ ...details, title: e.target.value })} className="input mt-1" /></label>
           <label className="text-sm text-slate-600">Kind
             <select id="text-kind" value={details.kind} onChange={(e) => setDetails({ ...details, kind: e.target.value })} className="input mt-1">
-              <option value="">—</option>{KINDS.map((k) => <option key={k}>{k}</option>)}
+              <option value="">None</option>{KINDS.map((k) => <option key={k}>{k}</option>)}
             </select>
           </label>
           <label className="text-sm text-slate-600 sm:col-span-2">First line<input id="text-first-line" value={details.first_line} onChange={(e) => setDetails({ ...details, first_line: e.target.value })} className="input mt-1" /></label>

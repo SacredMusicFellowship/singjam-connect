@@ -22,6 +22,7 @@ import {
   sortRecordingsByYear,
   enrichmentInProgress,
   ENRICHMENT_WAIT_MS,
+  textTuneLines,
   formatJammers,
   songTagNames,
   TAG_TYPE_LABELS,
@@ -74,6 +75,9 @@ type SongDetail = {
   meter: string | null;
   vibe: string | null;
   altTitles: string[];
+  // "Words:" and "Tune:" lines, for a song linked to a text or tune.
+  words: string | null;
+  tune: string | null;
   composers: string[];
   lyricists: string[];
   musicCultures: string[];
@@ -125,7 +129,7 @@ function WriterText({ names, slugs, cultures, onOpen }: { names: string[]; slugs
   const traditional = names.some(n => n.toLowerCase() === 'traditional');
   const others = names.filter(n => n.toLowerCase() !== 'traditional');
   const parts: { label: string; slug?: string }[] = [
-    ...(traditional ? [{ label: cultures[0] ? `Traditional - ${cultures[0]}` : 'Traditional' }] : []),
+    ...(traditional ? [{ label: cultures[0] ? `Traditional · ${cultures[0]}` : 'Traditional' }] : []),
     ...others.map(n => ({ label: n, slug: slugs[n] })),
   ];
   return (
@@ -300,7 +304,9 @@ export default function SongDetailScreen() {
           song_lyricists(people(name, slug)),
           song_tags(context, tags(name, type, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
-          song_productions(productions(name, year, slug))
+          song_productions(productions(name, year, slug)),
+          texts(title, text_credits(role, people(name))),
+          tunes(tune_label, year, tune_credits(role, people(name)), tune_tags(tags(name, type)))
         `)
         .eq('id', songId)
         .single(),
@@ -356,6 +362,7 @@ export default function SongDetailScreen() {
       meter: s.meter ?? null,
       vibe: s.vibe ?? null,
       altTitles: (s.song_alternate_titles ?? []).map((x: any) => x.title).filter(Boolean),
+      ...textTuneLines(s.texts, s.tunes),
       composers: sortByLastName((s.song_composers ?? []).map((x: any) => x.people?.name).filter(Boolean)),
       lyricists: sortByLastName((s.song_lyricists ?? []).map((x: any) => x.people?.name).filter(Boolean)),
       musicCultures: origins('music').length ? origins('music') : origins('general'),
@@ -691,6 +698,12 @@ export default function SongDetailScreen() {
 
           {song.altTitles.length > 0 ? (
             <Text className="text-sm text-slate-400 mt-1">aka: {song.altTitles.join(' · ')}</Text>
+          ) : null}
+          {song.words ? (
+            <Text className="text-sm text-slate-500 mt-1"><Text className="text-slate-400">Words:</Text> {song.words}</Text>
+          ) : null}
+          {song.tune ? (
+            <Text className={`text-sm text-slate-500 ${song.words ? '' : 'mt-1'}`}><Text className="text-slate-400">Tune:</Text> {song.tune}</Text>
           ) : null}
 
           {renderRepertoireControls()}

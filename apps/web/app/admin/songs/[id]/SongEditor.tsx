@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import CatalogLinkField from "@/components/catalog/CatalogLinkField";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
@@ -910,42 +911,28 @@ export default function SongEditor({
         <h2 className="text-sm font-semibold text-slate-700">Text &amp; tune</h2>
         <p className="text-xs text-slate-500">For songs whose words are sung to more than one melody (hymns, psalms, liturgy) or a melody that carries several texts. Most songs need neither.</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label htmlFor="song-text" className="text-xs font-medium text-slate-600">Text</label>
-            <select id="song-text" value={textId} onChange={(e) => setTextId(e.target.value)} className="input">
-              <option value="">— none —</option>
-              {allTexts.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-            </select>
-            <div className="flex gap-3 text-xs">
-              {textId ? (
-                <Link href={`/song-editor/texts/${allTexts.find((t) => t.id === textId)?.slug ?? ""}`} className="text-teal-700 hover:underline">Edit text</Link>
-              ) : (
-                <button type="button" className="text-teal-700 hover:underline" onClick={async () => {
-                  const { data, error: e } = await supabase.from("texts").insert({ title: title.trim() || "Untitled", slug: "x" }).select("id, title, slug").single();
-                  if (e || !data) { setError(e?.message ?? "Couldn't create the text."); return; }
-                  setAllTexts((prev) => [...prev, data]); setTextId(data.id);
-                }}>New text from this title</button>
-              )}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label htmlFor="song-tune" className="text-xs font-medium text-slate-600">Tune</label>
-            <select id="song-tune" value={tuneId} onChange={(e) => setTuneId(e.target.value)} className="input">
-              <option value="">— none —</option>
-              {allTunes.map((t) => <option key={t.id} value={t.id}>{t.tune_label}</option>)}
-            </select>
-            <div className="flex gap-3 text-xs">
-              {tuneId ? (
-                <Link href={`/song-editor/tunes/${allTunes.find((t) => t.id === tuneId)?.slug ?? ""}`} className="text-teal-700 hover:underline">Edit tune</Link>
-              ) : (
-                <button type="button" className="text-teal-700 hover:underline" onClick={async () => {
-                  const { data, error: e } = await supabase.from("tunes").insert({ name: null, slug: "x" }).select("id, slug, tune_label").single();
-                  if (e || !data) { setError(e?.message ?? "Couldn't create the tune."); return; }
-                  setAllTunes((prev) => [...prev, data as any]); setTuneId(data.id);
-                }}>New tune</button>
-              )}
-            </div>
-          </div>
+          <CatalogLinkField
+            kind="text"
+            songTitle={title}
+            options={allTexts.map((t) => ({ id: t.id, name: t.title, slug: t.slug }))}
+            value={textId}
+            savedValue={song?.text_id ?? ""}
+            onChange={setTextId}
+            onCreated={(t) => { setAllTexts((prev) => [...prev, { id: t.id, title: t.name, slug: t.slug }]); setTextId(t.id); }}
+            people={allPeople}
+            communities={allCommunities}
+          />
+          <CatalogLinkField
+            kind="tune"
+            songTitle={title}
+            options={allTunes.map((t) => ({ id: t.id, name: t.tune_label, slug: t.slug }))}
+            value={tuneId}
+            savedValue={song?.tune_id ?? ""}
+            onChange={setTuneId}
+            onCreated={(t) => { setAllTunes((prev) => [...prev, { id: t.id, tune_label: t.name, slug: t.slug }]); setTuneId(t.id); }}
+            people={allPeople}
+            communities={allCommunities}
+          />
         </div>
       </section>
 
@@ -1368,7 +1355,7 @@ function ProductionYearInputs({ rows, years, onChange }: {
     <div className="space-y-1.5">
       {rows.map((r) => (
         <label key={r.key} className="flex items-center gap-2 text-xs text-slate-600">
-          <span className="min-w-0 flex-1 truncate">{r.name} — year</span>
+          <span className="min-w-0 flex-1 truncate">Year for {r.name}</span>
           <input
             type="number"
             value={years[r.key] ?? ""}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadBrowseHub } from "./browseHub";
+import { loadBrowseHub, sortBrowseHub } from "./browseHub";
 
 // A minimal stand-in for the Supabase client: each table returns fixed rows.
 function fakeDb(tables: Record<string, unknown[]>, rpc: Record<string, unknown>) {
@@ -57,5 +57,24 @@ describe("loadBrowseHub", () => {
     expect(hub.writerTotal).toBe(2);
     expect(hub.artists.map((a) => a.label)).toEqual(["The Weavers"]);
     expect(hub.shows).toEqual([{ medium: "animated", label: "Animated film", chips: [{ href: "/shows/cinderella-1950", label: "Cinderella (1950)", count: 1 }] }]);
+  });
+});
+
+describe("sortBrowseHub", () => {
+  const hub = {
+    sections: [{ type: "genre" as const, title: "Genres", chips: [{ href: "/g/rock", label: "Rock", count: 9 }, { href: "/g/folk", label: "Folk", count: 3 }], all: [{ href: "/g/rock", label: "Rock", count: 9 }, { href: "/g/folk", label: "Folk", count: 3 }] }],
+    writers: [{ href: "/p/z", label: "Zed", count: 5 }, { href: "/p/a", label: "Ann", count: 2 }],
+    writerTotal: 2, artists: [], artistTotal: 0,
+    shows: [{ medium: "film", label: "Film", chips: [{ href: "/s/b", label: "Beta", count: 4 }, { href: "/s/a", label: "Alpha", count: 1 }] }],
+  };
+  it("keeps the loaded most-songs order", () => {
+    expect(sortBrowseHub(hub, "count")).toBe(hub);
+  });
+  it("lists every section A–Z", () => {
+    const az = sortBrowseHub(hub, "az");
+    expect(az.sections[0].chips.map((c) => c.label)).toEqual(["Folk", "Rock"]);
+    expect(az.sections[0].all.map((c) => c.label)).toEqual(["Folk", "Rock"]);
+    expect(az.writers.map((c) => c.label)).toEqual(["Ann", "Zed"]);
+    expect(az.shows[0].chips.map((c) => c.label)).toEqual(["Alpha", "Beta"]);
   });
 });

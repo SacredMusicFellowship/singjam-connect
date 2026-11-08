@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { loadBrowseHub, type BrowseChip, type BrowseHub } from '@singjam/core';
+import { loadBrowseHub, sortBrowseHub, type BrowseChip, type BrowseHub, type BrowseHubOrder } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import ContentContainer from '@/components/ContentContainer';
 import { nativeBrowseHref } from '@/lib/browseLinks';
@@ -52,7 +52,9 @@ function Heading({ title }: { title: string }) {
 // Native counterpart of web's /browse hub.
 export default function BrowseHubScreen() {
   const router = useRouter();
-  const [hub, setHub] = useState<BrowseHub | null>(null);
+  const [loaded, setHub] = useState<BrowseHub | null>(null);
+  const [order, setOrder] = useState<BrowseHubOrder>('count');
+  const hub = loaded ? sortBrowseHub(loaded, order) : null;
   const [error, setError] = useState(false);
   useEffect(() => { loadBrowseHub(supabase).then(setHub, () => setError(true)); }, []);
   const open = (href: string) => router.push(nativeBrowseHref(href) as any);
@@ -64,6 +66,20 @@ export default function BrowseHubScreen() {
         <ContentContainer>
           <View className="px-4 pb-12">
             <Text className="text-sm text-slate-500 mt-4">Numbers are songs on SingJam. A genre or occasion includes the kinds within it.</Text>
+            {hub && (
+              <View className="flex-row mt-3" style={{ gap: 6 }}>
+                {([['count', 'Most songs'], ['az', 'A–Z']] as const).map(([value, label]) => (
+                  <TouchableOpacity
+                    key={value}
+                    onPress={() => setOrder(value)}
+                    accessibilityState={{ selected: order === value }}
+                    className={`px-3 py-1 rounded-full border ${order === value ? 'border-amber-500 bg-amber-500' : 'border-slate-200 bg-white'}`}
+                  >
+                    <Text className={`text-sm ${order === value ? 'text-white' : 'text-slate-600'}`}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
             {!hub && !error && <ActivityIndicator className="mt-10" color="#d97706" />}
             {error && <Text className="text-sm text-slate-500 mt-10 text-center">Couldn’t load the browse page. Pull back and try again.</Text>}
             {hub?.sections.map(s => (

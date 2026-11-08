@@ -29,6 +29,8 @@ export type LinkedTag = { name: string; slug: string; type: TagType };
 
 export type BrowseEntity = {
   kind: BrowseKind;
+  // A person's or artist's own slug, when the page was opened by name.
+  slug?: string;
   name: string;
   subtitle: string | null;
   notes: string | null;
@@ -40,11 +42,20 @@ export type BrowseEntity = {
   roles: Map<string, string>;
 };
 
+// Song cards link writers and artists by name (names are unique), so a person
+// or artist page takes either its slug or the name.
+async function bySlugOrName(db: any, table: "people" | "artists", columns: string, key: string): Promise<any | null> {
+  const { data } = await db.from(table).select(columns).eq("slug", key).maybeSingle();
+  if (data) return data;
+  const { data: named } = await db.from(table).select(columns).eq("name", key).maybeSingle();
+  return named ?? null;
+}
+
 // The songs and context for one browse page (migration 205). Public data; web
 // reads it without a session, native with the app's client.
 export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string): Promise<BrowseEntity | null> {
   if (kind === "person") {
-    const { data: person } = await db.from("people").select("id, name, notes").eq("slug", slug).maybeSingle();
+    const person = await bySlugOrName(db, "people", "id, name, slug, notes", slug);
     if (!person) return null;
     const [composed, wrote] = await Promise.all([
       fetchAllRows<{ song_id: string }>((f: number, t: number) => db.from("song_composers").select("song_id").eq("person_id", person.id).order("song_id").range(f, t)),
@@ -53,16 +64,16 @@ export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string):
     const roles = new Map<string, string>();
     const music = new Set(composed.map((r) => r.song_id)), words = new Set(wrote.map((r) => r.song_id));
     for (const id of new Set([...music, ...words])) roles.set(id, music.has(id) && words.has(id) ? "Music & words" : music.has(id) ? "Music" : "Words");
-    return { kind, name: person.name, subtitle: null, notes: person.notes ?? null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
+    return { kind, slug: person.slug, name: person.name, subtitle: null, notes: person.notes ?? null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
   }
   if (kind === "artist") {
-    const { data: artist } = await db.from("artists").select("id, name").eq("slug", slug).maybeSingle();
+    const artist = await bySlugOrName(db, "artists", "id, name, slug", slug);
     if (!artist) return null;
     const rows = await fetchAllRows<{ song_id: string; year: number | null }>((f: number, t: number) =>
       db.from("song_recording_artists").select("song_id, year").eq("artist_id", artist.id).order("song_id").range(f, t)
     );
     const roles = new Map(rows.map((r) => [r.song_id, r.year ? `Recorded ${r.year}` : "Recording"]));
-    return { kind, name: artist.name, subtitle: null, notes: null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
+    return { kind, slug: artist.slug, name: artist.name, subtitle: null, notes: null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
   }
   if (kind === "show") {
     const { data: show } = await db.from("productions").select("id, name, year, medium").eq("slug", slug).maybeSingle();

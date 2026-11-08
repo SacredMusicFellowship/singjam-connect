@@ -55,3 +55,4 @@ export * from './utils/landmarkRecordings';
 export * from './utils/enrichmentMatching';
 export * from './utils/songSubtitle';
 export * from './utils/smallFormats';
+export * from './utils/textTuneLines';

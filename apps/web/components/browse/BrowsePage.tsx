@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { browsePath, type BrowseKind, type TagType } from "@singjam/core";
 import { loadBrowseEntity, loadBrowseFilterMeta, loadBrowseRelated, loadBrowseSongs, type LinkedTag } from "@/lib/browse";
 import BrowseSongList from "@/components/browse/BrowseSongList";
@@ -37,6 +37,7 @@ export default async function BrowsePage({ kind, slug }: { kind: BrowseKind; slu
   const decoded = decodeURIComponent(slug);
   const entity = await loadBrowseEntity(kind, decoded);
   if (!entity) notFound();
+  if (entity.slug && entity.slug !== decoded) redirect(browsePath(kind, entity.slug));
   const [{ songs, members }, meta, related] = await Promise.all([
     loadBrowseSongs(entity.songIds),
     loadBrowseFilterMeta(entity.songIds),

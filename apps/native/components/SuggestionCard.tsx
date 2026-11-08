@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Pressable, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { browsePath, formatComposers, formatRecordingArtists, productionCredits, songCardPills, songCardSecondLine, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { browsePath, productionCredits, songCardCredits, songCardPills, type CardCredit, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 
 export type Suggestion = {
@@ -74,15 +74,21 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
     Linking.openURL(url).catch(() => Alert.alert('Could not open link'));
   }
 
-  const composersLabel = song.composers.length > 0
-    ? formatComposers(song.composers, [...song.cultures, ...(song.communities ?? [])])
-    : null;
-  const artistsLine = songCardSecondLine({
+  const credits = songCardCredits({
     byline: song.byline,
     displayArtist: song.display_artist,
-    hasWriters: song.composers.length > 0,
-    recordingsLine: formatRecordingArtists(song.recording_artists, song.display_artist),
+    composers: song.composers,
+    cultures: [...song.cultures, ...(song.communities ?? [])],
+    recordingArtists: song.recording_artists,
   });
+  const creditText = (list: CardCredit[]) => list.map((c, i) => (
+    <Text key={c.text}>
+      {i > 0 ? ', ' : null}
+      {c.link && onOpenBrowse ? (
+        <Text onPress={() => onOpenBrowse(browsePath(c.link!.kind, c.link!.name))} suppressHighlighting={false}>{c.text}</Text>
+      ) : c.text}
+    </Text>
+  ));
   const shows = productionCredits(song.production_credits, song.productions);
   const pills = songCardPills({ forms: song.forms, occasions: song.occasions, genres: song.genres, communities: song.communities, languages: song.languages });
   const isLead = confidence === 'lead';
@@ -94,8 +100,8 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
         <View className="flex-1 min-w-0">
           <Text numberOfLines={3}>
             <Text className="font-medium text-zinc-900">{song.title}</Text>
-            {composersLabel ? (
-              <Text className="text-zinc-400"> ({composersLabel})</Text>
+            {credits.writers.length > 0 ? (
+              <Text className="text-zinc-400"> ({creditText(credits.writers)})</Text>
             ) : null}
           </Text>
           {shows.length > 0 ? (
@@ -108,10 +114,10 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
                   {p.year ? ` (${p.year})` : null}
                 </Text>
               ))}
-              {artistsLine ? ` · ${artistsLine}` : null}
+              {credits.line.length > 0 ? <Text>{' · '}{creditText(credits.line)}</Text> : null}
             </Text>
-          ) : artistsLine ? (
-            <Text className="text-sm text-zinc-500">{artistsLine}</Text>
+          ) : credits.line.length > 0 ? (
+            <Text className="text-sm text-zinc-500">{creditText(credits.line)}</Text>
           ) : null}
           {context ? <Text className="text-xs text-zinc-500">{context}</Text> : null}
         </View>

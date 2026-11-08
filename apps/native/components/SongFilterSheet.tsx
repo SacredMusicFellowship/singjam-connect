@@ -142,7 +142,7 @@ function TagSection({ dim, options, hierarchy, selected, onToggle, open, onToggl
     <View className="border-b border-zinc-100 py-1">
       <TouchableOpacity onPress={onToggleOpen} className="flex-row items-center justify-between py-2">
         <Text className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
-          {DIM_LABEL[dim]}{selected.size > 0 ? `  · ${selected.size}` : ''}
+          {DIM_LABEL[dim]}{selected.size > 0 ? ` · ${selected.size}` : ''}
         </Text>
         <Text className="text-xs text-zinc-400">{open ? '▾' : '▸'}</Text>
       </TouchableOpacity>

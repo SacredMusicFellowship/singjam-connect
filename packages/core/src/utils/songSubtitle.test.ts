@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { songCardSecondLine, songSubtitle, songSubtitleText } from "./songSubtitle";
+import { songCardCredits, songSubtitle, songSubtitleText } from "./songSubtitle";
 
 describe("songSubtitle", () => {
   it("names the show when the song is from one", () => {
@@ -21,16 +21,26 @@ describe("songSubtitle", () => {
   });
 });
 
-describe("songCardSecondLine", () => {
-  const recordingsLine = "Isaac Zones (rec. 2015)";
-  it("lists recordings for a song known by its recording, or a row from before byline existed", () => {
-    expect(songCardSecondLine({ byline: "Van Morrison", displayArtist: "Van Morrison", hasWriters: true, recordingsLine })).toBe(recordingsLine);
-    expect(songCardSecondLine({ displayArtist: "Van Morrison", hasWriters: true, recordingsLine })).toBe(recordingsLine);
+describe("songCardCredits", () => {
+  const recordingArtists = [{ name: "Isaac Zones", year: 2015 }];
+  it("puts writers after the title and recordings under it for a song known by its recording", () => {
+    const c = songCardCredits({ byline: "Van Morrison", displayArtist: "Van Morrison", composers: ["Van Morrison"], cultures: [], recordingArtists: [{ name: "Van Morrison", year: 1967 }] });
+    expect(c.writers).toEqual([{ text: "V. Morrison", link: { kind: "person", name: "Van Morrison" } }]);
+    expect(c.line).toEqual([{ text: "Van Morrison (1967)", link: { kind: "artist", name: "Van Morrison" } }]);
   });
-  it("shows how a traditional song is known instead of its recordings", () => {
-    expect(songCardSecondLine({ byline: "Traditional · Jewish", displayArtist: "Isaac Zones", hasWriters: false, recordingsLine })).toBe("Traditional · Jewish");
+  it("treats a row from before byline existed as known by its recording", () => {
+    expect(songCardCredits({ displayArtist: "Van Morrison", composers: [], cultures: [], recordingArtists: null }).line).toEqual([{ text: "Van Morrison", link: null }]);
   });
-  it("shows nothing extra when the writers are already in the title line", () => {
-    expect(songCardSecondLine({ byline: "John Newton", displayArtist: "Aretha Franklin, Elvis Presley", hasWriters: true, recordingsLine })).toBeNull();
+  it("shows the writers under the title, each linked, for a song not known by its recording", () => {
+    const c = songCardCredits({ byline: "John Newton, William Cowper", displayArtist: "Aretha Franklin", composers: ["John Newton"], cultures: [], recordingArtists });
+    expect(c.writers).toEqual([]);
+    expect(c.line).toEqual([
+      { text: "John Newton", link: { kind: "person", name: "John Newton" } },
+      { text: "William Cowper", link: { kind: "person", name: "William Cowper" } },
+    ]);
+  });
+  it("shows a traditional byline whole and unlinked", () => {
+    expect(songCardCredits({ byline: "Traditional · Jewish", displayArtist: "Isaac Zones", composers: ["Traditional"], cultures: [], recordingArtists }).line)
+      .toEqual([{ text: "Traditional · Jewish", link: null }]);
   });
 });

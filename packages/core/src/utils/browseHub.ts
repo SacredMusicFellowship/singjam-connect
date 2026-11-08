@@ -99,3 +99,18 @@ export async function loadBrowseIndex(db: any, kind: "person" | "artist"): Promi
     : artistChips(await fetchAllRows<ArtistRow>((f, t) => db.from("artists").select("name, slug, song_recording_artists(count)").order("id").range(f, t)));
   return chips.sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
 }
+
+export type BrowseHubOrder = "count" | "az";
+
+// The hub as listed: most songs first (as loaded), or A–Z.
+export function sortBrowseHub(hub: BrowseHub, order: BrowseHubOrder): BrowseHub {
+  if (order === "count") return hub;
+  const az = (chips: BrowseChip[]) => [...chips].sort((a, b) => a.label.localeCompare(b.label));
+  return {
+    ...hub,
+    sections: hub.sections.map((s) => ({ ...s, chips: az(s.chips), all: az(s.all) })),
+    writers: az(hub.writers),
+    artists: az(hub.artists),
+    shows: hub.shows.map((g) => ({ ...g, chips: az(g.chips) })),
+  };
+}

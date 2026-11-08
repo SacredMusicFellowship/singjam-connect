@@ -5,7 +5,7 @@ import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, ENRICHMENT_WAIT_MS } from "@singjam/core";
+import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, textTuneLines, ENRICHMENT_WAIT_MS } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
@@ -44,7 +44,7 @@ function WriterLinks({ names, slugs, cultures }: { names: string[]; slugs: Map<s
   const traditional = names.some((n) => n.toLowerCase() === "traditional");
   const others = names.filter((n) => n.toLowerCase() !== "traditional");
   const parts: React.ReactNode[] = [];
-  if (traditional) parts.push(<Fragment key="trad">{cultures[0] ? `Traditional - ${cultures[0]}` : "Traditional"}</Fragment>);
+  if (traditional) parts.push(<Fragment key="trad">{cultures[0] ? `Traditional · ${cultures[0]}` : "Traditional"}</Fragment>);
   for (const n of others) {
     const slug = slugs.get(n);
     parts.push(slug ? <Link key={n} href={browsePath("person", slug)} className="hover:text-amber-700 hover:underline">{n}</Link> : <Fragment key={n}>{n}</Fragment>);
@@ -132,7 +132,9 @@ const SONG_SELECT = `
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
           song_alternate_titles(title),
           song_tags(context, tags(name, type, slug)),
-          song_productions(productions(name, year, slug))
+          song_productions(productions(name, year, slug)),
+          texts(title, text_credits(role, people(name))),
+          tunes(tune_label, year, tune_credits(role, people(name)), tune_tags(tags(name, type)))
         `;
 
 export default function SongPageContent() {
@@ -342,6 +344,7 @@ export default function SongPageContent() {
       .filter((x: any) => x.name)
   );
   const altTitles = (song.song_alternate_titles as any[]).map((x: any) => x.title as string).filter(Boolean);
+  const textTune = textTuneLines((song as any).texts, (song as any).tunes);
   const tagLists = (["genre", "form", "occasion", "community", "theme", "language", "culture"] as const)
     .map((type) => ({
       label: TAG_TYPE_LABELS[type],
@@ -405,6 +408,12 @@ export default function SongPageContent() {
           ) : null}
           {altTitles.length > 0 && (
             <p className="mt-1 text-sm text-slate-400">aka: {altTitles.join(" · ")}</p>
+          )}
+          {(textTune.words || textTune.tune) && (
+            <div className="mt-1 text-sm text-slate-500">
+              {textTune.words && <p><span className="text-slate-400">Words:</span> {textTune.words}</p>}
+              {textTune.tune && <p><span className="text-slate-400">Tune:</span> {textTune.tune}</p>}
+            </div>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
