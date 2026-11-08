@@ -198,7 +198,12 @@ async function main() {
 }
 
 process.on("SIGINT", () => process.exit(130));
-process.on("exit", () => children.forEach((child) => child.kill()));
+process.on("exit", () => {
+  children.forEach((child) => child.kill());
+  // next dev with NEXT_DIST_DIR=.next-e2e repoints next-env.d.ts; put it back so a run leaves git clean.
+  const nextEnv = path.join(webDir, "next-env.d.ts");
+  fs.writeFileSync(nextEnv, fs.readFileSync(nextEnv, "utf8").replace("./.next-e2e/types/", "./.next/types/"));
+});
 main().then(
   () => process.exit(0),
   (error) => {
