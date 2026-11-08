@@ -9,7 +9,8 @@ import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import YouTubePlayer from '@/components/YouTubePlayer';
 import ChordChartControls from '@/components/ChordChartControls';
 import {
-  formatComposersLong,
+  browsePath,
+  songTagRefs,
   sortByLastName,
   fetchSongJammers,
   type SongJammer,
@@ -28,6 +29,7 @@ import {
   type TagContext,
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
+import { nativeBrowseHref } from '@/lib/browseLinks';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import AddToSetModal from '@/components/AddToSetModal';
@@ -45,6 +47,7 @@ const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
 type RecordingArtist = {
   name: string;
+  slug?: string | null;
   year: number | null;
   youtube_url: string | null;
   spotify_url: string | null;
@@ -76,7 +79,9 @@ type SongDetail = {
   musicCultures: string[];
   lyricsCultures: string[];
   recordingArtists: RecordingArtist[];
-  tagLists: { label: string; tags: string[] }[];
+  tagLists: { label: string; tags: { name: string; href: string | null }[] }[];
+  personSlugs: Record<string, string>;
+  productionSlugs: Record<string, string>;
   productions: string[];
   production_credits?: ProductionCredit[];
 };
@@ -99,7 +104,14 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function TagPill({ label }: { label: string }) {
+function TagPill({ label, href, onOpen }: { label: string; href?: string | null; onOpen?: (href: string) => void }) {
+  if (href && onOpen) {
+    return (
+      <TouchableOpacity onPress={() => onOpen(href)} className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5">
+        <Text className="text-slate-600 text-sm">{label}</Text>
+      </TouchableOpacity>
+    );
+  }
   return (
     <View className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5">
       <Text className="text-slate-600 text-sm">{label}</Text>
@@ -107,13 +119,36 @@ function TagPill({ label }: { label: string }) {
   );
 }
 
-function TagRow({ label, tags }: { label: string; tags: string[] }) {
+// Writer credits with each name opening its songwriter page; "Traditional"
+// names where it comes from, as formatComposersLong does.
+function WriterText({ names, slugs, cultures, onOpen }: { names: string[]; slugs: Record<string, string>; cultures: string[]; onOpen: (href: string) => void }) {
+  const traditional = names.some(n => n.toLowerCase() === 'traditional');
+  const others = names.filter(n => n.toLowerCase() !== 'traditional');
+  const parts: { label: string; slug?: string }[] = [
+    ...(traditional ? [{ label: cultures[0] ? `Traditional - ${cultures[0]}` : 'Traditional' }] : []),
+    ...others.map(n => ({ label: n, slug: slugs[n] })),
+  ];
+  return (
+    <>
+      {parts.map((p, i) => (
+        <Text key={`${p.label}-${i}`}>
+          {i > 0 ? ', ' : ''}
+          {p.slug ? <Text className="text-amber-700" onPress={() => onOpen(nativeBrowseHref(browsePath('person', p.slug!)))}>{p.label}</Text> : p.label}
+        </Text>
+      ))}
+    </>
+  );
+}
+
+function TagRow({ label, tags, onOpen }: { label: string; tags: (string | { name: string; href: string | null })[]; onOpen?: (href: string) => void }) {
   if (tags.length === 0) return null;
   return (
     <View className="flex-row items-start mb-2">
       <Text className="text-xs font-medium text-slate-500 w-20 shrink-0 mt-1">{label}</Text>
       <View className="flex-1 flex-row flex-wrap">
-        {tags.map(t => <TagPill key={t} label={t} />)}
+        {tags.map(t => typeof t === 'string'
+          ? <TagPill key={t} label={t} />
+          : <TagPill key={t.name} label={t.name} href={t.href} onOpen={onOpen} />)}
       </View>
     </View>
   );
@@ -191,6 +226,7 @@ function OpenInAppButton({ service, url }: { service: 'youtube' | 'spotify'; url
 export default function SongDetailScreen() {
   const { id: songId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const openBrowse = (href: string) => router.push(href as any);
 
   const [song, setSong] = useState<SongDetail | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
@@ -260,11 +296,11 @@ export default function SongDetailScreen() {
           genius_url, chord_chart_url, chord_chart_pending, youtube_url,
           year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_alternate_titles(title),
-          song_composers(people(name)),
-          song_lyricists(people(name)),
-          song_tags(context, tags(name, type)),
-          song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
-          song_productions(productions(name, year))
+          song_composers(people(name, slug)),
+          song_lyricists(people(name, slug)),
+          song_tags(context, tags(name, type, slug)),
+          song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
+          song_productions(productions(name, year, slug))
         `)
         .eq('id', songId)
         .single(),
@@ -326,12 +362,19 @@ export default function SongDetailScreen() {
       lyricsCultures: origins('lyrics').length ? origins('lyrics') : origins('general'),
       recordingArtists: sortRecordingsByYear(
         (s.song_recording_artists ?? [])
-          .map((x: any) => ({ name: x.artists?.name, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
+          .map((x: any) => ({ name: x.artists?.name, slug: x.artists?.slug ?? null, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
           .filter((x: any) => x.name)
       ),
       tagLists: (['genre', 'form', 'occasion', 'community', 'theme', 'language', 'culture'] as const)
-        .map((type) => ({ label: TAG_TYPE_LABELS[type], tags: songTagNames(tagRows, type) }))
+        .map((type) => ({
+          label: TAG_TYPE_LABELS[type],
+          tags: songTagRefs(tagRows, type).map((t) => ({ name: t.name, href: t.slug ? nativeBrowseHref(browsePath(type, t.slug)) : null })),
+        }))
         .filter((t) => t.tags.length > 0),
+      personSlugs: Object.fromEntries(
+        [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])].filter((x: any) => x.people?.slug).map((x: any) => [x.people.name, x.people.slug])
+      ),
+      productionSlugs: Object.fromEntries((s.song_productions ?? []).filter((x: any) => x.productions?.slug).map((x: any) => [x.productions.name, x.productions.slug])),
       productions: (s.song_productions ?? []).map((x: any) => x.productions?.name).filter(Boolean),
       production_credits: (s.song_productions ?? [])
         .map((x: any) => x.productions)
@@ -634,7 +677,10 @@ export default function SongDetailScreen() {
               {productionCredits(song.production_credits, song.productions).map((p, i) => (
                 <Text key={`${p.name}-${p.year}`}>
                   {i > 0 ? ', ' : null}
-                  <Text className="italic">{p.name}</Text>
+                  <Text
+                    className="italic"
+                    onPress={song.productionSlugs[p.name] ? () => openBrowse(nativeBrowseHref(browsePath('show', song.productionSlugs[p.name]))) : undefined}
+                  >{p.name}</Text>
                   {p.year ? ` (${p.year})` : null}
                 </Text>
               ))}
@@ -700,13 +746,13 @@ export default function SongDetailScreen() {
             {song.composers.length > 0 ? (
               <Text className="text-sm text-slate-700 mb-1">
                 <Text className="font-medium">Music: </Text>
-                {formatComposersLong(song.composers, song.musicCultures)}
+                <WriterText names={song.composers} slugs={song.personSlugs} cultures={song.musicCultures} onOpen={openBrowse} />
               </Text>
             ) : null}
             {song.lyricists.length > 0 ? (
               <Text className="text-sm text-slate-700">
                 <Text className="font-medium">Lyrics: </Text>
-                {formatComposersLong(song.lyricists, song.lyricsCultures)}
+                <WriterText names={song.lyricists} slugs={song.personSlugs} cultures={song.lyricsCultures} onOpen={openBrowse} />
               </Text>
             ) : null}
           </View>
@@ -734,10 +780,15 @@ export default function SongDetailScreen() {
                 <SectionHeader title="Recordings" />
                 <View className="flex-row flex-wrap">
                   {song.recordingArtists.map((ra, i) => (
-                    <View key={i} className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5">
+                    <TouchableOpacity
+                      key={i}
+                      disabled={!ra.slug}
+                      onPress={() => ra.slug && openBrowse(nativeBrowseHref(browsePath('artist', ra.slug)))}
+                      className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5"
+                    >
                       <Text className="text-slate-700 text-sm">{ra.name}</Text>
                       {ra.year ? <Text className="text-slate-400 text-sm">{ra.year}</Text> : null}
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
               </>
@@ -804,7 +855,7 @@ export default function SongDetailScreen() {
         {hasTags ? (
           <View className="px-4 py-4 border-b border-slate-100">
             <SectionHeader title="Tags" />
-            {song.tagLists.map((t) => <TagRow key={t.label} label={t.label} tags={t.tags} />)}
+            {song.tagLists.map((t) => <TagRow key={t.label} label={t.label} tags={t.tags} onOpen={openBrowse} />)}
           </View>
         ) : null}
 

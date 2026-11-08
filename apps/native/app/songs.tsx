@@ -406,7 +406,17 @@ export default function SongLibraryScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Song Library', headerTintColor: '#d97706' }} />
+      <Stack.Screen
+        options={{
+          title: 'Song Library',
+          headerTintColor: '#d97706',
+          headerRight: () => (
+            <TouchableOpacity onPress={() => router.push('/browse' as any)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text className="text-amber-600 font-medium">Browse</Text>
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <SongFilterSheet
         visible={filterModalVisible}
         filters={filters}

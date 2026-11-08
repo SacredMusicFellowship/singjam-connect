@@ -17,11 +17,11 @@ export const TAG_TYPE_LABELS: Record<TagType, string> = {
   community: "Communities",
 };
 
-export type TagRef = { id?: string; name: string; type: string };
+export type TagRef = { id?: string; name: string; type: string; slug?: string };
 export type SongTagRow = { context?: string | null; tags: TagRef | null };
 export type JamTagRow = { tags: TagRef | null };
 
-export const SONG_TAGS_SELECT = "song_tags(context, tags(id, name, type))";
+export const SONG_TAGS_SELECT = "song_tags(context, tags(id, name, type, slug))";
 export const JAM_TAGS_SELECT = "jam_tags(tags(id, name, type))";
 
 const byName = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -54,4 +54,13 @@ export function jamTags(rows: JamTagRow[] | null | undefined, type?: TagType): T
     .map((r) => r.tags)
     .filter((t): t is TagRef => !!t && (!type || t.type === type))
     .sort((a, b) => byName(a.name, b.name));
+}
+
+// One type's tags with their slugs (for links to browse pages), A–Z, each once.
+export function songTagRefs(rows: SongTagRow[] | null | undefined, type: TagType): { name: string; slug: string | null }[] {
+  const byNameMap = new Map<string, string | null>();
+  for (const r of rows ?? []) {
+    if (r.tags?.type === type && !byNameMap.has(r.tags.name)) byNameMap.set(r.tags.name, r.tags.slug ?? null);
+  }
+  return [...byNameMap].map(([name, slug]) => ({ name, slug })).sort((a, b) => byName(a.name, b.name));
 }
