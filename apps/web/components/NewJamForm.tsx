@@ -10,10 +10,14 @@ import EventImageEditor from "./EventImageEditor";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
 import { useJamImages, type JamImageFields } from "@/lib/useJamImages";
-import { jamPath, zonedInputToIso } from "@singjam/core";
+import { fetchAllRows, jamPath, zonedInputToIso } from "@singjam/core";
 import { visibilityForNewJam } from "@/lib/devSafety";
 
-type LookupItem = { id: string; name: string };
+// A jam can be tagged with any of these (jam_tags, migration 202), from one picker.
+const JAM_TAG_TYPES = ["genre", "occasion", "community", "form", "language", "theme"];
+const JAM_TAG_TYPE_LABEL: Record<string, string> = { genre: "Genre", occasion: "Occasion", community: "Community", form: "Form", language: "Language", theme: "Theme" };
+type JamTagOption = { id: string; name: string; type: string };
+
 
 export type NewJamInitialData = {
   copyFromId: string;
@@ -26,8 +30,7 @@ export type NewJamInitialData = {
   guestsCanInvite: boolean;
   ticketsUrl: string;
   images: JamImageFields;
-  selectedGenreIds: string[];
-  selectedThemeIds: string[];
+  selectedTagIds: string[];
   startTime: string;
   endTime: string;
   timezone: string | null;
@@ -61,10 +64,8 @@ export default function NewJamForm({
   const [previewing, setPreviewing] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const [genres, setGenres] = useState<LookupItem[]>([]);
-  const [themes, setThemes] = useState<LookupItem[]>([]);
-  const [selectedGenres, setSelectedGenres] = useState<string[]>(initialData?.selectedGenreIds ?? []);
-  const [selectedThemes, setSelectedThemes] = useState<string[]>(initialData?.selectedThemeIds ?? []);
+  const [allTags, setAllTags] = useState<JamTagOption[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialData?.selectedTagIds ?? []);
 
   const [guestsCanInvite, setGuestsCanInvite] = useState(initialData?.guestsCanInvite ?? false);
   const [name, setName] = useState(initialData?.name ?? "");
@@ -95,12 +96,9 @@ export default function NewJamForm({
         setCanPostOfficial((p as any)?.role === "admin" || (p as any)?.can_host_official === true);
         setDisplayName((p as any)?.display_name ?? (p as any)?.username ?? null);
       }
-      const [{ data: g }, { data: t }] = await Promise.all([
-        supabase.from("tags").select("id, name").eq("type", "genre").order("name"),
-        supabase.from("tags").select("id, name").eq("type", "theme").order("name"),
-      ]);
-      setGenres((g as LookupItem[]) ?? []);
-      setThemes((t as LookupItem[]) ?? []);
+      setAllTags(await fetchAllRows<JamTagOption>((from, to) =>
+        supabase.from("tags").select("id, name, type").in("type", JAM_TAG_TYPES).order("name").order("id").range(from, to)
+      ));
     }
     load();
   }, [supabase]);
@@ -175,7 +173,7 @@ export default function NewJamForm({
     }
 
     const jamId = data.id;
-    const tagIds = [...selectedGenres, ...selectedThemes];
+    const tagIds = selectedTags;
     if (tagIds.length > 0) await supabase.from("jam_tags").insert(tagIds.map((tag_id) => ({ jam_id: jamId, tag_id })));
 
     fetch("/api/jam/confirm", {
@@ -206,8 +204,9 @@ export default function NewJamForm({
 
   const isOfficial = visibility === "official";
 
-  const previewGenreNames = selectedGenres.map((id) => genres.find((g) => g.id === id)?.name).filter(Boolean) as string[];
-  const previewThemeNames = selectedThemes.map((id) => themes.find((t) => t.id === id)?.name).filter(Boolean) as string[];
+  const chosenTags = selectedTags.map((id) => allTags.find((t) => t.id === id)).filter((t): t is JamTagOption => !!t);
+  const previewGenreNames = chosenTags.filter((t) => t.type === "genre").map((t) => t.name);
+  const previewThemeNames = chosenTags.filter((t) => t.type !== "genre").map((t) => t.name);
   const defaultName = displayName ? `${displayName}'s jam` : "Community jam";
   const previewName = name.trim() || (isOfficial ? null : defaultName);
 
@@ -408,8 +407,14 @@ export default function NewJamForm({
           </div>
         )}
 
-        <TagCombobox label="Genres" options={genres} selected={selectedGenres} onChange={setSelectedGenres} placeholder="Search genres…" optional />
-        <TagCombobox label="Themes" options={themes} selected={selectedThemes} onChange={setSelectedThemes} placeholder="Search themes…" optional />
+        <TagCombobox
+          label="Tags"
+          options={allTags.map((t) => ({ id: t.id, name: `${t.name} · ${JAM_TAG_TYPE_LABEL[t.type] ?? t.type}` }))}
+          selected={selectedTags}
+          onChange={setSelectedTags}
+          placeholder="Search genres, occasions, communities…"
+          optional
+        />
 
         {/* Description */}
         <div>

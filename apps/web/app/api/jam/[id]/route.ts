@@ -11,6 +11,7 @@ import { jamUpdatedHtml } from "@/emails/jam-updated";
 import { buildIcs } from "@/lib/ics";
 import { isValidTimeZone } from "@singjam/core";
 import { devRefusesVisibility, DEV_PRIVATE_JAMS_MESSAGE } from "@/lib/devSafety";
+import { jamTagIdsFromBody } from "@/lib/jamTagIds";
 
 // The web editor sends its baked per-layout crops along with the image. A
 // client that only sends image_url (the native editor) and changes it leaves
@@ -59,7 +60,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const {
     name, starts_at, ends_at, neighborhood, full_address, notes, visibility,
     guests_can_invite, tickets_url, image_url, image_focal_point, capacity,
-    genre_ids, theme_ids,
+    genre_ids, theme_ids, tag_ids,
   } = body;
   // The client converts the typed times using the venue's zone (from /api/timezone),
   // so store that same zone; anything unusable keeps the event's existing one.
@@ -90,7 +91,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   // A jam's tags are its genres and themes; the form sends both lists in full.
   await admin.from("jam_tags").delete().eq("jam_id", id);
-  const tagIds = [...(genre_ids ?? []), ...(theme_ids ?? [])] as string[];
+  const tagIds = jamTagIdsFromBody({ tag_ids, genre_ids, theme_ids });
   if (tagIds.length > 0) await admin.from("jam_tags").insert(tagIds.map((tag_id) => ({ jam_id: id, tag_id })));
 
   // Postgres returns "+00:00" while clients send toISOString()'s ".000Z", so compare instants, not strings.

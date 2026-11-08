@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, SectionList, RefreshControl, TouchableOpacity,
   Alert,
@@ -46,7 +46,8 @@ function toJamItem(j: any, rsvpMap: Map<string, any>, inviteMap: Map<string, str
     host_id: j.host_user_id,
     host_display_name: j.profiles?.display_name ?? null,
     host_username: j.profiles?.username ?? null,
-    tags: [...jamTags(j.jam_tags, 'genre'), ...jamTags(j.jam_tags, 'theme')].map((t) => t.name),
+    // Genres first, then everything else the jam is tagged with (occasion, community, …).
+    tags: [...jamTags(j.jam_tags, 'genre'), ...jamTags(j.jam_tags).filter((t) => t.type !== 'genre')].map((t) => t.name),
     rsvp_status: rsvpMap.get(j.id)?.status ?? null,
     rsvp_waitlist_position: rsvpMap.get(j.id)?.waitlist_position ?? null,
     invite_status: inviteMap.get(j.id) ?? null,
@@ -123,6 +124,18 @@ export default function JamsScreen() {
   const [items, setItems] = useState<JamItem[]>([]);
   const [olderPast, setOlderPast] = useState<OlderPast | null>(null);
   const [maps, setMaps] = useState<{ rsvp: Map<string, any>; invite: Map<string, string> }>({ rsvp: new Map(), invite: new Map() });
+  // Filter every section by one tag; the row offers the tags upcoming jams use (as on web).
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const filterTags = useMemo(() => {
+    const now = new Date().toISOString();
+    const counts = new Map<string, number>();
+    for (const s of sections) for (const j of s.data) if ((j.ends_at ?? j.starts_at ?? "") >= now) for (const t of j.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
+    return [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([t]) => t);
+  }, [sections]);
+  const shownSections = useMemo(
+    () => (tagFilter ? sections.map(s => ({ ...s, data: s.data.filter(j => j.tags.includes(tagFilter)) })).filter(s => s.data.length > 0) : sections),
+    [sections, tagFilter]
+  );
   const router = useRouter();
 
   const load = useCallback(async (isRefresh = false) => {
@@ -319,7 +332,25 @@ export default function JamsScreen() {
         </View>
       ) : (
         <SectionList
-          sections={sections}
+          sections={shownSections}
+          ListHeaderComponent={filterTags.length > 1 || tagFilter ? (
+            <View className="flex-row flex-wrap px-4 pt-3">
+              {filterTags.map(t => (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => setTagFilter(cur => (cur === t ? null : t))}
+                  className={`px-2.5 py-1 rounded-full border mr-1.5 mb-1.5 ${tagFilter === t ? 'border-amber-400 bg-amber-50' : 'border-zinc-200 bg-white'}`}
+                >
+                  <Text className={`text-xs ${tagFilter === t ? 'text-amber-700' : 'text-zinc-600'}`}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+              {tagFilter ? (
+                <TouchableOpacity onPress={() => setTagFilter(null)} className="px-1.5 py-1 mb-1.5">
+                  <Text className="text-xs font-medium text-zinc-500">Show all jams</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <JamCard

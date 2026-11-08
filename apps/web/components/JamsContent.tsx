@@ -38,7 +38,8 @@ function indexJams(
   for (const j of jams) {
     const genres = jamTags(j.jam_tags, "genre").map((t) => t.name);
     if (genres.length > 0) genresByJam.set(j.id, genres);
-    const themes = jamTags(j.jam_tags, "theme").map((t) => t.name);
+    // Everything a jam is tagged with besides genres: occasions, communities, forms, languages, themes.
+    const themes = jamTags(j.jam_tags).filter((t) => t.type !== "genre").map((t) => t.name);
     if (themes.length > 0) themesByJam.set(j.id, themes);
     if (j.host_user_id && j.host && !profileById.has(j.host_user_id)) {
       profileById.set(j.host_user_id, {
@@ -311,6 +312,7 @@ function JamListCard({ jam, tags, hostLabel, isOfficial, ticketSummary, rsvp, is
 
 export default function JamsContent() {
   const [data, setData] = useState<JamsData | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [olderPast, setOlderPast] = useState<OlderPast | null>(null);
   const supabase = supabaseBrowser();
   const hydratedUidRef = useRef<string | null | undefined>(undefined);
@@ -508,7 +510,14 @@ export default function JamsContent() {
     );
   }
 
-  const { userId, invitesEnabled, isAdmin, canHostOfficial, allJams, rsvpByJam, inviteByJam, genresByJam, themesByJam, profileById, ticketSummaryByJam } = data;
+  const { userId, invitesEnabled, isAdmin, canHostOfficial, allJams: everyJam, rsvpByJam, inviteByJam, genresByJam, themesByJam, profileById, ticketSummaryByJam } = data;
+  // Filter every section by one tag; the row offers the tags upcoming jams use.
+  const tagsOf = (id: string) => [...(genresByJam.get(id) ?? []), ...(themesByJam.get(id) ?? [])];
+  const nowIso = new Date().toISOString();
+  const tagCounts = new Map<string, number>();
+  for (const j of everyJam) if ((j.ends_at ?? j.starts_at) >= nowIso) for (const t of tagsOf(j.id)) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  const filterTags = [...tagCounts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([t]) => t);
+  const allJams = tagFilter ? everyJam.filter((j) => tagsOf(j.id).includes(tagFilter)) : everyJam;
 
   function cardProps(jam: any, opts: { isOfficial?: boolean; isHosting?: boolean } = {}) {
     return {
@@ -589,6 +598,26 @@ export default function JamsContent() {
         <h1 className="text-xl font-semibold">Jams</h1>
         <p className="text-sm text-zinc-500">Browse open jams or post your own.</p>
       </div>
+
+      {(filterTags.length > 1 || tagFilter) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {filterTags.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTagFilter((cur) => (cur === t ? null : t))}
+              aria-pressed={tagFilter === t}
+              className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                tagFilter === t ? "border-amber-400 bg-amber-50 text-amber-700" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+          {tagFilter && (
+            <button onClick={() => setTagFilter(null)} className="px-1.5 text-xs font-medium text-zinc-500 hover:text-red-600">Show all jams</button>
+          )}
+        </div>
+      )}
 
       {userId && (invitesEnabled || isAdmin) && (
         <section className="space-y-3">

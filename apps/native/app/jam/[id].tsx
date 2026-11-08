@@ -409,7 +409,8 @@ export default function JamDetailScreen() {
       host_display_name: j.profiles?.display_name ?? null,
       host_username: j.profiles?.username ?? null,
       host_avatar: j.profiles?.avatar_url ?? null,
-      genres: jamTags(j.jam_tags, 'genre').map((t) => t.name),
+      // Every tag the jam has, genres first (the field predates the other tag types).
+      genres: [...jamTags(j.jam_tags, 'genre'), ...jamTags(j.jam_tags).filter((t) => t.type !== 'genre')].map((t) => t.name),
     });
 
     const rawRsvps: Attendee[] = (rsvpsResult.data ?? []).map((r: any) => ({

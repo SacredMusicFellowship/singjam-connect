@@ -27,13 +27,12 @@ export default async function EditJamPage({ params }: { params: Promise<{ id: st
   // The host, or for an official event anyone who can host one. See lib/jamAuthz.ts.
   if (!(await canEditJamById(supabaseAdmin(), id, user.id))) notFound();
 
-  const selectedGenreIds = jamTags(tagsRes.data as any, "genre").map((t) => t.id as string);
-  const selectedThemeIds = jamTags(tagsRes.data as any, "theme").map((t) => t.id as string);
+  const selectedTagIds = jamTags(tagsRes.data as any).map((t) => t.id as string);
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Edit jam</h1>
-      <EditJamForm jam={jam as any} selectedGenreIds={selectedGenreIds} selectedThemeIds={selectedThemeIds} />
+      <EditJamForm jam={jam as any} selectedTagIds={selectedTagIds} />
     </div>
   );
 }

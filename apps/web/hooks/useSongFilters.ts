@@ -41,17 +41,21 @@ const noTags = (): SelectedTags => Object.fromEntries(MULTI_FILTER_DIMS.map((dim
 export function useSongFilters<T extends FilterableSong>(
   songs: T[],
   initialSortBy: SortBy = "popularity",
-  hierarchy: TagHierarchy | null = null
+  hierarchy: TagHierarchy | null = null,
+  // Off for panels inside another page (a set's Add songs), which shouldn't touch its address.
+  { syncUrl = true }: { syncUrl?: boolean } = {}
 ) {
-  const [selectedTags, setSelectedTags] = useState<SelectedTags>(tagsFromUrl);
-  const [selectedVibe, setSelectedVibe] = useState(() => readUrlParams().get("vibe") ?? "");
-  const [selectedTonality, setSelectedTonality] = useState(() => readUrlParams().get("tonality") ?? "");
-  const [selectedMeter, setSelectedMeter] = useState(() => readUrlParams().get("meter") ?? "");
-  const [yearMin, setYearMin] = useState(() => readUrlParams().get("yrMin") ?? "");
-  const [yearMax, setYearMax] = useState(() => readUrlParams().get("yrMax") ?? "");
-  const [sortBy, setSortBy] = useState<SortBy>(() => (readUrlParams().get("sort") as SortBy | null) ?? initialSortBy);
+  const fromUrl = (key: string) => (syncUrl ? readUrlParams().get(key) ?? "" : "");
+  const [selectedTags, setSelectedTags] = useState<SelectedTags>(() => (syncUrl ? tagsFromUrl() : noTags()));
+  const [selectedVibe, setSelectedVibe] = useState(() => fromUrl("vibe"));
+  const [selectedTonality, setSelectedTonality] = useState(() => fromUrl("tonality"));
+  const [selectedMeter, setSelectedMeter] = useState(() => fromUrl("meter"));
+  const [yearMin, setYearMin] = useState(() => fromUrl("yrMin"));
+  const [yearMax, setYearMax] = useState(() => fromUrl("yrMax"));
+  const [sortBy, setSortBy] = useState<SortBy>(() => (fromUrl("sort") as SortBy) || initialSortBy);
 
   useEffect(() => {
+    if (!syncUrl) return;
     const params = new URLSearchParams(window.location.search);
     [...Object.values(URL_PARAM), "vibe", "tonality", "meter", "sort", "yrMin", "yrMax"].forEach((k) => params.delete(k));
     for (const dim of MULTI_FILTER_DIMS) selectedTags[dim].forEach((v) => params.append(URL_PARAM[dim], v));
@@ -63,7 +67,7 @@ export function useSongFilters<T extends FilterableSong>(
     if (sortBy !== initialSortBy) params.set("sort", sortBy);
     const qs = params.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [selectedTags, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, sortBy, initialSortBy]);
+  }, [syncUrl, selectedTags, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, sortBy, initialSortBy]);
 
   const filterState = useMemo<SongFilterState>(() => ({
     ...selectedTags,

@@ -145,7 +145,7 @@ export default async function JamPage({
   if (!jam) return <p className="text-sm text-zinc-500">Jam not found.</p>;
 
   const genres = jamTags(tagsRes.data as any, "genre").map((t) => t.name);
-  const themes = jamTags(tagsRes.data as any, "theme").map((t) => t.name);
+  const themes = jamTags(tagsRes.data as any).filter((t) => t.type !== "genre").map((t) => t.name);
   const invitesEnabled = flagRes.data?.enabled ?? true;
 
   const hostLabel = [jam.profiles?.display_name, jam.profiles?.last_name].filter(Boolean).join(" ") || jam.profiles?.username || null;
