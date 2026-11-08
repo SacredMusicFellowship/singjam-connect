@@ -3,6 +3,10 @@ import {
   songMatchesFilters,
   deriveFilterOptions,
   countActiveFilters,
+  buildTagHierarchy,
+  rootFacets,
+  deriveFilterFacets,
+  expandFilterState,
   type FilterableSong,
   type SongFilterState,
 } from "./songFilters";
@@ -141,5 +145,69 @@ describe("countActiveFilters", () => {
     expect(countActiveFilters(emptyState({ yearMin: "1980" }))).toBe(1);
     expect(countActiveFilters(emptyState({ yearMin: "1980", yearMax: "2000" }))).toBe(1);
     expect(countActiveFilters(emptyState())).toBe(0);
+  });
+});
+
+describe("tag hierarchy", () => {
+  const tags = [
+    { id: "rock", name: "Rock", type: "genre" },
+    { id: "americana", name: "Americana", type: "genre", is_top_level: true },
+    { id: "rockabilly", name: "Rockabilly", type: "genre", is_top_level: true },
+    { id: "classic", name: "Classic Rock", type: "genre" },
+    { id: "jewish", name: "Jewish", type: "community" },
+  ];
+  const relations = [
+    { tag_id: "rockabilly", related_tag_id: "rock", kind: "parent" },
+    { tag_id: "rockabilly", related_tag_id: "americana", kind: "parent" },
+    { tag_id: "classic", related_tag_id: "rock", kind: "parent" },
+    { tag_id: "rockabilly", related_tag_id: "jewish", kind: "related" },
+  ];
+  const h = buildTagHierarchy(tags, relations);
+  const songs = [
+    song({ genres: ["Rockabilly"] }),
+    song({ genres: ["Classic Rock"] }),
+    song({ genres: ["Rock"], communities: ["Jewish"] }),
+    song({ genres: ["Folk"] }),
+  ];
+
+  it("handles a tag type with no hierarchy", () => {
+    expect(deriveFilterFacets([song({ communities: ["Jewish"] })], emptyState(), h).communities).toEqual([{ value: "Jewish", count: 1 }]);
+  });
+
+  it("links parents and children within a type only, ignoring 'related' links", () => {
+    expect(h.genres?.children.get("Rock")).toEqual(["Rockabilly", "Classic Rock"]);
+    expect(h.genres?.parents.get("Rockabilly")).toEqual(["Rock", "Americana"]);
+    expect(h.communities).toBeUndefined();
+  });
+
+  it("lists top-level tags and parentless ones first, even when they also have a parent", () => {
+    const facets = deriveFilterFacets(songs, emptyState(), h);
+    expect(rootFacets(facets.genres, "genres", h).map((o) => o.value)).toEqual(["Rock", "Americana", "Folk", "Rockabilly"]);
+  });
+
+  it("filters a parent for itself and everything below it", () => {
+    const f = expandFilterState(emptyState({ genres: new Set(["Rock"]) }), h);
+    expect(songs.filter((s) => songMatchesFilters(s, f)).length).toBe(3);
+    const americana = expandFilterState(emptyState({ genres: new Set(["Americana"]) }), h);
+    expect(songs.filter((s) => songMatchesFilters(s, americana)).length).toBe(1);
+  });
+
+  it("counts a parent across its children and offers parents no song carries directly", () => {
+    const facets = deriveFilterFacets(songs, emptyState(), h);
+    expect(facets.genres).toEqual([
+      { value: "Rock", count: 3 },
+      { value: "Americana", count: 1 },
+      { value: "Classic Rock", count: 1 },
+      { value: "Folk", count: 1 },
+      { value: "Rockabilly", count: 1 },
+    ]);
+  });
+
+  it("counts each section against the other active filters and keeps selections listed", () => {
+    const facets = deriveFilterFacets(songs, emptyState({ communities: new Set(["Jewish"]), forms: new Set(["Hymn"]) }), h);
+    // No song is a hymn, so nothing passes: unselected genres drop out, selections stay at 0.
+    expect(facets.genres).toEqual([]);
+    expect(facets.forms).toEqual([{ value: "Hymn", count: 0 }]);
+    expect(facets.communities).toEqual([{ value: "Jewish", count: 0 }]);
   });
 });

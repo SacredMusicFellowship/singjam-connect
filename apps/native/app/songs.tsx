@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { songMatchesFilters, deriveFilterOptions, countActiveFilters, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { songMatchesFilters, deriveFilterOptions, deriveFilterFacets, expandFilterState, countActiveFilters, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
@@ -13,6 +13,7 @@ import ContentContainer from '@/components/ContentContainer';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
 import SuggestionCard from '@/components/SuggestionCard';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
+import { useTagHierarchy } from '@/lib/useTagHierarchy';
 import InlineDropdown from '@/components/InlineDropdown';
 
 // A superset of SuggestionCard's `Suggestion`, so catalog rows render in the
@@ -248,10 +249,16 @@ export default function SongLibraryScreen() {
   // edits shouldn't rebuild them either.
   const { genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax } = filters;
   const hiddenIds = hideMySongs ? myConfidence : null;
-  const options = useMemo(() => {
-    const pool = hiddenIds ? allSongs.filter(s => !hiddenIds.has(s.song_id)) : allSongs;
-    return deriveFilterOptions(pool, { genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax });
-  }, [allSongs, hiddenIds, genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax]);
+  const hierarchy = useTagHierarchy();
+  const dims = useMemo(
+    () => ({ genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax }),
+    [genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax]
+  );
+  // A selected tag also covers everything below it (Rock covers Classic Rock).
+  const expandedDims = useMemo(() => expandFilterState(dims, hierarchy), [dims, hierarchy]);
+  const pool = useMemo(() => (hiddenIds ? allSongs.filter(s => !hiddenIds.has(s.song_id)) : allSongs), [allSongs, hiddenIds]);
+  const options = useMemo(() => deriveFilterOptions(pool, expandedDims), [pool, expandedDims]);
+  const facets = useMemo(() => deriveFilterFacets(pool, dims, hierarchy), [pool, dims, hierarchy]);
 
   const yearBounds = useMemo(() => {
     const years = allSongs.map(s => s.year).filter((y): y is number => y != null);
@@ -261,10 +268,10 @@ export default function SongLibraryScreen() {
   const displayedSongs = useMemo(() => {
     const base = query.trim() ? searchResults : allSongs;
     const filtered = base.filter(s =>
-      (!hideMySongs || !myConfidence.has(s.song_id)) && songMatchesFilters(s, filters)
+      (!hideMySongs || !myConfidence.has(s.song_id)) && songMatchesFilters(s, expandedDims)
     );
     return applySort(filtered, filters.sortBy);
-  }, [query, allSongs, searchResults, filters, hideMySongs, myConfidence]);
+  }, [query, allSongs, searchResults, filters, expandedDims, hideMySongs, myConfidence]);
 
   // Read through a ref so the row callbacks below can stay referentially stable.
   // Depending on the Map directly would rebuild them on every repertoire edit,
@@ -404,6 +411,8 @@ export default function SongLibraryScreen() {
         visible={filterModalVisible}
         filters={filters}
         options={options}
+        facets={facets}
+        hierarchy={hierarchy}
         yearBounds={yearBounds}
         onChange={setFilters}
         onClose={() => setFilterModalVisible(false)}

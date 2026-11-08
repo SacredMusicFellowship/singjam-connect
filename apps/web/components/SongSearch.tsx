@@ -9,7 +9,8 @@ import { useSongSearch } from "@/hooks/useSongSearch";
 import { useBrowseSongs, type BrowseFilters } from "@/hooks/useBrowseSongs";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { SortDropdown } from "@/components/SortDropdown";
-import { FilterPanel } from "@/components/FilterPanel";
+import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
+import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import SearchInput from "@/components/SearchInput";
 
@@ -66,36 +67,27 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
 
   const { results, loading, error: searchError } = useSongSearch(q, { limit: 50, debounceMs: 200 });
 
-  const {
-    filterOptions, matchesFilters,
-    selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedForms, selectedOccasions, selectedCommunities,
-    selectedVibe, setSelectedVibe,
-    selectedTonality, setSelectedTonality,
-    selectedMeter, setSelectedMeter,
-    yearMin, setYearMin,
-    yearMax, setYearMax,
-    yearBounds,
-    activeFilterCount,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, toggleForm, toggleOccasion, toggleCommunity, clearFilters,
-    sortBy, setSortBy,
-  } = useSongFilters(filterMeta, "popularity");
+  const hierarchy = useTagHierarchy();
+  const filters = useSongFilters(filterMeta, "popularity", hierarchy);
+  const { matchesFilters, activeFilterCount, sortBy, setSortBy, expandedState } = filters;
 
+  // The browse RPC gets each selected tag plus everything below it, as the list filter does.
   const browseFilters = useMemo<BrowseFilters>(() => ({
-    genres: Array.from(selectedGenres).sort(),
-    languages: Array.from(selectedLanguages).sort(),
-    themes: Array.from(selectedThemes).sort(),
-    cultures: Array.from(selectedCultures).sort(),
-    forms: Array.from(selectedForms).sort(),
-    occasions: Array.from(selectedOccasions).sort(),
-    communities: Array.from(selectedCommunities).sort(),
-    vibe: selectedVibe,
-    tonality: selectedTonality,
-    meter: selectedMeter,
-    yearMin,
-    yearMax,
+    genres: Array.from(expandedState.genres).sort(),
+    languages: Array.from(expandedState.languages).sort(),
+    themes: Array.from(expandedState.themes).sort(),
+    cultures: Array.from(expandedState.cultures).sort(),
+    forms: Array.from(expandedState.forms).sort(),
+    occasions: Array.from(expandedState.occasions).sort(),
+    communities: Array.from(expandedState.communities).sort(),
+    vibe: expandedState.vibe,
+    tonality: expandedState.tonality,
+    meter: expandedState.meter,
+    yearMin: expandedState.yearMin,
+    yearMax: expandedState.yearMax,
     excludeMine: hideMySongs,
     sort: sortBy,
-  }), [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedForms, selectedOccasions, selectedCommunities, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, hideMySongs, sortBy]);
+  }), [expandedState, hideMySongs, sortBy]);
 
   const {
     songs: browseSongs,
@@ -274,37 +266,10 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
           </p>
         </div>
 
+        <ActiveFilterChips filters={filters} />
+
         {filtersOpen && (
-          <FilterPanel
-            filterOptions={filterOptions}
-            selectedGenres={selectedGenres}
-            selectedLanguages={selectedLanguages}
-            selectedThemes={selectedThemes}
-            selectedCultures={selectedCultures}
-              selectedForms={selectedForms}
-              selectedOccasions={selectedOccasions}
-              selectedCommunities={selectedCommunities}
-            selectedVibe={selectedVibe}
-            setSelectedVibe={setSelectedVibe}
-            selectedTonality={selectedTonality}
-            setSelectedTonality={setSelectedTonality}
-            selectedMeter={selectedMeter}
-            setSelectedMeter={setSelectedMeter}
-            yearMin={yearMin}
-            setYearMin={setYearMin}
-            yearMax={yearMax}
-            setYearMax={setYearMax}
-            yearBounds={yearBounds}
-            activeFilterCount={activeFilterCount}
-            toggleGenre={toggleGenre}
-            toggleLanguage={toggleLanguage}
-            toggleTheme={toggleTheme}
-            toggleCulture={toggleCulture}
-              toggleForm={toggleForm}
-              toggleOccasion={toggleOccasion}
-              toggleCommunity={toggleCommunity}
-            clearFilters={clearFilters}
-          />
+          <FilterPanel filters={filters} hierarchy={hierarchy} />
         )}
 
         {/* Song list: search results or browse list */}

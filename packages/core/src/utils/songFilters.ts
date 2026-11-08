@@ -115,3 +115,116 @@ export function countActiveFilters(f: SongFilterState): number {
     (f.yearMin || f.yearMax ? 1 : 0)
   );
 }
+
+// ── Tag hierarchy (migration 202) ────────────────────────────────────────────
+// Tags nest through parent links, and a tag can have several parents (Rockabilly
+// is under Rock and Americana). Picking a parent filters for it and everything
+// below it, and its count covers them all.
+
+export const FILTER_DIM_TAG_TYPE: Record<MultiFilterDim, string> = {
+  genres: "genre",
+  forms: "form",
+  occasions: "occasion",
+  communities: "community",
+  cultures: "culture",
+  languages: "language",
+  themes: "theme",
+};
+
+export type TagGraphRow = { id: string; name: string; type: string; is_top_level?: boolean };
+export type TagRelationRow = { tag_id: string; related_tag_id: string; kind: string };
+
+// Per dimension: each tag name's direct children and parents, by name, and the
+// tags shown at the top level even though they have a parent (Country, also under Americana).
+export type TagHierarchy = Partial<Record<MultiFilterDim, { children: Map<string, string[]>; parents: Map<string, string[]>; topLevel: Set<string> }>>;
+
+export function buildTagHierarchy(tags: TagGraphRow[], relations: TagRelationRow[]): TagHierarchy {
+  const byId = new Map(tags.map((t) => [t.id, t]));
+  const dimOf = new Map(Object.entries(FILTER_DIM_TAG_TYPE).map(([dim, type]) => [type, dim as MultiFilterDim]));
+  const out: TagHierarchy = {};
+  const entry = (dim: MultiFilterDim) => (out[dim] ??= { children: new Map(), parents: new Map(), topLevel: new Set() });
+  for (const t of tags) {
+    const dim = dimOf.get(t.type);
+    if (dim && t.is_top_level) entry(dim).topLevel.add(t.name);
+  }
+  for (const r of relations) {
+    if (r.kind !== "parent") continue;
+    const child = byId.get(r.tag_id), parent = byId.get(r.related_tag_id);
+    if (!child || !parent || child.type !== parent.type) continue;
+    const dim = dimOf.get(child.type);
+    if (!dim) continue;
+    const h = entry(dim);
+    h.children.set(parent.name, [...(h.children.get(parent.name) ?? []), child.name]);
+    h.parents.set(child.name, [...(h.parents.get(child.name) ?? []), parent.name]);
+  }
+  return out;
+}
+
+// The options a filter section lists first: top-level tags, and any tag none of
+// whose parents are on offer. The rest appear under their parents.
+export function rootFacets(options: FacetOption[], dim: MultiFilterDim, h: TagHierarchy | null | undefined): FacetOption[] {
+  const offered = new Set(options.map((o) => o.value));
+  const entry = h?.[dim];
+  return options.filter((o) => entry?.topLevel.has(o.value) || !(entry?.parents.get(o.value) ?? []).some((p) => offered.has(p)));
+}
+
+// A tag and everything below it.
+export function tagWithDescendants(name: string, children: Map<string, string[]> | undefined): Set<string> {
+  const out = new Set([name]);
+  const stack = [name];
+  while (stack.length) {
+    const next = stack.pop()!;
+    for (const c of children?.get(next) ?? []) if (!out.has(c)) { out.add(c); stack.push(c); }
+  }
+  return out;
+}
+
+function withAncestors(name: string, parents: Map<string, string[]> | undefined): Set<string> {
+  const out = new Set([name]);
+  const stack = [name];
+  while (stack.length) {
+    const next = stack.pop()!;
+    for (const p of parents?.get(next) ?? []) if (!out.has(p)) { out.add(p); stack.push(p); }
+  }
+  return out;
+}
+
+// The state to actually filter with: every selected tag plus what's below it.
+export function expandFilterState<F extends SongFilterState>(f: F, h: TagHierarchy | null | undefined): F {
+  if (!h) return f;
+  const out = { ...f };
+  for (const dim of MULTI_FILTER_DIMS) {
+    const children = h[dim]?.children;
+    if (!children || f[dim].size === 0) continue;
+    const expanded = new Set<string>();
+    for (const v of f[dim]) for (const x of tagWithDescendants(v, children)) expanded.add(x);
+    out[dim] = expanded;
+  }
+  return out;
+}
+
+export type FacetOption = { value: string; count: number };
+export type SongFilterFacets = Record<MultiFilterDim, FacetOption[]>;
+
+// Every tag a filter section can offer, with how many songs match it given the
+// OTHER active filters. A parent counts the songs tagged with it or anything
+// below it, and parents of used tags are offered even when no song carries them
+// directly. Selected values always stay listed. Most songs first, then A–Z.
+export function deriveFilterFacets(songs: FilterableSong[], f: SongFilterState, h?: TagHierarchy | null): SongFilterFacets {
+  const expanded = expandFilterState(f, h);
+  const out = {} as SongFilterFacets;
+  for (const dim of MULTI_FILTER_DIMS) {
+    const parents = h?.[dim]?.parents;
+    const counts = new Map<string, number>();
+    for (const s of songs) {
+      if (!songMatchesFilters(s, expanded, dim)) continue;
+      const hit = new Set<string>();
+      for (const v of s[dim] ?? []) for (const a of withAncestors(v, parents)) hit.add(a);
+      for (const v of hit) counts.set(v, (counts.get(v) ?? 0) + 1);
+    }
+    for (const v of f[dim]) if (!counts.has(v)) counts.set(v, 0);
+    out[dim] = [...counts].map(([value, count]) => ({ value, count }))
+      .sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0));
+  }
+  return out;
+}

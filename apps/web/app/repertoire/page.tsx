@@ -13,7 +13,8 @@ import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { useSongSearch, type SongSearchResult } from "@/hooks/useSongSearch";
 import { sortRepertoireSearchResults } from "@/lib/sortRepertoireSearchResults";
 import { SortDropdown } from "@/components/SortDropdown";
-import { FilterPanel } from "@/components/FilterPanel";
+import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
+import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import MyKeySelect from "@/components/MyKeySelect";
@@ -322,19 +323,9 @@ export default function RepertoirePage() {
 
   const [isPending, startTransition] = useTransition();
 
-  const {
-    filterOptions, matchesFilters,
-    selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedForms, selectedOccasions, selectedCommunities,
-    selectedVibe, setSelectedVibe,
-    selectedTonality, setSelectedTonality,
-    selectedMeter, setSelectedMeter,
-    yearMin, setYearMin,
-    yearMax, setYearMax,
-    yearBounds,
-    activeFilterCount,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, toggleForm, toggleOccasion, toggleCommunity, clearFilters,
-    sortBy, setSortBy,
-  } = useSongFilters(items, "title_asc");
+  const hierarchy = useTagHierarchy();
+  const filters = useSongFilters(items, "title_asc", hierarchy);
+  const { matchesFilters, activeFilterCount, clearFilters, sortBy, setSortBy } = filters;
 
   const saveScrollPosition = useScrollRestoration(
     "scroll:/repertoire",
@@ -1100,37 +1091,10 @@ export default function RepertoirePage() {
             )}
           </div>
 
+          <ActiveFilterChips filters={filters} />
+
           {filtersOpen && (
-            <FilterPanel
-              filterOptions={filterOptions}
-              selectedGenres={selectedGenres}
-              selectedLanguages={selectedLanguages}
-              selectedThemes={selectedThemes}
-              selectedCultures={selectedCultures}
-              selectedForms={selectedForms}
-              selectedOccasions={selectedOccasions}
-              selectedCommunities={selectedCommunities}
-              selectedVibe={selectedVibe}
-              setSelectedVibe={setSelectedVibe}
-              selectedTonality={selectedTonality}
-              setSelectedTonality={setSelectedTonality}
-              selectedMeter={selectedMeter}
-              setSelectedMeter={setSelectedMeter}
-              yearMin={yearMin}
-              setYearMin={setYearMin}
-              yearMax={yearMax}
-              setYearMax={setYearMax}
-              yearBounds={yearBounds}
-              activeFilterCount={activeFilterCount}
-              toggleGenre={toggleGenre}
-              toggleLanguage={toggleLanguage}
-              toggleTheme={toggleTheme}
-              toggleCulture={toggleCulture}
-              toggleForm={toggleForm}
-              toggleOccasion={toggleOccasion}
-              toggleCommunity={toggleCommunity}
-              clearFilters={clearFilters}
-            />
+            <FilterPanel filters={filters} hierarchy={hierarchy} />
           )}
 
           <div className="divide-y rounded-md border">

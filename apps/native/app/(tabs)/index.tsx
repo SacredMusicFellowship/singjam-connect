@@ -3,12 +3,13 @@ import { View, Text, FlatList, TextInput, TouchableOpacity, RefreshControl, Aler
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { mergeSuggestionsById, songMatchesFilters, deriveFilterOptions, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState } from '@singjam/core';
+import { mergeSuggestionsById, songMatchesFilters, deriveFilterOptions, deriveFilterFacets, expandFilterState, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
 import { useAuth } from '@/lib/auth-context';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
+import { useTagHierarchy } from '@/lib/useTagHierarchy';
 import InlineDropdown from '@/components/InlineDropdown';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RepertoireCard from '@/components/RepertoireCard';
@@ -185,7 +186,11 @@ export default function RepertoireScreen() {
 
   // Derive each filter dimension's options from songs passing the OTHER active
   // filters, so choosing one facet narrows the rest (cascading, like web).
-  const options = useMemo(() => deriveFilterOptions(songs, extFilters), [songs, extFilters]);
+  const hierarchy = useTagHierarchy();
+  // A selected tag also covers everything below it (Rock covers Classic Rock).
+  const expandedFilters = useMemo(() => expandFilterState(extFilters, hierarchy), [extFilters, hierarchy]);
+  const options = useMemo(() => deriveFilterOptions(songs, expandedFilters), [songs, expandedFilters]);
+  const facets = useMemo(() => deriveFilterFacets(songs, extFilters, hierarchy), [songs, extFilters, hierarchy]);
 
   const yearBounds = useMemo(() => {
     const years = songs.map(s => s.year).filter((y): y is number => y != null);
@@ -220,12 +225,12 @@ export default function RepertoireScreen() {
       result = result.filter(s => s.confidence === confidenceFilter);
     }
 
-    result = result.filter(s => songMatchesFilters(s, extFilters));
+    result = result.filter(s => songMatchesFilters(s, expandedFilters));
 
     if (sortBy === 'title_desc') return [...result].sort((a, b) => b.title.localeCompare(a.title));
     if (sortBy === 'popularity') return [...result].sort((a, b) => b.popularity - a.popularity || a.title.localeCompare(b.title));
     return result;
-  }, [songs, confidenceFilter, extFilters, sortBy]);
+  }, [songs, confidenceFilter, expandedFilters, sortBy]);
 
   const existingIds = useMemo(() => new Set(songs.map(s => s.song_id)), [songs]);
   const songsById = useMemo(() => new Map(songs.map(s => [s.song_id, s])), [songs]);
@@ -634,6 +639,8 @@ export default function RepertoireScreen() {
         visible={filterModalVisible}
         filters={extFilters}
         options={options}
+        facets={facets}
+        hierarchy={hierarchy}
         yearBounds={yearBounds}
         emptyHint={{
           title: 'No filter options available yet.',
