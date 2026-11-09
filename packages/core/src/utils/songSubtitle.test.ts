@@ -41,7 +41,7 @@ describe("songCardCredits", () => {
   it("puts writers after the title and recordings under it for a song known by its recording", () => {
     const c = songCardCredits({ title: "Moondance", byline: "Van Morrison", displayArtist: "Van Morrison", composers: ["Van Morrison"], cultures: [], recordingArtists: [{ name: "Van Morrison", year: 1967 }] });
     expect(c.writers).toEqual([{ text: "V. Morrison", link: { kind: "person", key: "Van Morrison" } }]);
-    expect(c.line).toEqual([{ text: "Van Morrison (1967)", link: { kind: "artist", key: "Van Morrison" } }]);
+    expect(c.line).toEqual([{ text: "Van Morrison", suffix: " (1967)", link: { kind: "artist", key: "Van Morrison" } }]);
   });
   it("treats a row from before byline existed as known by its recording", () => {
     expect(songCardCredits({ title: "x", displayArtist: "Van Morrison", composers: [], cultures: [], recordingArtists: null }).line).toEqual([{ text: "Van Morrison", link: null }]);

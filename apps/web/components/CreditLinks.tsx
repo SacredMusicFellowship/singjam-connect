@@ -13,6 +13,7 @@ export default function CreditLinks({ credits, separator = ", ", linkClassName =
       {c.link ? (
         <Link href={browsePath(c.link.kind, c.link.key, { traditional: c.link.traditional })} className={`hover:text-amber-700 hover:underline ${linkClassName}`}>{c.text}</Link>
       ) : c.text}
+      {c.suffix}
     </Fragment>
   ));
 }

@@ -121,7 +121,9 @@ export default function SongCard({
               {shows.map((p, i) => (
                 <Fragment key={`${p.name}-${p.year}`}>
                   {i > 0 && ", "}
-                  <em>{p.name}</em>
+                  {p.slug ? (
+                    <Link href={browsePath("show", p.slug)} className="relative z-10 hover:text-amber-700 hover:underline"><em>{p.name}</em></Link>
+                  ) : <em>{p.name}</em>}
                   {p.year ? ` (${p.year})` : null}
                 </Fragment>
               ))}

@@ -16,8 +16,10 @@ function Chip({ c }: { c: BrowseChip }) {
 
 // One /browse section: its most-used entries, and everything on "Show all"
 // (for genres, occasions and communities that adds the kinds within each).
-export default function ChipSection({ title, chips, all, more }: {
+export default function ChipSection({ title, chips, all, more, sub = false }: {
   title: string;
+  // A group inside a section (a medium under Stage & screen).
+  sub?: boolean;
   chips: BrowseChip[];
   all?: BrowseChip[];
   more?: { href: string; label: string };
@@ -28,7 +30,7 @@ export default function ChipSection({ title, chips, all, more }: {
   const canExpand = !expanded && full.length > shown.length;
   return (
     <section className="space-y-2">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+      {sub ? <h3 className="text-sm text-slate-600">{title}</h3> : <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h2>}
       <div className="flex flex-wrap gap-1.5">
         {shown.map((c) => <Chip key={c.href} c={c} />)}
         {canExpand && (

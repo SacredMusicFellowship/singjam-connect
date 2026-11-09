@@ -1,4 +1,4 @@
-export type ProductionCredit = { name: string; year: number | null };
+export type ProductionCredit = { name: string; year: number | null; slug?: string | null };
 
 // Rows cached before production_credits existed carry only the names.
 export function productionCredits(

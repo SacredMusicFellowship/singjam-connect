@@ -11,6 +11,8 @@ export type BrowseHub = {
   artists: BrowseChip[];
   artistTotal: number;
   shows: { medium: string; label: string; chips: BrowseChip[] }[];
+  // Cultures with their traditional songs (migration 213).
+  traditional: BrowseChip[];
 };
 
 const SECTIONS: { type: TagType; title: string; topLevelOnly: boolean }[] = [
@@ -28,7 +30,7 @@ const byCount = (a: BrowseChip, b: BrowseChip) => b.count - a.count || (a.label 
 // Everything the /browse hub lists, with song counts (a tag counts what's below
 // it too, via tag_song_counts in migration 206). Only entries with songs appear.
 export async function loadBrowseHub(db: any): Promise<BrowseHub> {
-  const [tags, { data: counts }, people, artists, { data: shows }] = await Promise.all([
+  const [tags, { data: counts }, people, artists, { data: shows }, { data: tradCounts }] = await Promise.all([
     fetchAllRows<{ id: string; name: string; slug: string; type: TagType; is_top_level: boolean }>((f, t) =>
       db.from("tags").select("id, name, slug, type, is_top_level").order("id").range(f, t)
     ),
@@ -40,6 +42,7 @@ export async function loadBrowseHub(db: any): Promise<BrowseHub> {
       db.from("artists").select("name, slug, song_recording_artists(count)").order("id").range(f, t)
     ),
     db.from("productions").select("name, slug, year, medium, song_productions(count)").order("name").order("id"),
+    db.rpc("traditional_culture_counts"),
   ]);
   const songCount = new Map(((counts ?? []) as { tag_id: string; songs: number }[]).map((c) => [c.tag_id, c.songs]));
 
@@ -72,6 +75,9 @@ export async function loadBrowseHub(db: any): Promise<BrowseHub> {
     artists: recording,
     artistTotal: allArtists.length,
     shows: [...byMedium].map(([medium, chips]) => ({ medium, label: SHOW_MEDIUM_LABEL[medium] ?? "Other", chips: chips.sort(byCount) })),
+    traditional: ((tradCounts ?? []) as { name: string; slug: string; song_count: number }[])
+      .map((c) => ({ href: browsePath("culture", c.slug, { traditional: true }), label: c.name, count: Number(c.song_count) }))
+      .sort(byCount),
   };
 }
 
@@ -112,5 +118,6 @@ export function sortBrowseHub(hub: BrowseHub, order: BrowseHubOrder): BrowseHub 
     writers: az(hub.writers),
     artists: az(hub.artists),
     shows: hub.shows.map((g) => ({ ...g, chips: az(g.chips) })),
+    traditional: az(hub.traditional),
   };
 }

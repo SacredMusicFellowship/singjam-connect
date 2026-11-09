@@ -30,7 +30,8 @@ export function knownByRecording(byline: string | null | undefined, displayArtis
 // One part of a song card's credits: `lead` is plain text before it ("Tune: "),
 // and `link` the page it opens. People, artists and tags are linked by name
 // (each is unique; see loadBrowseEntity), tunes and texts by slug.
-export type CardCredit = { lead?: string; text: string; link: { kind: BrowseKind; key: string; traditional?: boolean } | null };
+// `suffix` is plain text after the link, such as a recording's year.
+export type CardCredit = { lead?: string; text: string; suffix?: string; link: { kind: BrowseKind; key: string; traditional?: boolean } | null };
 
 // What tells a song apart when it isn't known by a recording (migrations 211-212).
 export type CardIdentity = {
@@ -85,7 +86,7 @@ export function songCardCredits(o: {
     return { writers, line: id ? [id] : [] };
   }
   const line: CardCredit[] = o.recordingArtists?.length
-    ? sortRecordingsByYear(o.recordingArtists).map((a): CardCredit => ({ text: a.year ? `${a.name} (${a.year})` : a.name, link: { kind: "artist", key: a.name } }))
+    ? sortRecordingsByYear(o.recordingArtists).map((a): CardCredit => ({ text: a.name, ...(a.year ? { suffix: ` (${a.year})` } : {}), link: { kind: "artist", key: a.name } }))
     : o.displayArtist?.trim() ? [{ text: o.displayArtist.trim(), link: null }] : [];
   return { writers, line };
 }

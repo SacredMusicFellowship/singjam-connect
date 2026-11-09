@@ -106,7 +106,7 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
               {shows.map((p, i) => (
                 <Text key={`${p.name}-${p.year}`}>
                   {i > 0 ? ', ' : null}
-                  <Text className="italic">{p.name}</Text>
+                  <Text className="italic" onPress={p.slug && onOpenBrowse ? () => onOpenBrowse(browsePath('show', p.slug!)) : undefined}>{p.name}</Text>
                   {p.year ? ` (${p.year})` : null}
                 </Text>
               ))}

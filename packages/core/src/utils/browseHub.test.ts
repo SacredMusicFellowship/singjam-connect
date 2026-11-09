@@ -38,7 +38,10 @@ describe("loadBrowseHub", () => {
         { name: "Victory", slug: "victory", year: null, medium: null, song_productions: [{ count: 0 }] },
       ],
     },
-    { tag_song_counts: [{ tag_id: "rock", songs: 5 }, { tag_id: "classic", songs: 3 }, { tag_id: "folk", songs: 7 }, { tag_id: "hymn", songs: 2 }] }
+    {
+      tag_song_counts: [{ tag_id: "rock", songs: 5 }, { tag_id: "classic", songs: 3 }, { tag_id: "folk", songs: 7 }, { tag_id: "hymn", songs: 2 }],
+      traditional_culture_counts: [{ name: "Irish", slug: "irish", song_count: 3 }, { name: "Scottish", slug: "scottish", song_count: 5 }],
+    }
   );
 
   it("lists top-level genres with songs, most first, and every form with songs", async () => {
@@ -58,6 +61,14 @@ describe("loadBrowseHub", () => {
     expect(hub.artists.map((a) => a.label)).toEqual(["The Weavers"]);
     expect(hub.shows).toEqual([{ medium: "animated", label: "Animated film", chips: [{ href: "/shows/cinderella-1950", label: "Cinderella (1950)", count: 1 }] }]);
   });
+
+  it("lists each culture's traditional songs, most first", async () => {
+    const hub = await loadBrowseHub(db);
+    expect(hub.traditional).toEqual([
+      { href: "/cultures/scottish?traditional=1", label: "Scottish", count: 5 },
+      { href: "/cultures/irish?traditional=1", label: "Irish", count: 3 },
+    ]);
+  });
 });
 
 describe("sortBrowseHub", () => {
@@ -66,6 +77,7 @@ describe("sortBrowseHub", () => {
     writers: [{ href: "/p/z", label: "Zed", count: 5 }, { href: "/p/a", label: "Ann", count: 2 }],
     writerTotal: 2, artists: [], artistTotal: 0,
     shows: [{ medium: "film", label: "Film", chips: [{ href: "/s/b", label: "Beta", count: 4 }, { href: "/s/a", label: "Alpha", count: 1 }] }],
+    traditional: [{ href: "/c/s", label: "Scottish", count: 9 }, { href: "/c/i", label: "Irish", count: 2 }],
   };
   it("keeps the loaded most-songs order", () => {
     expect(sortBrowseHub(hub, "count")).toBe(hub);
@@ -76,5 +88,6 @@ describe("sortBrowseHub", () => {
     expect(az.sections[0].all.map((c) => c.label)).toEqual(["Folk", "Rock"]);
     expect(az.writers.map((c) => c.label)).toEqual(["Ann", "Zed"]);
     expect(az.shows[0].chips.map((c) => c.label)).toEqual(["Alpha", "Beta"]);
+    expect(az.traditional.map((c) => c.label)).toEqual(["Irish", "Scottish"]);
   });
 });

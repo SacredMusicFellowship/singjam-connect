@@ -72,21 +72,24 @@ export default function BrowseHubScreen() {
             )}
             {!hub && !error && <ActivityIndicator className="mt-10" color="#d97706" />}
             {error && <Text className="text-sm text-slate-500 mt-10 text-center">Couldn’t load the browse page. Pull back and try again.</Text>}
-            {hub?.sections.map(s => (
+            {hub?.sections.slice(0, 1).map(s => (
               <View key={s.type}>
                 <Heading title={s.title} />
-                <ChipCloud chips={s.chips} all={s.all} more={s.type === 'culture' ? { href: '/people/traditional', label: 'Traditional songs from every culture' } : undefined} onPress={open} />
+                <ChipCloud chips={s.chips} all={s.all} onPress={open} />
               </View>
             ))}
-            {hub && hub.writers.length > 0 && (
-              <><Heading title="Songwriters" /><ChipCloud chips={hub.writers} more={{ href: '/people', label: `See all ${hub.writerTotal} songwriters` }} onPress={open} /></>
+            {hub && hub.traditional.length > 0 && (
+              <><Heading title="Traditional songs" /><ChipCloud chips={hub.traditional} more={{ href: '/people/traditional', label: 'All traditional songs' }} onPress={open} /></>
             )}
-            {hub && hub.artists.length > 0 && (
-              <><Heading title="Recording artists" /><ChipCloud chips={hub.artists} more={{ href: '/artists', label: `See all ${hub.artistTotal} recording artists` }} onPress={open} /></>
-            )}
+            {hub?.sections.slice(1).map(s => (
+              <View key={s.type}>
+                <Heading title={s.title} />
+                <ChipCloud chips={s.chips} all={s.all} onPress={open} />
+              </View>
+            ))}
             {hub && hub.shows.length > 0 && (
               <>
-                <Heading title="Shows" />
+                <Heading title="Stage & screen" />
                 {hub.shows.map(g => (
                   <View key={g.medium}>
                     <Text className="text-sm text-slate-600 mb-1.5">{g.label}</Text>
@@ -94,6 +97,12 @@ export default function BrowseHubScreen() {
                   </View>
                 ))}
               </>
+            )}
+            {hub && hub.writers.length > 0 && (
+              <><Heading title="Songwriters" /><ChipCloud chips={hub.writers} more={{ href: '/people', label: `See all ${hub.writerTotal} songwriters` }} onPress={open} /></>
+            )}
+            {hub && hub.artists.length > 0 && (
+              <><Heading title="Recording artists" /><ChipCloud chips={hub.artists} more={{ href: '/artists', label: `See all ${hub.artistTotal} recording artists` }} onPress={open} /></>
             )}
           </View>
         </ContentContainer>

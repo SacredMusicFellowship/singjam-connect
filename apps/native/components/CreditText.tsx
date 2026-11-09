@@ -18,6 +18,7 @@ export default function CreditText({ credits, onOpen, separator = ', ', linkClas
           {c.link && onOpen ? (
             <Text className={linkClassName} onPress={() => onOpen(browsePath(c.link!.kind, c.link!.key, { traditional: c.link!.traditional }))}>{c.text}</Text>
           ) : c.text}
+          {c.suffix ?? null}
         </Text>
       ))}
     </>
