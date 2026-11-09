@@ -16,6 +16,7 @@ import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterS
 import { useTagHierarchy } from '@/lib/useTagHierarchy';
 import { nativeBrowseHref } from '@/lib/browseLinks';
 import InlineDropdown from '@/components/InlineDropdown';
+import FiltersButton from '@/components/FiltersButton';
 
 // A superset of SuggestionCard's `Suggestion`, so catalog rows render in the
 // same card web uses while still carrying the fields the filters need.
@@ -352,17 +353,7 @@ export default function SongLibraryScreen() {
           onChange={(sortBy) => setFilters(f => ({ ...f, sortBy }))}
           accessibilityLabel="Sort"
         />
-        <TouchableOpacity
-          onPress={() => setFilterModalVisible(true)}
-          className={`h-7 flex-row items-center gap-1.5 rounded-full border px-3 ${
-            activeFilterCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200'
-          }`}
-        >
-          <Ionicons name="filter" size={12} color={activeFilterCount > 0 ? '#b45309' : '#71717a'} />
-          <Text className={`text-xs font-medium ${activeFilterCount > 0 ? 'text-amber-700' : 'text-zinc-500'}`}>
-            Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
-          </Text>
-        </TouchableOpacity>
+        <FiltersButton count={activeFilterCount} onPress={() => setFilterModalVisible(true)} />
         {userId && myConfidence.size > 0 && (
           <TouchableOpacity
             onPress={() => setHideMySongs(v => !v)}

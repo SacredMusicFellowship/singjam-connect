@@ -3,30 +3,14 @@
 import { useState } from "react";
 import { sortBrowseHub, type BrowseHub, type BrowseHubOrder } from "@singjam/core";
 import ChipSection from "@/components/browse/ChipSection";
-
-const ORDERS: { value: BrowseHubOrder; label: string }[] = [
-  { value: "count", label: "Most songs" },
-  { value: "az", label: "A–Z" },
-];
+import OrderToggle, { COUNT_OR_AZ } from "@/components/OrderToggle";
 
 export default function BrowseHubSections({ hub: loaded }: { hub: BrowseHub }) {
   const [order, setOrder] = useState<BrowseHubOrder>("count");
   const hub = sortBrowseHub(loaded, order);
   return (
     <>
-      <div className="flex items-center gap-1.5" role="group" aria-label="Sort">
-        {ORDERS.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => setOrder(o.value)}
-            aria-pressed={order === o.value}
-            className={`rounded-full border px-3 py-1 text-sm ${order === o.value ? "border-amber-500 bg-amber-500 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-amber-300"}`}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <OrderToggle value={order} onChange={setOrder} options={COUNT_OR_AZ} />
       {hub.sections.map((s) => (
         <ChipSection
           key={s.type}

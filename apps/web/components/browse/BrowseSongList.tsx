@@ -9,6 +9,7 @@ import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
 import { SortDropdown } from "@/components/SortDropdown";
 import SongCard from "@/components/SongCard";
 import { useSongCardActions } from "@/hooks/useSongCardActions";
+import FiltersButton from "@/components/FiltersButton";
 
 const SORT_OPTIONS = [
   { value: "popularity" as const, label: "Most known" },
@@ -42,14 +43,7 @@ export default function BrowseSongList({ songs, meta, roles }: {
       <div className="flex flex-wrap items-center gap-2 px-1">
         <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} align="left" />
         {songs.length > 1 && (
-          <button
-            onClick={() => setFiltersOpen((o) => !o)}
-            className={`h-7 flex items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
-              activeFilterCount > 0 ? "border-amber-400 bg-amber-50 text-amber-700" : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
-            }`}
-          >
-            Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-          </button>
+          <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
         )}
         {activeFilterCount > 0 && <span className="text-xs text-zinc-500">{shown.length} of {songs.length}</span>}
       </div>

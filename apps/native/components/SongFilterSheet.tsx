@@ -1,9 +1,12 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import OrderToggle, { COUNT_OR_AZ } from '@/components/OrderToggle';
 import {
   countActiveFilters,
   MULTI_FILTER_DIMS,
   rootFacets,
+  orderFacets,
+  type FacetOrder,
   type FacetOption,
   type MultiFilterDim,
   type SongFilterFacets,
@@ -90,7 +93,7 @@ function SectionLabel({ title }: { title: string }) {
   return <Text className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2 mt-4">{title}</Text>;
 }
 
-function TagSection({ dim, options, hierarchy, selected, onToggle, open, onToggleOpen }: {
+function TagSection({ dim, options, hierarchy, selected, onToggle, open, onToggleOpen, order }: {
   dim: MultiFilterDim;
   options: FacetOption[];
   hierarchy: TagHierarchy | null;
@@ -98,16 +101,16 @@ function TagSection({ dim, options, hierarchy, selected, onToggle, open, onToggl
   onToggle: (dim: ChipDim, value: string) => void;
   open: boolean;
   onToggleOpen: () => void;
+  order: FacetOrder;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const byValue = useMemo(() => new Map(options.map(o => [o.value, o])), [options]);
-  const roots = useMemo(() => rootFacets(options, dim, hierarchy), [options, dim, hierarchy]);
+  const roots = useMemo(() => orderFacets(rootFacets(options, dim, hierarchy), order), [options, dim, hierarchy, order]);
   const childMap = hierarchy?.[dim]?.children;
-  const childOptions = (value: string) => (childMap?.get(value) ?? [])
+  const childOptions = (value: string) => orderFacets((childMap?.get(value) ?? [])
     .map(c => byValue.get(c))
-    .filter((o): o is FacetOption => !!o)
-    .sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : 1));
+    .filter((o): o is FacetOption => !!o), order);
   const shownRoots = showAll ? roots : roots.filter((o, i) => i < TOP_N || selected.has(o.value));
   const hidden = roots.length - shownRoots.length;
 
@@ -186,6 +189,7 @@ export default function SongFilterSheet<T extends SongFilterState>({
   const activeCount = countActiveFilters(filters);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Set<string>>(() => new Set(['genres']));
+  const [order, setOrder] = useState<FacetOrder>('count');
 
   function set(patch: Partial<SongFilterState>) {
     onChange({ ...filters, ...patch });
@@ -240,6 +244,7 @@ export default function SongFilterSheet<T extends SongFilterState>({
         </View>
 
         <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          {hasAnyOption && <OrderToggle value={order} onChange={setOrder} options={COUNT_OR_AZ} className="mt-3" />}
           {hasAnyOption && (
             <TextInput
               className="mt-3 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900"
@@ -283,6 +288,7 @@ export default function SongFilterSheet<T extends SongFilterState>({
                   onToggle={handleToggle}
                   open={open.has(dim)}
                   onToggleOpen={() => setOpen(prev => toggleFilterValue(prev, dim))}
+                  order={order}
                 />
               ) : null
             )}

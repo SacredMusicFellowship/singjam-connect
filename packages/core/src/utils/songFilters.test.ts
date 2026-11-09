@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   songMatchesFilters,
+  orderFacets,
   deriveFilterOptions,
   countActiveFilters,
   buildTagHierarchy,
@@ -209,5 +210,15 @@ describe("tag hierarchy", () => {
     expect(facets.genres).toEqual([]);
     expect(facets.forms).toEqual([{ value: "Hymn", count: 0 }]);
     expect(facets.communities).toEqual([{ value: "Jewish", count: 0 }]);
+  });
+});
+
+describe("orderFacets", () => {
+  const opts = [{ value: "Rock", count: 2 }, { value: "Folk", count: 9 }, { value: "Blues", count: 2 }];
+  it("puts most songs first, ties A–Z", () => {
+    expect(orderFacets(opts, "count").map((o) => o.value)).toEqual(["Folk", "Blues", "Rock"]);
+  });
+  it("sorts A–Z", () => {
+    expect(orderFacets(opts, "az").map((o) => o.value)).toEqual(["Blues", "Folk", "Rock"]);
   });
 });

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Select from "@/components/Select";
-import { MULTI_FILTER_DIMS, rootFacets, type FacetOption, type MultiFilterDim, type TagHierarchy } from "@singjam/core";
+import { MULTI_FILTER_DIMS, orderFacets, rootFacets, type FacetOption, type FacetOrder, type MultiFilterDim, type TagHierarchy } from "@singjam/core";
+import OrderToggle, { COUNT_OR_AZ } from "@/components/OrderToggle";
 import type { SongFilters } from "@/hooks/useSongFilters";
 
 export const FILTER_DIM_LABEL: Record<MultiFilterDim, string> = {
@@ -24,6 +25,7 @@ export function FilterPanel({ filters, hierarchy }: { filters: SongFilters; hier
   const { facets, selectedTags, toggleTag, filterOptions, activeFilterCount, clearFilters } = filters;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<Set<MultiFilterDim>>(() => new Set(["genres"]));
+  const [order, setOrder] = useState<FacetOrder>("count");
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -41,6 +43,7 @@ export function FilterPanel({ filters, hierarchy }: { filters: SongFilters; hier
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-3">
       <div className="space-y-2">
+        <OrderToggle value={order} onChange={setOrder} options={COUNT_OR_AZ} size="xs" />
         <input
           id="filter-search"
           type="search"
@@ -82,6 +85,7 @@ export function FilterPanel({ filters, hierarchy }: { filters: SongFilters; hier
               onToggle={(v) => toggleTag(dim, v)}
               open={open.has(dim)}
               onToggleOpen={() => toggleOpen(dim)}
+              order={order}
             />
           ) : null
         )}
@@ -125,7 +129,7 @@ export function FilterPanel({ filters, hierarchy }: { filters: SongFilters; hier
   );
 }
 
-function TagSection({ dim, options, hierarchy, childMap, selected, onToggle, open, onToggleOpen }: {
+function TagSection({ dim, options, hierarchy, childMap, selected, onToggle, open, onToggleOpen, order }: {
   dim: MultiFilterDim;
   options: FacetOption[];
   hierarchy: TagHierarchy | null;
@@ -134,13 +138,13 @@ function TagSection({ dim, options, hierarchy, childMap, selected, onToggle, ope
   onToggle: (v: string) => void;
   open: boolean;
   onToggleOpen: () => void;
+  order: FacetOrder;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const byValue = useMemo(() => new Map(options.map((o) => [o.value, o])), [options]);
-  const roots = useMemo(() => rootFacets(options, dim, hierarchy), [options, dim, hierarchy]);
-  const childOptions = (value: string) => (childMap?.get(value) ?? []).map((c) => byValue.get(c)).filter((o): o is FacetOption => !!o)
-    .sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : 1));
+  const roots = useMemo(() => orderFacets(rootFacets(options, dim, hierarchy), order), [options, dim, hierarchy, order]);
+  const childOptions = (value: string) => orderFacets((childMap?.get(value) ?? []).map((c) => byValue.get(c)).filter((o): o is FacetOption => !!o), order);
   const shownRoots = showAll ? roots : roots.filter((o, i) => i < TOP_N || selected.has(o.value));
   const hidden = roots.length - shownRoots.length;
 

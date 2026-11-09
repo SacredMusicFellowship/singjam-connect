@@ -20,6 +20,7 @@ import AddToSetModal from '@/components/AddToSetModal';
 import BrandHeader from '@/components/BrandHeader';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
+import FiltersButton from '@/components/FiltersButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -499,17 +500,7 @@ export default function RepertoireScreen() {
             onChange={setSortBy}
             accessibilityLabel="Sort"
           />
-          <TouchableOpacity
-            onPress={() => setFilterModalVisible(true)}
-            className={`h-7 flex-row items-center gap-1.5 rounded-full border px-3 ${
-              extFilterCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200'
-            }`}
-          >
-            <Ionicons name="filter" size={12} color={extFilterCount > 0 ? '#b45309' : '#71717a'} />
-            <Text className={`text-xs font-medium ${extFilterCount > 0 ? 'text-amber-700' : 'text-zinc-500'}`}>
-              Filters{extFilterCount > 0 ? ` · ${extFilterCount}` : ''}
-            </Text>
-          </TouchableOpacity>
+          <FiltersButton count={extFilterCount} onPress={() => setFilterModalVisible(true)} />
         </View>
       </View>
 

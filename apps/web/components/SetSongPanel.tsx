@@ -12,6 +12,7 @@ import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import { useBrowseSongs, type BrowseFilters } from "@/hooks/useBrowseSongs";
+import FiltersButton from "@/components/FiltersButton";
 
 type SongMeta = FilterableSong & { song_id: string };
 const DIM_FOR_TYPE = Object.fromEntries(Object.entries(FILTER_DIM_TAG_TYPE).map(([dim, type]) => [type, dim])) as Record<string, MultiFilterDim>;
@@ -406,14 +407,7 @@ export default function SetSongPanel({
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => setFiltersOpen((o) => !o)}
-              className={`h-7 rounded-full border px-3 text-xs font-medium transition-colors ${
-                activeFilterCount > 0 ? "border-amber-400 bg-amber-50 text-amber-700" : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
-              }`}
-            >
-              Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-            </button>
+            <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
           </div>
           {jamTags.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">

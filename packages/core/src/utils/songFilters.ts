@@ -228,3 +228,11 @@ export function deriveFilterFacets(songs: FilterableSong[], f: SongFilterState, 
   }
   return out;
 }
+
+export type FacetOrder = "count" | "az";
+
+// A filter section's options: most songs first (as faceted), or A–Z.
+export function orderFacets(options: FacetOption[], order: FacetOrder): FacetOption[] {
+  if (order === "count") return [...options].sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+  return [...options].sort((a, b) => a.value.localeCompare(b.value));
+}

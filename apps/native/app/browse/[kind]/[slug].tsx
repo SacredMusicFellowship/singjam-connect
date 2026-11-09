@@ -12,6 +12,7 @@ import { useTagHierarchy } from '@/lib/useTagHierarchy';
 import { supabase } from '@/lib/supabase';
 import ContentContainer from '@/components/ContentContainer';
 import { browseKindFromSegment, nativeBrowseHref } from '@/lib/browseLinks';
+import FiltersButton from '@/components/FiltersButton';
 
 const KIND_LABEL: Record<BrowseKind, string> = {
   genre: 'Genre', form: 'Form', occasion: 'Occasion', community: 'Community', culture: 'Culture',
@@ -147,12 +148,7 @@ export default function BrowseScreen() {
 
             {songs.length > 1 && (
               <View className="flex-row items-center mt-4">
-                <TouchableOpacity
-                  onPress={() => setSheetOpen(true)}
-                  className={`px-3 py-1.5 rounded-full border ${activeCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200 bg-white'}`}
-                >
-                  <Text className={`text-xs font-medium ${activeCount > 0 ? 'text-amber-700' : 'text-zinc-500'}`}>Filters{activeCount > 0 ? ` · ${activeCount}` : ''}</Text>
-                </TouchableOpacity>
+                <FiltersButton count={activeCount} onPress={() => setSheetOpen(true)} />
                 {activeCount > 0 ? <Text className="text-xs text-zinc-500 ml-2">{shownSongs.length} of {songs.length}</Text> : null}
               </View>
             )}

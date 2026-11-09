@@ -27,6 +27,7 @@ import ChordChartSlot from "@/components/ChordChartSlot";
 import SearchInput from "@/components/SearchInput";
 import Select from "@/components/Select";
 import SongSubtitle from "@/components/SongSubtitle";
+import FiltersButton from "@/components/FiltersButton";
 
 const CONFIDENCE_LEVELS = [
   { key: "lead", label: "Lead" },
@@ -965,19 +966,7 @@ export default function RepertoirePage() {
             </p>
             <div className="flex items-center gap-2">
               <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
-              <button
-                onClick={() => setFiltersOpen((o) => !o)}
-                className={`h-7 flex items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
-                  activeFilterCount > 0
-                    ? "border-amber-400 bg-amber-50 text-amber-700"
-                    : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
-                }`}
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1.5 3h13a.5.5 0 0 1 0 1H1.5a.5.5 0 0 1 0-1zm2 4h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1 0-1zm3 4h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1 0-1z" />
-                </svg>
-                Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-              </button>
+              <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
             </div>
           </div>
 
