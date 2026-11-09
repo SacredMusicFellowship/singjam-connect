@@ -25,6 +25,14 @@ describe("first_line column", () => {
   });
 });
 
+describe("no_recording and add_anyway columns", () => {
+  it("adds a song with neither writers nor artist without a recording, and a same-title song anyway", () => {
+    const rows = parseImportCsv("title,no_recording,add_anyway\nCaroline,yes,\nStand by Me,,true");
+    expect(importRowBody(rows[0])).toEqual({ title: "Caroline", artist: "", no_recording: true });
+    expect(importRowBody(rows[1])).toEqual({ title: "Stand by Me", artist: "", add_anyway: true });
+  });
+});
+
 describe("importRowBody", () => {
   it("skips the recording match only for a row with writers and no artist", () => {
     expect(importRowBody({ title: "Haul Away Joe", artist: "", writers: "Traditional", tags: "form:Shanty", first_line: "" })).toEqual({

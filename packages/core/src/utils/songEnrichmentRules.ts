@@ -154,7 +154,12 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
     const all = ` ${norm(src.lyrics)} `;
     const lrc = firstLyricLine(src.lyrics);
     const opensWithAdLib = !!lrc && VOCAL.test(norm(lrc));
-    const fromModel = lines.find((l) => norm(l).length >= 12 && (head.startsWith(norm(l)) || (opensWithAdLib && head.includes(norm(l)))));
+    // A model's line at the top of the lyrics wins; failing that, a model's
+    // line found later in them beats the lyrics' own first line, which can be a
+    // performer's spoken introduction (Tom Dooley's "This one next tells a story…").
+    const fromModel =
+      lines.find((l) => norm(l).length >= 12 && (head.startsWith(norm(l)) || (opensWithAdLib && head.includes(norm(l))))) ??
+      lines.find((l) => norm(l).length >= 12 && all.includes(` ${norm(l)} `));
     if (fromModel) out.first_line = fromModel;
     else if (lrc && lrc.length >= 20 && !VOCAL.test(norm(lrc)) && !/chorus|verse|intro|[{}*]/i.test(lrc)) out.first_line = lrc;
     const hook = hooks.find((h) => all.includes(` ${norm(h)} `));

@@ -76,6 +76,10 @@ describe("decideEnrichment — lyrics", () => {
     const d = decideEnrichment(base({ gpt: { first_line: hi("When the night has come"), hook: hi("Stand by me") }, lyrics }));
     expect(d).toMatchObject({ first_line: "When the night has come", hook: "Stand by me" });
   });
+  it("prefers a model's line found in the lyrics over a spoken introduction at their top", () => {
+    const live = "This one next tells a story of a lot of different people\nHang down your head, Tom Dooley\nHang down your head and cry";
+    expect(decideEnrichment(base({ gpt: { first_line: hi("Hang down your head, Tom Dooley") }, lyrics: live })).first_line).toBe("Hang down your head, Tom Dooley");
+  });
   it("rejects a hook that isn't in the lyrics", () => {
     expect(decideEnrichment(base({ gpt: { hook: hi("Lean on me") }, lyrics })).hook).toBeUndefined();
   });
