@@ -9,6 +9,7 @@ import {
   SONG_TONALITIES,
 } from "./songVocabulary";
 import { sameArtist } from "./landmarkRecordings";
+import { pickHymnaryText, samePerson, type HymnaryText } from "./hymnary";
 
 export type Confidence = "high" | "medium" | "low";
 export type ModelField<T> = { v: T | null; c: Confidence } | null | undefined;
@@ -45,6 +46,10 @@ export type EnrichmentSources = {
   spotifyReleaseYear: number | null;
   lyrics: string | null;
   artist?: string | null;
+  // The song's writers already in the catalogue, and Hymnary texts with its title.
+  writers?: string[];
+  hymnary?: HymnaryText[] | null;
+  title?: string;
 };
 
 // A spiritual is neither a hymn nor a contemporary worship song, though
@@ -190,6 +195,23 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   } else {
     if (lines.length === 2 && norm(lines[0]) === norm(lines[1])) out.first_line = lines[0];
     if (hooks.length === 2 && norm(hooks[0]) === norm(hooks[1])) out.hook = hooks[0];
+  }
+
+  // Hymnary: the hymnals' text of this song (its author must be one of the
+  // song's writers, see pickHymnaryText). Its first line is a printed source;
+  // its authors and its most-printed tune's composers each need a model to
+  // name one of them too.
+  const modelLyricists = [...(value(g.lyricists, SURE) ?? []), ...(value(c.lyricists, SURE) ?? [])];
+  const modelComposers = [...(value(g.composers, SURE) ?? []), ...(value(c.composers, SURE) ?? [])];
+  const hymn = pickHymnaryText(src.hymnary ?? [], src.writers?.length ? src.writers : [...modelComposers, ...modelLyricists], src.title ?? "");
+  if (hymn) {
+    if (!out.first_line) out.first_line = hymn.firstLine.trim().replace(/[,;:]+$/, "");
+    const named = (list: string[], by: string[]) => list.length > 0 && by.some((w) => list.some((n) => samePerson(n, w)));
+    if (!out.composers && !out.lyricists && named(hymn.authors, [...modelLyricists, ...modelComposers])) {
+      out.lyricists = hymn.authors;
+      const tune = hymn.tunes[0];
+      if (tune && named(tune.composers, modelComposers)) out.composers = tune.composers;
+    }
   }
 
   return out;

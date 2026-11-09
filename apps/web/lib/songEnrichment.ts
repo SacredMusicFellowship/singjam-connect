@@ -6,6 +6,10 @@ import {
   withoutGenericFaithThemes,
   withoutMisfitForms,
   verifiedFirstLine,
+  parseCsvRecords,
+  hymnaryTextsFor,
+  hymnaryTunes,
+  type HymnaryText,
   agreedLandmarks,
   decideEnrichment,
   decideListedFacts,
@@ -318,6 +322,30 @@ async function lookUpGenius(title: string, artists: string[]): Promise<string | 
   return null;
 }
 
+// ---- Hymnary.org (hymnals' texts and tunes; its CSV search export) ----
+
+async function hymnarySearch(query: string) {
+  const res = await fetch(`https://hymnary.org/search?qu=${encodeURIComponent(query)}&export=csv`, {
+    headers: { "User-Agent": USER_AGENT },
+    signal: AbortSignal.timeout(20_000),
+  });
+  return res.ok ? parseCsvRecords(await res.text()) : null;
+}
+
+// Texts titled like the song (the two most printed), each with its tunes.
+// decideEnrichment picks the one that is this song, if any.
+async function lookUpHymnary(title: string): Promise<HymnaryText[] | null> {
+  const records = await hymnarySearch(`textName:${title.replace(/[():"]/g, " ")} in:texts`);
+  if (!records) return null;
+  const texts: HymnaryText[] = [];
+  for (const t of hymnaryTextsFor(title, records).slice(0, 2)) {
+    const id = t.url.split("/").pop();
+    const tunes = await hymnarySearch(`textAuthNumber:"^${id}$" in:tunes`);
+    texts.push({ ...t, tunes: tunes ? hymnaryTunes(tunes) : [] });
+  }
+  return texts;
+}
+
 // ---- First line by web search (songs nothing else could place) ----
 
 async function pageText(url: string): Promise<string | null> {
@@ -427,7 +455,7 @@ export async function gatherSources(
   const usage: ModelUsage[] = [];
   const checks: SourceCheck[] = [];
   const wants = (...f: Field[]) => f.some((x) => wanted.includes(x));
-  const [gpt, claude, musicbrainz, lyrics, wikipedia, geniusUrl] = await Promise.all([
+  const [gpt, claude, musicbrainz, lyrics, wikipedia, geniusUrl, hymnary] = await Promise.all([
     timed("GPT", 150_000, checks, () => askGpt(song, usage)),
     timed("Claude", 150_000, checks, () => askClaude(song, usage)),
     artist && wants("recording_year", "composers") ? timed("MusicBrainz", 60_000, checks, () => lookUpMusicBrainz(title, artist)) : null,
@@ -440,10 +468,11 @@ export async function gatherSources(
         })
       : null,
     opts.links ? timed("Genius", 20_000, checks, () => lookUpGenius(title, song.artists ?? (artist ? [artist] : []))) : null,
+    wants("first_line", "composers") ? timed("Hymnary", 60_000, checks, () => lookUpHymnary(title)) : null,
   ]);
-  const order = ["GPT", "Claude", "MusicBrainz", "LRCLIB", "Wikipedia", "Genius"];
+  const order = ["GPT", "Claude", "MusicBrainz", "LRCLIB", "Hymnary", "Wikipedia", "Genius"];
   return {
-    sources: { gpt, claude, musicbrainz, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics, artist },
+    sources: { gpt, claude, musicbrainz, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics, artist, writers: song.writers ?? [], hymnary, title },
     wikipedia,
     geniusUrl,
     checks: checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name)),
@@ -719,8 +748,8 @@ async function fillSong(
   if (decision.recording_year && primary && !primary.year)
     await admin.from("song_recording_artists").update({ year: decision.recording_year }).eq("song_id", songId).eq("artist_id", primary.artist_id);
 
-  if (decision.composers && wanted.includes("composers")) {
-    const c = await idsFor(admin, "people", decision.composers);
+  if ((decision.composers || decision.lyricists) && wanted.includes("composers")) {
+    const c = decision.composers ? await idsFor(admin, "people", decision.composers) : [];
     const l = decision.lyricists ? await idsFor(admin, "people", decision.lyricists) : [];
     if (c.length) await admin.from("song_composers").insert(c.map((person_id) => ({ song_id: songId, person_id })));
     if (l.length) await admin.from("song_lyricists").insert(l.map((person_id) => ({ song_id: songId, person_id })));
