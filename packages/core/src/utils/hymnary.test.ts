@@ -71,6 +71,14 @@ describe("decideEnrichment with Hymnary", () => {
     expect(d).toMatchObject({ lyricists: ["John Newton"], composers: ["Edwin O. Excell"] });
     expect(decideEnrichment(base({ hymnary: hymn, gpt: { composers: sure(["William Walker"]) } })).lyricists).toBeUndefined();
   });
+  it("takes the composer of whichever of the text's tunes a model names, not the most printed tune", () => {
+    const hymn = [text({ authors: ["John Newton"], tunes: [
+      { name: "ARLINGTON", composers: ["Thomas A. Arne"], instances: 1403 },
+      { name: "NEW BRITAIN", composers: ["Edwin O. Excell"], instances: 946 },
+    ] })];
+    const sure = (v: string[]) => ({ v, c: "medium" as const });
+    expect(decideEnrichment(base({ hymnary: hymn, gpt: { lyricists: sure(["John Newton"]), composers: sure(["Edwin O. Excell"]) } })).composers).toEqual(["Edwin O. Excell"]);
+  });
 });
 
 describe("samePerson", () => {

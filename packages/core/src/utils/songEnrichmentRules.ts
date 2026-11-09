@@ -199,8 +199,8 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
 
   // Hymnary: the hymnals' text of this song (its author must be one of the
   // song's writers, see pickHymnaryText). Its first line is a printed source;
-  // its authors and its most-printed tune's composers each need a model to
-  // name one of them too.
+  // its authors, and the composer of one of its tunes, each need a model to
+  // name them too.
   const modelLyricists = [...(value(g.lyricists, SURE) ?? []), ...(value(c.lyricists, SURE) ?? [])];
   const modelComposers = [...(value(g.composers, SURE) ?? []), ...(value(c.composers, SURE) ?? [])];
   const hymn = pickHymnaryText(src.hymnary ?? [], src.writers?.length ? src.writers : [...modelComposers, ...modelLyricists], src.title ?? "");
@@ -209,8 +209,10 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
     const named = (list: string[], by: string[]) => list.length > 0 && by.some((w) => list.some((n) => samePerson(n, w)));
     if (!out.composers && !out.lyricists && named(hymn.authors, [...modelLyricists, ...modelComposers])) {
       out.lyricists = hymn.authors;
-      const tune = hymn.tunes[0];
-      if (tune && named(tune.composers, modelComposers)) out.composers = tune.composers;
+      // Hymnary's tune counts are across all texts, not this one, so no tune is
+      // "the" tune: a composer counts when a model names one of the text's tunes'.
+      const tune = hymn.tunes.find((t) => named(t.composers, modelComposers));
+      if (tune) out.composers = tune.composers.filter((c) => modelComposers.some((m) => samePerson(c, m)));
     }
   }
 
