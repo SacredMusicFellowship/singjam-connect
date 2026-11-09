@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  browsePath, countActiveFilters, deriveFilterFacets, deriveFilterOptions, expandFilterState, loadBrowseEntity, loadBrowseRelated, loadBrowseSongs,
+  browsePath, countActiveFilters, deriveFilterFacets, deriveFilterOptions, expandFilterState, loadBrowseEntity, loadBrowseRelated, loadBrowseSongs, traditionalCultureChips,
   songMatchesFilters, type BrowseEntity, type BrowseKind, type BrowseRelatedGroup, type BrowseSongRow, type FilterableSong, type LinkedTag, type SongFilterState,
 } from '@singjam/core';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
@@ -98,6 +98,7 @@ export default function BrowseScreen() {
     );
   }
   const total = entity.songIds.length;
+  const byCulture = kind === 'person' && entity.slug === 'traditional' ? traditionalCultureChips(meta) : [];
   return (
     <>
       <Stack.Screen options={{ title: entity.name, headerTintColor: '#d97706' }} />
@@ -105,18 +106,35 @@ export default function BrowseScreen() {
         <ContentContainer>
           <View className="px-4 pt-4 pb-12">
             <TouchableOpacity onPress={() => router.push('/browse' as any)}>
-              <Text className="text-xs font-medium text-amber-700 uppercase tracking-wide">{KIND_LABEL[kind]}</Text>
+              <Text className="text-xs font-medium text-amber-700 uppercase tracking-wide">{entity.label ?? KIND_LABEL[kind]}</Text>
             </TouchableOpacity>
             <Text className="text-2xl font-semibold text-slate-900 mt-1">{entity.name}</Text>
             {entity.subtitle ? <Text className="text-base text-slate-500">{entity.subtitle}</Text> : null}
             <Text className="text-sm text-slate-500 mt-1">
               {entity.traditionalOnly ? `${total} traditional song${total === 1 ? '' : 's'} · ` : `${total} song${total === 1 ? '' : 's'}`}
               {entity.traditionalOnly ? (
-                <Text className="font-medium text-amber-700" onPress={() => router.replace(nativeBrowseHref(browsePath(kind!, entity.slug ?? slug!)) as any)}>Show all {entity.allSongCount}</Text>
+                <Text>
+                  <Text className="font-medium text-amber-700" onPress={() => router.replace(nativeBrowseHref(browsePath(kind!, entity.slug ?? slug!)) as any)}>Show all {entity.allSongCount}</Text>
+                  {' · '}
+                  <Text className="font-medium text-amber-700" onPress={() => router.push(nativeBrowseHref(browsePath('person', 'traditional')) as any)}>All traditional songs</Text>
+                </Text>
               ) : null}
               {members > 0 ? ` · ${members} member${members === 1 ? '' : 's'} know${members === 1 ? 's' : ''} at least one` : ''}
             </Text>
             {entity.notes ? <Text className="text-sm text-slate-600 mt-3">{entity.notes}</Text> : null}
+
+            {byCulture.length > 0 && (
+              <View className="mt-4">
+                <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">By culture</Text>
+                <View className="flex-row flex-wrap">
+                  {byCulture.map(c => (
+                    <TouchableOpacity key={c.href} onPress={() => openBrowse(c.href)} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white mr-2 mb-2">
+                      <Text className="text-sm text-slate-700">{c.label}<Text className="text-slate-400">{`  ${c.count}`}</Text></Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {(entity.parents.length > 0 || entity.children.length > 0 || entity.related.length > 0) && (
               <View className="mt-4 rounded-xl border border-slate-200 bg-white p-3">

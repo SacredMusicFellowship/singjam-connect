@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadBrowseRelated } from "./browseEntity";
+import { loadBrowseRelated, traditionalCultureChips } from "./browseEntity";
 
 describe("loadBrowseRelated", () => {
   const rows = [
@@ -21,5 +21,14 @@ describe("loadBrowseRelated", () => {
 
   it("returns nothing for a page without songs", async () => {
     expect(await loadBrowseRelated(db, [], { kind: "genre", slug: "rock" })).toEqual([]);
+  });
+});
+
+describe("traditionalCultureChips", () => {
+  it("counts each culture once per song, most songs first, linking to its traditional songs", () => {
+    expect(traditionalCultureChips([{ cultures: ["Irish", "Scottish"] }, { cultures: ["Irish", "Irish"] }, { cultures: [] }])).toEqual([
+      { label: "Irish", count: 2, href: "/cultures/Irish?traditional=1" },
+      { label: "Scottish", count: 1, href: "/cultures/Scottish?traditional=1" },
+    ]);
   });
 });

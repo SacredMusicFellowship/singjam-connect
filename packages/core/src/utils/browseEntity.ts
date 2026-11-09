@@ -1,5 +1,6 @@
 import type { CardIdentity } from "./songSubtitle";
 import { formatScriptureRef, type ScriptureRef } from "./scripture";
+import type { BrowseChip } from "./browseHub";
 import { fetchAllRows } from "./fetchAllRows";
 import { browsePath, SHOW_MEDIUM_LABEL, type BrowseKind } from "./browsePaths";
 import type { TagType } from "./songTags";
@@ -34,6 +35,8 @@ export type BrowseEntity = {
   kind: BrowseKind;
   // A person's or artist's own slug, when the page was opened by name.
   slug?: string;
+  // Shown above the name in place of the kind ("Songwriter").
+  label?: string;
   // Narrowed to its traditional songs; allSongCount is the page's full count.
   traditionalOnly?: boolean;
   allSongCount?: number;
@@ -86,6 +89,12 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
     const roles = new Map<string, string>();
     const music = new Set(composed.map((r) => r.song_id)), words = new Set(wrote.map((r) => r.song_id));
     for (const id of new Set([...music, ...words])) roles.set(id, music.has(id) && words.has(id) ? "Music & words" : music.has(id) ? "Music" : "Words");
+    if (person.name === "Traditional") {
+      return {
+        kind, slug: person.slug, label: "Browse", name: "Traditional songs", subtitle: "Songs passed down without a known writer",
+        notes: person.notes ?? null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles: new Map(),
+      };
+    }
     return { kind, slug: person.slug, name: person.name, subtitle: null, notes: person.notes ?? null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
   }
   if (kind === "artist") {
@@ -242,4 +251,14 @@ export async function loadBrowseRelated(db: any, songIds: string[], self: { kind
       .filter((c) => !(c.kind === self.kind && c.slug === self.slug))
       .map(({ href, label, count }) => ({ href, label, count })),
   })).filter((g) => g.chips.length > 0);
+}
+
+// The cultures among a page's songs, most songs first, each linking to that
+// culture's traditional songs: the Traditional page's "By culture" row.
+export function traditionalCultureChips(meta: { cultures: string[] }[]): BrowseChip[] {
+  const counts = new Map<string, number>();
+  for (const m of meta) for (const c of new Set(m.cultures)) counts.set(c, (counts.get(c) ?? 0) + 1);
+  return [...counts]
+    .map(([label, count]) => ({ label, count, href: browsePath("culture", label, { traditional: true }) }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }

@@ -85,7 +85,7 @@ export default function BrowseHubScreen() {
             {hub?.sections.map(s => (
               <View key={s.type}>
                 <Heading title={s.title} />
-                <ChipCloud chips={s.chips} all={s.all} onPress={open} />
+                <ChipCloud chips={s.chips} all={s.all} more={s.type === 'culture' ? { href: '/people/traditional', label: 'Traditional songs from every culture' } : undefined} onPress={open} />
               </View>
             ))}
             {hub && hub.writers.length > 0 && (

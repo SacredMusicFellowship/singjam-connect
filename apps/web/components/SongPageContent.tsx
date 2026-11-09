@@ -1,10 +1,11 @@
 "use client";
 
-import { browsePath, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
+import { browsePath, bylineCredits, traditionalCredit, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
 import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import CreditLinks from "@/components/CreditLinks";
 import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, textTuneLines, ENRICHMENT_WAIT_MS } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
@@ -44,10 +45,9 @@ function WriterLinks({ names, slugs, cultures }: { names: string[]; slugs: Map<s
   const traditional = names.some((n) => n.toLowerCase() === "traditional");
   const others = names.filter((n) => n.toLowerCase() !== "traditional");
   const parts: React.ReactNode[] = [];
-  if (traditional) parts.push(<Fragment key="trad">{cultures[0] ? `Traditional · ${cultures[0]}` : "Traditional"}</Fragment>);
+  if (traditional) parts.push(<CreditLinks key="trad" credits={[traditionalCredit(cultures[0] ? `Traditional · ${cultures[0]}` : "Traditional")]} />);
   for (const n of others) {
-    const slug = slugs.get(n);
-    parts.push(slug ? <Link key={n} href={browsePath("person", slug)} className="hover:text-amber-700 hover:underline">{n}</Link> : <Fragment key={n}>{n}</Fragment>);
+    parts.push(<Link key={n} href={browsePath("person", slugs.get(n) ?? n)} className="hover:text-amber-700 hover:underline">{n}</Link>);
   }
   return <>{parts.map((p, i) => <Fragment key={i}>{i > 0 && ", "}{p}</Fragment>)}</>;
 }
@@ -404,7 +404,12 @@ export default function SongPageContent() {
               ))}
             </p>
           ) : (song.byline ?? song.display_artist) ? (
-            <p className="mt-0.5 text-base text-slate-500">{song.byline ?? song.display_artist}</p>
+            <p className="mt-0.5 text-base text-slate-500">
+              <CreditLinks
+                separator=""
+                credits={bylineCredits(song.byline ?? song.display_artist, { people: [...composers, ...lyricists], artists: recordingArtists.map((a: any) => a.name) })}
+              />
+            </p>
           ) : null}
           {altTitles.length > 0 && (
             <p className="mt-1 text-sm text-slate-400">aka: {altTitles.join(" · ")}</p>
@@ -518,7 +523,7 @@ export default function SongPageContent() {
                 {recordingArtists.map((a: any, i: number) => (
                   <Link
                     key={i}
-                    href={a.slug ? browsePath("artist", a.slug) : "#"}
+                    href={browsePath("artist", a.slug ?? a.name)}
                     className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700 hover:bg-amber-100 hover:text-amber-800"
                   >
                     {a.name}

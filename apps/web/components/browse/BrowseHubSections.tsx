@@ -27,7 +27,15 @@ export default function BrowseHubSections({ hub: loaded }: { hub: BrowseHub }) {
           </button>
         ))}
       </div>
-      {hub.sections.map((s) => <ChipSection key={s.type} title={s.title} chips={s.chips} all={s.all} />)}
+      {hub.sections.map((s) => (
+        <ChipSection
+          key={s.type}
+          title={s.title}
+          chips={s.chips}
+          all={s.all}
+          more={s.type === "culture" ? { href: "/people/traditional", label: "Traditional songs from every culture" } : undefined}
+        />
+      ))}
       {hub.writers.length > 0 && (
         <ChipSection title="Songwriters" chips={hub.writers} more={{ href: "/people", label: `See all ${hub.writerTotal} songwriters` }} />
       )}

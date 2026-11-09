@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { songCardCredits, songCardIdentity, songSubtitle, songSubtitleText } from "./songSubtitle";
+import { bylineCredits, songCardCredits, songCardIdentity, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
 
 describe("songSubtitle", () => {
   it("names the show when the song is from one", () => {
@@ -55,5 +55,25 @@ describe("songCardCredits", () => {
     const c = songCardCredits({ title: "Rio Grande", byline: "Traditional · English", displayArtist: null, composers: ["Traditional"], cultures: ["English", "American"], recordingArtists: [], identity: { first_line: "Oh, say were you ever in Rio Grande?" } });
     expect(c.writers).toEqual([{ text: "Trad. · English", link: { kind: "culture", key: "English", traditional: true } }]);
     expect(c.line).toEqual([{ text: "“Oh, say were you ever in Rio Grande…”", link: null }]);
+  });
+});
+
+describe("bylineCredits", () => {
+  it("links each writer or artist named in the line, keeping names with commas whole", () => {
+    expect(bylineCredits("Peter, Paul and Mary", { people: [], artists: ["Peter, Paul and Mary"] }))
+      .toEqual([{ text: "Peter, Paul and Mary", link: { kind: "artist", key: "Peter, Paul and Mary" } }]);
+    expect(bylineCredits("John Newton, William Cowper", { people: ["William Cowper", "John Newton"], artists: [] })).toEqual([
+      { text: "John Newton", link: { kind: "person", key: "John Newton" } },
+      { text: ", ", link: null },
+      { text: "William Cowper", link: { kind: "person", key: "William Cowper" } },
+    ]);
+  });
+  it("leaves unknown names plain", () => {
+    expect(bylineCredits("Some Choir", { people: [], artists: [] })).toEqual([{ text: "Some Choir", link: null }]);
+  });
+  it("links a traditional line to that culture's traditional songs, or to all of them", () => {
+    expect(bylineCredits("Traditional · Irish", { people: ["Traditional"], artists: [] }))
+      .toEqual([{ text: "Traditional · Irish", link: { kind: "culture", key: "Irish", traditional: true } }]);
+    expect(traditionalCredit("Traditional")).toEqual({ text: "Traditional", link: { kind: "person", key: "Traditional" } });
   });
 });

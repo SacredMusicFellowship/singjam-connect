@@ -74,7 +74,7 @@ export function songCardCredits(o: {
   const traditional = named.length < o.composers.length && !o.identity?.tune;
   const culture = o.cultures[0];
   const writers: CardCredit[] = [
-    ...(traditional ? [culture ? { text: `Trad. · ${culture}`, link: { kind: "culture" as const, key: culture, traditional: true } } : { text: "Trad.", link: null }] : []),
+    ...(traditional ? [culture ? { text: `Trad. · ${culture}`, link: { kind: "culture" as const, key: culture, traditional: true } } : { text: "Trad.", link: { kind: "person" as const, key: "Traditional" } }] : []),
     ...named.map((name): CardCredit => {
       const w = name.trim().split(" ");
       return { text: w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(" ")}` : name, link: { kind: "person", key: name } };
@@ -88,4 +88,39 @@ export function songCardCredits(o: {
     ? sortRecordingsByYear(o.recordingArtists).map((a): CardCredit => ({ text: a.year ? `${a.name} (${a.year})` : a.name, link: { kind: "artist", key: a.name } }))
     : o.displayArtist?.trim() ? [{ text: o.displayArtist.trim(), link: null }] : [];
   return { writers, line };
+}
+
+// "Traditional" or "Traditional · Irish" as a link: to the Traditional page,
+// or to that culture's traditional songs.
+export function traditionalCredit(text: string): CardCredit {
+  const culture = text.split(" · ")[1]?.trim();
+  return { text, link: culture ? { kind: "culture", key: culture, traditional: true } : { kind: "person", key: "Traditional" } };
+}
+
+// The line under a song's title (byline(), migration 204) as linked parts:
+// "Traditional · Irish" as one link, and each writer or recording artist named
+// in it linked to their page. Names are matched whole, longest first, so
+// "Peter, Paul and Mary" stays one artist.
+export function bylineCredits(byline: string | null | undefined, known: { people: string[]; artists: string[] }): CardCredit[] {
+  const text = byline?.trim();
+  if (!text) return [];
+  if (/^Traditional( · |$)/.test(text)) return [traditionalCredit(text)];
+  const names = [
+    ...known.artists.map((n) => ({ n, kind: "artist" as const })),
+    ...known.people.filter((n) => n.toLowerCase() !== "traditional").map((n) => ({ n, kind: "person" as const })),
+  ].sort((a, b) => b.n.length - a.n.length);
+  const parts: CardCredit[] = [];
+  let rest = text;
+  while (rest) {
+    let best: { at: number; n: string; kind: "artist" | "person" } | null = null;
+    for (const c of names) {
+      const at = rest.indexOf(c.n);
+      if (at >= 0 && (!best || at < best.at)) best = { at, ...c };
+    }
+    if (!best) { parts.push({ text: rest, link: null }); break; }
+    if (best.at > 0) parts.push({ text: rest.slice(0, best.at), link: null });
+    parts.push({ text: best.n, link: { kind: best.kind, key: best.n } });
+    rest = rest.slice(best.at + best.n.length);
+  }
+  return parts;
 }

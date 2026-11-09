@@ -23,6 +23,9 @@ import {
   enrichmentInProgress,
   ENRICHMENT_WAIT_MS,
   textTuneLines,
+  bylineCredits,
+  traditionalCredit,
+  type CardCredit,
   type TextTuneLines,
   formatJammers,
   songTagNames,
@@ -32,6 +35,7 @@ import {
 } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { nativeBrowseHref } from '@/lib/browseLinks';
+import CreditText from '@/components/CreditText';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import AddToSetModal from '@/components/AddToSetModal';
@@ -131,20 +135,11 @@ function TagPill({ label, href, onOpen }: { label: string; href?: string | null;
 function WriterText({ names, slugs, cultures, onOpen }: { names: string[]; slugs: Record<string, string>; cultures: string[]; onOpen: (href: string) => void }) {
   const traditional = names.some(n => n.toLowerCase() === 'traditional');
   const others = names.filter(n => n.toLowerCase() !== 'traditional');
-  const parts: { label: string; slug?: string }[] = [
-    ...(traditional ? [{ label: cultures[0] ? `Traditional · ${cultures[0]}` : 'Traditional' }] : []),
-    ...others.map(n => ({ label: n, slug: slugs[n] })),
+  const credits: CardCredit[] = [
+    ...(traditional ? [traditionalCredit(cultures[0] ? `Traditional · ${cultures[0]}` : 'Traditional')] : []),
+    ...others.map((n): CardCredit => ({ text: n, link: { kind: 'person', key: slugs[n] ?? n } })),
   ];
-  return (
-    <>
-      {parts.map((p, i) => (
-        <Text key={`${p.label}-${i}`}>
-          {i > 0 ? ', ' : ''}
-          {p.slug ? <Text className="text-amber-700" onPress={() => onOpen(nativeBrowseHref(browsePath('person', p.slug!)))}>{p.label}</Text> : p.label}
-        </Text>
-      ))}
-    </>
-  );
+  return <CreditText credits={credits} onOpen={(path) => onOpen(nativeBrowseHref(path))} linkClassName="text-amber-700" />;
 }
 
 function TagRow({ label, tags, onOpen }: { label: string; tags: (string | { name: string; href: string | null })[]; onOpen?: (href: string) => void }) {
@@ -696,7 +691,14 @@ export default function SongDetailScreen() {
               ))}
             </Text>
           ) : song.byline ? (
-            <Text className="text-base text-slate-500 mt-0.5">{song.byline}</Text>
+            <Text className="text-base text-slate-500 mt-0.5">
+              <CreditText
+                separator=""
+                credits={bylineCredits(song.byline, { people: [...song.composers, ...song.lyricists], artists: song.recordingArtists.map((a) => a.name) })}
+                onOpen={(path) => openBrowse(nativeBrowseHref(path))}
+                linkClassName="text-amber-700"
+              />
+            </Text>
           ) : null}
 
           {song.altTitles.length > 0 ? (
@@ -805,8 +807,7 @@ export default function SongDetailScreen() {
                   {song.recordingArtists.map((ra, i) => (
                     <TouchableOpacity
                       key={i}
-                      disabled={!ra.slug}
-                      onPress={() => ra.slug && openBrowse(nativeBrowseHref(browsePath('artist', ra.slug)))}
+                      onPress={() => openBrowse(nativeBrowseHref(browsePath('artist', ra.slug ?? ra.name)))}
                       className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5"
                     >
                       <Text className="text-slate-700 text-sm">{ra.name}</Text>

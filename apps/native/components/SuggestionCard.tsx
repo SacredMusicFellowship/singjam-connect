@@ -2,7 +2,8 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Pressable, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { browsePath, productionCredits, songCardCredits, songCardPills, type CardCredit, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import CreditText from '@/components/CreditText';
+import { browsePath, productionCredits, songCardCredits, songCardPills, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 
 export type Suggestion = {
@@ -84,15 +85,6 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
     cultures: song.cultures,
     recordingArtists: song.recording_artists,
   });
-  const creditText = (list: CardCredit[]) => list.map((c, i) => (
-    <Text key={c.text}>
-      {i > 0 ? ', ' : null}
-      {c.lead ?? null}
-      {c.link && onOpenBrowse ? (
-        <Text onPress={() => onOpenBrowse(browsePath(c.link!.kind, c.link!.key, { traditional: c.link!.traditional }))} suppressHighlighting={false}>{c.text}</Text>
-      ) : c.text}
-    </Text>
-  ));
   const shows = productionCredits(song.production_credits, song.productions);
   const pills = songCardPills({ forms: song.forms, occasions: song.occasions, genres: song.genres, communities: song.communities, languages: song.languages });
   const isLead = confidence === 'lead';
@@ -105,7 +97,7 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
           <Text numberOfLines={3}>
             <Text className="font-medium text-zinc-900">{song.title}</Text>
             {credits.writers.length > 0 ? (
-              <Text className="text-zinc-400"> ({creditText(credits.writers)})</Text>
+              <Text className="text-zinc-400"> (<CreditText credits={credits.writers} onOpen={onOpenBrowse} />)</Text>
             ) : null}
           </Text>
           {shows.length > 0 ? (
@@ -118,10 +110,10 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
                   {p.year ? ` (${p.year})` : null}
                 </Text>
               ))}
-              {credits.line.length > 0 ? <Text>{' · '}{creditText(credits.line)}</Text> : null}
+              {credits.line.length > 0 ? <Text>{' · '}<CreditText credits={credits.line} onOpen={onOpenBrowse} /></Text> : null}
             </Text>
           ) : credits.line.length > 0 ? (
-            <Text className="text-sm text-zinc-500">{creditText(credits.line)}</Text>
+            <Text className="text-sm text-zinc-500"><CreditText credits={credits.line} onOpen={onOpenBrowse} /></Text>
           ) : null}
           {context ? <Text className="text-xs text-zinc-500">{context}</Text> : null}
         </View>
