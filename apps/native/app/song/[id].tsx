@@ -23,6 +23,7 @@ import {
   enrichmentInProgress,
   ENRICHMENT_WAIT_MS,
   textTuneLines,
+  type TextTuneLines,
   formatJammers,
   songTagNames,
   TAG_TYPE_LABELS,
@@ -76,8 +77,10 @@ type SongDetail = {
   vibe: string | null;
   altTitles: string[];
   // "Words:" and "Tune:" lines, for a song linked to a text or tune.
-  words: string | null;
-  tune: string | null;
+  words: TextTuneLines['words'];
+  textSlug: TextTuneLines['textSlug'];
+  tune: TextTuneLines['tune'];
+  tuneSlug: TextTuneLines['tuneSlug'];
   composers: string[];
   lyricists: string[];
   musicCultures: string[];
@@ -305,8 +308,8 @@ export default function SongDetailScreen() {
           song_tags(context, tags(name, type, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
           song_productions(productions(name, year, slug)),
-          texts(title, text_credits(role, people(name))),
-          tunes(tune_label, year, tune_credits(role, people(name)), tune_tags(tags(name, type)))
+          texts(title, slug, text_credits(role, people(name))),
+          tunes(tune_label, slug, year, tune_credits(role, people(name)), tune_tags(tags(name, type)))
         `)
         .eq('id', songId)
         .single(),
@@ -700,10 +703,17 @@ export default function SongDetailScreen() {
             <Text className="text-sm text-slate-400 mt-1">aka: {song.altTitles.join(' · ')}</Text>
           ) : null}
           {song.words ? (
-            <Text className="text-sm text-slate-500 mt-1"><Text className="text-slate-400">Words:</Text> {song.words}</Text>
+            <Text className="text-sm text-slate-500 mt-1">
+              <Text className="text-slate-400">Words:</Text>{' '}
+              {song.textSlug ? <Text className="text-amber-700" onPress={() => openBrowse(nativeBrowseHref(browsePath('text', song.textSlug!)))}>{song.words}</Text> : song.words}
+            </Text>
           ) : null}
           {song.tune ? (
-            <Text className={`text-sm text-slate-500 ${song.words ? '' : 'mt-1'}`}><Text className="text-slate-400">Tune:</Text> {song.tune}</Text>
+            <Text className={`text-sm text-slate-500 ${song.words ? '' : 'mt-1'}`}>
+              <Text className="text-slate-400">Tune:</Text>{' '}
+              {song.tuneSlug ? <Text className="text-amber-700" onPress={() => openBrowse(nativeBrowseHref(browsePath('tune', song.tuneSlug!)))}>{song.tune.name}</Text> : song.tune.name}
+              {song.tune.detail ? ` · ${song.tune.detail}` : null}
+            </Text>
           ) : null}
 
           {renderRepertoireControls()}

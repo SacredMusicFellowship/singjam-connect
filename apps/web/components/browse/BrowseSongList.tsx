@@ -70,7 +70,7 @@ export default function BrowseSongList({ songs, meta, roles }: {
               byline={r.byline}
               cardIdentity={r.card_identity}
               composers={r.composers}
-              cultures={[...(r.cultures ?? []), ...(r.communities ?? [])]}
+              cultures={r.cultures ?? []}
               productions={r.productions}
               recordingArtists={r.recording_artists}
               productionCredits={r.production_credits}

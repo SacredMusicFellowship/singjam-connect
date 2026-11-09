@@ -1,5 +1,6 @@
 import { sortRecordingsByYear } from "./formatRecordingArtists";
 import { formatScriptureRef, type ScriptureRef } from "./scripture";
+import type { BrowseKind } from "./browsePaths";
 
 export type SongSubtitle = { kind: "production"; text: string } | { kind: "artist"; text: string } | null;
 
@@ -26,28 +27,40 @@ export function knownByRecording(byline: string | null | undefined, displayArtis
   return byline === undefined || (byline ?? null) === (displayArtist?.trim() || null);
 }
 
-// One name on a song card. `link` is the songwriter or artist page to open;
-// names are unique, so the page is found by name (see loadBrowseEntity).
-export type CardCredit = { text: string; link: { kind: "person" | "artist"; name: string } | null };
+// One part of a song card's credits: `lead` is plain text before it ("Tune: "),
+// and `link` the page it opens. People, artists and tags are linked by name
+// (each is unique; see loadBrowseEntity), tunes and texts by slug.
+export type CardCredit = { lead?: string; text: string; link: { kind: BrowseKind; key: string } | null };
 
-// What tells a song apart when it isn't known by a recording (migration 211).
-export type CardIdentity = { tune?: string | null; source?: ScriptureRef | null; first_line?: string | null } | null | undefined;
+// What tells a song apart when it isn't known by a recording (migrations 211-212).
+export type CardIdentity = {
+  tune?: string | null;
+  tune_slug?: string | null;
+  text_slug?: string | null;
+  source?: ScriptureRef | null;
+  first_line?: string | null;
+} | null | undefined;
 
 const plain = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 // Its tune's name, else the scripture it sets, else its first line (when that
 // says more than the title).
-export function songCardIdentity(identity: CardIdentity, title: string): string | null {
-  if (identity?.tune) return `Tune: ${identity.tune}`;
-  if (identity?.source) return formatScriptureRef(identity.source) || null;
+export function songCardIdentity(identity: CardIdentity, title: string): CardCredit | null {
+  if (identity?.tune) return { lead: "Tune: ", text: identity.tune, link: identity.tune_slug ? { kind: "tune", key: identity.tune_slug } : null };
+  if (identity?.source) {
+    const ref = formatScriptureRef(identity.source);
+    if (ref) return { text: ref, link: identity.text_slug ? { kind: "text", key: identity.text_slug } : null };
+  }
   const line = identity?.first_line?.trim().replace(/[\s,;:.!?—–-]+$/u, "");
   if (!line || plain(title).includes(plain(line))) return null;
-  return `“${line}…”`;
+  return { text: `“${line}…”`, link: null };
 }
 
 // A song card's credits: its writers in brackets after the title (as on every
 // list), and under it the recordings for a song known by them, or what tells
 // the song apart otherwise. The "line under the title" override decides which.
+// A traditional song names one culture ("Trad. · Irish"); when the song has a
+// named tune, "Traditional" is that tune's credit and the tune line says it.
 export function songCardCredits(o: {
   title: string;
   byline?: string | null;
@@ -57,21 +70,22 @@ export function songCardCredits(o: {
   recordingArtists: { name: string; year: number | null; position?: number | null }[] | null | undefined;
   identity?: CardIdentity;
 }): { writers: CardCredit[]; line: CardCredit[] } {
-  const traditional = o.composers.some((c) => c.toLowerCase() === "traditional");
-  const cultures = [...new Set(o.cultures)];
+  const named = o.composers.filter((c) => c.toLowerCase() !== "traditional");
+  const traditional = named.length < o.composers.length && !o.identity?.tune;
+  const culture = o.cultures[0];
   const writers: CardCredit[] = [
-    ...(traditional ? [{ text: cultures.length ? `Trad. · ${cultures.join(", ")}` : "Trad.", link: null }] : []),
-    ...o.composers.filter((c) => c.toLowerCase() !== "traditional").map((name): CardCredit => {
+    ...(traditional ? [culture ? { lead: "Trad. · ", text: culture, link: { kind: "culture" as const, key: culture } } : { text: "Trad.", link: null }] : []),
+    ...named.map((name): CardCredit => {
       const w = name.trim().split(" ");
-      return { text: w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(" ")}` : name, link: { kind: "person", name } };
+      return { text: w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(" ")}` : name, link: { kind: "person", key: name } };
     }),
   ];
   if (!knownByRecording(o.byline, o.displayArtist)) {
     const id = songCardIdentity(o.identity, o.title);
-    return { writers, line: id ? [{ text: id, link: null }] : [] };
+    return { writers, line: id ? [id] : [] };
   }
   const line: CardCredit[] = o.recordingArtists?.length
-    ? sortRecordingsByYear(o.recordingArtists).map((a): CardCredit => ({ text: a.year ? `${a.name} (${a.year})` : a.name, link: { kind: "artist", name: a.name } }))
+    ? sortRecordingsByYear(o.recordingArtists).map((a): CardCredit => ({ text: a.year ? `${a.name} (${a.year})` : a.name, link: { kind: "artist", key: a.name } }))
     : o.displayArtist?.trim() ? [{ text: o.displayArtist.trim(), link: null }] : [];
   return { writers, line };
 }

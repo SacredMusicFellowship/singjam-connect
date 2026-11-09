@@ -1,4 +1,5 @@
 import type { CardIdentity } from "./songSubtitle";
+import { formatScriptureRef, type ScriptureRef } from "./scripture";
 import { fetchAllRows } from "./fetchAllRows";
 import { browsePath, SHOW_MEDIUM_LABEL, type BrowseKind } from "./browsePaths";
 import type { TagType } from "./songTags";
@@ -90,7 +91,46 @@ export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string):
     };
   }
 
-  const { data: tag } = await db.from("tags").select("id, name, type, description").eq("type", kind).eq("slug", slug).maybeSingle();
+  if (kind === "tune") {
+    const { data: tune } = await db.from("tunes")
+      .select("id, slug, tune_label, meter, year, notes, tune_credits(role, people(name)), tune_tags(tags(name, slug, type))")
+      .eq("slug", slug).maybeSingle();
+    if (!tune) return null;
+    const songs = await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").eq("tune_id", tune.id).order("id").range(f, t));
+    const composers = ((tune.tune_credits ?? []) as any[])
+      .filter((c) => c.people && c.people.name.toLowerCase() !== "traditional" && c.people.name !== tune.tune_label)
+      .map((c) => (c.role === "composer" ? c.people.name : `${c.people.name} (${c.role})`));
+    const tags = ((tune.tune_tags ?? []) as any[]).map((t) => t.tags).filter(Boolean) as LinkedTag[];
+    return {
+      kind, name: tune.tune_label,
+      subtitle: [composers.join(", "), tune.meter, tune.year].filter(Boolean).join(" · ") || null,
+      notes: tune.notes ?? null, parents: [], children: [], related: tags.sort((a, b) => (a.name < b.name ? -1 : 1)),
+      songIds: songs.map((r) => r.id), roles: new Map(),
+    };
+  }
+  if (kind === "text") {
+    const { data: text } = await db.from("texts")
+      .select("id, title, notes, text_credits(role, people(name)), text_sources(book, chapter_start, verse_start, chapter_end, verse_end, citation), text_tags(tags(name, slug, type))")
+      .eq("slug", slug).maybeSingle();
+    if (!text) return null;
+    const songs = await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").eq("text_id", text.id).order("id").range(f, t));
+    const credits = ((text.text_credits ?? []) as any[])
+      .filter((c) => c.people && c.people.name.toLowerCase() !== "traditional")
+      .map((c) => (c.role === "author" ? c.people.name : `${c.people.name} (${c.role})`));
+    const sources = ((text.text_sources ?? []) as ScriptureRef[]).map(formatScriptureRef).filter(Boolean);
+    const tags = ((text.text_tags ?? []) as any[]).map((t) => t.tags).filter(Boolean) as LinkedTag[];
+    return {
+      kind, name: text.title,
+      subtitle: [sources.join(", "), credits.join(", ")].filter(Boolean).join(" · ") || null,
+      notes: text.notes ?? null, parents: [], children: [], related: tags.sort((a, b) => (a.name < b.name ? -1 : 1)),
+      songIds: songs.map((r) => r.id), roles: new Map(),
+    };
+  }
+
+  // Tags open by slug, or by name (song cards link a culture by its name).
+  const columns = "id, name, slug, type, description";
+  let { data: tag } = await db.from("tags").select(columns).eq("type", kind).eq("slug", slug).maybeSingle();
+  if (!tag) ({ data: tag } = await db.from("tags").select(columns).eq("type", kind).eq("name", slug).maybeSingle());
   if (!tag) return null;
   const [{ data: links }, { data: descendants }] = await Promise.all([
     db.from("tag_relations").select("kind, tag_id, related_tag_id, a:tags!tag_relations_tag_id_fkey(name, slug, type), b:tags!tag_relations_related_tag_id_fkey(name, slug, type)")
@@ -127,7 +167,7 @@ export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string):
     ? await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").in("text_id", [...new Set(textRows.map((r) => r.text_id))]).order("id").range(f, t))
     : [];
   return {
-    kind, name: tag.name, subtitle: null, notes: tag.description ?? null,
+    kind, slug: tag.slug, name: tag.name, subtitle: null, notes: tag.description ?? null,
     parents: parents.sort(byName), children: children.sort(byName), related: related.sort(byName),
     songIds: [...new Set([...rows.map((r) => r.song_id), ...viaTunes.map((r) => r.id), ...viaTexts.map((r) => r.id)])], roles: new Map(),
   };

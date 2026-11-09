@@ -81,14 +81,15 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
     byline: song.byline,
     displayArtist: song.display_artist,
     composers: song.composers,
-    cultures: [...song.cultures, ...(song.communities ?? [])],
+    cultures: song.cultures,
     recordingArtists: song.recording_artists,
   });
   const creditText = (list: CardCredit[]) => list.map((c, i) => (
     <Text key={c.text}>
       {i > 0 ? ', ' : null}
+      {c.lead ?? null}
       {c.link && onOpenBrowse ? (
-        <Text onPress={() => onOpenBrowse(browsePath(c.link!.kind, c.link!.name))} suppressHighlighting={false}>{c.text}</Text>
+        <Text onPress={() => onOpenBrowse(browsePath(c.link!.kind, c.link!.key))} suppressHighlighting={false}>{c.text}</Text>
       ) : c.text}
     </Text>
   ));

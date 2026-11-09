@@ -18,10 +18,11 @@ export const TAG_PATH_TYPE: Record<string, TagType> = Object.fromEntries(
   Object.entries(TAG_TYPE_PATH).map(([type, path]) => [path, type as TagType])
 ) as Record<string, TagType>;
 
-export type BrowseKind = TagType | "person" | "artist" | "show";
+export type BrowseKind = TagType | "person" | "artist" | "show" | "tune" | "text";
 
 export function browsePath(kind: BrowseKind, slug: string): string {
-  const base = kind === "person" ? "people" : kind === "artist" ? "artists" : kind === "show" ? "shows" : TAG_TYPE_PATH[kind];
+  const base = kind === "person" ? "people" : kind === "artist" ? "artists" : kind === "show" ? "shows"
+    : kind === "tune" ? "tunes" : kind === "text" ? "texts" : TAG_TYPE_PATH[kind];
   return `/${base}/${encodeURIComponent(slug)}`;
 }
 

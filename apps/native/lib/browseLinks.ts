@@ -10,5 +10,7 @@ export function browseKindFromSegment(segment: string): BrowseKind | null {
   if (segment === 'people') return 'person';
   if (segment === 'artists') return 'artist';
   if (segment === 'shows') return 'show';
+  if (segment === 'tunes') return 'tune';
+  if (segment === 'texts') return 'text';
   return TAG_PATH_TYPE[segment] ?? null;
 }

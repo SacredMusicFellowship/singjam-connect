@@ -133,8 +133,8 @@ const SONG_SELECT = `
           song_alternate_titles(title),
           song_tags(context, tags(name, type, slug)),
           song_productions(productions(name, year, slug)),
-          texts(title, text_credits(role, people(name))),
-          tunes(tune_label, year, tune_credits(role, people(name)), tune_tags(tags(name, type)))
+          texts(title, slug, text_credits(role, people(name))),
+          tunes(tune_label, slug, year, tune_credits(role, people(name)), tune_tags(tags(name, type)))
         `;
 
 export default function SongPageContent() {
@@ -411,8 +411,19 @@ export default function SongPageContent() {
           )}
           {(textTune.words || textTune.tune) && (
             <div className="mt-1 text-sm text-slate-500">
-              {textTune.words && <p><span className="text-slate-400">Words:</span> {textTune.words}</p>}
-              {textTune.tune && <p><span className="text-slate-400">Tune:</span> {textTune.tune}</p>}
+              {textTune.words && (
+                <p>
+                  <span className="text-slate-400">Words:</span>{" "}
+                  {textTune.textSlug ? <Link href={browsePath("text", textTune.textSlug)} className="hover:text-amber-700 hover:underline">{textTune.words}</Link> : textTune.words}
+                </p>
+              )}
+              {textTune.tune && (
+                <p>
+                  <span className="text-slate-400">Tune:</span>{" "}
+                  {textTune.tuneSlug ? <Link href={browsePath("tune", textTune.tuneSlug)} className="hover:text-amber-700 hover:underline">{textTune.tune.name}</Link> : textTune.tune.name}
+                  {textTune.tune.detail && ` · ${textTune.tune.detail}`}
+                </p>
+              )}
             </div>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">

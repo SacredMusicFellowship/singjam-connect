@@ -166,7 +166,7 @@ function SuggestionsPanel({
             byline={s.byline}
             cardIdentity={s.card_identity}
             composers={s.composers}
-            cultures={[...s.cultures, ...(s.communities ?? [])]}
+            cultures={s.cultures}
             productions={s.productions}
             recordingArtists={s.recording_artists}
             productionCredits={s.production_credits}
@@ -906,7 +906,7 @@ export default function RepertoirePage() {
                       byline={result.byline}
                       cardIdentity={result.card_identity}
                       composers={result.composers}
-                      cultures={[...(result.cultures ?? []), ...(result.communities ?? [])]}
+                      cultures={result.cultures ?? []}
                       productions={result.productions}
                       recordingArtists={result.recording_artists}
                       productionCredits={result.production_credits}

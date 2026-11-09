@@ -17,6 +17,8 @@ export const KIND_LABEL: Record<BrowseKind, string> = {
   person: "Songwriter",
   artist: "Recording artist",
   show: "Show",
+  tune: "Tune",
+  text: "Text",
 };
 
 function TagLinks({ label, tags }: { label: string; tags: LinkedTag[] }) {
