@@ -1,12 +1,12 @@
 "use client";
 
-import { browsePath, bylineCredits, traditionalCredit, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
+import { browsePath, bylineCredits, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
 import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import CreditLinks from "@/components/CreditLinks";
-import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, textTuneLines, ENRICHMENT_WAIT_MS } from "@singjam/core";
+import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, songCreditLines, ENRICHMENT_WAIT_MS } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
@@ -37,19 +37,6 @@ function TagRow({ label, tags }: { label: string; tags: (string | { name: string
       </div>
     </div>
   );
-}
-
-// Writer credits with each name linked to its songwriter page; "Traditional"
-// names where it comes from, as formatComposersLong does.
-function WriterLinks({ names, slugs, cultures }: { names: string[]; slugs: Map<string, string>; cultures: string[] }) {
-  const traditional = names.some((n) => n.toLowerCase() === "traditional");
-  const others = names.filter((n) => n.toLowerCase() !== "traditional");
-  const parts: React.ReactNode[] = [];
-  if (traditional) parts.push(<CreditLinks key="trad" credits={[traditionalCredit(cultures[0] ? `Traditional · ${cultures[0]}` : "Traditional")]} />);
-  for (const n of others) {
-    parts.push(<Link key={n} href={browsePath("person", slugs.get(n) ?? n)} className="hover:text-amber-700 hover:underline">{n}</Link>);
-  }
-  return <>{parts.map((p, i) => <Fragment key={i}>{i > 0 && ", "}{p}</Fragment>)}</>;
 }
 
 function JammerRow({ level, label, jammers }: { level: ConfidenceLevel; label: string; jammers: { name: string; username: string }[] }) {
@@ -133,8 +120,8 @@ const SONG_SELECT = `
           song_alternate_titles(title),
           song_tags(context, tags(name, type, slug)),
           song_productions(productions(name, year, slug)),
-          texts(title, slug, text_credits(role, people(name))),
-          tunes(tune_label, slug, year, tune_credits(role, people(name)), tune_tags(tags(name, type)))
+          texts(slug, songs(count), text_sources(book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          tunes(name, slug)
         `;
 
 export default function SongPageContent() {
@@ -344,7 +331,12 @@ export default function SongPageContent() {
       .filter((x: any) => x.name)
   );
   const altTitles = (song.song_alternate_titles as any[]).map((x: any) => x.title as string).filter(Boolean);
-  const textTune = textTuneLines((song as any).texts, (song as any).tunes);
+  const people = (rows: any[]) => sortByLastName(rows.map((x: any) => x.people?.name).filter(Boolean))
+    .map((name) => ({ name, slug: personSlugs.get(name) ?? null }));
+  const creditLines = songCreditLines({
+    composers: people(song.song_composers as any[]), lyricists: people(song.song_lyricists as any[]),
+    musicCultures, lyricsCultures, text: (song as any).texts, tune: (song as any).tunes,
+  });
   const tagLists = (["genre", "form", "occasion", "community", "theme", "language", "culture"] as const)
     .map((type) => ({
       label: TAG_TYPE_LABELS[type],
@@ -414,23 +406,6 @@ export default function SongPageContent() {
           {altTitles.length > 0 && (
             <p className="mt-1 text-sm text-slate-400">aka: {altTitles.join(" · ")}</p>
           )}
-          {(textTune.words || textTune.tune) && (
-            <div className="mt-1 text-sm text-slate-500">
-              {textTune.words && (
-                <p>
-                  <span className="text-slate-400">Words:</span>{" "}
-                  {textTune.textSlug ? <Link href={browsePath("text", textTune.textSlug)} className="hover:text-amber-700 hover:underline">{textTune.words}</Link> : textTune.words}
-                </p>
-              )}
-              {textTune.tune && (
-                <p>
-                  <span className="text-slate-400">Tune:</span>{" "}
-                  {textTune.tuneSlug ? <Link href={browsePath("tune", textTune.tuneSlug)} className="hover:text-amber-700 hover:underline">{textTune.tune.name}</Link> : textTune.tune.name}
-                  {textTune.tune.detail && ` · ${textTune.tune.detail}`}
-                </p>
-              )}
-            </div>
-          )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
               {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
@@ -492,19 +467,15 @@ export default function SongPageContent() {
           )}
         </div>
 
-        {(composers.length > 0 || lyricists.length > 0) && (
+        {creditLines.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Songwriters</p>
-            {composers.length > 0 && (
-              <p className="text-sm text-slate-600">
-                <span className="font-medium">Music:</span> <WriterLinks names={composers} slugs={personSlugs} cultures={musicCultures} />
+            {creditLines.map((line) => (
+              <p key={line.label} className="text-sm text-slate-600">
+                <span className="font-medium">{line.label}:</span>{" "}
+                {line.groups.map((g, i) => <Fragment key={i}>{i > 0 && " · "}<CreditLinks credits={g} /></Fragment>)}
               </p>
-            )}
-            {lyricists.length > 0 && (
-              <p className="text-sm text-slate-600">
-                <span className="font-medium">Lyrics:</span> <WriterLinks names={lyricists} slugs={personSlugs} cultures={lyricsCultures} />
-              </p>
-            )}
+            ))}
           </div>
         )}
       </div>

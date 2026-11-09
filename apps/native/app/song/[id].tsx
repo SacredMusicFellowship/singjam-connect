@@ -22,11 +22,10 @@ import {
   sortRecordingsByYear,
   enrichmentInProgress,
   ENRICHMENT_WAIT_MS,
-  textTuneLines,
+  songCreditLines,
+  type CreditTextRef,
+  type CreditTune,
   bylineCredits,
-  traditionalCredit,
-  type CardCredit,
-  type TextTuneLines,
   formatJammers,
   songTagNames,
   TAG_TYPE_LABELS,
@@ -81,10 +80,8 @@ type SongDetail = {
   vibe: string | null;
   altTitles: string[];
   // "Words:" and "Tune:" lines, for a song linked to a text or tune.
-  words: TextTuneLines['words'];
-  textSlug: TextTuneLines['textSlug'];
-  tune: TextTuneLines['tune'];
-  tuneSlug: TextTuneLines['tuneSlug'];
+  textRef: CreditTextRef;
+  tuneRef: CreditTune;
   composers: string[];
   lyricists: string[];
   musicCultures: string[];
@@ -128,18 +125,6 @@ function TagPill({ label, href, onOpen }: { label: string; href?: string | null;
       <Text className="text-slate-600 text-sm">{label}</Text>
     </View>
   );
-}
-
-// Writer credits with each name opening its songwriter page; "Traditional"
-// names where it comes from, as formatComposersLong does.
-function WriterText({ names, slugs, cultures, onOpen }: { names: string[]; slugs: Record<string, string>; cultures: string[]; onOpen: (href: string) => void }) {
-  const traditional = names.some(n => n.toLowerCase() === 'traditional');
-  const others = names.filter(n => n.toLowerCase() !== 'traditional');
-  const credits: CardCredit[] = [
-    ...(traditional ? [traditionalCredit(cultures[0] ? `Traditional · ${cultures[0]}` : 'Traditional')] : []),
-    ...others.map((n): CardCredit => ({ text: n, link: { kind: 'person', key: slugs[n] ?? n } })),
-  ];
-  return <CreditText credits={credits} onOpen={(path) => onOpen(nativeBrowseHref(path))} linkClassName="text-amber-700" />;
 }
 
 function TagRow({ label, tags, onOpen }: { label: string; tags: (string | { name: string; href: string | null })[]; onOpen?: (href: string) => void }) {
@@ -303,8 +288,8 @@ export default function SongDetailScreen() {
           song_tags(context, tags(name, type, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
           song_productions(productions(name, year, slug)),
-          texts(title, slug, text_credits(role, people(name))),
-          tunes(tune_label, slug, year, tune_credits(role, people(name)), tune_tags(tags(name, type)))
+          texts(slug, songs(count), text_sources(book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          tunes(name, slug)
         `)
         .eq('id', songId)
         .single(),
@@ -360,7 +345,8 @@ export default function SongDetailScreen() {
       meter: s.meter ?? null,
       vibe: s.vibe ?? null,
       altTitles: (s.song_alternate_titles ?? []).map((x: any) => x.title).filter(Boolean),
-      ...textTuneLines(s.texts, s.tunes),
+      textRef: s.texts ?? null,
+      tuneRef: s.tunes ?? null,
       composers: sortByLastName((s.song_composers ?? []).map((x: any) => x.people?.name).filter(Boolean)),
       lyricists: sortByLastName((s.song_lyricists ?? []).map((x: any) => x.people?.name).filter(Boolean)),
       musicCultures: origins('music').length ? origins('music') : origins('general'),
@@ -566,6 +552,12 @@ export default function SongDetailScreen() {
     .filter((y): y is number => !!y);
   const earliestYear = allYears.length > 0 ? Math.min(...allYears) : null;
 
+  const creditLines = songCreditLines({
+    composers: song.composers.map((name) => ({ name, slug: song.personSlugs[name] ?? null })),
+    lyricists: song.lyricists.map((name) => ({ name, slug: song.personSlugs[name] ?? null })),
+    musicCultures: song.musicCultures, lyricsCultures: song.lyricsCultures,
+    text: song.textRef, tune: song.tuneRef,
+  });
   const hasMusicalProps = tonalityPills.length > 0 || meterPills.length > 0 || !!song.vibe;
   const hasTags = song.tagLists.length > 0;
   const hasJammers = jammers && (jammers.lead.length > 0 || jammers.support.length > 0 || jammers.learn.length > 0);
@@ -704,20 +696,6 @@ export default function SongDetailScreen() {
           {song.altTitles.length > 0 ? (
             <Text className="text-sm text-slate-400 mt-1">aka: {song.altTitles.join(' · ')}</Text>
           ) : null}
-          {song.words ? (
-            <Text className="text-sm text-slate-500 mt-1">
-              <Text className="text-slate-400">Words:</Text>{' '}
-              {song.textSlug ? <Text className="text-amber-700" onPress={() => openBrowse(nativeBrowseHref(browsePath('text', song.textSlug!)))}>{song.words}</Text> : song.words}
-            </Text>
-          ) : null}
-          {song.tune ? (
-            <Text className={`text-sm text-slate-500 ${song.words ? '' : 'mt-1'}`}>
-              <Text className="text-slate-400">Tune:</Text>{' '}
-              {song.tuneSlug ? <Text className="text-amber-700" onPress={() => openBrowse(nativeBrowseHref(browsePath('tune', song.tuneSlug!)))}>{song.tune.name}</Text> : song.tune.name}
-              {song.tune.detail ? ` · ${song.tune.detail}` : null}
-            </Text>
-          ) : null}
-
           {renderRepertoireControls()}
 
           {song.chord_chart_url || song.genius_url ? (
@@ -765,21 +743,20 @@ export default function SongDetailScreen() {
         </View>
 
         {/* Songwriters */}
-        {(song.composers.length > 0 || song.lyricists.length > 0) ? (
+        {creditLines.length > 0 ? (
           <View className="px-4 py-4 border-b border-slate-100">
             <SectionHeader title="Songwriters" />
-            {song.composers.length > 0 ? (
-              <Text className="text-sm text-slate-700 mb-1">
-                <Text className="font-medium">Music: </Text>
-                <WriterText names={song.composers} slugs={song.personSlugs} cultures={song.musicCultures} onOpen={openBrowse} />
+            {creditLines.map((line) => (
+              <Text key={line.label} className="text-sm text-slate-700 mb-1">
+                <Text className="font-medium">{line.label}: </Text>
+                {line.groups.map((g, i) => (
+                  <Text key={i}>
+                    {i > 0 ? ' · ' : null}
+                    <CreditText credits={g} onOpen={(path) => openBrowse(nativeBrowseHref(path))} linkClassName="text-amber-700" />
+                  </Text>
+                ))}
               </Text>
-            ) : null}
-            {song.lyricists.length > 0 ? (
-              <Text className="text-sm text-slate-700">
-                <Text className="font-medium">Lyrics: </Text>
-                <WriterText names={song.lyricists} slugs={song.personSlugs} cultures={song.lyricsCultures} onOpen={openBrowse} />
-              </Text>
-            ) : null}
+            ))}
           </View>
         ) : null}
 
