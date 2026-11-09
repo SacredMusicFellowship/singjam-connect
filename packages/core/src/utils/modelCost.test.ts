@@ -14,4 +14,7 @@ describe("usageCost", () => {
     expect(usageCost([{ model: "mystery-1", input: 10, output: 10 }])).toEqual({ usd: 0, unpriced: ["mystery-1"] });
     expect(modelPrice("gpt-5.55")).toBeNull();
   });
+  it("adds web searches at a cent each", () => {
+    expect(usageCost([{ model: "claude-opus-5-5", input: 0, output: 0, searches: 3 }]).usd).toBeCloseTo(0.03);
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideEnrichment, type EnrichmentSources, type ModelAnswer } from "./songEnrichmentRules";
+import { decideEnrichment, verifiedFirstLine, withoutMisfitForms, type EnrichmentSources, type ModelAnswer } from "./songEnrichmentRules";
 
 const base = (over: Partial<EnrichmentSources> = {}): EnrichmentSources => ({
   gpt: null, claude: null, musicbrainz: null, spotifyReleaseYear: null, lyrics: null, ...over,
@@ -86,5 +86,48 @@ describe("decideEnrichment — lyrics", () => {
   it("without published lyrics, needs both models to quote the same words", () => {
     expect(decideEnrichment(base({ gpt: { first_line: hi("Gosto muito de te ver") }, claude: { first_line: hi("Gosto muito de você") } })).first_line).toBeUndefined();
     expect(decideEnrichment(base({ gpt: { first_line: hi("Have you seen the ghost of John?") }, claude: { first_line: hi("Have you seen the ghost of John") } })).first_line).toBe("Have you seen the ghost of John?");
+  });
+});
+
+describe("decideEnrichment — a recording artist who wrote the song", () => {
+  const carlebach = { composers: med(["Shlomo Carlebach"]), lyricists: { v: ["Traditional"], c: "low" as const } };
+  it("accepts the artist as composer when both models name them and one is sure", () => {
+    const d = decideEnrichment(base({ artist: "Shlomo Carlebach", gpt: { composers: hi(["Shlomo Carlebach"]) }, claude: carlebach }));
+    expect(d.composers).toEqual(["Shlomo Carlebach"]);
+  });
+  it("doesn't copy the composer into the words when a model says someone else wrote them", () => {
+    const d = decideEnrichment(base({ artist: "Shlomo Carlebach", gpt: { composers: hi(["Shlomo Carlebach"]) }, claude: carlebach }));
+    expect(d.lyricists).toBeUndefined();
+  });
+  it("still needs both models to be sure when the composer isn't the artist", () => {
+    expect(decideEnrichment(base({ artist: "Neshama Carlebach", gpt: { composers: hi(["Shlomo Carlebach"]) }, claude: carlebach })).composers).toBeUndefined();
+    expect(decideEnrichment(base({ artist: "Shlomo Carlebach", gpt: { composers: med(["Shlomo Carlebach"]) }, claude: carlebach })).composers).toBeUndefined();
+  });
+  it("keeps composers as lyricists when nobody names anyone else", () => {
+    const d = decideEnrichment(base({ gpt: { composers: hi(["Carole King"]) }, claude: { composers: hi(["Carole King"]) } }));
+    expect(d.lyricists).toEqual(["Carole King"]);
+  });
+});
+
+describe("withoutMisfitForms", () => {
+  it("drops Hymn and Worship song from spirituals only", () => {
+    expect(withoutMisfitForms(["Hymn", "Worship song", "Call and response"], ["Spiritual"])).toEqual(["Call and response"]);
+    expect(withoutMisfitForms(["Hymn"], ["Traditional Gospel"])).toEqual(["Hymn"]);
+  });
+});
+
+describe("verifiedFirstLine", () => {
+  const answer = { first_line: "Ezekiel saw the wheel, way up in the middle of the air", url: "https://example.org/a" };
+  it("keeps a line a citation quotes, with that citation's page", () => {
+    const cites = [{ url: "https://example.org/b", cited_text: "Ezekiel saw the wheel, Way up in the middle of the air. Ezekiel saw..." }];
+    expect(verifiedFirstLine(answer, cites)).toEqual({ first_line: answer.first_line, url: "https://example.org/b" });
+  });
+  it("falls back to the fetched page text", () => {
+    expect(verifiedFirstLine(answer, [], { "https://example.org/a": "<p>Ezekiel saw the wheel, way up in the middle of the air</p>" })?.url).toBe("https://example.org/a");
+  });
+  it("rejects a line no page holds, a section label, or a fragment", () => {
+    expect(verifiedFirstLine(answer, [{ url: "x", cited_text: "Ezekiel saw de wheel" }])).toBeNull();
+    expect(verifiedFirstLine({ first_line: "Chorus: Ezekiel saw the wheel" }, [{ url: "x", cited_text: "Chorus: Ezekiel saw the wheel" }])).toBeNull();
+    expect(verifiedFirstLine({ first_line: "Ezekiel" }, [{ url: "x", cited_text: "Ezekiel" }])).toBeNull();
   });
 });

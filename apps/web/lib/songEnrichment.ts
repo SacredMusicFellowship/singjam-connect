@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   usageCost,
   withoutGenericFaithThemes,
+  withoutMisfitForms,
+  verifiedFirstLine,
   agreedLandmarks,
   decideEnrichment,
   decideListedFacts,
@@ -36,8 +38,16 @@ const norm = (s: string) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
 
 type Field = keyof ModelAnswer;
-export type ModelUsage = { model: string; input: number; output: number; reasoning?: number };
-export type SongContext = { title: string; artist: string | null; production: string | null; wanted: Field[]; artists?: string[] };
+export type ModelUsage = { model: string; input: number; output: number; reasoning?: number; searches?: number };
+export type SongContext = {
+  title: string;
+  artist: string | null;
+  production: string | null;
+  wanted: Field[];
+  artists?: string[];
+  writers?: string[];
+  firstLine?: string | null;
+};
 
 const FIELD_RULES: Record<Field, string> = {
   year_written: "year_written: year the song was composed (not recorded)",
@@ -48,7 +58,7 @@ const FIELD_RULES: Record<Field, string> = {
   meter: `meter: time-signature numerator, one of ${SONG_METERS.join(", ")}`,
   vibe: 'vibe: "Banger" (upbeat, high energy) or "Ballad" (slow, tender)',
   genres: `genres: 1 to 3, each from: ${SONG_GENRES.join(", ")}`,
-  themes: `themes: 1 to 3 lyrical themes, each from: ${SONG_THEMES.join(", ")}`,
+  themes: `themes: 1 to 3 lyrical themes, each from: ${SONG_THEMES.join(", ")}. A Bible story is not Mythology`,
   languages: "languages: languages it is sung in, plain English names",
   cultures: `cultures: where the song comes from (nationality, ethnicity or region), each from: ${SONG_CULTURES.join(", ")}. Never "British". Religious traditions go in communities. Name the song's own musical tradition, never the performers' ethnicity: a spiritual or a traditional blues is African American; a soul or hip-hop record by Black artists gets no culture for that reason alone`,
   forms: `forms: what kind of piece it is, only if it clearly is one, each from: ${SONG_FORMS.join(", ")}. Empty for an ordinary popular song`,
@@ -70,7 +80,11 @@ const NUMBER_FIELDS = new Set<Field>(["year_written", "recording_year"]);
 function prompt(song: SongContext) {
   const system = `You are a careful music researcher filling gaps in a song database. Accuracy matters more than coverage: a wrong value is far worse than a missing one.
 Only use the listed values where a list is given. For each field give confidence "high", "medium" or "low", and use null for the value when you don't know. Never guess facts or reconstruct lyrics you are unsure of.`;
-  const user = `Song: "${song.title}" — ${song.artist ?? "(no artist)"}${song.production ? ` — from ${song.production}` : ""}
+  const known = [
+    song.writers?.length ? `Written by: ${song.writers.join(", ")}` : null,
+    song.firstLine ? `First line: "${song.firstLine}"` : null,
+  ].filter(Boolean).join("\n");
+  const user = `Song: "${song.title}" — ${song.artist ?? "(no artist)"}${song.production ? ` — from ${song.production}` : ""}${known ? `\n${known}\nAnswer about this song, not another song with the same title.` : ""}
 Fill these fields:
 ${song.wanted.map((f) => `- ${FIELD_RULES[f]}`).join("\n")}
 Return JSON: {"fields": {"<field>": {"v": <value or null>, "c": "high" | "medium" | "low"}}}. Where null isn't allowed, use "", 0 or [] for unknown.`;
@@ -304,6 +318,71 @@ async function lookUpGenius(title: string, artists: string[]): Promise<string | 
   return null;
 }
 
+// ---- First line by web search (songs nothing else could place) ----
+
+async function pageText(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    return (await res.text()).replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;|&#160;/g, " ");
+  } catch {
+    return null;
+  }
+}
+
+// Claude searches the web for a page that prints the words; the line is kept
+// only if that page's own text holds it (verifiedFirstLine), never from memory.
+export async function searchFirstLine(
+  song: SongContext,
+  usage: ModelUsage[],
+  model = "claude-opus-5-5",
+): Promise<{ first_line: string; url: string } | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  const about = [
+    song.writers?.length ? `written by ${song.writers.join(", ")}` : null,
+    song.artist ? `recorded by ${song.artist}` : null,
+  ].filter(Boolean).join(", ");
+  const messages: any[] = [{
+    role: "user",
+    content: `Find the first sung line of the song "${song.title}"${about ? ` (${about})` : ""}. Search the web for a page that prints its words, such as a hymnal, songbook, folk song archive or lyrics page, and copy its first line exactly as that page prints it: one line only (usually under 12 words), not the whole verse or a repeated refrain, without section labels. If versions differ, use the most widely printed one. Never answer from memory.
+Reply with only JSON: {"first_line": "...", "url": "<the page it is on>"}, or {"first_line": null, "url": null} if no page prints it.`,
+  }];
+  const client = new Anthropic();
+  const citations: { url: string; cited_text: string }[] = [];
+  let text = "";
+  for (let turn = 0; turn < 3; turn++) {
+    const res: any = await client.beta.messages.create({
+      model,
+      max_tokens: 16000,
+      ...(model.startsWith("claude-haiku") ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }),
+      output_config: { effort: "low" },
+      tools: [{ type: model.startsWith("claude-haiku") ? "web_search_20250305" : "web_search_20260209", name: "web_search", max_uses: 3 }],
+      messages,
+    } as any);
+    usage.push({ model: res.model, input: res.usage.input_tokens, output: res.usage.output_tokens, searches: res.usage.server_tool_use?.web_search_requests ?? 0 });
+    for (const block of res.content ?? []) {
+      if (block.type !== "text") continue;
+      text += block.text;
+      for (const c of block.citations ?? []) if (c.url && c.cited_text) citations.push({ url: c.url, cited_text: c.cited_text });
+    }
+    if (res.stop_reason !== "pause_turn") break;
+    messages.push({ role: "assistant", content: res.content });
+  }
+  const json = text.match(/\{[^{}]*"first_line"[^{}]*\}/g)?.pop();
+  let answer: { first_line?: string | null; url?: string | null } | null = null;
+  try { answer = json ? JSON.parse(json) : null; } catch { answer = null; }
+  if (!answer?.first_line) return null;
+  const found = verifiedFirstLine(answer, citations);
+  if (found) return found;
+  const urls = [answer.url, ...citations.map((c) => c.url)].filter((u, i, all): u is string => !!u && all.indexOf(u) === i).slice(0, 3);
+  const pages: Record<string, string> = {};
+  for (const url of urls) {
+    const t = await pageText(url);
+    if (t) pages[url] = t;
+  }
+  return verifiedFirstLine(answer, [], pages);
+}
+
 // ---- Gathering every source, the one way all enrichment does it ----
 
 export type SourceCheck = { name: string; ok: boolean };
@@ -364,7 +443,7 @@ export async function gatherSources(
   ]);
   const order = ["GPT", "Claude", "MusicBrainz", "LRCLIB", "Wikipedia", "Genius"];
   return {
-    sources: { gpt, claude, musicbrainz, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics },
+    sources: { gpt, claude, musicbrainz, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics, artist },
     wikipedia,
     geniusUrl,
     checks: checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name)),
@@ -542,7 +621,7 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   const { data: song, error } = await admin
     .from("songs")
     .select(
-      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
+      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
     )
     .eq("id", songId)
     .single();
@@ -552,10 +631,13 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   const primary = [...(s.song_recording_artists ?? [])].sort((a: any, b: any) => (a.position ?? 99) - (b.position ?? 99))[0];
   const artist: string | null = primary?.artists?.name ?? s.display_artist ?? null;
   const empty = (n: { count: number }[]) => !n?.[0]?.count;
+  const writers = [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])]
+    .map((r: any) => r.people?.name as string | undefined)
+    .filter((n, i, all): n is string => !!n && all.indexOf(n) === i);
   const wanted: Field[] = [];
   if (!s.year_written) wanted.push("year_written");
   if (primary && !primary.year) wanted.push("recording_year");
-  if (empty(s.song_composers) && empty(s.song_lyricists)) wanted.push("composers", "lyricists");
+  if (!writers.length) wanted.push("composers", "lyricists");
   if (!s.tonality) wanted.push("tonality");
   if (!s.meter) wanted.push("meter");
   if (!s.vibe) wanted.push("vibe");
@@ -575,7 +657,7 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
 
   if (!opts.dryRun) await admin.from("songs").update({ enrichment_started_at: new Date().toISOString() }).eq("id", songId);
   try {
-    const filled = await fillSong(admin, songId, s, primary, artist, wanted, opts);
+    const filled = await fillSong(admin, songId, s, primary, artist, writers, wanted, opts);
     const landmarks = await addLandmarkRecordings(admin, songId, opts).catch((e) => {
       console.error("[song-enrichment] landmark recordings failed:", e instanceof Error ? e.message : e);
       return { added: [] as LandmarkResult[], usage: [] as ModelUsage[] };
@@ -594,6 +676,7 @@ async function fillSong(
   s: any,
   primary: any,
   artist: string | null,
+  writers: string[],
   wanted: Field[],
   opts: { spotifyReleaseYear?: number | null; dryRun?: boolean },
 ) {
@@ -602,10 +685,25 @@ async function fillSong(
     artist,
     production: (s.song_productions ?? []).map((p: any) => p.productions?.name).filter(Boolean).join(", ") || null,
     wanted,
+    writers,
+    firstLine: s.first_line ?? null,
   };
   const { sources, wikipedia, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear });
   const decision = { ...decideEnrichment(sources), ...decideListedFacts(sources, wikipedia) };
-  if (opts.dryRun) return { songId, decision, usage, checks };
+  let firstLineSource: string | null = null;
+  if (wanted.includes("first_line") && !decision.first_line) {
+    const found = await timed("Web search", 180_000, checks, () => searchFirstLine(context, usage));
+    if (found) {
+      decision.first_line = found.first_line;
+      firstLineSource = found.url;
+    }
+  }
+  if (decision.forms)
+    decision.forms = withoutMisfitForms(decision.forms, [
+      ...(s.song_tags ?? []).filter((t: any) => t.tags?.type === "genre").map((t: any) => t.tags.name as string),
+      ...(wanted.includes("genres") ? decision.genres ?? [] : []),
+    ]);
+  if (opts.dryRun) return { songId, decision, usage, checks, firstLineSource };
 
   const scalar: Record<string, unknown> = {};
   for (const f of ["year_written", "tonality", "meter", "vibe", "first_line", "hook"] as const)
@@ -617,7 +715,7 @@ async function fillSong(
 
   if (decision.composers && wanted.includes("composers")) {
     const c = await idsFor(admin, "people", decision.composers);
-    const l = await idsFor(admin, "people", decision.lyricists ?? decision.composers);
+    const l = decision.lyricists ? await idsFor(admin, "people", decision.lyricists) : [];
     if (c.length) await admin.from("song_composers").insert(c.map((person_id) => ({ song_id: songId, person_id })));
     if (l.length) await admin.from("song_lyricists").insert(l.map((person_id) => ({ song_id: songId, person_id })));
   }
@@ -648,7 +746,7 @@ async function fillSong(
     const titles = decision.alternate_titles.filter((t, i, all) => norm(t) !== norm(s.title) && all.findIndex((x) => norm(x) === norm(t)) === i);
     if (titles.length) await admin.from("song_alternate_titles").insert(titles.map((title) => ({ song_id: songId, title })));
   }
-  return { songId, decision, usage };
+  return { songId, decision, usage, firstLineSource };
 }
 
 // Review mode for the song editor: asks every source about every field, saves

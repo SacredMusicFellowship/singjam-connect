@@ -8,6 +8,7 @@ import {
   SONG_THEMES,
   SONG_TONALITIES,
 } from "./songVocabulary";
+import { sameArtist } from "./landmarkRecordings";
 
 export type Confidence = "high" | "medium" | "low";
 export type ModelField<T> = { v: T | null; c: Confidence } | null | undefined;
@@ -43,7 +44,14 @@ export type EnrichmentSources = {
   musicbrainz: { recordingYear: number | null; composers: string[]; lyricists: string[] } | null;
   spotifyReleaseYear: number | null;
   lyrics: string | null;
+  artist?: string | null;
 };
+
+// A spiritual is neither a hymn nor a contemporary worship song, though
+// hymnals print many and models often call them that.
+export function withoutMisfitForms(forms: string[], genres: string[]): string[] {
+  return genres.includes("Spiritual") ? forms.filter((f) => f !== "Hymn" && f !== "Worship song") : forms;
+}
 
 export type EnrichmentDecision = {
   recording_year?: number;
@@ -114,14 +122,29 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
 
   const mb = src.musicbrainz;
   const gComp = value(g.composers, HIGH), cComp = value(c.composers, HIGH);
+  // Both models naming the song's own recording artist as its composer counts
+  // even when one of them is only fairly sure (Carlebach's Eilecha).
+  const gSure = value(g.composers, SURE), cSure = value(c.composers, SURE);
+  const artistWroteIt =
+    !!src.artist && !!gSure && !!cSure && (gComp || cComp) && sameNames(gSure, cSure) && gSure.every((n) => sameArtist(n, src.artist!));
+  // Words default to the composers only when neither model names someone else.
+  const lyricistsFor = (composers: string[]) => {
+    const named = [value(g.lyricists, ["high", "medium", "low"]), value(c.lyricists, ["high", "medium", "low"])];
+    const gLyr = value(g.lyricists, HIGH), cLyr = value(c.lyricists, HIGH);
+    if (gLyr && cLyr && sameNames(gLyr, cLyr)) return gLyr;
+    return named.some((l) => l && !sameNames(l, composers)) ? undefined : composers;
+  };
   if (mb?.composers.length && [gComp, cComp].some((m) => m && m.some((n) => mb.composers.map(norm).includes(norm(n))))) {
     out.composers = mb.composers;
     out.lyricists = mb.lyricists.length ? mb.lyricists : mb.composers;
   } else if (gComp && cComp && sameNames(gComp, cComp)) {
     out.composers = gComp;
-    const gLyr = value(g.lyricists, HIGH), cLyr = value(c.lyricists, HIGH);
-    out.lyricists = gLyr && cLyr && sameNames(gLyr, cLyr) ? gLyr : gComp;
+    out.lyricists = lyricistsFor(gComp);
+  } else if (artistWroteIt) {
+    out.composers = gSure!;
+    out.lyricists = lyricistsFor(gSure!);
   }
+  if (!out.lyricists) delete out.lyricists;
 
   const agree = (field: "tonality" | "meter" | "vibe", allowed: readonly string[]) => {
     const a = value(g[field], SURE), b = value(c[field], SURE);
@@ -170,6 +193,23 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   }
 
   return out;
+}
+
+// A first line found by web search counts only when a page's own text holds it:
+// a citation's quoted text, or the cited page as fetched. Returns the line with
+// the page it was found on.
+export function verifiedFirstLine(
+  answer: { first_line?: string | null; url?: string | null } | null,
+  citations: { url: string; cited_text: string }[],
+  pages: Record<string, string> = {},
+): { first_line: string; url: string } | null {
+  const line = answer?.first_line?.trim();
+  if (!line || norm(line).length < 20 || norm(line).length > 90 || /chorus|verse|intro/i.test(line)) return null;
+  const holds = (text: string) => ` ${norm(text)} `.includes(` ${norm(line)} `);
+  const cited = citations.find((c) => holds(c.cited_text));
+  if (cited) return { first_line: line, url: cited.url };
+  const fetched = Object.entries(pages).find(([, text]) => holds(text));
+  return fetched ? { first_line: line, url: fetched[0] } : null;
 }
 
 // Items at least two of the lists name (GPT, Claude, the Wikipedia article),
