@@ -674,11 +674,10 @@ export default function SongDetailScreen() {
               {productionCredits(song.production_credits, song.productions).map((p, i) => (
                 <Text key={`${p.name}-${p.year}`}>
                   {i > 0 ? ', ' : null}
-                  <Text
-                    className="italic"
-                    onPress={song.productionSlugs[p.name] ? () => openBrowse(nativeBrowseHref(browsePath('show', song.productionSlugs[p.name]))) : undefined}
-                  >{p.name}</Text>
-                  {p.year ? ` (${p.year})` : null}
+                  <Text onPress={song.productionSlugs[p.name] ? () => openBrowse(nativeBrowseHref(browsePath('show', song.productionSlugs[p.name]))) : undefined}>
+                    <Text className="italic">{p.name}</Text>
+                    {p.year ? ` (${p.year})` : null}
+                  </Text>
                 </Text>
               ))}
             </Text>

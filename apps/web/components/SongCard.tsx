@@ -122,9 +122,8 @@ export default function SongCard({
                 <Fragment key={`${p.name}-${p.year}`}>
                   {i > 0 && ", "}
                   {p.slug ? (
-                    <Link href={browsePath("show", p.slug)} className="relative z-10 hover:text-amber-700 hover:underline"><em>{p.name}</em></Link>
-                  ) : <em>{p.name}</em>}
-                  {p.year ? ` (${p.year})` : null}
+                    <Link href={browsePath("show", p.slug)} className="relative z-10 hover:text-amber-700 hover:underline"><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</Link>
+                  ) : <><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</>}
                 </Fragment>
               ))}
               {credits.line.length > 0 && <> · <CreditLinks credits={credits.line} linkClassName="relative z-10" /></>}

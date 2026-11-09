@@ -387,11 +387,10 @@ export default function SongPageContent() {
                 <Fragment key={`${p.name}-${p.year}`}>
                   {i > 0 && ", "}
                   {p.slug ? (
-                    <Link href={browsePath("show", p.slug)} className="hover:text-amber-700 hover:underline"><em>{p.name}</em></Link>
+                    <Link href={browsePath("show", p.slug)} className="hover:text-amber-700 hover:underline"><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</Link>
                   ) : (
-                    <em>{p.name}</em>
+                    <><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</>
                   )}
-                  {p.year ? ` (${p.year})` : null}
                 </Fragment>
               ))}
             </p>
