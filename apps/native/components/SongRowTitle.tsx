@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native';
-import { songCardCredits, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
+import { songRowText, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 
 export type SongRowCard = {
   byline?: string | null;
@@ -17,7 +17,7 @@ export default function SongRowTitle({ title, displayArtist, productions, card }
   productions?: string[] | null;
   card: SongRowCard;
 }) {
-  const credits = songCardCredits({
+  const { writers, line: second } = songRowText({
     title,
     byline: card.byline,
     displayArtist,
@@ -25,15 +25,13 @@ export default function SongRowTitle({ title, displayArtist, productions, card }
     cultures: card.cultures ?? [],
     recordingArtists: card.recording_artists,
     identity: card.card_identity,
+    productions,
   });
-  const text = (list: typeof credits.line) => list.map((c) => `${c.lead ?? ''}${c.text}${c.suffix ?? ''}`).join(', ');
-  const shows = (productions ?? []).filter(Boolean);
-  const second = shows.length ? `from ${shows.join(', ')}${credits.line.length ? ` · ${text(credits.line)}` : ''}` : text(credits.line);
   return (
     <View>
       <Text numberOfLines={2}>
         <Text className="text-zinc-900 font-medium">{title}</Text>
-        {credits.writers.length > 0 ? <Text className="text-zinc-400">{` (${text(credits.writers)})`}</Text> : null}
+        {writers ? <Text className="text-zinc-400">{` (${writers})`}</Text> : null}
       </Text>
       {second ? <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>{second}</Text> : null}
     </View>

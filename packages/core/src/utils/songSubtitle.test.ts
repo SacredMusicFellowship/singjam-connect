@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bylineCredits, songCardCredits, songCardIdentity, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
+import { bylineCredits, songCardCredits, songCardIdentity, songRowText, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
 
 describe("songSubtitle", () => {
   it("names the show when the song is from one", () => {
@@ -75,5 +75,17 @@ describe("bylineCredits", () => {
     expect(bylineCredits("Traditional · Irish", { people: ["Traditional"], artists: [] }))
       .toEqual([{ text: "Traditional · Irish", link: { kind: "culture", key: "Irish", traditional: true } }]);
     expect(traditionalCredit("Traditional")).toEqual({ text: "Traditional", link: { kind: "person", key: "Traditional" } });
+  });
+});
+
+describe("songRowText", () => {
+  it("drops recording years, which only cards show", () => {
+    const t = songRowText({ title: "Moondance", byline: "Van Morrison", displayArtist: "Van Morrison", composers: ["Van Morrison"], cultures: [], recordingArtists: [{ name: "Van Morrison", year: 1970 }, { name: "Michael Bublé", year: 2003 }] });
+    expect(t).toEqual({ writers: "V. Morrison", line: "Van Morrison, Michael Bublé" });
+  });
+  it("leads with the show and keeps the identity line for songs not known by a recording", () => {
+    expect(songRowText({ title: "x", displayArtist: "Julie Andrews", byline: "Julie Andrews", composers: [], cultures: [], recordingArtists: [], productions: ["The Sound of Music"] }).line).toBe("from The Sound of Music · Julie Andrews");
+    expect(songRowText({ title: "Rio Grande", byline: "Traditional · English", displayArtist: null, composers: ["Traditional"], cultures: ["English"], recordingArtists: [], identity: { first_line: "Oh, say were you ever in Rio Grande?" } }))
+      .toEqual({ writers: "Trad. · English", line: "“Oh, say were you ever in Rio Grande…”" });
   });
 });

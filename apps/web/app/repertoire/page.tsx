@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import { mergeSuggestionsById } from "@/lib/mergeSuggestionsById";
 import SubmitSongForm from "@/components/SubmitSongForm";
@@ -20,13 +19,12 @@ import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, songRowText, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
 import ChordChartSlot from "@/components/ChordChartSlot";
 import SearchInput from "@/components/SearchInput";
 import Select from "@/components/Select";
-import SongSubtitle from "@/components/SongSubtitle";
 import FiltersButton from "@/components/FiltersButton";
 
 const CONFIDENCE_LEVELS = [
@@ -46,6 +44,8 @@ const SORT_OPTIONS = [
 type Item = {
   song_id: string;
   byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
   slug: string | null;
   confidence: string | null;
   key_note: string | null;
@@ -116,6 +116,9 @@ type AddableSong = {
   productions: string[];
   genres: string[];
   languages: string[] | null;
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
 };
 
 
@@ -225,6 +228,16 @@ const RepertoireRow = memo(function RepertoireRow({
   canAddCharts: boolean;
   actions: RowActions;
 }) {
+  const row = songRowText({
+    title: it.title,
+    byline: it.byline,
+    displayArtist: it.display_artist,
+    composers: it.composers,
+    cultures: it.cultures,
+    recordingArtists: it.recording_artists,
+    identity: it.card_identity,
+    productions: it.productions,
+  });
   return (
   <div
     className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
@@ -244,13 +257,9 @@ const RepertoireRow = memo(function RepertoireRow({
           <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => actions.saveScroll()} className="hover:text-amber-600">
             {it.title}
           </Link>
-          {it.composers.length > 0 && (
-            <span className="ml-1 font-normal text-slate-400">
-              ({formatComposers(it.composers, [...it.cultures, ...(it.communities ?? [])])})
-            </span>
-          )}
+          {row.writers && <span className="ml-1 font-normal text-slate-400">({row.writers})</span>}
         </div>
-        <SongSubtitle productions={it.productions} artist={it.byline ?? it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
+        <div className="truncate text-sm text-zinc-500">{row.line || "—"}</div>
         {(it.popularity ?? 0) > 0 && (
           <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
         )}
@@ -419,6 +428,8 @@ export default function RepertoirePage() {
           title: r.title,
           display_artist: r.display_artist,
           byline: r.byline ?? null,
+          card_identity: r.card_identity ?? null,
+          recording_artists: r.recording_artists ?? [],
           first_line: r.first_line ?? null,
           hook: r.hook ?? null,
           notes: r.notes ?? null,
@@ -731,6 +742,9 @@ export default function RepertoirePage() {
         updated_at: new Date().toISOString(),
         title: result.title,
         display_artist: result.display_artist ?? null,
+        byline: result.byline ?? null,
+        card_identity: result.card_identity ?? null,
+        recording_artists: result.recording_artists ?? [],
         first_line: result.first_line ?? null,
         hook: null,
         notes: null,

@@ -91,6 +91,16 @@ export function songCardCredits(o: {
   return { writers, line };
 }
 
+// A compact row's text (My songs, a set's Add songs lists): the card's credits
+// as plain text, without recording years, which only cards show.
+export function songRowText(o: Parameters<typeof songCardCredits>[0] & { productions?: string[] | null }): { writers: string; line: string } {
+  const credits = songCardCredits(o);
+  const text = (list: CardCredit[]) => list.map((c) => `${c.lead ?? ""}${c.text}`).join(", ");
+  const shows = (o.productions ?? []).filter(Boolean);
+  const line = text(credits.line);
+  return { writers: text(credits.writers), line: shows.length ? `from ${shows.join(", ")}${line ? ` · ${line}` : ""}` : line };
+}
+
 // "Traditional" or "Traditional · Irish" as a link: to the Traditional page,
 // or to that culture's traditional songs.
 export function traditionalCredit(text: string): CardCredit {

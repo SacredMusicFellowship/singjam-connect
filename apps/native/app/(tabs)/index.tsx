@@ -3,7 +3,7 @@ import { View, Text, FlatList, TextInput, TouchableOpacity, RefreshControl, Aler
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { mergeSuggestionsById, songMatchesFilters, deriveFilterOptions, deriveFilterFacets, expandFilterState, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState } from '@singjam/core';
+import { mergeSuggestionsById, songMatchesFilters, deriveFilterOptions, deriveFilterFacets, expandFilterState, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
@@ -25,6 +25,9 @@ import FiltersButton from '@/components/FiltersButton';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RichUserSong = UserSong & {
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
   chord_chart_url?: string | null;
   genres: string[];
   languages: string[];
@@ -96,6 +99,8 @@ async function fetchRichUserSongs(): Promise<RichUserSong[]> {
     title: row.title ?? '',
     display_artist: row.display_artist ?? null,
     byline: row.byline ?? null,
+    card_identity: row.card_identity ?? null,
+    recording_artists: row.recording_artists ?? [],
     composers: row.composers ?? [],
     cultures: row.cultures ?? [],
     genres: row.genres ?? [],
@@ -308,6 +313,9 @@ export default function RepertoireScreen() {
         updated_at: new Date().toISOString(),
         title: s.title,
         display_artist: s.display_artist,
+        byline: s.byline ?? null,
+        card_identity: s.card_identity ?? null,
+        recording_artists: s.recording_artists ?? [],
         composers: s.composers,
         cultures: s.cultures,
         genres: s.genres,

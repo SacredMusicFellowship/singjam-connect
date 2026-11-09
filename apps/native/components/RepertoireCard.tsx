@@ -2,8 +2,7 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Linking, Alert } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { formatComposers, formatJammers } from '@singjam/core';
-import SubtitleText from '@/components/SubtitleText';
+import { formatJammers, songRowText, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RolePill from '@/components/RolePill';
 import MyKeyChip from '@/components/MyKeyChip';
@@ -15,6 +14,8 @@ export type RepertoireCardSong = {
   key_note: string | null;
   display_artist: string | null;
   byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
   composers: string[];
   cultures: string[];
   communities?: string[];
@@ -55,9 +56,16 @@ function RepertoireCard({
     });
   }
 
-  const composersLabel = song.composers.length > 0
-    ? formatComposers(song.composers, [...song.cultures, ...(song.communities ?? [])])
-    : null;
+  const row = songRowText({
+    title: song.title,
+    byline: song.byline,
+    displayArtist: song.display_artist,
+    composers: song.composers,
+    cultures: song.cultures,
+    recordingArtists: song.recording_artists,
+    identity: song.card_identity,
+    productions: song.productions,
+  });
 
   return (
     <View
@@ -82,13 +90,11 @@ function RepertoireCard({
           <TouchableOpacity onPress={() => onView(song)}>
             <Text numberOfLines={1}>
               <Text className="font-medium text-zinc-900">{song.title}</Text>
-              {composersLabel ? (
-                <Text className="text-zinc-400"> ({composersLabel})</Text>
-              ) : null}
+              {row.writers ? <Text className="text-zinc-400"> ({row.writers})</Text> : null}
             </Text>
           </TouchableOpacity>
           <Text className="text-sm text-zinc-500 mt-0.5" numberOfLines={1}>
-            <SubtitleText productions={song.productions} artist={song.byline ?? song.display_artist} fallback="—" />
+            {row.line || '—'}
           </Text>
           {song.popularity > 0 && (
             <Text className="text-xs text-zinc-400 mt-0.5">
