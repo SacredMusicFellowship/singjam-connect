@@ -44,6 +44,9 @@ export async function POST(req: Request) {
   if (!body.confirmed && !noRecording) {
     const match = await findOnSpotify(title, artist ?? "").catch(() => null);
     if (match) ({ title, artist, spotify_url: spotifyUrl, release_year: releaseYear } = match);
+    // The CSV import's titles are sourced; Spotify's track name ("Graves Into
+    // Gardens (Live)", "Trust In God (feat. Chris Brown)") only supplies the recording.
+    if (match && body.keep_title === true) title = body.title.trim();
   }
 
   const db = admin();

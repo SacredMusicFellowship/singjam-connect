@@ -21,26 +21,26 @@ describe("first_line column", () => {
   it("reads a sourced first line and sends it with the row", () => {
     const [row] = parseImportCsv('title,writers,first_line\nRio Grande,Traditional,"Oh, say were you ever in Rio Grande?"');
     expect(row.first_line).toBe("Oh, say were you ever in Rio Grande?");
-    expect(importRowBody(row)).toMatchObject({ first_line: "Oh, say were you ever in Rio Grande?", no_recording: true });
+    expect(importRowBody(row)).toMatchObject({ keep_title: true, first_line: "Oh, say were you ever in Rio Grande?", no_recording: true });
   });
 });
 
 describe("no_recording and add_anyway columns", () => {
   it("adds a song with neither writers nor artist without a recording, and a same-title song anyway", () => {
     const rows = parseImportCsv("title,no_recording,add_anyway\nCaroline,yes,\nStand by Me,,true");
-    expect(importRowBody(rows[0])).toEqual({ title: "Caroline", artist: "", no_recording: true });
-    expect(importRowBody(rows[1])).toEqual({ title: "Stand by Me", artist: "", add_anyway: true });
+    expect(importRowBody(rows[0])).toEqual({ title: "Caroline", keep_title: true, artist: "", no_recording: true });
+    expect(importRowBody(rows[1])).toEqual({ title: "Stand by Me", keep_title: true, artist: "", add_anyway: true });
   });
 });
 
 describe("importRowBody", () => {
   it("skips the recording match only for a row with writers and no artist", () => {
     expect(importRowBody({ title: "Haul Away Joe", artist: "", writers: "Traditional", tags: "form:Shanty", first_line: "" })).toEqual({
-      title: "Haul Away Joe", artist: "", writers: "Traditional", tags: "form:Shanty", no_recording: true,
+      title: "Haul Away Joe", keep_title: true, artist: "", writers: "Traditional", tags: "form:Shanty", no_recording: true,
     });
-    expect(importRowBody({ title: "Jolene", artist: "", writers: "", tags: "", first_line: "" })).toEqual({ title: "Jolene", artist: "" });
+    expect(importRowBody({ title: "Jolene", artist: "", writers: "", tags: "", first_line: "" })).toEqual({ title: "Jolene", keep_title: true, artist: "" });
     expect(importRowBody({ title: "Holy Forever", artist: "Chris Tomlin", writers: "Jason Ingram", tags: "", first_line: "" })).toEqual({
-      title: "Holy Forever", artist: "Chris Tomlin", writers: "Jason Ingram",
+      title: "Holy Forever", keep_title: true, artist: "Chris Tomlin", writers: "Jason Ingram",
     });
   });
 });

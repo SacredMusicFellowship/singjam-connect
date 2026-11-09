@@ -56,6 +56,7 @@ export function parseImportCsv(text: string): ImportRow[] {
 export function importRowBody(row: ImportRow) {
   return {
     title: row.title,
+    keep_title: true,
     artist: row.artist,
     ...(row.writers ? { writers: row.writers } : {}),
     ...(row.tags ? { tags: row.tags } : {}),
