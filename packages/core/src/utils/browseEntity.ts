@@ -34,6 +34,9 @@ export type BrowseEntity = {
   kind: BrowseKind;
   // A person's or artist's own slug, when the page was opened by name.
   slug?: string;
+  // Narrowed to its traditional songs; allSongCount is the page's full count.
+  traditionalOnly?: boolean;
+  allSongCount?: number;
   name: string;
   subtitle: string | null;
   notes: string | null;
@@ -55,8 +58,24 @@ async function bySlugOrName(db: any, table: "people" | "artists", columns: strin
 }
 
 // The songs and context for one browse page (migration 205). Public data; web
-// reads it without a session, native with the app's client.
-export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string): Promise<BrowseEntity | null> {
+// reads it without a session, native with the app's client. `traditional`
+// keeps only songs credited to "Traditional".
+export async function loadBrowseEntity(db: any, kind: BrowseKind, slug: string, opts: { traditional?: boolean } = {}): Promise<BrowseEntity | null> {
+  const entity = await loadEntity(db, kind, slug);
+  if (!entity || !opts.traditional) return entity;
+  const { data: trad } = await db.from("people").select("id").eq("name", "Traditional").maybeSingle();
+  const tradIds = new Set<string>();
+  if (trad) {
+    const [composed, wrote] = await Promise.all([
+      fetchAllRows<{ song_id: string }>((f: number, t: number) => db.from("song_composers").select("song_id").eq("person_id", trad.id).order("song_id").range(f, t)),
+      fetchAllRows<{ song_id: string }>((f: number, t: number) => db.from("song_lyricists").select("song_id").eq("person_id", trad.id).order("song_id").range(f, t)),
+    ]);
+    for (const r of [...composed, ...wrote]) tradIds.add(r.song_id);
+  }
+  return { ...entity, traditionalOnly: true, allSongCount: entity.songIds.length, songIds: entity.songIds.filter((id) => tradIds.has(id)) };
+}
+
+async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<BrowseEntity | null> {
   if (kind === "person") {
     const person = await bySlugOrName(db, "people", "id, name, slug, notes", slug);
     if (!person) return null;

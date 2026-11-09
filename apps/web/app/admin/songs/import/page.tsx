@@ -76,8 +76,9 @@ export default function ImportCSVPage() {
         <p className="mt-1 text-sm text-slate-500">
           CSV should have <code className="rounded bg-slate-100 px-1">title</code> and{" "}
           <code className="rounded bg-slate-100 px-1">artist</code> columns, and may add{" "}
-          <code className="rounded bg-slate-100 px-1">writers</code> (separated by ;) and{" "}
-          <code className="rounded bg-slate-100 px-1">tags</code> (<code className="rounded bg-slate-100 px-1">form:Shanty; occasion:Pub sing</code>). A row with writers and no artist is added without a recording. Everything left blank fills in automatically.
+          <code className="rounded bg-slate-100 px-1">writers</code> (separated by ;),{" "}
+          <code className="rounded bg-slate-100 px-1">tags</code> (<code className="rounded bg-slate-100 px-1">form:Shanty; occasion:Pub sing</code>) and{" "}
+          <code className="rounded bg-slate-100 px-1">first_line</code>. A row with writers and no artist is added without a recording. Everything left blank fills in automatically.
         </p>
       </div>
 

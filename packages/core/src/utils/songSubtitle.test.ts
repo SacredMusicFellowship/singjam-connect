@@ -51,9 +51,9 @@ describe("songCardCredits", () => {
     expect(c.writers).toEqual([{ text: "R. Robinson", link: { kind: "person", key: "Robert Robinson" } }]);
     expect(c.line).toEqual([{ lead: "Tune: ", text: "Nettleton", link: { kind: "tune", key: "nettleton" } }]);
   });
-  it("names one culture for a traditional song, linked to its page", () => {
+  it("names one culture for a traditional song, linked to that culture's traditional songs", () => {
     const c = songCardCredits({ title: "Rio Grande", byline: "Traditional · English", displayArtist: null, composers: ["Traditional"], cultures: ["English", "American"], recordingArtists: [], identity: { first_line: "Oh, say were you ever in Rio Grande?" } });
-    expect(c.writers).toEqual([{ lead: "Trad. · ", text: "English", link: { kind: "culture", key: "English" } }]);
+    expect(c.writers).toEqual([{ text: "Trad. · English", link: { kind: "culture", key: "English", traditional: true } }]);
     expect(c.line).toEqual([{ text: "“Oh, say were you ever in Rio Grande…”", link: null }]);
   });
 });

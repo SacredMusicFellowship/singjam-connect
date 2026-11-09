@@ -34,7 +34,8 @@ function TagLinks({ label, tags, onPress }: { label: string; tags: LinkedTag[]; 
 
 // Native counterpart of web's browse pages (/genres/rock, /people/john-newton, …).
 export default function BrowseScreen() {
-  const { kind: segment, slug } = useLocalSearchParams<{ kind: string; slug: string }>();
+  const { kind: segment, slug, traditional: tradParam } = useLocalSearchParams<{ kind: string; slug: string; traditional?: string }>();
+  const traditional = tradParam === '1';
   const router = useRouter();
   const kind = browseKindFromSegment(segment ?? '');
   const [entity, setEntity] = useState<BrowseEntity | null | undefined>(undefined);
@@ -50,7 +51,7 @@ export default function BrowseScreen() {
     if (!kind || !slug) { setEntity(null); return; }
     let live = true;
     (async () => {
-      const e = await loadBrowseEntity(supabase, kind, slug).catch(() => null);
+      const e = await loadBrowseEntity(supabase, kind, slug, { traditional }).catch(() => null);
       if (!live) return;
       setEntity(e);
       if (e) {
@@ -64,7 +65,7 @@ export default function BrowseScreen() {
       }
     })();
     return () => { live = false; };
-  }, [kind, slug]);
+  }, [kind, slug, traditional]);
 
   const openTag = (t: LinkedTag) => router.push(nativeBrowseHref(browsePath(t.type, t.slug)) as any);
   const openBrowse = useCallback((webPath: string) => router.push(nativeBrowseHref(webPath) as any), [router]);
@@ -109,7 +110,10 @@ export default function BrowseScreen() {
             <Text className="text-2xl font-semibold text-slate-900 mt-1">{entity.name}</Text>
             {entity.subtitle ? <Text className="text-base text-slate-500">{entity.subtitle}</Text> : null}
             <Text className="text-sm text-slate-500 mt-1">
-              {total} song{total === 1 ? '' : 's'}
+              {entity.traditionalOnly ? `${total} traditional song${total === 1 ? '' : 's'} · ` : `${total} song${total === 1 ? '' : 's'}`}
+              {entity.traditionalOnly ? (
+                <Text className="font-medium text-amber-700" onPress={() => router.replace(nativeBrowseHref(browsePath(kind!, entity.slug ?? slug!)) as any)}>Show all {entity.allSongCount}</Text>
+              ) : null}
               {members > 0 ? ` · ${members} member${members === 1 ? '' : 's'} know${members === 1 ? 's' : ''} at least one` : ''}
             </Text>
             {entity.notes ? <Text className="text-sm text-slate-600 mt-3">{entity.notes}</Text> : null}

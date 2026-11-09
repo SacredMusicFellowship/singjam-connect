@@ -14,3 +14,10 @@ describe("browsePath", () => {
     expect(TAG_PATH_TYPE.people).toBeUndefined();
   });
 });
+
+describe("browsePath traditional", () => {
+  it("narrows a page to its traditional songs", () => {
+    expect(browsePath("culture", "American", { traditional: true })).toBe("/cultures/American?traditional=1");
+    expect(browsePath("culture", "american")).toBe("/cultures/american");
+  });
+});

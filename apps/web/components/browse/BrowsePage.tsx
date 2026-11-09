@@ -35,11 +35,11 @@ function TagLinks({ label, tags }: { label: string; tags: LinkedTag[] }) {
   );
 }
 
-export default async function BrowsePage({ kind, slug }: { kind: BrowseKind; slug: string }) {
+export default async function BrowsePage({ kind, slug, traditional = false }: { kind: BrowseKind; slug: string; traditional?: boolean }) {
   const decoded = decodeURIComponent(slug);
-  const entity = await loadBrowseEntity(kind, decoded);
+  const entity = await loadBrowseEntity(kind, decoded, traditional);
   if (!entity) notFound();
-  if (entity.slug && entity.slug !== decoded) redirect(browsePath(kind, entity.slug));
+  if (entity.slug && entity.slug !== decoded) redirect(browsePath(kind, entity.slug, { traditional }));
   const [{ songs, members }, meta, related] = await Promise.all([
     loadBrowseSongs(entity.songIds),
     loadBrowseFilterMeta(entity.songIds),
@@ -58,7 +58,7 @@ export default async function BrowsePage({ kind, slug }: { kind: BrowseKind; slu
         <h1 className="text-2xl font-semibold text-slate-900 text-balance">{entity.name}</h1>
         {entity.subtitle && <p className="text-base text-slate-500">{entity.subtitle}</p>}
         <p className="text-sm text-slate-500">
-          {total} song{total === 1 ? "" : "s"}
+          {entity.traditionalOnly ? <>{total} traditional song{total === 1 ? "" : "s"} · <Link href={browsePath(kind, entity.slug ?? decoded)} className="font-medium text-amber-700 hover:underline">Show all {entity.allSongCount}</Link></> : <>{total} song{total === 1 ? "" : "s"}</>}
           {members > 0 && <> · {members} member{members === 1 ? "" : "s"} know{members === 1 ? "s" : ""} at least one</>}
         </p>
       </div>
@@ -102,10 +102,10 @@ export default async function BrowsePage({ kind, slug }: { kind: BrowseKind; slu
   );
 }
 
-export async function browseMetadata(kind: BrowseKind, slug: string) {
-  const entity = await loadBrowseEntity(kind, decodeURIComponent(slug));
+export async function browseMetadata(kind: BrowseKind, slug: string, traditional = false) {
+  const entity = await loadBrowseEntity(kind, decodeURIComponent(slug), traditional);
   if (!entity) return { title: KIND_LABEL[kind] };
-  const title = `${entity.name} | ${KIND_LABEL[kind]}`;
+  const title = `${traditional ? "Traditional · " : ""}${entity.name} | ${KIND_LABEL[kind]}`;
   const description = `${entity.songIds.length} songs on SingJam: ${KIND_LABEL[kind].toLowerCase()} ${entity.name}. Find people to sing them with.`;
   return { title, description, openGraph: { title, description } };
 }

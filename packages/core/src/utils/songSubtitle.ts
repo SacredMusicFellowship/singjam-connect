@@ -30,7 +30,7 @@ export function knownByRecording(byline: string | null | undefined, displayArtis
 // One part of a song card's credits: `lead` is plain text before it ("Tune: "),
 // and `link` the page it opens. People, artists and tags are linked by name
 // (each is unique; see loadBrowseEntity), tunes and texts by slug.
-export type CardCredit = { lead?: string; text: string; link: { kind: BrowseKind; key: string } | null };
+export type CardCredit = { lead?: string; text: string; link: { kind: BrowseKind; key: string; traditional?: boolean } | null };
 
 // What tells a song apart when it isn't known by a recording (migrations 211-212).
 export type CardIdentity = {
@@ -74,7 +74,7 @@ export function songCardCredits(o: {
   const traditional = named.length < o.composers.length && !o.identity?.tune;
   const culture = o.cultures[0];
   const writers: CardCredit[] = [
-    ...(traditional ? [culture ? { lead: "Trad. · ", text: culture, link: { kind: "culture" as const, key: culture } } : { text: "Trad.", link: null }] : []),
+    ...(traditional ? [culture ? { text: `Trad. · ${culture}`, link: { kind: "culture" as const, key: culture, traditional: true } } : { text: "Trad.", link: null }] : []),
     ...named.map((name): CardCredit => {
       const w = name.trim().split(" ");
       return { text: w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(" ")}` : name, link: { kind: "person", key: name } };

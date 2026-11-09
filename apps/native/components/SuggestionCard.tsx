@@ -89,7 +89,7 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
       {i > 0 ? ', ' : null}
       {c.lead ?? null}
       {c.link && onOpenBrowse ? (
-        <Text onPress={() => onOpenBrowse(browsePath(c.link!.kind, c.link!.key))} suppressHighlighting={false}>{c.text}</Text>
+        <Text onPress={() => onOpenBrowse(browsePath(c.link!.kind, c.link!.key, { traditional: c.link!.traditional }))} suppressHighlighting={false}>{c.text}</Text>
       ) : c.text}
     </Text>
   ));

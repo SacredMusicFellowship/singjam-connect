@@ -1,4 +1,4 @@
-export type ImportRow = { title: string; artist: string; writers: string; tags: string };
+export type ImportRow = { title: string; artist: string; writers: string; tags: string; first_line: string };
 
 function splitLine(line: string): string[] {
   const cols: string[] = [];
@@ -15,7 +15,7 @@ function splitLine(line: string): string[] {
   return cols;
 }
 
-// Reads title, artist, writers and tags columns. With a header row the columns
+// Reads title, artist, writers, tags and first_line columns. With a header row the columns
 // can come in any order; without one they are title, artist.
 export function parseImportCsv(text: string): ImportRow[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
@@ -23,12 +23,12 @@ export function parseImportCsv(text: string): ImportRow[] {
   const head = splitLine(lines[0]).map((c) => c.toLowerCase());
   const hasHeader = head.includes("title") || head.includes("song");
   const col = (name: string, fallback: number) => (hasHeader ? head.indexOf(name) : fallback);
-  const at = { title: hasHeader ? Math.max(head.indexOf("title"), head.indexOf("song")) : 0, artist: col("artist", 1), writers: col("writers", -1), tags: col("tags", -1) };
+  const at = { title: hasHeader ? Math.max(head.indexOf("title"), head.indexOf("song")) : 0, artist: col("artist", 1), writers: col("writers", -1), tags: col("tags", -1), first_line: hasHeader ? Math.max(head.indexOf("first_line"), head.indexOf("first line")) : -1 };
   return (hasHeader ? lines.slice(1) : lines)
     .map((line) => {
       const cols = splitLine(line);
       const get = (i: number) => (i >= 0 ? cols[i] ?? "" : "");
-      return { title: get(at.title), artist: get(at.artist), writers: get(at.writers), tags: get(at.tags) };
+      return { title: get(at.title), artist: get(at.artist), writers: get(at.writers), tags: get(at.tags), first_line: get(at.first_line) };
     })
     .filter((r) => r.title);
 }
@@ -41,6 +41,7 @@ export function importRowBody(row: ImportRow) {
     artist: row.artist,
     ...(row.writers ? { writers: row.writers } : {}),
     ...(row.tags ? { tags: row.tags } : {}),
+    ...(row.first_line ? { first_line: row.first_line } : {}),
     ...(row.writers && !row.artist ? { no_recording: true } : {}),
   };
 }

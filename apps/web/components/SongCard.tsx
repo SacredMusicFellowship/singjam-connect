@@ -34,7 +34,7 @@ function Credits({ credits }: { credits: CardCredit[] }) {
       {i > 0 && ", "}
       {c.lead}
       {c.link ? (
-        <Link href={browsePath(c.link.kind, c.link.key)} className="relative z-10 hover:text-amber-700 hover:underline">{c.text}</Link>
+        <Link href={browsePath(c.link.kind, c.link.key, { traditional: c.link.traditional })} className="relative z-10 hover:text-amber-700 hover:underline">{c.text}</Link>
       ) : c.text}
     </Fragment>
   ));

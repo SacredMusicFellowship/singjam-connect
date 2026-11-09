@@ -19,8 +19,8 @@ async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): P
 // is filled in afterwards by the enrichment job; nobody reviews it by hand.
 // Older clients send only title/artist; those are matched on Spotify here.
 // Admins and song editors (the CSV import) may also send sourced writers and
-// tags, which enrichment then leaves alone, and no_recording for a traditional
-// song that has no recording to match.
+// tags and a first line, which enrichment then leaves alone, and no_recording
+// for a traditional song that has no recording to match.
 export async function POST(req: Request) {
   const supabase = await supabaseServer();
   let user = (await supabase.auth.getUser()).data.user ?? null;
@@ -49,10 +49,11 @@ export async function POST(req: Request) {
   const db = admin();
   const writers = parseWriters(body.writers);
   const tagSpecs = parseTagSpecs(body.tags);
-  if (writers.length || tagSpecs.length) {
+  const firstLine = typeof body.first_line === "string" ? body.first_line.trim() || null : null;
+  if (writers.length || tagSpecs.length || firstLine) {
     const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).single();
     if (!["admin", "song_editor"].includes(profile?.role)) {
-      return NextResponse.json({ error: "Only song editors can set writers and tags when adding a song" }, { status: 403 });
+      return NextResponse.json({ error: "Only song editors can set writers, tags or a first line when adding a song" }, { status: 403 });
     }
   }
   const existing = await findExistingSong(db, [title, body.title.trim()], artist);
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
 
   const { data: song, error: songErr } = await db
     .from("songs")
-    .insert({ title, display_artist: artist, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString() })
+    .insert({ title, display_artist: artist, first_line: firstLine, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString() })
     .select("id, slug")
     .single();
   if (songErr || !song) {
