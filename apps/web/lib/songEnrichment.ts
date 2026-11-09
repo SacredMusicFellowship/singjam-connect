@@ -50,7 +50,7 @@ const FIELD_RULES: Record<Field, string> = {
   genres: `genres: 1 to 3, each from: ${SONG_GENRES.join(", ")}`,
   themes: `themes: 1 to 3 lyrical themes, each from: ${SONG_THEMES.join(", ")}`,
   languages: "languages: languages it is sung in, plain English names",
-  cultures: `cultures: where the song comes from (nationality, ethnicity or region), each from: ${SONG_CULTURES.join(", ")}. Never "British". Religious traditions go in communities`,
+  cultures: `cultures: where the song comes from (nationality, ethnicity or region), each from: ${SONG_CULTURES.join(", ")}. Never "British". Religious traditions go in communities. Name the song's own musical tradition, never the performers' ethnicity: a spiritual or a traditional blues is African American; a soul or hip-hop record by Black artists gets no culture for that reason alone`,
   forms: `forms: what kind of piece it is, only if it clearly is one, each from: ${SONG_FORMS.join(", ")}. Empty for an ordinary popular song`,
   occasions: `occasions: when it is traditionally sung, only if it is strongly tied to one, each from: ${SONG_OCCASIONS.join(", ")}. Empty if none`,
   communities: `communities: the religious tradition or community it belongs to, only if it clearly belongs to one, each from: ${SONG_COMMUNITIES.join(", ")}. Empty if none`,

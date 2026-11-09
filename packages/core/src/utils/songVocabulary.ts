@@ -36,20 +36,17 @@ export const SONG_THEMES = [
 
 // Where a song comes from: nationality, ethnicity or region. Religious traditions are communities.
 export const SONG_CULTURES = [
-  "Aboriginal Australian", "African American", "African Traditional", "American", "Arab", "Argentine",
-  "Australian", "Bahamian", "Bangladeshi", "Belgian", "Brazilian", "Cajun",
-  "Cambodian", "Cameroonian", "Canadian", "Chilean", "Chinese", "Colombian",
-  "Creole", "Cuban", "Czech", "Danish", "Dutch", "East African",
-  "Egyptian", "English", "Ethiopian", "Filipino", "Finnish", "First Nations/Native American",
-  "French", "German", "Ghanaian", "Greek", "Haitian", "Hawaiian",
-  "Hungarian", "Icelandic", "Indian", "Indonesian", "Irish", "Israeli",
-  "Italian", "Jamaican", "Japanese", "Kenyan", "Korean", "Latin American",
-  "Māori", "Mexican", "Nepali", "New Zealand", "Nigerian", "Norwegian", "Pakistani",
-  "Peruvian", "Polish", "Portuguese", "Puerto Rican", "Romani", "Romanian",
-  "Russian", "Scandinavian", "Scottish", "South African", "Spanish", "Sri Lankan",
-  "Swedish", "Swiss", "Tex-Mex", "Thai", "Trinidadian", "Turkish",
-  "Ukrainian", "Venezuelan", "Vietnamese", "Welsh", "West African", "Yoruba",
-  "Zulu",
+  "Aboriginal Australian", "African American", "African Traditional", "American", "Appalachian",
+  "Arab", "Argentine", "Australian", "Bahamian", "Bangladeshi", "Belgian", "Brazilian", "Cajun",
+  "Cambodian", "Cameroonian", "Canadian", "Chilean", "Chinese", "Colombian", "Creole", "Cuban",
+  "Czech", "Danish", "Dutch", "East African", "Egyptian", "English", "Ethiopian", "Filipino",
+  "Finnish", "First Nations/Native American", "French", "German", "Ghanaian", "Greek",
+  "Gullah Geechee", "Haitian", "Hawaiian", "Hungarian", "Icelandic", "Indian", "Indonesian", "Irish",
+  "Israeli", "Italian", "Jamaican", "Japanese", "Kenyan", "Korean", "Latin American", "Mexican",
+  "Māori", "Nepali", "New Zealand", "Nigerian", "Norwegian", "Pakistani", "Peruvian", "Polish",
+  "Portuguese", "Puerto Rican", "Romani", "Romanian", "Russian", "Scandinavian", "Scottish",
+  "South African", "Spanish", "Sri Lankan", "Swedish", "Swiss", "Tex-Mex", "Thai", "Trinidadian",
+  "Turkish", "Ukrainian", "Venezuelan", "Vietnamese", "Welsh", "West African", "Yoruba", "Zulu",
 ];
 
 // What kind of piece a song is, separate from its musical style.
