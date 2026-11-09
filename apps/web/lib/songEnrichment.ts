@@ -617,7 +617,13 @@ export async function recordEnrichmentUsage(admin: SupabaseClient, songId: strin
   if (error) console.error("[song-enrichment] couldn't record usage:", error.message);
 }
 
-export async function enrichSong(admin: SupabaseClient, songId: string, opts: { spotifyReleaseYear?: number | null; dryRun?: boolean } = {}) {
+// searchFirstLine is off unless asked for: at ~13¢ a song it runs as a separate
+// pass over songs still missing a first line, not on every add.
+export async function enrichSong(
+  admin: SupabaseClient,
+  songId: string,
+  opts: { spotifyReleaseYear?: number | null; dryRun?: boolean; searchFirstLine?: boolean } = {},
+) {
   const { data: song, error } = await admin
     .from("songs")
     .select(
@@ -678,7 +684,7 @@ async function fillSong(
   artist: string | null,
   writers: string[],
   wanted: Field[],
-  opts: { spotifyReleaseYear?: number | null; dryRun?: boolean },
+  opts: { spotifyReleaseYear?: number | null; dryRun?: boolean; searchFirstLine?: boolean },
 ) {
   const context: SongContext = {
     title: s.title,
@@ -691,7 +697,7 @@ async function fillSong(
   const { sources, wikipedia, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear });
   const decision = { ...decideEnrichment(sources), ...decideListedFacts(sources, wikipedia) };
   let firstLineSource: string | null = null;
-  if (wanted.includes("first_line") && !decision.first_line) {
+  if (opts.searchFirstLine && wanted.includes("first_line") && !decision.first_line) {
     const found = await timed("Web search", 180_000, checks, () => searchFirstLine(context, usage));
     if (found) {
       decision.first_line = found.first_line;
