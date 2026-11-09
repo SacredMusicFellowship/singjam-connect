@@ -20,6 +20,7 @@ import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import RolePill from '@/components/RolePill';
+import SongRowTitle, { type SongRowCard } from '@/components/SongRowTitle';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -69,11 +70,10 @@ type SetSong = {
   };
 };
 
-type SongSearchResult = {
+type SongSearchResult = SongRowCard & {
   song_id: string;
   title: string;
   display_artist: string | null;
-  byline?: string | null;
   productions: string[];
 };
 
@@ -196,12 +196,7 @@ function AddSongModal({
               return (
                 <View className="flex-row items-center px-4 py-3 border-b border-zinc-100">
                   <View className="flex-1 mr-3">
-                    <Text className="text-zinc-900 font-medium" numberOfLines={1}>{item.title}</Text>
-                    {songSubtitle(item.productions, item.byline ?? item.display_artist) && (
-                      <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>
-                        <SubtitleText productions={item.productions} artist={item.byline ?? item.display_artist} />
-                      </Text>
-                    )}
+                    <SongRowTitle title={item.title} displayArtist={item.display_artist} productions={item.productions} card={item} />
                   </View>
                   {already ? (
                     <Text className="text-zinc-400 text-sm">Added</Text>
@@ -1520,7 +1515,7 @@ export default function SetDetailScreen() {
                   className={`px-3 py-1 rounded-full border ${sortBy === key ? 'bg-amber-500 border-amber-500' : 'bg-white border-zinc-200'}`}
                 >
                   <Text className={`text-xs font-medium ${sortBy === key ? 'text-white' : 'text-zinc-600'}`}>
-                    {key === 'custom' ? 'Custom' : key === 'title_asc' ? 'A → Z' : 'Z → A'}
+                    {key === 'custom' ? 'Custom' : key === 'title_asc' ? 'A–Z' : 'Z–A'}
                   </Text>
                 </TouchableOpacity>
               ))}

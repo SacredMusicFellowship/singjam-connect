@@ -36,8 +36,8 @@ const PAGE_SIZE = 20;
 
 const SORT_OPTIONS = [
   { value: "popularity" as const, label: "Popular" },
-  { value: "title_asc" as const, label: "A → Z" },
-  { value: "title_desc" as const, label: "Z → A" },
+  { value: "title_asc" as const, label: "A–Z" },
+  { value: "title_desc" as const, label: "Z–A" },
 ];
 
 export default function SongSearch({ initialQuery = "" }: { initialQuery?: string }) {

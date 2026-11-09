@@ -38,8 +38,8 @@ const CONFIDENCE_LEVELS = [
 type ConfidenceKey = (typeof CONFIDENCE_LEVELS)[number]["key"];
 
 const SORT_OPTIONS = [
-  { value: "title_asc" as const, label: "A → Z" },
-  { value: "title_desc" as const, label: "Z → A" },
+  { value: "title_asc" as const, label: "A–Z" },
+  { value: "title_desc" as const, label: "Z–A" },
   { value: "popularity" as const, label: "Popular" },
 ];
 

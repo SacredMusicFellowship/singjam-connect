@@ -52,8 +52,8 @@ type SortBy = 'popularity' | 'title_asc' | 'title_desc';
 
 const SORT_OPTIONS: { key: SortBy; label: string }[] = [
   { key: 'popularity', label: 'Popular' },
-  { key: 'title_asc', label: 'A → Z' },
-  { key: 'title_desc', label: 'Z → A' },
+  { key: 'title_asc', label: 'A–Z' },
+  { key: 'title_desc', label: 'Z–A' },
 ];
 
 function SkeletonCard() {

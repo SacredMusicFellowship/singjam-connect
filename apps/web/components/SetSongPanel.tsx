@@ -7,7 +7,7 @@ import { useSongSearch } from "@/hooks/useSongSearch";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import { type SharedSong, type SortMode, displayedSongs } from "@/lib/setDisplayedSongs";
 import SearchInput from "@/components/SearchInput";
-import SongSubtitle from "@/components/SongSubtitle";
+import SongRowTitle from "@/components/SongRowTitle";
 import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
@@ -200,15 +200,16 @@ export default function SetSongPanel({
     genres: [...expandedState.genres], languages: [...expandedState.languages], themes: [...expandedState.themes],
     cultures: [...expandedState.cultures], forms: [...expandedState.forms], occasions: [...expandedState.occasions],
     communities: [...expandedState.communities], vibe: expandedState.vibe, tonality: expandedState.tonality, meter: expandedState.meter,
-    yearMin: expandedState.yearMin, yearMax: expandedState.yearMax, excludeMine: false, sort: "popularity",
-  }), [expandedState]);
+    yearMin: expandedState.yearMin, yearMax: expandedState.yearMax, excludeMine: false,
+    sort: sortMode === "alpha" ? "title_asc" : sortMode === "za" ? "title_desc" : "popularity",
+  }), [expandedState, sortMode]);
   const { songs: catalogSongs, loading: catalogLoading } = useBrowseSongs(browseFilters, { pageSize: 50 });
   // In the whole catalog, songs more of the group knows come first.
   const groupCount = (id: string) => { const s = sharedSongsMap.get(id); return s ? s.who_else.length + (s.viewer_has ? 1 : 0) : 0; };
   const catalogRanked = useMemo(
-    () => [...catalogSongs].sort((a, b) => groupCount(b.song_id) - groupCount(a.song_id)),
+    () => (sortMode === "popular" ? [...catalogSongs].sort((a, b) => groupCount(b.song_id) - groupCount(a.song_id)) : catalogSongs),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [catalogSongs, sharedSongs]
+    [catalogSongs, sharedSongs, sortMode]
   );
 
   function buildOptimistic(songId: string, hint: { title: string; display_artist: string | null; slug?: string | null; year?: number | null }) {
@@ -353,9 +354,9 @@ export default function SetSongPanel({
     <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-base font-semibold">{canEdit ? "Add songs" : "Songs you share"}</h2>
-        {!searchQuery && hasSharedSongs && source === "group" && (
+        {!searchQuery && ((hasSharedSongs && source === "group") || source === "all") && (
           <div className="flex gap-0.5 rounded-lg bg-zinc-100 p-0.5">
-            {(["popular", "alpha", "za", ...(!isSolo ? ["leader"] : [])] as SortMode[]).map((mode) => (
+            {(["popular", "alpha", "za", ...(!isSolo && source === "group" ? ["leader"] : [])] as SortMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => { setSortMode(mode); if (mode !== "leader") setSelectedLeaders(new Set()); }}
@@ -363,7 +364,7 @@ export default function SetSongPanel({
                   sortMode === mode ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                 }`}
               >
-                {mode === "popular" ? "Popular" : mode === "alpha" ? "A → Z" : mode === "za" ? "Z → A" : "Leader"}
+                {mode === "popular" ? "Popular" : mode === "alpha" ? "A–Z" : mode === "za" ? "Z–A" : "Leader"}
               </button>
             ))}
           </div>
@@ -400,7 +401,7 @@ export default function SetSongPanel({
               {([["group", isSolo ? "Your songs" : "Your group knows"], ["all", "All songs"]] as const).map(([key, label]) => (
                 <button
                   key={key}
-                  onClick={() => setSource(key)}
+                  onClick={() => { setSource(key); if (key === "all" && sortMode === "leader") { setSortMode("popular"); setSelectedLeaders(new Set()); } }}
                   className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${source === key ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
                 >
                   {label}
@@ -449,10 +450,7 @@ export default function SetSongPanel({
                       onClick={() => handleSearchSongSelect(song)}
                     />
                     <div className={`min-w-0 flex-1 ${inSet ? "opacity-40" : ""}`}>
-                      <div className="flex items-baseline gap-1.5 flex-wrap">
-                        <span className="text-sm font-medium text-zinc-900">{song.title}</span>
-                        <SongSubtitle productions={song.productions} artist={song.byline ?? song.display_artist} className="text-xs text-zinc-400" />
-                      </div>
+                      <SongRowTitle title={song.title} displayArtist={song.display_artist} productions={song.productions} card={song} />
                       <RowPills meta={metaById.get(song.song_id)} />
                       {shared && <WhoKnows s={shared} />}
                       {inSet && <p className="text-xs text-zinc-400">Already in set</p>}
@@ -522,12 +520,7 @@ export default function SetSongPanel({
                 <li key={song.song_id} className="flex items-start gap-3 py-2.5">
                   <AddButton inSet={inSet} isAdding={false} onClick={() => handleSearchSongSelect(song)} />
                   <div className={`min-w-0 flex-1 ${inSet ? "opacity-40" : ""}`}>
-                    <div className="flex items-baseline gap-1.5 flex-wrap">
-                      <a href={`/songs/${song.slug ?? song.song_id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-zinc-900 hover:underline">
-                        {song.title}
-                      </a>
-                      <SongSubtitle productions={song.productions} artist={song.byline ?? song.display_artist} className="text-xs text-zinc-400" />
-                    </div>
+                    <SongRowTitle title={song.title} href={`/songs/${song.slug ?? song.song_id}`} displayArtist={song.display_artist} productions={song.productions} card={song} />
                     <RowPills meta={metaById.get(song.song_id)} />
                     {shared && !isSolo && <WhoKnows s={shared} />}
                   </div>
@@ -574,21 +567,7 @@ export default function SetSongPanel({
                     />
                   )}
                   <div className={`min-w-0 flex-1 ${inSet ? "opacity-40" : ""}`}>
-                    <div className="flex items-baseline gap-1.5 flex-wrap">
-                      {s.slug ? (
-                        <a
-                          href={`/songs/${s.slug}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-zinc-900 hover:underline"
-                        >
-                          {s.title}
-                        </a>
-                      ) : (
-                        <span className="text-sm font-medium text-zinc-900">{s.title}</span>
-                      )}
-                      <SongSubtitle productions={productionsBySong.get(s.song_id)} artist={s.display_artist} className="text-xs text-zinc-400" />
-                    </div>
+                    <SongRowTitle title={s.title} href={s.slug ? `/songs/${s.slug}` : null} displayArtist={s.display_artist} productions={productionsBySong.get(s.song_id)} card={s.card ?? {}} />
                     <RowPills meta={metaById.get(s.song_id)} />
                     {!isSolo && <WhoKnows s={s} />}
                   </div>

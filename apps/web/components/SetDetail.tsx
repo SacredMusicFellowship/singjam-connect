@@ -1528,8 +1528,8 @@ export default function SetDetail({
           <div className="flex gap-0.5 rounded-lg bg-zinc-100 p-0.5">
             {([
               { value: "custom", label: "Custom" },
-              { value: "az",     label: "A → Z" },
-              { value: "za",     label: "Z → A" },
+              { value: "az",     label: "A–Z" },
+              { value: "za",     label: "Z–A" },
               { value: "popularity", label: "Popular" },
             ] as const).map(({ value, label }) => (
               <button

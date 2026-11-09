@@ -52,8 +52,8 @@ const CONFIDENCE_LEVELS: { key: Exclude<ConfidenceFilter, 'all'>; label: string 
 ];
 
 const SORT_OPTIONS: { key: SortOrder; label: string }[] = [
-  { key: 'title_asc', label: 'A → Z' },
-  { key: 'title_desc', label: 'Z → A' },
+  { key: 'title_asc', label: 'A–Z' },
+  { key: 'title_desc', label: 'Z–A' },
   { key: 'popularity', label: 'Popular' },
 ];
 
