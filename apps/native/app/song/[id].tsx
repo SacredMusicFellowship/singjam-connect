@@ -20,6 +20,9 @@ import {
   productionCredits,
   type ProductionCredit,
   sortRecordingsByYear,
+  knownTuneHint,
+  NO_MELODIES,
+  type SongMelodies as Melodies,
   enrichmentInProgress,
   ENRICHMENT_WAIT_MS,
   songCreditLines,
@@ -36,6 +39,7 @@ import { supabase } from '@/lib/supabase';
 import { nativeBrowseHref } from '@/lib/browseLinks';
 import CreditText from '@/components/CreditText';
 import { ensureLeadVoice } from '@/lib/leadVoice';
+import SongMelodies from '@/components/SongMelodies';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import AddToSetModal from '@/components/AddToSetModal';
 import ContentContainer from '@/components/ContentContainer';
@@ -218,6 +222,8 @@ export default function SongDetailScreen() {
   const [song, setSong] = useState<SongDetail | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [myConfidence, setMyConfidence] = useState<string | null>(null);
+  const [melodies, setMelodies] = useState<Melodies | null>(null);
+  const melodiesFor = useRef<string | null>(null);
   const [myKey, setMyKey] = useState<string | null>(null);
   const [keyPickerVisible, setKeyPickerVisible] = useState(false);
   const [jammers, setJammers] = useState<SongJammers | null>(null);
@@ -274,6 +280,11 @@ export default function SongDetailScreen() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
+    const forSong = songId;
+    melodiesFor.current = forSong;
+    supabase.rpc('song_melodies', { p_song_id: forSong }).then(({ data: m }) => {
+      if (melodiesFor.current === forSong) setMelodies((m as Melodies | null) ?? NO_MELODIES);
+    });
 
     const [songRes, confidenceRes, profileRes, jammersRes, count] = await Promise.all([
       supabase
@@ -589,6 +600,22 @@ export default function SongDetailScreen() {
           </>
         ) : (
           <>
+            {(() => {
+              const known = knownTuneHint(melodies, myConfidence);
+              return known ? (
+                <View className="w-full flex-row flex-wrap items-center gap-2 mb-1">
+                  <Text className="text-sm text-slate-600">
+                    You know the tune from <Text className="font-medium">{known.title}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => myUserId ? addToRepertoire('lead') : router.push('/(auth)/sign-in' as any)}
+                    className="rounded-full bg-amber-100 px-3 py-1"
+                  >
+                    <Text className="text-sm font-medium text-amber-800">Add as Lead</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null;
+            })()}
             <TouchableOpacity
               onPress={handleAddToRepertoire}
               className="rounded-full border border-indigo-500 bg-indigo-500 px-4 py-1.5"
@@ -795,6 +822,9 @@ export default function SongDetailScreen() {
             ) : null}
           </View>
         ) : null}
+
+        <SongMelodies title="Other melodies" items={melodies?.other_melodies ?? []} onOpen={(id) => router.push(`/song/${id}` as any)} />
+        <SongMelodies title="Also sung to this tune" items={melodies?.same_tune ?? []} onOpen={(id) => router.push(`/song/${id}` as any)} />
 
         {/* Media — inline YouTube player plus hand-off buttons for both apps */}
         {hasMedia ? (

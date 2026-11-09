@@ -6,7 +6,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import CreditLinks from "@/components/CreditLinks";
-import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, songCreditLines, ENRICHMENT_WAIT_MS } from "@singjam/core";
+import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, songCreditLines, ENRICHMENT_WAIT_MS, knownTuneHint, NO_MELODIES, type SongMelodies as Melodies } from "@singjam/core";
+import SongMelodies from "@/components/SongMelodies";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
@@ -141,6 +142,8 @@ export default function SongPageContent() {
   const [currentUserEntry, setCurrentUserEntry] = useState<JammerEntry | null>(null);
   const [userSets, setUserSets] = useState<{ id: string; name: string }[] | null>(null);
   const [songInSets, setSongInSets] = useState<Set<string>>(new Set());
+  const [melodies, setMelodies] = useState<Melodies | null>(null);
+  const melodiesFor = useRef<string | null>(null);
   const supabase = supabaseBrowser();
 
   usePinToTopOnLoad(data !== null);
@@ -148,6 +151,7 @@ export default function SongPageContent() {
   useEffect(() => {
     (async () => {
       setData(null);
+      setMelodies(null);
       setSongUsers(null);
       setSongUsersLoading(false);
       setNotFound(false);
@@ -167,6 +171,10 @@ export default function SongPageContent() {
       }
 
       const song = songRes.data;
+      melodiesFor.current = song.id;
+      supabase.rpc("song_melodies", { p_song_id: song.id }).then(({ data: m }) => {
+        if (melodiesFor.current === song.id) setMelodies((m as Melodies | null) ?? NO_MELODIES);
+      });
 
       const [profileRes, userSongRes, popularityJson] = await Promise.all([
         user
@@ -406,7 +414,7 @@ export default function SongPageContent() {
             <p className="mt-1 text-sm text-slate-400">aka: {altTitles.join(" · ")}</p>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
+            <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange} knownTune={knownTuneHint(melodies, confidence)}>
               {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
               {confidence && (
                 <AddToSetPanel
@@ -505,6 +513,9 @@ export default function SongPageContent() {
           )}
         </section>
       )}
+
+      <SongMelodies title="Other melodies" items={melodies?.other_melodies ?? []} />
+      <SongMelodies title="Also sung to this tune" items={melodies?.same_tune ?? []} />
 
       {(() => {
         type ArtistEmbed = { name: string; year: number | null; videoId: string | null; trackId: string | null };
@@ -636,7 +647,7 @@ export default function SongPageContent() {
 
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
+          <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange} knownTune={knownTuneHint(melodies, confidence)}>
             {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
             {confidence && (
               <AddToSetPanel

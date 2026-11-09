@@ -16,6 +16,7 @@ export * from './utils/browseHub';
 export * from './utils/officialYouTube';
 export * from './utils/songEnrichmentRules';
 export * from './utils/hymnary';
+export * from './utils/songMelodies';
 export * from './utils/sameSong';
 export * from './utils/songMissingFields';
 export * from './utils/chordCharts';
