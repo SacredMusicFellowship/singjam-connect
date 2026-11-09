@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { importRowBody, parseImportCsv, type ImportRow } from "@/lib/songImportCsv";
+import EnrichmentSpend from "@/components/EnrichmentSpend";
 
 type RowResult =
   | { status: "pending" }
@@ -71,6 +72,7 @@ export default function ImportCSVPage() {
 
   return (
     <div className="space-y-6">
+      <EnrichmentSpend refreshKey={progress === rows.length && rows.length > 0 ? 1 : 0} />
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Import songs from CSV</h1>
         <p className="mt-1 text-sm text-slate-500">

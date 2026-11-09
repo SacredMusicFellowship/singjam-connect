@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  usageCost,
   agreedLandmarks,
   decideEnrichment,
   decideListedFacts,
@@ -526,6 +527,16 @@ export async function tagIds(admin: SupabaseClient, type: TagType, names: string
 
 // Gathers every source for one song, decides with the shared rules, and fills
 // only fields that are still empty — nothing someone has set is overwritten.
+// Keeps what a run cost (migration 214). Best effort: a failed write never
+// fails the enrichment itself.
+export async function recordEnrichmentUsage(admin: SupabaseClient, songId: string, kind: "fill" | "review", usage: ModelUsage[]) {
+  if (!usage.length) return;
+  const { usd, unpriced } = usageCost(usage);
+  if (unpriced.length) console.warn(`[song-enrichment] no price for ${unpriced.join(", ")}; cost recorded without them`);
+  const { error } = await admin.from("song_enrichment_runs").insert({ song_id: songId, kind, usage, cost_usd: Number(usd.toFixed(5)) });
+  if (error) console.error("[song-enrichment] couldn't record usage:", error.message);
+}
+
 export async function enrichSong(admin: SupabaseClient, songId: string, opts: { spotifyReleaseYear?: number | null; dryRun?: boolean } = {}) {
   const { data: song, error } = await admin
     .from("songs")
@@ -568,7 +579,9 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
       console.error("[song-enrichment] landmark recordings failed:", e instanceof Error ? e.message : e);
       return { added: [] as LandmarkResult[], usage: [] as ModelUsage[] };
     });
-    return { ...filled, usage: [...filled.usage, ...landmarks.usage], landmarks: landmarks.added };
+    const usage = [...filled.usage, ...landmarks.usage];
+    if (!opts.dryRun) await recordEnrichmentUsage(admin, songId, "fill", usage);
+    return { ...filled, usage, landmarks: landmarks.added };
   } finally {
     if (!opts.dryRun) await admin.from("songs").update({ enrichment_finished_at: new Date().toISOString() }).eq("id", songId);
   }
@@ -673,6 +686,7 @@ export async function runEnrichmentReview(admin: SupabaseClient, songId: string,
   try {
     const { usage, ...review } = await proposeEnrichment(admin, songId);
     console.log(`[enrich-review] ${songId}: usage ${JSON.stringify(usage)}`);
+    await recordEnrichmentUsage(admin, songId, "review", usage);
     proposal = { requested_at: requestedAt, finished_at: new Date().toISOString(), ...review };
   } catch (e) {
     console.error(`[enrich-review] ${songId} failed: ${e instanceof Error ? e.message : String(e)}`);
