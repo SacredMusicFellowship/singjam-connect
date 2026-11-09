@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   usageCost,
+  withoutGenericFaithThemes,
   agreedLandmarks,
   decideEnrichment,
   decideListedFacts,
@@ -541,7 +542,7 @@ export async function enrichSong(admin: SupabaseClient, songId: string, opts: { 
   const { data: song, error } = await admin
     .from("songs")
     .select(
-      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_tags(context, tags(type)), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
+      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(count), song_lyricists(count), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
     )
     .eq("id", songId)
     .single();
@@ -622,6 +623,14 @@ async function fillSong(
   }
   const tagFields = [["genres", "genre"], ["themes", "theme"], ["cultures", "culture"], ["languages", "language"],
     ["forms", "form"], ["occasions", "occasion"], ["communities", "community"]] as const;
+  // Faith/Spirituality add nothing to a song already known as religious.
+  const existing = (type: string) => (s.song_tags ?? []).filter((t: any) => t.tags?.type === type).map((t: any) => t.tags.name as string);
+  const religion = {
+    communities: [...existing("community"), ...(wanted.includes("communities") ? decision.communities ?? [] : [])],
+    forms: [...existing("form"), ...(wanted.includes("forms") ? decision.forms ?? [] : [])],
+    genres: [...existing("genre"), ...(wanted.includes("genres") ? decision.genres ?? [] : [])],
+  };
+  if (decision.themes) decision.themes = withoutGenericFaithThemes(decision.themes, religion);
   for (const [field, type] of tagFields) {
     const names = decision[field];
     if (!names?.length || !wanted.includes(field)) continue;

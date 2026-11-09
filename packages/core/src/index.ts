@@ -57,3 +57,4 @@ export * from './utils/songSubtitle';
 export * from './utils/smallFormats';
 export * from './utils/songCreditLines';
 export * from './utils/modelCost';
+export * from './utils/genericThemes';

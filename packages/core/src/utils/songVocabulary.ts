@@ -54,7 +54,7 @@ export const SONG_CULTURES = [
 
 // What kind of piece a song is, separate from its musical style.
 export const SONG_FORMS = [
-  "Action song", "Anthem", "Ballad", "Call and response", "Carol", "Chant",
+  "Action song", "Anthem", "Ballad", "Barbershop tag", "Call and response", "Carol", "Chant",
   "Circle song", "Cumulative song", "Drinking song", "Freedom song", "Hymn", "Lament", "Lined hymn",
   "Liturgical setting", "Lullaby", "Mantra", "Nigun", "Nursery rhyme", "Piyyut", "Psalm setting",
   "Round / Canon", "Sea song", "Shanty", "Singing game", "Work song", "Worship song", "Zemer",
