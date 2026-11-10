@@ -379,7 +379,7 @@ export default function SetSongRow({
           {chord_chart_url ? (
             <>
               <ChordsLink href={chord_chart_url} />
-              {song.songs.chord_chart_pending && (
+              {(isAdmin || isSongEditor) && song.songs.chord_chart_pending && (
                 <span title="Added recently — not yet checked by a song editor" className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">unreviewed</span>
               )}
             </>

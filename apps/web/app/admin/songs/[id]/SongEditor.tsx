@@ -6,7 +6,7 @@ import CatalogLinkField from "@/components/catalog/CatalogLinkField";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
-import { MAX_RECORDINGS, samePeople, songTagNames, songTraditionTag, type EnrichmentReview, type SongTagRow } from "@singjam/core";
+import { MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -26,6 +26,22 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 type Lookup = { id: string; name: string };
+
+const creditText = (list: CardCredit[]) => list.map((c) => `${c.lead ?? ""}${c.text}${c.suffix ?? ""}`).join(", ");
+
+// How the song's card will read (songCardCredits, as every song card): the
+// title with its writers in brackets, and the line under it.
+function CardPreview({ credits, title }: { credits: { writers: CardCredit[]; line: CardCredit[] }; title: string }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="font-medium text-zinc-900">
+        {title || "Untitled"}
+        {credits.writers.length > 0 && <span className="ml-1 font-normal text-zinc-400">({creditText(credits.writers)})</span>}
+      </div>
+      {credits.line.length > 0 && <div className="text-sm text-zinc-500">{creditText(credits.line)}</div>}
+    </div>
+  );
+}
 type ProductionLookup = Lookup & { year: number | null };
 
 function productionLabel(p: ProductionLookup) {
@@ -153,6 +169,16 @@ export default function SongEditor({
   const [tuneId, setTuneId] = useState<string>(song?.tune_id ?? "");
   const [allTexts, setAllTexts] = useState(initialTexts);
   const [allTunes, setAllTunes] = useState(initialTunes);
+  // The text's first quoted source, which a card without a named tune shows.
+  const [textSource, setTextSource] = useState<SourceRef | null>(null);
+  useEffect(() => {
+    if (!textId) { setTextSource(null); return; }
+    let live = true;
+    supabase.from("text_sources").select("corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation")
+      .eq("text_id", textId).neq("relation", "inspired").order("id")
+      .then(({ data }) => { if (live) setTextSource(((data ?? []) as SourceRef[])[0] ?? null); });
+    return () => { live = false; };
+  }, [textId, supabase]);
 
   const initialComposerIds = song?.song_composers.map((x) => x.person_id) ?? [];
   const initialLyricistIds = song?.song_lyricists.map((x) => x.person_id) ?? [];
@@ -698,6 +724,26 @@ export default function SongEditor({
               {song?.byline ? <> Now: <span className="text-slate-600">{song.byline}</span></> : null}
             </p>
           </Field>
+          <div className="sm:col-span-2 space-y-1">
+            <p className="text-sm font-medium text-slate-700">Card preview</p>
+            <CardPreview
+              title={title}
+              credits={songCardCredits({
+                title,
+                // The override decides at once; Automatic follows the saved song's line until you save.
+                byline: knownByRecording === true ? undefined : knownByRecording === false ? "\u0000writers" : song?.byline,
+                displayArtist: knownByRecording === false ? null : displayArtist || null,
+                composers: [...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
+                cultures,
+                recordingArtists: recordingArtists.map((r, i) => ({ name: allArtists.find((a) => a.id === r.id)?.name ?? "", year: r.year, position: i })).filter((r) => r.name),
+                identity: {
+                  tune: allTunes.find((t) => t.id === tuneId)?.tune_label ?? null,
+                  source: textSource,
+                  first_line: firstLine || null,
+                },
+              })}
+            />
+          </div>
         </div>
 
         {(() => {

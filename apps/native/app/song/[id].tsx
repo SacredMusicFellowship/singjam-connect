@@ -760,7 +760,7 @@ export default function SongDetailScreen() {
           <ChordChartControls
             songId={song.id}
             url={song.chord_chart_url}
-            pending={song.chord_chart_pending}
+            pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
             signedIn={!!myUserId}
             onChanged={({ url, pending }) => setSong((prev) => (prev ? { ...prev, chord_chart_url: url, chord_chart_pending: pending } : prev))}
           />

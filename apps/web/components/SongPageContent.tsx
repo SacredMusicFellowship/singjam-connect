@@ -431,7 +431,7 @@ export default function SongPageContent() {
                 <ChordChartSlot
                   songId={song.id}
                   url={song.chord_chart_url}
-                pending={song.chord_chart_pending}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                   canAdd={isLoggedIn}
                   size="md"
                   onAdded={handleChartAdded}
@@ -442,7 +442,7 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                pending={song.chord_chart_pending}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -664,7 +664,7 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                pending={song.chord_chart_pending}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -675,7 +675,7 @@ export default function SongPageContent() {
             <ChordChartSlot
               songId={song.id}
               url={song.chord_chart_url}
-                pending={song.chord_chart_pending}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
               canAdd={isLoggedIn}
               size="md"
               onAdded={handleChartAdded}

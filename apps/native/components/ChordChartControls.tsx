@@ -16,7 +16,7 @@ async function post(path: string, body: unknown) {
 }
 
 // Mirrors web's ChordChartSlot + ReportChartButton: anyone signed in can add an
-// Ultimate Guitar chart (it shows as "unreviewed" until a song editor checks it)
+// Ultimate Guitar chart (admins and song editors see "not yet reviewed" until a song editor checks it)
 // or report a problem with the current one.
 export default function ChordChartControls({
   songId,

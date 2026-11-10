@@ -5,8 +5,8 @@ import ChordsLink from "@/components/ChordsLink";
 import { UltimateGuitarIcon } from "@/components/setDetailShared";
 
 // A song's chord chart in a row of controls: the Chords link when there is one
-// (marked "unreviewed" until someone other than the person who added it checks
-// it); for anyone signed in, the dashed "add chart" button and URL field when
+// (marked "unreviewed", for admins and song editors only, until a song editor
+// checks it); for anyone signed in, the dashed "add chart" button and URL field when
 // there isn't. Meant for the end of a flex-wrap row: the URL field takes a line
 // of its own beneath it.
 export default function ChordChartSlot({
