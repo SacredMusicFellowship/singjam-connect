@@ -107,4 +107,14 @@ describe("runYouTubeBackfill", () => {
     expect(result.found).toBe(1);
     expect(updates[0].values).toMatchObject({ youtube_url: "https://www.youtube.com/watch?v=ERIEERIEERI", youtube_ok: true });
   });
+
+  it("stops quietly when the daily search quota is used up", async () => {
+    const { admin, updates } = fakeAdmin([], [row("s1", "Ripple", "Grateful Dead")]);
+    mockYouTube(() => ({ error: { message: "Quota exceeded for quota metric 'Search Queries' and limit 'Search Queries per day'", errors: [{ reason: "rateLimitExceeded" }] } }));
+
+    const result = await runYouTubeBackfill(admin, "key");
+
+    expect(result.quotaExceeded).toBe(true);
+    expect(updates).toEqual([]);
+  });
 });

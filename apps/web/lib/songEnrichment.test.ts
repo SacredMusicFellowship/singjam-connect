@@ -201,7 +201,7 @@ function musicBrainzKnows(recordings: { artist: string; title: string; date: str
   );
 }
 
-const lowBridge = { title: "Low Bridge, Everybody Down", first_line: null, youtube_url: null, tune_id: null, song_recording_artists: [{ count: 0 }], song_composers: [], song_lyricists: [], song_tags: [] };
+const lowBridge = { title: "Low Bridge, Everybody Down", first_line: null, youtube_url: null, tune_id: null, known_by_recording: null, song_recording_artists: [{ count: 0 }], song_composers: [], song_lyricists: [], song_tags: [] };
 
 describe("addFirstRecordings", () => {
   beforeEach(() => {
@@ -236,6 +236,14 @@ describe("addFirstRecordings", () => {
     const { db } = fakeSongDb(lowBridge);
 
     expect((await run(db, { dryRun: true })).added.map((a: any) => a.artist)).toEqual(["Pete Seeger", "The Weavers"]);
+  });
+
+  it("leaves a song marked as not known by a recording alone", async () => {
+    answers.gpt = answers.claude = [{ artist: "George Harrison", year: 1982, why: "original", recorded_title: "That's the Way It Goes" }];
+    const { db, inserted } = fakeSongDb({ ...lowBridge, title: "That's the Way It Goes", known_by_recording: false });
+
+    expect((await run(db)).added).toEqual([]);
+    expect(inserted).toEqual([]);
   });
 
   it("leaves a song that names its tune alone", async () => {

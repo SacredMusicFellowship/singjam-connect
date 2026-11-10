@@ -22,7 +22,11 @@ const titlesOf = (r: Row) =>
 async function youtube(path: string, apiKey: string) {
   const res = await fetch(`https://www.googleapis.com/youtube/v3/${path}&key=${apiKey}`);
   const json = await res.json();
-  const quotaExceeded = (json.error?.errors ?? []).some((e: { reason?: string }) => e.reason === "quotaExceeded");
+  // The daily search limit comes back as rateLimitExceeded with a "Quota exceeded" message, not only quotaExceeded.
+  const quotaExceeded = !!json.error && (
+    (json.error.errors ?? []).some((e: { reason?: string }) => e.reason === "quotaExceeded" || e.reason === "rateLimitExceeded")
+    || /quota exceeded/i.test(json.error.message ?? "")
+  );
   if (json.error && !quotaExceeded) throw new Error(`YouTube API: ${json.error.message}`);
   return { json, quotaExceeded };
 }

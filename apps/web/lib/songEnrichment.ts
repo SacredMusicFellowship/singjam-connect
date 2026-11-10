@@ -703,14 +703,15 @@ export async function addFirstRecordings(admin: SupabaseClient, songId: string, 
   const usage: ModelUsage[] = [];
   const { data: song } = await admin
     .from("songs")
-    .select("title, first_line, youtube_url, tune_id, song_recording_artists(count), song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name))")
+    .select("title, first_line, youtube_url, tune_id, known_by_recording, song_recording_artists(count), song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name))")
     .eq("id", songId)
     .single();
   const s = song as any;
   // A song that names its tune (Love Divine to Hyfrydol) or already has a
   // reference recording is left alone: a model can't tell which melody a
-  // recording of the words uses.
-  if (!s || s.song_recording_artists?.[0]?.count || s.tune_id || s.youtube_url) return { added: [] as FirstRecordingResult[], usage };
+  // recording of the words uses. Nor one marked as not known by a recording (a
+  // camp song: a model will find a different song with the same title).
+  if (!s || s.song_recording_artists?.[0]?.count || s.tune_id || s.youtube_url || s.known_by_recording === false) return { added: [] as FirstRecordingResult[], usage };
   const writers = [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])]
     .map((r: any) => r.people?.name as string | undefined)
     .filter((n, i, all): n is string => !!n && all.indexOf(n) === i);
