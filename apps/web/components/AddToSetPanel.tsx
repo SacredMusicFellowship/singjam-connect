@@ -5,6 +5,9 @@ import { popoverSideFor } from "@/lib/popoverSide";
 
 type SetInfo = { id: string; name: string };
 
+// The button keeps one size open or closed (smaller on phones), so it doesn't jump when tapped.
+const BUTTON_SIZE = "rounded-full border px-3 py-1 text-xs sm:py-1.5 sm:text-sm transition-colors";
+
 export default function AddToSetPanel({
   songId,
   sets,
@@ -88,7 +91,7 @@ export default function AddToSetPanel({
           setOpen(true);
           onOpen?.();
         }}
-        className="rounded-full border border-zinc-200 px-3 py-1 text-xs sm:py-1.5 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+        className={`${BUTTON_SIZE} border-zinc-200 text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700`}
       >
         Add to set
       </button>
@@ -131,7 +134,7 @@ export default function AddToSetPanel({
     <div ref={panelRef} data-popover-open>
       <button
         onClick={() => setOpen(false)}
-        className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition-colors"
+        className={`${BUTTON_SIZE} border-amber-300 bg-amber-50 text-amber-700`}
       >
         Add to set
       </button>
