@@ -37,6 +37,12 @@ export default function SongEditorLayout({ children }: { children: React.ReactNo
           <Link href="/song-editor/history" className="text-slate-600 hover:text-slate-900">
             Song History
           </Link>
+          <Link href="/song-editor/texts" className="text-slate-600 hover:text-slate-900">
+            Texts
+          </Link>
+          <Link href="/song-editor/tunes" className="text-slate-600 hover:text-slate-900">
+            Tunes
+          </Link>
         </nav>
       </div>
       <Suspense fallback={<AdminPageSkeleton />}>

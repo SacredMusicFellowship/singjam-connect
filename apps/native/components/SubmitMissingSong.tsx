@@ -132,7 +132,7 @@ export default function SubmitMissingSong({
             {match.existing ? 'Already in the library: ' : 'Is this the song? '}
             <Text className="font-medium">{match.existing?.title ?? match.title}</Text>
             {(match.existing ? match.existing.display_artist : match.artist) ? (
-              <Text className="text-zinc-500"> — {match.existing ? match.existing.display_artist : match.artist}</Text>
+              <Text className="text-zinc-500"> · {match.existing ? match.existing.display_artist : match.artist}</Text>
             ) : null}
           </Text>
           {match.youtube_id ? (

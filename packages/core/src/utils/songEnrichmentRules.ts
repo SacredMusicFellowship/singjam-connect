@@ -1,4 +1,15 @@
-import { SONG_CULTURES, SONG_GENRES, SONG_METERS, SONG_THEMES, SONG_TONALITIES } from "./songVocabulary";
+import {
+  SONG_COMMUNITIES,
+  SONG_CULTURES,
+  SONG_FORMS,
+  SONG_GENRES,
+  SONG_METERS,
+  SONG_OCCASIONS,
+  SONG_THEMES,
+  SONG_TONALITIES,
+} from "./songVocabulary";
+import { sameArtist } from "./landmarkRecordings";
+import { pickHymnaryText, samePerson, type HymnaryText } from "./hymnary";
 
 export type Confidence = "high" | "medium" | "low";
 export type ModelField<T> = { v: T | null; c: Confidence } | null | undefined;
@@ -15,6 +26,9 @@ export type ModelAnswer = {
   themes?: ModelField<string[]>;
   languages?: ModelField<string[]>;
   cultures?: ModelField<string[]>;
+  forms?: ModelField<string[]>;
+  occasions?: ModelField<string[]>;
+  communities?: ModelField<string[]>;
   first_line?: ModelField<string>;
   hook?: ModelField<string>;
   // Asked only when a song editor reviews suggestions; never filled automatically.
@@ -31,7 +45,18 @@ export type EnrichmentSources = {
   musicbrainz: { recordingYear: number | null; composers: string[]; lyricists: string[] } | null;
   spotifyReleaseYear: number | null;
   lyrics: string | null;
+  artist?: string | null;
+  // The song's writers already in the catalogue, and Hymnary texts with its title.
+  writers?: string[];
+  hymnary?: HymnaryText[] | null;
+  title?: string;
 };
+
+// A spiritual is neither a hymn nor a contemporary worship song, though
+// hymnals print many and models often call them that.
+export function withoutMisfitForms(forms: string[], genres: string[]): string[] {
+  return genres.includes("Spiritual") ? forms.filter((f) => f !== "Hymn" && f !== "Worship song") : forms;
+}
 
 export type EnrichmentDecision = {
   recording_year?: number;
@@ -45,6 +70,9 @@ export type EnrichmentDecision = {
   themes?: string[];
   languages?: string[];
   cultures?: string[];
+  forms?: string[];
+  occasions?: string[];
+  communities?: string[];
   first_line?: string;
   hook?: string;
 };
@@ -99,14 +127,29 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
 
   const mb = src.musicbrainz;
   const gComp = value(g.composers, HIGH), cComp = value(c.composers, HIGH);
+  // Both models naming the song's own recording artist as its composer counts
+  // even when one of them is only fairly sure (Carlebach's Eilecha).
+  const gSure = value(g.composers, SURE), cSure = value(c.composers, SURE);
+  const artistWroteIt =
+    !!src.artist && !!gSure && !!cSure && (gComp || cComp) && sameNames(gSure, cSure) && gSure.every((n) => sameArtist(n, src.artist!));
+  // Words default to the composers only when neither model names someone else.
+  const lyricistsFor = (composers: string[]) => {
+    const named = [value(g.lyricists, ["high", "medium", "low"]), value(c.lyricists, ["high", "medium", "low"])];
+    const gLyr = value(g.lyricists, HIGH), cLyr = value(c.lyricists, HIGH);
+    if (gLyr && cLyr && sameNames(gLyr, cLyr)) return gLyr;
+    return named.some((l) => l && !sameNames(l, composers)) ? undefined : composers;
+  };
   if (mb?.composers.length && [gComp, cComp].some((m) => m && m.some((n) => mb.composers.map(norm).includes(norm(n))))) {
     out.composers = mb.composers;
     out.lyricists = mb.lyricists.length ? mb.lyricists : mb.composers;
   } else if (gComp && cComp && sameNames(gComp, cComp)) {
     out.composers = gComp;
-    const gLyr = value(g.lyricists, HIGH), cLyr = value(c.lyricists, HIGH);
-    out.lyricists = gLyr && cLyr && sameNames(gLyr, cLyr) ? gLyr : gComp;
+    out.lyricists = lyricistsFor(gComp);
+  } else if (artistWroteIt) {
+    out.composers = gSure!;
+    out.lyricists = lyricistsFor(gSure!);
   }
+  if (!out.lyricists) delete out.lyricists;
 
   const agree = (field: "tonality" | "meter" | "vibe", allowed: readonly string[]) => {
     const a = value(g[field], SURE), b = value(c[field], SURE);
@@ -120,8 +163,15 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   if (genres) out.genres = genres;
   const themes = mergeTags(value(g.themes, SURE), value(c.themes, SURE), SONG_THEMES);
   if (themes) out.themes = themes;
-  const cultures = (value(g.cultures, SURE) ?? []).filter((x) => SONG_CULTURES.includes(x) && (value(c.cultures, SURE) ?? []).includes(x));
-  if (cultures.length) out.cultures = cultures.slice(0, MAX_TAGS);
+  // Both models must name a culture, form, occasion or community for it to be used.
+  const bothNamed = (f: "cultures" | "forms" | "occasions" | "communities", allowed: readonly string[]) => {
+    const picked = (value(g[f], SURE) ?? []).filter((x) => allowed.includes(x) && (value(c[f], SURE) ?? []).includes(x));
+    if (picked.length) out[f] = picked.slice(0, MAX_TAGS);
+  };
+  bothNamed("cultures", SONG_CULTURES);
+  bothNamed("forms", SONG_FORMS);
+  bothNamed("occasions", SONG_OCCASIONS);
+  bothNamed("communities", SONG_COMMUNITIES);
   const langs = (value(g.languages, SURE) ?? []).filter((x) => (value(c.languages, SURE) ?? []).map(norm).includes(norm(x)));
   if (langs.length) out.languages = langs.slice(0, MAX_TAGS);
 
@@ -132,7 +182,12 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
     const all = ` ${norm(src.lyrics)} `;
     const lrc = firstLyricLine(src.lyrics);
     const opensWithAdLib = !!lrc && VOCAL.test(norm(lrc));
-    const fromModel = lines.find((l) => norm(l).length >= 12 && (head.startsWith(norm(l)) || (opensWithAdLib && head.includes(norm(l)))));
+    // A model's line at the top of the lyrics wins; failing that, a model's
+    // line found later in them beats the lyrics' own first line, which can be a
+    // performer's spoken introduction (Tom Dooley's "This one next tells a story…").
+    const fromModel =
+      lines.find((l) => norm(l).length >= 12 && (head.startsWith(norm(l)) || (opensWithAdLib && head.includes(norm(l))))) ??
+      lines.find((l) => norm(l).length >= 12 && all.includes(` ${norm(l)} `));
     if (fromModel) out.first_line = fromModel;
     else if (lrc && lrc.length >= 20 && !VOCAL.test(norm(lrc)) && !/chorus|verse|intro|[{}*]/i.test(lrc)) out.first_line = lrc;
     const hook = hooks.find((h) => all.includes(` ${norm(h)} `));
@@ -142,7 +197,43 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
     if (hooks.length === 2 && norm(hooks[0]) === norm(hooks[1])) out.hook = hooks[0];
   }
 
+  // Hymnary: the hymnals' text of this song (its author must be one of the
+  // song's writers, see pickHymnaryText). Its first line is a printed source;
+  // its authors, and the composer of one of its tunes, each need a model to
+  // name them too.
+  const modelLyricists = [...(value(g.lyricists, SURE) ?? []), ...(value(c.lyricists, SURE) ?? [])];
+  const modelComposers = [...(value(g.composers, SURE) ?? []), ...(value(c.composers, SURE) ?? [])];
+  const hymn = pickHymnaryText(src.hymnary ?? [], src.writers?.length ? src.writers : [...modelComposers, ...modelLyricists], src.title ?? "");
+  if (hymn) {
+    if (!out.first_line) out.first_line = hymn.firstLine.trim().replace(/[,;:]+$/, "");
+    const named = (list: string[], by: string[]) => list.length > 0 && by.some((w) => list.some((n) => samePerson(n, w)));
+    if (!out.composers && !out.lyricists && named(hymn.authors, [...modelLyricists, ...modelComposers])) {
+      out.lyricists = hymn.authors;
+      // Hymnary's tune counts are across all texts, not this one, so no tune is
+      // "the" tune: a composer counts when a model names one of the text's tunes'.
+      const tune = hymn.tunes.find((t) => named(t.composers, modelComposers));
+      if (tune) out.composers = tune.composers.filter((c) => modelComposers.some((m) => samePerson(c, m)));
+    }
+  }
+
   return out;
+}
+
+// A first line found by web search counts only when a page's own text holds it:
+// a citation's quoted text, or the cited page as fetched. Returns the line with
+// the page it was found on.
+export function verifiedFirstLine(
+  answer: { first_line?: string | null; url?: string | null } | null,
+  citations: { url: string; cited_text: string }[],
+  pages: Record<string, string> = {},
+): { first_line: string; url: string } | null {
+  const line = answer?.first_line?.trim();
+  if (!line || norm(line).length < 20 || norm(line).length > 90 || /chorus|verse|intro/i.test(line)) return null;
+  const holds = (text: string) => ` ${norm(text)} `.includes(` ${norm(line)} `);
+  const cited = citations.find((c) => holds(c.cited_text));
+  if (cited) return { first_line: line, url: cited.url };
+  const fetched = Object.entries(pages).find(([, text]) => holds(text));
+  return fetched ? { first_line: line, url: fetched[0] } : null;
 }
 
 // Items at least two of the lists name (GPT, Claude, the Wikipedia article),
@@ -180,6 +271,9 @@ export type EnrichmentReview = {
     genres: string[];
     themes: string[];
     cultures: string[];
+    forms: string[];
+    occasions: string[];
+    communities: string[];
     music_culture: string | null;
     lyric_culture: string | null;
     languages: string[];
@@ -245,6 +339,9 @@ export function reviewEnrichment(
     genres: pick("genres", d.genres, listIn(SONG_GENRES)(one<string[]>("genres")).slice(0, MAX_TAGS)) ?? [],
     themes: pick("themes", d.themes, listIn(SONG_THEMES)(one<string[]>("themes")).slice(0, MAX_TAGS)) ?? [],
     cultures: pick("cultures", d.cultures, listIn(SONG_CULTURES)(one<string[]>("cultures")).slice(0, MAX_TAGS)) ?? [],
+    forms: pick("forms", d.forms, listIn(SONG_FORMS)(one<string[]>("forms")).slice(0, MAX_TAGS)) ?? [],
+    occasions: pick("occasions", d.occasions, listIn(SONG_OCCASIONS)(one<string[]>("occasions")).slice(0, MAX_TAGS)) ?? [],
+    communities: pick("communities", d.communities, listIn(SONG_COMMUNITIES)(one<string[]>("communities")).slice(0, MAX_TAGS)) ?? [],
     languages: pick("languages", d.languages, (one<string[]>("languages") ?? []).slice(0, MAX_TAGS)) ?? [],
     music_culture: culture("music_culture"),
     lyric_culture: culture("lyric_culture"),

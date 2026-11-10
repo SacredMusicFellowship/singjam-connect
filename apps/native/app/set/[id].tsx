@@ -9,10 +9,11 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WIDE_BREAKPOINT } from '@/components/BrandHeader';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
+import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, formatComposers, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
 import SubtitleText from '@/components/SubtitleText';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
@@ -20,6 +21,7 @@ import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import RolePill from '@/components/RolePill';
+import SongRowTitle, { type SongRowCard } from '@/components/SongRowTitle';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -61,14 +63,14 @@ type SetSong = {
   songs: {
     title: string;
     display_artist: string | null;
+    byline?: string | null;
     chord_chart_url: string | null;
     tonality?: string | null;
-    song_composers: { people: { name: string } | null }[];
     song_productions?: { productions: { name: string } | null }[];
   };
 };
 
-type SongSearchResult = {
+type SongSearchResult = SongRowCard & {
   song_id: string;
   title: string;
   display_artist: string | null;
@@ -194,12 +196,7 @@ function AddSongModal({
               return (
                 <View className="flex-row items-center px-4 py-3 border-b border-zinc-100">
                   <View className="flex-1 mr-3">
-                    <Text className="text-zinc-900 font-medium" numberOfLines={1}>{item.title}</Text>
-                    {songSubtitle(item.productions, item.display_artist) && (
-                      <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>
-                        <SubtitleText productions={item.productions} artist={item.display_artist} />
-                      </Text>
-                    )}
+                    <SongRowTitle title={item.title} displayArtist={item.display_artist} productions={item.productions} card={item} />
                   </View>
                   {already ? (
                     <Text className="text-zinc-400 text-sm">Added</Text>
@@ -275,10 +272,7 @@ function SongRow({
   const [editingNotes, setEditingNotes] = useState(false);
   const [showAllPeople, setShowAllPeople] = useState(false);
   const [notesInput, setNotesInput] = useState('');
-  const composerNames = (song.songs.song_composers ?? [])
-    .map((sc) => sc.people?.name)
-    .filter(Boolean) as string[];
-  const artist = song.songs.display_artist ?? formatComposers(composerNames, []);
+  const artist = song.songs.byline;
   const productions = (song.songs.song_productions ?? [])
     .map((sp) => sp.productions?.name)
     .filter(Boolean) as string[];
@@ -919,7 +913,7 @@ export default function SetDetailScreen() {
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, song_productions(productions(name)), chord_chart_url, tonality, song_composers(people(name)))';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -1035,7 +1029,7 @@ export default function SetDetailScreen() {
         .single(),
       supabase
         .from('set_songs')
-        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, song_productions(productions(name)), chord_chart_url, tonality, song_composers(people(name)))')
+        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)')
         .eq('set_id', id)
         .order('position', { ascending: true }),
       user
@@ -1325,7 +1319,7 @@ export default function SetDetailScreen() {
       setMyRepertoire(previous);
       setSongKnowledge(previousKnowledge);
       Alert.alert('Error', error.message);
-    }
+    } else noteMySong(songId, { confidence });
   }
 
   // Per-song lookup: songId → Map<userId, confidence>.
@@ -1353,7 +1347,7 @@ export default function SetDetailScreen() {
     let result = songs;
     if (filterQuery.trim()) {
       const q = filterQuery.trim().toLowerCase();
-      result = result.filter(s => s.songs.title.toLowerCase().includes(q) || (s.songs.display_artist ?? '').toLowerCase().includes(q));
+      result = result.filter(s => s.songs.title.toLowerCase().includes(q) || `${s.songs.byline ?? ''} ${s.songs.display_artist ?? ''}`.toLowerCase().includes(q));
     }
     if (sortBy === 'title_asc') return [...result].sort((a, b) => a.songs.title.localeCompare(b.songs.title));
     if (sortBy === 'title_desc') return [...result].sort((a, b) => b.songs.title.localeCompare(a.songs.title));
@@ -1518,7 +1512,7 @@ export default function SetDetailScreen() {
                   className={`px-3 py-1 rounded-full border ${sortBy === key ? 'bg-amber-500 border-amber-500' : 'bg-white border-zinc-200'}`}
                 >
                   <Text className={`text-xs font-medium ${sortBy === key ? 'text-white' : 'text-zinc-600'}`}>
-                    {key === 'custom' ? 'Custom' : key === 'title_asc' ? 'A → Z' : 'Z → A'}
+                    {key === 'custom' ? 'Custom' : key === 'title_asc' ? 'A–Z' : 'Z–A'}
                   </Text>
                 </TouchableOpacity>
               ))}

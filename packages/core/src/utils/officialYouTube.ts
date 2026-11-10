@@ -8,12 +8,14 @@ const NOT_THE_RECORDING = /\b(live|cover|karaoke|instrumental|reaction|tutorial|
 
 // A recording's YouTube link must be the artist's own upload: their channel, its
 // auto-generated "<Artist> - Topic" channel, or its VEVO channel — and the video
-// title must name the song. Covers, live cuts and fan uploads don't qualify.
+// title must name the song (by any of its titles: "Erie Canal" is how Pete
+// Seeger's record names "Low Bridge"). Covers, live cuts and fan uploads don't qualify.
 export function isOfficialYouTubeUpload(
   video: { title: string; channelTitle: string },
-  songTitle: string,
+  songTitle: string | string[],
   artistName: string,
 ): boolean {
+  if (Array.isArray(songTitle)) return songTitle.some((t) => isOfficialYouTubeUpload(video, t, artistName));
   const artist = squash(artistName).replace(/^the/, "");
   const channel = squash(video.channelTitle).replace(/^the/, "");
   if (!artist) return false;

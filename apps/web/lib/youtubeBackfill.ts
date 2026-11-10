@@ -5,7 +5,8 @@ type Row = {
   song_id: string;
   artist_id: string;
   youtube_url: string | null;
-  songs: { title: string } | null;
+  recorded_title: string | null;
+  songs: { title: string; song_alternate_titles: { title: string }[] | null } | null;
   artists: { name: string } | null;
 };
 
@@ -13,10 +14,19 @@ export type YouTubeBackfillResult = { verified: number; searched: number; found:
 
 const RETRY_AFTER_DAYS = 90;
 
+// Every name the video may use: the title on this record ("Erie Canal"), the
+// song's title ("Low Bridge") and its alternate titles.
+const titlesOf = (r: Row) =>
+  [r.recorded_title, r.songs?.title, ...(r.songs?.song_alternate_titles ?? []).map((a) => a.title)].filter((t): t is string => !!t);
+
 async function youtube(path: string, apiKey: string) {
   const res = await fetch(`https://www.googleapis.com/youtube/v3/${path}&key=${apiKey}`);
   const json = await res.json();
-  const quotaExceeded = (json.error?.errors ?? []).some((e: { reason?: string }) => e.reason === "quotaExceeded");
+  // The daily search limit comes back as rateLimitExceeded with a "Quota exceeded" message, not only quotaExceeded.
+  const quotaExceeded = !!json.error && (
+    (json.error.errors ?? []).some((e: { reason?: string }) => e.reason === "quotaExceeded" || e.reason === "rateLimitExceeded")
+    || /quota exceeded/i.test(json.error.message ?? "")
+  );
   if (json.error && !quotaExceeded) throw new Error(`YouTube API: ${json.error.message}`);
   return { json, quotaExceeded };
 }
@@ -31,7 +41,7 @@ export async function runYouTubeBackfill(
   { verifyLimit = 50, searchLimit = 3 }: { verifyLimit?: number; searchLimit?: number } = {},
 ): Promise<YouTubeBackfillResult> {
   const result: YouTubeBackfillResult = { verified: 0, searched: 0, found: 0, quotaExceeded: false };
-  const select = "song_id, artist_id, youtube_url, songs(title), artists(name)";
+  const select = "song_id, artist_id, youtube_url, recorded_title, songs(title, song_alternate_titles(title)), artists(name)";
 
   const { data: unchecked, error: uncheckedError } = await admin
     .from("song_recording_artists")
@@ -52,7 +62,7 @@ export async function runYouTubeBackfill(
     );
     for (const r of toVerify) {
       const snippet = byId.get(youTubeVideoId(r.youtube_url) ?? "");
-      const ok = !!snippet && !!r.songs && !!r.artists && isOfficialYouTubeUpload(snippet, r.songs.title, r.artists.name);
+      const ok = !!snippet && !!r.songs && !!r.artists && isOfficialYouTubeUpload(snippet, titlesOf(r), r.artists.name);
       await admin
         .from("song_recording_artists")
         .update(snippet ? { youtube_ok: ok } : { youtube_url: null, youtube_ok: null })
@@ -83,12 +93,12 @@ export async function runYouTubeBackfill(
 
   for (const r of (candidates ?? []) as unknown as Row[]) {
     if (!r.songs || !r.artists) continue;
-    const q = encodeURIComponent(`${r.artists.name} ${r.songs.title}`);
+    const q = encodeURIComponent(`${r.artists.name} ${r.recorded_title ?? r.songs.title}`);
     const { json, quotaExceeded } = await youtube(`search?part=snippet&type=video&videoCategoryId=10&maxResults=10&q=${q}`, apiKey);
     if (quotaExceeded) return { ...result, quotaExceeded };
     result.searched++;
     const match = (json.items ?? []).find((v: { snippet: { title: string; channelTitle: string } }) =>
-      isOfficialYouTubeUpload(v.snippet, r.songs!.title, r.artists!.name)
+      isOfficialYouTubeUpload(v.snippet, titlesOf(r), r.artists!.name)
     );
     const checkedAt = new Date().toISOString();
     await admin

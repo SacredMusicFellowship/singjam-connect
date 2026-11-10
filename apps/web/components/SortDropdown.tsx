@@ -5,8 +5,8 @@ import type { SortBy } from "@/hooks/useSongFilters";
 
 const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: "popularity", label: "Popular" },
-  { value: "title_asc", label: "A → Z" },
-  { value: "title_desc", label: "Z → A" },
+  { value: "title_asc", label: "A–Z" },
+  { value: "title_desc", label: "Z–A" },
 ];
 
 export function SortDropdown({

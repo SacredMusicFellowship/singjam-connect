@@ -1,11 +1,13 @@
 "use client";
 
-import { CONFIDENCE_STYLES, formatJammers, isUuid, type ConfidenceLevel } from "@singjam/core";
+import { browsePath, bylineCredits, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
 import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { formatComposersLong, sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, ENRICHMENT_WAIT_MS } from "@singjam/core";
+import CreditLinks from "@/components/CreditLinks";
+import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, songCreditLines, ENRICHMENT_WAIT_MS, knownTuneHint, NO_MELODIES, type SongMelodies as Melodies } from "@singjam/core";
+import SongMelodies from "@/components/SongMelodies";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
@@ -16,16 +18,23 @@ import ChordChartSlot from "@/components/ChordChartSlot";
 import ReportChartButton from "@/components/ReportChartButton";
 import { resolveSongId } from "@/lib/resolveSongId";
 
-function TagRow({ label, tags }: { label: string; tags: string[] }) {
+function TagRow({ label, tags }: { label: string; tags: (string | { name: string; href: string | null })[] }) {
   return (
     <div className="flex flex-wrap items-baseline gap-2">
       <span className="text-xs font-medium text-slate-500 w-20 shrink-0">{label}</span>
       <div className="flex flex-wrap gap-1.5">
-        {tags.map((t) => (
-          <span key={t} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600">
-            {t}
-          </span>
-        ))}
+        {tags.map((t) => {
+          const tag = typeof t === "string" ? { name: t, href: null } : t;
+          return tag.href ? (
+            <Link key={tag.name} href={tag.href} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-amber-100 hover:text-amber-800">
+              {tag.name}
+            </Link>
+          ) : (
+            <span key={tag.name} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600">
+              {tag.name}
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -105,16 +114,15 @@ function usePinToTopOnLoad(loaded: boolean) {
 }
 
 const SONG_SELECT = `
-          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
-          song_composers(people(name)),
-          song_lyricists(people(name)),
-          song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
+          id, title, slug, display_artist, byline, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          song_composers(people(name, slug)),
+          song_lyricists(people(name, slug)),
+          song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
           song_alternate_titles(title),
-          song_genres(genres(name)),
-          song_themes(themes(name)),
-          song_cultures(context, cultures(name)),
-          song_languages(languages(name)),
-          song_productions(productions(name, year))
+          song_tags(context, tags(name, type, slug)),
+          song_productions(productions(name, year, slug)),
+          texts(slug, year, year_precision, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          tunes(name, slug, year, year_precision)
         `;
 
 export default function SongPageContent() {
@@ -134,6 +142,8 @@ export default function SongPageContent() {
   const [currentUserEntry, setCurrentUserEntry] = useState<JammerEntry | null>(null);
   const [userSets, setUserSets] = useState<{ id: string; name: string }[] | null>(null);
   const [songInSets, setSongInSets] = useState<Set<string>>(new Set());
+  const [melodies, setMelodies] = useState<Melodies | null>(null);
+  const melodiesFor = useRef<string | null>(null);
   const supabase = supabaseBrowser();
 
   usePinToTopOnLoad(data !== null);
@@ -141,6 +151,7 @@ export default function SongPageContent() {
   useEffect(() => {
     (async () => {
       setData(null);
+      setMelodies(null);
       setSongUsers(null);
       setSongUsersLoading(false);
       setNotFound(false);
@@ -160,6 +171,10 @@ export default function SongPageContent() {
       }
 
       const song = songRes.data;
+      melodiesFor.current = song.id;
+      supabase.rpc("song_melodies", { p_song_id: song.id }).then(({ data: m }) => {
+        if (melodiesFor.current === song.id) setMelodies((m as Melodies | null) ?? NO_MELODIES);
+      });
 
       const [profileRes, userSongRes, popularityJson] = await Promise.all([
         user
@@ -309,27 +324,36 @@ export default function SongPageContent() {
 
   const composers = sortByLastName((song.song_composers as any[]).map((x: any) => x.people?.name).filter(Boolean));
   const lyricists = sortByLastName((song.song_lyricists as any[]).map((x: any) => x.people?.name).filter(Boolean));
-  const cultureRows = song.song_cultures as any[];
-  const musicSpecificRows = cultureRows.filter((x: any) => x.context === "music");
-  const lyricsSpecificRows = cultureRows.filter((x: any) => x.context === "lyrics");
-  const noContextRows = cultureRows.filter((x: any) => !x.context);
-  const musicCultures = (musicSpecificRows.length ? musicSpecificRows : noContextRows)
-    .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
-  const lyricsCultures = (lyricsSpecificRows.length ? lyricsSpecificRows : noContextRows)
-    .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
+  const tagRows = song.song_tags as SongTagRow[];
+  const personSlugs = new Map<string, string>(
+    [...(song.song_composers as any[]), ...(song.song_lyricists as any[])].filter((x: any) => x.people?.slug).map((x: any) => [x.people.name, x.people.slug])
+  );
+  // Where "Traditional" comes from: the melody's / words' own tradition when set,
+  // otherwise the song's general cultures and communities.
+  const origins = (context: TagContext) => [...songTagNames(tagRows, "culture", context), ...songTagNames(tagRows, "community", context)];
+  const musicCultures = origins("music").length ? origins("music") : origins("general");
+  const lyricsCultures = origins("lyrics").length ? origins("lyrics") : origins("general");
   const recordingArtists = sortRecordingsByYear(
     (song.song_recording_artists as any[])
-      .map((x: any) => ({ name: x.artists?.name as string, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
+      .map((x: any) => ({ name: x.artists?.name as string, slug: (x.artists?.slug ?? null) as string | null, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
       .filter((x: any) => x.name)
   );
   const altTitles = (song.song_alternate_titles as any[]).map((x: any) => x.title as string).filter(Boolean);
-  const genres = (song.song_genres as any[]).map((x: any) => x.genres?.name as string).filter(Boolean).sort();
-  const themes = (song.song_themes as any[]).map((x: any) => x.themes?.name as string).filter(Boolean).sort();
-  const cultures = [...new Set((song.song_cultures as any[]).map((x: any) => x.cultures?.name as string).filter(Boolean))];
-  const languages = (song.song_languages as any[]).map((x: any) => x.languages?.name as string).filter(Boolean);
+  const people = (rows: any[]) => sortByLastName(rows.map((x: any) => x.people?.name).filter(Boolean))
+    .map((name) => ({ name, slug: personSlugs.get(name) ?? null }));
+  const creditLines = songCreditLines({
+    composers: people(song.song_composers as any[]), lyricists: people(song.song_lyricists as any[]),
+    musicCultures, lyricsCultures, text: (song as any).texts, tune: (song as any).tunes,
+  });
+  const tagLists = (["genre", "form", "occasion", "community", "theme", "language", "culture"] as const)
+    .map((type) => ({
+      label: TAG_TYPE_LABELS[type],
+      tags: songTagRefs(tagRows, type).map((t) => ({ name: t.name, href: t.slug ? browsePath(type, t.slug) : null })),
+    }))
+    .filter((t) => t.tags.length > 0);
   const songProductions = (song.song_productions as any[])
     .map((x: any) => x.productions)
-    .filter((p: any): p is { name: string; year: number | null } => !!p?.name);
+    .filter((p: any): p is { name: string; year: number | null; slug: string | null } => !!p?.name);
   const allYears = [song.year_written, song.year, ...recordingArtists.map((a: any) => a.year)].filter(Boolean) as number[];
   const earliestYear = allYears.length > 0 ? Math.min(...allYears) : null;
   const tonalityPills = song.tonality ? song.tonality.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
@@ -370,26 +394,33 @@ export default function SongPageContent() {
               {songProductions.map((p, i) => (
                 <Fragment key={`${p.name}-${p.year}`}>
                   {i > 0 && ", "}
-                  <em>{p.name}</em>
-                  {p.year ? ` (${p.year})` : null}
+                  {p.slug ? (
+                    <Link href={browsePath("show", p.slug)} className="hover:text-amber-700 hover:underline"><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</Link>
+                  ) : (
+                    <><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</>
+                  )}
                 </Fragment>
               ))}
             </p>
-          ) : song.display_artist ? (
-            <p className="mt-0.5 text-base text-slate-500">{song.display_artist}</p>
+          ) : song.byline ? (
+            <p className="mt-0.5 text-base text-slate-500">
+              <CreditLinks
+                separator=""
+                credits={bylineCredits(song.byline, { people: [...composers, ...lyricists], artists: recordingArtists.map((a: any) => a.name) })}
+              />
+            </p>
           ) : null}
           {altTitles.length > 0 && (
             <p className="mt-1 text-sm text-slate-400">aka: {altTitles.join(" · ")}</p>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
+            <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange} knownTune={knownTuneHint(melodies, confidence)}>
               {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
               {confidence && (
                 <AddToSetPanel
                   songId={song.id}
                   sets={userSets}
                   inSets={songInSets}
-                  direction="down"
                   onOpen={loadSetData}
                   onAdded={(setId) => setSongInSets((prev) => new Set([...prev, setId]))}
                   onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
@@ -399,7 +430,7 @@ export default function SongPageContent() {
                 <ChordChartSlot
                   songId={song.id}
                   url={song.chord_chart_url}
-                pending={song.chord_chart_pending}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                   canAdd={isLoggedIn}
                   size="md"
                   onAdded={handleChartAdded}
@@ -410,7 +441,7 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                pending={song.chord_chart_pending}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -442,19 +473,15 @@ export default function SongPageContent() {
           )}
         </div>
 
-        {(composers.length > 0 || lyricists.length > 0) && (
+        {creditLines.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Songwriter(s)</p>
-            {composers.length > 0 && (
-              <p className="text-sm text-slate-600">
-                <span className="font-medium">Music:</span> {formatComposersLong(composers, musicCultures)}
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Songwriters</p>
+            {creditLines.map((line) => (
+              <p key={line.label} className="text-sm text-slate-600">
+                <span className="font-medium">{line.label}:</span>{" "}
+                {line.groups.map((g, i) => <Fragment key={i}>{i > 0 && " · "}<CreditLinks credits={g} /></Fragment>)}
               </p>
-            )}
-            {lyricists.length > 0 && (
-              <p className="text-sm text-slate-600">
-                <span className="font-medium">Lyrics:</span> {formatComposersLong(lyricists, lyricsCultures)}
-              </p>
-            )}
+            ))}
           </div>
         )}
       </div>
@@ -471,16 +498,23 @@ export default function SongPageContent() {
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recordings</h2>
               <div className="flex flex-wrap gap-2">
                 {recordingArtists.map((a: any, i: number) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                  <Link
+                    key={i}
+                    href={browsePath("artist", a.slug ?? a.name)}
+                    className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700 hover:bg-amber-100 hover:text-amber-800"
+                  >
                     {a.name}
                     {a.year && <span className="text-slate-400">{a.year}</span>}
-                  </span>
+                  </Link>
                 ))}
               </div>
             </>
           )}
         </section>
       )}
+
+      <SongMelodies title="Other tunes" items={melodies?.other_melodies ?? []} />
+      <SongMelodies title="Also sung to this tune" items={melodies?.same_tune ?? []} />
 
       {(() => {
         type ArtistEmbed = { name: string; year: number | null; videoId: string | null; trackId: string | null };
@@ -559,13 +593,10 @@ export default function SongPageContent() {
         </section>
       )}
 
-      {(genres.length > 0 || themes.length > 0 || cultures.length > 0 || languages.length > 0) && (
+      {tagLists.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tags</h2>
-          {genres.length > 0 && <TagRow label="Genres" tags={genres} />}
-          {themes.length > 0 && <TagRow label="Themes" tags={themes} />}
-          {languages.length > 0 && <TagRow label="Languages" tags={languages} />}
-          {cultures.length > 0 && <TagRow label="Cultures" tags={cultures} />}
+          {tagLists.map((t) => <TagRow key={t.label} label={t.label} tags={t.tags} />)}
         </section>
       )}
 
@@ -615,14 +646,13 @@ export default function SongPageContent() {
 
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
+          <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange} knownTune={knownTuneHint(melodies, confidence)}>
             {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
             {confidence && (
               <AddToSetPanel
                 songId={song.id}
                 sets={userSets}
                 inSets={songInSets}
-                direction="up"
                 onOpen={loadSetData}
                 onAdded={(setId) => setSongInSets((prev) => new Set([...prev, setId]))}
                 onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
@@ -632,7 +662,7 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                pending={song.chord_chart_pending}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -643,7 +673,7 @@ export default function SongPageContent() {
             <ChordChartSlot
               songId={song.id}
               url={song.chord_chart_url}
-                pending={song.chord_chart_pending}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
               canAdd={isLoggedIn}
               size="md"
               onAdded={handleChartAdded}

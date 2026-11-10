@@ -2,6 +2,7 @@
 
 import { hasLeadVoice } from "@singjam/core";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RoleSelect from "@/components/RoleSelect";
@@ -20,12 +21,15 @@ export default function RepertoireButton({
   initialConfidence,
   singingVoice = null,
   onConfidenceChange,
+  knownTune = null,
   children,
 }: {
   songId: string;
   initialConfidence: string | null;
   singingVoice?: string | null;
   onConfidenceChange?: (level: string | null) => void;
+  // The viewer's Lead/Support song sung to this tune (song_melodies, migration 220).
+  knownTune?: { title: string; slug: string | null } | null;
   children?: React.ReactNode;
 }) {
   const supabase = supabaseBrowser();
@@ -110,7 +114,36 @@ export default function RepertoireButton({
     setPicking(true);
   }
 
+  function addAsLead() {
+    if (!hasLeadVoice(singingVoice)) {
+      setVoiceCheckPending(true);
+      setPicking(true);
+    } else {
+      save("lead");
+    }
+  }
+
   return (
+    <div className="flex flex-col gap-2">
+    {knownTune && (
+      <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+        <span>
+          You know the tune from{" "}
+          {knownTune.slug ? (
+            <Link href={`/songs/${knownTune.slug}`} className="font-medium hover:text-amber-700 hover:underline">{knownTune.title}</Link>
+          ) : (
+            <span className="font-medium">{knownTune.title}</span>
+          )}
+        </span>
+        <button
+          onClick={addAsLead}
+          disabled={saving}
+          className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800 hover:bg-amber-200 transition-colors disabled:opacity-50"
+        >
+          Add as Lead
+        </button>
+      </p>
+    )}
     <div className="flex flex-wrap items-center gap-3">
       <button
         onClick={handleAddClick}
@@ -125,6 +158,7 @@ export default function RepertoireButton({
       >
         Want to learn it
       </button>
+    </div>
     </div>
   );
 }

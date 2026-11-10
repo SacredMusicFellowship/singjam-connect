@@ -15,7 +15,7 @@ export default async function RecentlyAddedSongs({ basePath }: { basePath: strin
       id, title, slug, display_artist, created_at, submitted_by,
       first_line, hook, genius_url, chord_chart_url, youtube_url, tonality, meter, vibe,
       song_composers(person_id), song_lyricists(person_id), song_recording_artists(youtube_url),
-      song_genres(genre_id), song_languages(language_id),
+      song_tags(context, tags(name, type)),
       profiles!submitted_by(display_name, last_name, username)
     `)
     .order("created_at", { ascending: false })

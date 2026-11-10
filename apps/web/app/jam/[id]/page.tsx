@@ -10,7 +10,7 @@ import { resolveJamId } from "@/lib/shortRef";
 import { describeLeaders, jamLeaderRows, publicLeaders } from "@/lib/jamLeaders";
 import JamView, { type InviteEntry } from "@/components/JamView";
 import ShortUrl from "@/components/ShortUrl";
-import { formatJamLongDate, formatJamTimeRange, jamPreviewPlace, jamSeatExcludedUserId, jamSeatsTaken } from "@singjam/core";
+import { formatJamLongDate, formatJamTimeRange, jamPreviewPlace, jamTags, jamSeatExcludedUserId, jamSeatsTaken } from "@singjam/core";
 import { type JamCardData } from "@/components/JamCard";
 
 // Private jams are unlisted, not access-controlled (migration 160): holding
@@ -96,12 +96,11 @@ export default async function JamPage({
     : Promise.resolve([false, false]);
 
   const [
-    jam, genresRes, themesRes, flagRes, tierRes, addressRes,
+    jam, tagsRes, flagRes, tierRes, addressRes,
     attendingCount, rsvpRes, inviteRes, cohostRes, [canManage, canEdit], allLeaders, managed,
   ] = await Promise.all([
     jamPromise,
-    admin.from("jam_genres").select("genres(name)").eq("jam_id", id),
-    admin.from("jam_themes").select("themes(name)").eq("jam_id", id),
+    admin.from("jam_tags").select("tags(name, type)").eq("jam_id", id),
     supabase.from("feature_flags").select("enabled").eq("key", "jam_invites").maybeSingle(),
     // Only whether tiers exist, not their availability — the purchase panel
     // reads that itself. The layout needs the answer on the server: the panel
@@ -145,8 +144,8 @@ export default async function JamPage({
 
   if (!jam) return <p className="text-sm text-zinc-500">Jam not found.</p>;
 
-  const genres = ((genresRes.data ?? []) as any[]).map((g: any) => g.genres?.name).filter(Boolean) as string[];
-  const themes = ((themesRes.data ?? []) as any[]).map((t: any) => t.themes?.name).filter(Boolean) as string[];
+  const genres = jamTags(tagsRes.data as any, "genre").map((t) => t.name);
+  const themes = jamTags(tagsRes.data as any).filter((t) => t.type !== "genre").map((t) => t.name);
   const invitesEnabled = flagRes.data?.enabled ?? true;
 
   const hostLabel = [jam.profiles?.display_name, jam.profiles?.last_name].filter(Boolean).join(" ") || jam.profiles?.username || null;

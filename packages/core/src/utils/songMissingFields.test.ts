@@ -3,7 +3,7 @@ import { songMissingFields, SONG_COMPLETENESS_FIELDS } from "./songMissingFields
 
 const full = {
   display_artist: "A", first_line: "x", hook: "x", genius_url: "u", chord_chart_url: "u", tonality: "Major", meter: "4", vibe: "Ballad",
-  youtube_url: null, song_composers: [1], song_lyricists: [1], song_recording_artists: [{ youtube_url: "y" }], song_genres: [1], song_languages: [1],
+  youtube_url: null, song_composers: [1], song_lyricists: [1], song_recording_artists: [{ youtube_url: "y" }], song_tags: [{ tags: { name: "Rock", type: "genre" } }, { tags: { name: "English", type: "language" } }],
 };
 
 describe("songMissingFields", () => {
@@ -16,7 +16,7 @@ describe("songMissingFields", () => {
   it("names every field it can report in SONG_COMPLETENESS_FIELDS, in the same order", () => {
     const empty = {
       display_artist: null, first_line: null, hook: null, genius_url: null, chord_chart_url: null, tonality: null, meter: null, vibe: null,
-      youtube_url: null, song_composers: [], song_lyricists: [], song_recording_artists: [], song_genres: [], song_languages: [],
+      youtube_url: null, song_composers: [], song_lyricists: [], song_recording_artists: [], song_tags: [],
     };
     expect(songMissingFields(empty)).toEqual([...SONG_COMPLETENESS_FIELDS]);
   });

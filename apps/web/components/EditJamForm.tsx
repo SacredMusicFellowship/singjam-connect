@@ -10,9 +10,10 @@ import EventImageEditor from "./EventImageEditor";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
 import { useJamImages, type JamImageFields } from "@/lib/useJamImages";
-import { isoToZonedInput, jamPath, zonedInputToIso, type JamImageCrops } from "@singjam/core";
+import { isoToZonedInput, jamPath, zonedInputToIso, type JamImageCrops, JAM_TAG_TYPE_LABEL, loadJamTagOptions, type JamTagOption } from "@singjam/core";
 
-type LookupItem = { id: string; name: string };
+// A jam can be tagged with any of these (jam_tags, migration 202), from one picker.
+
 
 type JamData = {
   id: string;
@@ -48,12 +49,10 @@ function Label({ text, required, optional }: { text: string; required?: boolean;
 
 export default function EditJamForm({
   jam,
-  selectedGenreIds,
-  selectedThemeIds,
+  selectedTagIds,
 }: {
   jam: JamData;
-  selectedGenreIds: string[];
-  selectedThemeIds: string[];
+  selectedTagIds: string[];
 }) {
   const supabase = supabaseBrowser();
   const router = useRouter();
@@ -64,10 +63,8 @@ export default function EditJamForm({
   const [previewing, setPreviewing] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const [genres, setGenres] = useState<LookupItem[]>([]);
-  const [themes, setThemes] = useState<LookupItem[]>([]);
-  const [selectedGenres, setSelectedGenres] = useState<string[]>(selectedGenreIds);
-  const [selectedThemes, setSelectedThemes] = useState<string[]>(selectedThemeIds);
+  const [allTags, setAllTags] = useState<JamTagOption[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(selectedTagIds);
 
   const [guestsCanInvite, setGuestsCanInvite] = useState(jam.guests_can_invite ?? false);
   const [name, setName] = useState(jam.name ?? "");
@@ -101,12 +98,7 @@ export default function EditJamForm({
         setCanPostOfficial((p as any)?.role === "admin" || (p as any)?.can_host_official === true);
         setDisplayName((p as any)?.display_name ?? (p as any)?.username ?? null);
       }
-      const [{ data: g }, { data: t }] = await Promise.all([
-        supabase.from("genres").select("id, name").order("name"),
-        supabase.from("themes").select("id, name").order("name"),
-      ]);
-      setGenres((g as LookupItem[]) ?? []);
-      setThemes((t as LookupItem[]) ?? []);
+      setAllTags(await loadJamTagOptions(supabase));
     }
     load();
   }, [supabase]);
@@ -173,8 +165,7 @@ export default function EditJamForm({
         ...imageFields,
         capacity: capacity ? parseInt(capacity, 10) : null,
         timezone,
-        genre_ids: selectedGenres,
-        theme_ids: selectedThemes,
+        tag_ids: selectedTags,
       }),
     });
 
@@ -189,8 +180,9 @@ export default function EditJamForm({
   }
 
   const isOfficial = visibility === "official";
-  const previewGenreNames = selectedGenres.map((id) => genres.find((g) => g.id === id)?.name).filter(Boolean) as string[];
-  const previewThemeNames = selectedThemes.map((id) => themes.find((t) => t.id === id)?.name).filter(Boolean) as string[];
+  const chosenTags = selectedTags.map((id) => allTags.find((t) => t.id === id)).filter((t): t is JamTagOption => !!t);
+  const previewGenreNames = chosenTags.filter((t) => t.type === "genre").map((t) => t.name);
+  const previewThemeNames = chosenTags.filter((t) => t.type !== "genre").map((t) => t.name);
   const defaultName = displayName ? `${displayName}'s jam` : "Community jam";
   const previewName = name.trim() || (isOfficial ? null : defaultName);
   if (previewing) {
@@ -356,8 +348,14 @@ export default function EditJamForm({
           </div>
         )}
 
-        <TagCombobox label="Genres" options={genres} selected={selectedGenres} onChange={setSelectedGenres} placeholder="Search genres…" optional />
-        <TagCombobox label="Themes" options={themes} selected={selectedThemes} onChange={setSelectedThemes} placeholder="Search themes…" optional />
+        <TagCombobox
+          label="Tags"
+          options={allTags.map((t) => ({ id: t.id, name: `${t.name} · ${JAM_TAG_TYPE_LABEL[t.type] ?? t.type}` }))}
+          selected={selectedTags}
+          onChange={setSelectedTags}
+          placeholder="Search genres, occasions, communities…"
+          optional
+        />
 
         {/* Description */}
         <div>

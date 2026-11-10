@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import CatalogLinkField from "@/components/catalog/CatalogLinkField";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
-import { MAX_RECORDINGS, samePeople, type EnrichmentReview } from "@singjam/core";
+import { MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -25,6 +26,22 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 type Lookup = { id: string; name: string };
+
+const creditText = (list: CardCredit[]) => list.map((c) => `${c.lead ?? ""}${c.text}${c.suffix ?? ""}`).join(", ");
+
+// How the song's card will read (songCardCredits, as every song card): the
+// title with its writers in brackets, and the line under it.
+function CardPreview({ credits, title }: { credits: { writers: CardCredit[]; line: CardCredit[] }; title: string }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="font-medium text-zinc-900">
+        {title || "Untitled"}
+        {credits.writers.length > 0 && <span className="ml-1 font-normal text-zinc-400">({creditText(credits.writers)})</span>}
+      </div>
+      {credits.line.length > 0 && <div className="text-sm text-zinc-500">{creditText(credits.line)}</div>}
+    </div>
+  );
+}
 type ProductionLookup = Lookup & { year: number | null };
 
 function productionLabel(p: ProductionLookup) {
@@ -62,10 +79,11 @@ type Song = {
   tonality: string | null;
   meter: string | null;
   vibe: "Banger" | "Ballad" | null;
-  song_genres: { genre_id: string }[];
-  song_themes: { theme_id: string }[];
-  song_cultures: { culture_id: string; context: string | null }[];
-  song_languages: { language_id: string }[];
+  known_by_recording?: boolean | null;
+  text_id?: string | null;
+  tune_id?: string | null;
+  byline?: string | null;
+  song_tags: SongTagRow[];
   song_composers: { person_id: string }[];
   song_lyricists: { person_id: string }[];
   song_recording_artists: { artist_id: string; year: number | null; position: number | null; youtube_url: string | null; spotify_url: string | null }[];
@@ -91,6 +109,11 @@ type Props = {
   allThemes: Lookup[];
   allCultures: Lookup[];
   allLanguages: Lookup[];
+  allForms: Lookup[];
+  allOccasions: Lookup[];
+  allCommunities: Lookup[];
+  allTexts: { id: string; title: string; slug: string }[];
+  allTunes: { id: string; slug: string; tune_label: string }[];
   allPeople: Lookup[];
   allArtists: Lookup[];
   allProductions: ProductionLookup[];
@@ -108,6 +131,11 @@ export default function SongEditor({
   allThemes,
   allCultures,
   allLanguages,
+  allForms,
+  allOccasions,
+  allCommunities,
+  allTexts: initialTexts,
+  allTunes: initialTunes,
   allPeople,
   allArtists,
   allProductions,
@@ -135,6 +163,22 @@ export default function SongEditor({
     song?.meter ? song.meter.split(",").map((s) => s.trim()).filter(Boolean) : []
   );
   const [vibe, setVibe] = useState<"Banger" | "Ballad" | null>(song?.vibe ?? null);
+  const [knownByRecording, setKnownByRecording] = useState<boolean | null>(song?.known_by_recording ?? null);
+  // Which text this song sings, to which tune (migration 208).
+  const [textId, setTextId] = useState<string>(song?.text_id ?? "");
+  const [tuneId, setTuneId] = useState<string>(song?.tune_id ?? "");
+  const [allTexts, setAllTexts] = useState(initialTexts);
+  const [allTunes, setAllTunes] = useState(initialTunes);
+  // The text's first quoted source, which a card without a named tune shows.
+  const [textSource, setTextSource] = useState<SourceRef | null>(null);
+  useEffect(() => {
+    if (!textId) { setTextSource(null); return; }
+    let live = true;
+    supabase.from("text_sources").select("corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation")
+      .eq("text_id", textId).neq("relation", "inspired").order("id")
+      .then(({ data }) => { if (live) setTextSource(((data ?? []) as SourceRef[])[0] ?? null); });
+    return () => { live = false; };
+  }, [textId, supabase]);
 
   const initialComposerIds = song?.song_composers.map((x) => x.person_id) ?? [];
   const initialLyricistIds = song?.song_lyricists.map((x) => x.person_id) ?? [];
@@ -170,21 +214,13 @@ export default function SongEditor({
   ];
 
   // Tag pill arrays
-  const [genres, setGenres] = useState<string[]>(() =>
-    (song?.song_genres ?? []).map((x) => allGenres.find((g) => g.id === x.genre_id)?.name).filter((n): n is string => !!n)
-  );
-  const [themes, setThemes] = useState<string[]>(() =>
-    (song?.song_themes ?? []).map((x) => allThemes.find((t) => t.id === x.theme_id)?.name).filter((n): n is string => !!n)
-  );
-  const [cultures, setCultures] = useState<string[]>(() =>
-    (song?.song_cultures ?? [])
-      .filter((x) => !x.context)
-      .map((x) => allCultures.find((c) => c.id === x.culture_id)?.name)
-      .filter((n): n is string => !!n)
-  );
-  const [languages, setLanguages] = useState<string[]>(() =>
-    (song?.song_languages ?? []).map((x) => allLanguages.find((l) => l.id === x.language_id)?.name).filter((n): n is string => !!n)
-  );
+  const [genres, setGenres] = useState<string[]>(() => songTagNames(song?.song_tags, "genre", "general"));
+  const [themes, setThemes] = useState<string[]>(() => songTagNames(song?.song_tags, "theme", "general"));
+  const [cultures, setCultures] = useState<string[]>(() => songTagNames(song?.song_tags, "culture", "general"));
+  const [languages, setLanguages] = useState<string[]>(() => songTagNames(song?.song_tags, "language", "general"));
+  const [forms, setForms] = useState<string[]>(() => songTagNames(song?.song_tags, "form", "general"));
+  const [occasions, setOccasions] = useState<string[]>(() => songTagNames(song?.song_tags, "occasion", "general"));
+  const [communities, setCommunities] = useState<string[]>(() => songTagNames(song?.song_tags, "community", "general"));
 
   // Alternate titles
   const [altTitles, setAltTitles] = useState<AltTitle[]>(song?.song_alternate_titles ?? []);
@@ -213,14 +249,8 @@ export default function SongEditor({
   const [pendingRecordingArtists, setPendingRecordingArtists] = useState<{ name: string; year: number | null; spotify_url: string | null }[]>([]);
   const [pendingComposerNames, setPendingComposerNames] = useState<string[]>([]);
   const [pendingLyricistNames, setPendingLyricistNames] = useState<string[]>([]);
-  const [composerTraditionalCulture, setComposerTraditionalCulture] = useState(() => {
-    const mc = song?.song_cultures.find((x) => x.context === "music");
-    return mc ? (allCultures.find((c) => c.id === mc.culture_id)?.name ?? "") : "";
-  });
-  const [lyricistTraditionalCulture, setLyricistTraditionalCulture] = useState(() => {
-    const lc = song?.song_cultures.find((x) => x.context === "lyrics");
-    return lc ? (allCultures.find((c) => c.id === lc.culture_id)?.name ?? "") : "";
-  });
+  const [composerTraditionalCulture, setComposerTraditionalCulture] = useState(() => songTraditionTag(song?.song_tags, "music")?.name ?? "");
+  const [lyricistTraditionalCulture, setLyricistTraditionalCulture] = useState(() => songTraditionTag(song?.song_tags, "lyrics")?.name ?? "");
   // Find or create a person/artist by canonical name. Returns the DB id.
   async function resolvePersonName(
     name: string,
@@ -269,7 +299,7 @@ export default function SongEditor({
     title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
     [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
     isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
-    composerTraditionalCulture, lyricistTraditionalCulture,
+    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, knownByRecording, textId, tuneId,
   ]);
   const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
 
@@ -366,6 +396,9 @@ export default function SongEditor({
       { key: "genres", label: "Genres", current: genres.join(", "), suggested: s.genres.join(", ") },
       { key: "themes", label: "Themes", current: themes.join(", "), suggested: s.themes.join(", ") },
       { key: "cultures", label: "Cultures", current: cultures.join(", "), suggested: s.cultures.join(", ") },
+      { key: "forms", label: "Forms", current: forms.join(", "), suggested: (s.forms ?? []).join(", ") },
+      { key: "occasions", label: "Occasions", current: occasions.join(", "), suggested: (s.occasions ?? []).join(", ") },
+      { key: "communities", label: "Communities", current: communities.join(", "), suggested: (s.communities ?? []).join(", ") },
       { key: "music_culture", label: "Music culture", current: composerTraditionalCulture, suggested: s.music_culture ?? "" },
       { key: "lyric_culture", label: "Lyric culture", current: lyricistTraditionalCulture, suggested: s.lyric_culture ?? "" },
       { key: "languages", label: "Languages", current: languages.join(", "), suggested: s.languages.join(", ") },
@@ -426,6 +459,15 @@ export default function SongEditor({
     }
     if (accept("cultures") && aiSuggestions.cultures.length) {
       setCultures(aiSuggestions.cultures);
+    }
+    if (accept("forms") && aiSuggestions.forms?.length) {
+      setForms(aiSuggestions.forms);
+    }
+    if (accept("occasions") && aiSuggestions.occasions?.length) {
+      setOccasions(aiSuggestions.occasions);
+    }
+    if (accept("communities") && aiSuggestions.communities?.length) {
+      setCommunities(aiSuggestions.communities);
     }
     if (accept("music_culture") && aiSuggestions.music_culture) {
       setComposerTraditionalCulture(aiSuggestions.music_culture);
@@ -496,8 +538,8 @@ export default function SongEditor({
         p_song_id: song!.id,
         p: songSavePayload(
           {
-            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
-            genres, themes, languages, cultures, composers, lyricists, pendingComposerNames, pendingLyricistNames,
+            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, textId, tuneId,
+            genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
             composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
             productions, pendingProductionNames, productionYears,
             hadRecordingArtists: (song?.song_recording_artists.length ?? 0) > 0,
@@ -667,6 +709,42 @@ export default function SongEditor({
             <p className="py-2 font-mono text-xs text-slate-500 break-all">/songs/{slug || "…"}</p>
             <p className="text-xs text-slate-400">Set automatically from the title, first three writers and music culture. Old addresses keep working.</p>
           </Field>
+          <Field label="Known by">
+            <select
+              value={knownByRecording === null ? "auto" : knownByRecording ? "recording" : "writers"}
+              onChange={(e) => setKnownByRecording(e.target.value === "auto" ? null : e.target.value === "recording")}
+              className="input"
+            >
+              <option value="auto">Automatic</option>
+              <option value="recording">Its recording: recording artists under the title</option>
+              <option value="writers">Its writers: writers or tradition on its page; tune, scripture or first line on cards</option>
+            </select>
+            <p className="text-xs text-slate-400">
+              Automatic shows the writers, or &ldquo;Traditional · culture&rdquo;, for traditional songs and hymns, nigunim and other traditional forms, and the recording artists for everything else.
+              {song?.byline ? <> Now: <span className="text-slate-600">{song.byline}</span></> : null}
+            </p>
+          </Field>
+          <div className="sm:col-span-2 space-y-1">
+            <p className="text-sm font-medium text-slate-700">Card preview</p>
+            <CardPreview
+              title={title}
+              credits={songCardCredits({
+                title,
+                // The override decides at once; Automatic follows the saved song's line until you save.
+                knownByRecording,
+                byline: song?.byline,
+                displayArtist: displayArtist || null,
+                composers: [...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
+                cultures,
+                recordingArtists: recordingArtists.map((r, i) => ({ name: allArtists.find((a) => a.id === r.id)?.name ?? "", year: r.year, position: i })).filter((r) => r.name),
+                identity: {
+                  tune: allTunes.find((t) => t.id === tuneId)?.tune_label ?? null,
+                  source: textSource,
+                  first_line: firstLine || null,
+                },
+              })}
+            />
+          </div>
         </div>
 
         {(() => {
@@ -871,7 +949,40 @@ export default function SongEditor({
         <TagPillsField label="Themes" value={themes} onChange={setThemes} suggestions={allThemes.map((t) => t.name)} allowNew placeholder="Search themes…" />
         <TagPillsField label="Languages" value={languages} onChange={setLanguages} suggestions={allLanguages.map((l) => l.name)} placeholder="Search languages…" />
         <TagPillsField label="Cultures" value={cultures} onChange={setCultures} suggestions={allCultures.map((c) => c.name)} allowNew placeholder="Search cultures…" />
+        <TagPillsField label="Forms" value={forms} onChange={setForms} suggestions={allForms.map((f) => f.name)} allowNew placeholder="Search forms…" />
+        <TagPillsField label="Occasions" value={occasions} onChange={setOccasions} suggestions={allOccasions.map((o) => o.name)} allowNew placeholder="Search occasions…" />
+        <TagPillsField label="Communities" value={communities} onChange={setCommunities} suggestions={allCommunities.map((c) => c.name)} allowNew placeholder="Search communities…" />
       </section>
+      {/* Text & tune */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Text &amp; tune</h2>
+        <p className="text-xs text-slate-500">For songs whose words are sung to more than one melody (hymns, psalms, liturgy) or a melody that carries several texts. Most songs need neither.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CatalogLinkField
+            kind="text"
+            songTitle={title}
+            options={allTexts.map((t) => ({ id: t.id, name: t.title, slug: t.slug }))}
+            value={textId}
+            savedValue={song?.text_id ?? ""}
+            onChange={setTextId}
+            onCreated={(t) => { setAllTexts((prev) => [...prev, { id: t.id, title: t.name, slug: t.slug }]); setTextId(t.id); }}
+            people={allPeople}
+            communities={allCommunities}
+          />
+          <CatalogLinkField
+            kind="tune"
+            songTitle={title}
+            options={allTunes.map((t) => ({ id: t.id, name: t.tune_label, slug: t.slug }))}
+            value={tuneId}
+            savedValue={song?.tune_id ?? ""}
+            onChange={setTuneId}
+            onCreated={(t) => { setAllTunes((prev) => [...prev, { id: t.id, tune_label: t.name, slug: t.slug }]); setTuneId(t.id); }}
+            people={allPeople}
+            communities={allCommunities}
+          />
+        </div>
+      </section>
+
       {/* Alternate titles */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
         <h2 className="text-sm font-semibold text-slate-700">Alternate titles (AKA)</h2>
@@ -1291,7 +1402,7 @@ function ProductionYearInputs({ rows, years, onChange }: {
     <div className="space-y-1.5">
       {rows.map((r) => (
         <label key={r.key} className="flex items-center gap-2 text-xs text-slate-600">
-          <span className="min-w-0 flex-1 truncate">{r.name} — year</span>
+          <span className="min-w-0 flex-1 truncate">Year for {r.name}</span>
           <input
             type="number"
             value={years[r.key] ?? ""}

@@ -5,13 +5,17 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
+import { useSongCardActions } from "@/hooks/useSongCardActions";
+import { matchedAlternateTitles, loadSongFilterMeta } from "@singjam/core";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import { useBrowseSongs, type BrowseFilters } from "@/hooks/useBrowseSongs";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { SortDropdown } from "@/components/SortDropdown";
-import { FilterPanel } from "@/components/FilterPanel";
+import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
+import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import SearchInput from "@/components/SearchInput";
+import FiltersButton from "@/components/FiltersButton";
 
 type FilterMeta = {
   song_id: string;
@@ -19,6 +23,9 @@ type FilterMeta = {
   languages: string[];
   themes: string[];
   cultures: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
@@ -29,8 +36,8 @@ const PAGE_SIZE = 20;
 
 const SORT_OPTIONS = [
   { value: "popularity" as const, label: "Popular" },
-  { value: "title_asc" as const, label: "A → Z" },
-  { value: "title_desc" as const, label: "Z → A" },
+  { value: "title_asc" as const, label: "A–Z" },
+  { value: "title_desc" as const, label: "Z–A" },
 ];
 
 export default function SongSearch({ initialQuery = "" }: { initialQuery?: string }) {
@@ -38,16 +45,12 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
   const router = useRouter();
 
   const [filterMeta, setFilterMeta] = useState<FilterMeta[]>([]);
-  const [singingVoice, setSingingVoice] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [q, setQ] = useState(() => {
     if (typeof window === "undefined") return initialQuery;
     return new URLSearchParams(window.location.search).get("q") ?? initialQuery;
   });
   const [status, setStatus] = useState<string | null>(null);
-  const [pendingAddId, setPendingAddId] = useState<string | null>(null);
-  const [repertoire, setRepertoire] = useState<Map<string, string>>(new Map());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hideMySongs, setHideMySongs] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -63,33 +66,27 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
 
   const { results, loading, error: searchError } = useSongSearch(q, { limit: 50, debounceMs: 200 });
 
-  const {
-    filterOptions, matchesFilters,
-    selectedGenres, selectedLanguages, selectedThemes, selectedCultures,
-    selectedVibe, setSelectedVibe,
-    selectedTonality, setSelectedTonality,
-    selectedMeter, setSelectedMeter,
-    yearMin, setYearMin,
-    yearMax, setYearMax,
-    yearBounds,
-    activeFilterCount,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, clearFilters,
-    sortBy, setSortBy,
-  } = useSongFilters(filterMeta, "popularity");
+  const hierarchy = useTagHierarchy();
+  const filters = useSongFilters(filterMeta, "popularity", hierarchy);
+  const { matchesFilters, activeFilterCount, sortBy, setSortBy, expandedState } = filters;
 
+  // The browse RPC gets each selected tag plus everything below it, as the list filter does.
   const browseFilters = useMemo<BrowseFilters>(() => ({
-    genres: Array.from(selectedGenres).sort(),
-    languages: Array.from(selectedLanguages).sort(),
-    themes: Array.from(selectedThemes).sort(),
-    cultures: Array.from(selectedCultures).sort(),
-    vibe: selectedVibe,
-    tonality: selectedTonality,
-    meter: selectedMeter,
-    yearMin,
-    yearMax,
+    genres: Array.from(expandedState.genres).sort(),
+    languages: Array.from(expandedState.languages).sort(),
+    themes: Array.from(expandedState.themes).sort(),
+    cultures: Array.from(expandedState.cultures).sort(),
+    forms: Array.from(expandedState.forms).sort(),
+    occasions: Array.from(expandedState.occasions).sort(),
+    communities: Array.from(expandedState.communities).sort(),
+    vibe: expandedState.vibe,
+    tonality: expandedState.tonality,
+    meter: expandedState.meter,
+    yearMin: expandedState.yearMin,
+    yearMax: expandedState.yearMax,
     excludeMine: hideMySongs,
     sort: sortBy,
-  }), [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, hideMySongs, sortBy]);
+  }), [expandedState, hideMySongs, sortBy]);
 
   const {
     songs: browseSongs,
@@ -101,29 +98,18 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     removeSong,
   } = useBrowseSongs(browseFilters, { pageSize: PAGE_SIZE, initialCount });
 
+  // The viewer's songs and the add buttons, shared with the browse pages' cards.
+  const actions = useSongCardActions({ onAdded: (songId) => { if (hideMySongs) removeSong(songId); } });
+  const { currentUser, repertoire } = actions;
+
   useEffect(() => {
     if (browseSongs.length > 0) sessionStorage.setItem("vc:/search", String(browseSongs.length));
   }, [browseSongs.length]);
 
   useEffect(() => {
-    // User data — session reads from localStorage (fast), then fetches profile + repertoire
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return;
-      setCurrentUser(session.user);
-      Promise.all([
-        supabase.from("profiles").select("singing_voice").eq("id", session.user.id).single(),
-        supabase.from("user_songs").select("song_id, confidence").eq("user_id", session.user.id),
-      ]).then(([profileRes, repertoireRes]) => {
-        setSingingVoice((profileRes.data as any)?.singing_voice ?? null);
-        setRepertoire(new Map(((repertoireRes.data ?? []) as any[]).map((r) => [r.song_id, r.confidence ?? ""])));
-      });
-    });
-
     // Slim per-song filter fields for the cascading filter-pill options —
     // the browse list itself is paginated via the browse_songs RPC
-    supabase.rpc("song_filter_meta").then(({ data }) => {
-      setFilterMeta((data ?? []) as FilterMeta[]);
-    });
+    loadSongFilterMeta(supabase).then((m) => setFilterMeta(m as FilterMeta[]), () => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -169,33 +155,6 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   }, [q, hideMySongs]);
 
-  async function handlePendingAdd(songId: string, slug?: string | null) {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      const next = slug ? `/songs/${slug}` : "/search";
-      router.push(`/auth?next=${encodeURIComponent(next)}`);
-      return;
-    }
-    setPendingAddId(songId);
-  }
-
-  async function addSong(songId: string, level: string) {
-    setPendingAddId(null);
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
-    if (!session) { router.push(`/auth?next=${encodeURIComponent(window.location.pathname)}`); return; }
-    const { error } = await supabase.from("user_songs").upsert(
-      { user_id: session.user.id, song_id: songId, confidence: level, updated_at: new Date().toISOString() },
-      { onConflict: "user_id,song_id" }
-    );
-    if (error) {
-      setStatus(error.message);
-    } else {
-      setRepertoire((prev) => new Map(prev).set(songId, level));
-      if (hideMySongs) removeSong(songId);
-    }
-  }
-
   const searching = q.trim().length > 0;
 
   // Back from a song lands where the visitor was: the query and filters are in
@@ -227,10 +186,10 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
           {loading
             ? "Searching…"
             : q.trim()
-              ? `${sortedSearch.length} song(s)${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`
+              ? `${sortedSearch.length} song${sortedSearch.length === 1 ? "" : "s"}${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`
               : null}
         </div>
-        {(searchError ?? browseError ?? status) ? <div className="text-sm text-zinc-700">{searchError ?? browseError ?? status}</div> : null}
+        {(searchError ?? browseError ?? status ?? actions.status) ? <div className="text-sm text-zinc-700">{searchError ?? browseError ?? status ?? actions.status}</div> : null}
       </div>
 
       {/* Filter bar */}
@@ -238,19 +197,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
         <div className="flex flex-col gap-2 px-1">
           <div className="flex items-center gap-2">
             <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} align="left" />
-            <button
-              onClick={() => setFiltersOpen((o) => !o)}
-              className={`h-7 flex items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
-                activeFilterCount > 0
-                  ? "border-amber-400 bg-amber-50 text-amber-700"
-                  : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
-              }`}
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1.5 3h13a.5.5 0 0 1 0 1H1.5a.5.5 0 0 1 0-1zm2 4h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1 0-1zm3 4h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1 0-1z" />
-              </svg>
-              Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-            </button>
+            <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
             {currentUser && repertoire.size > 0 && (
               <label className="h-7 flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-500 cursor-pointer select-none hover:bg-zinc-50 transition-colors whitespace-nowrap">
                 <input
@@ -268,31 +215,10 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
           </p>
         </div>
 
+        <ActiveFilterChips filters={filters} />
+
         {filtersOpen && (
-          <FilterPanel
-            filterOptions={filterOptions}
-            selectedGenres={selectedGenres}
-            selectedLanguages={selectedLanguages}
-            selectedThemes={selectedThemes}
-            selectedCultures={selectedCultures}
-            selectedVibe={selectedVibe}
-            setSelectedVibe={setSelectedVibe}
-            selectedTonality={selectedTonality}
-            setSelectedTonality={setSelectedTonality}
-            selectedMeter={selectedMeter}
-            setSelectedMeter={setSelectedMeter}
-            yearMin={yearMin}
-            setYearMin={setYearMin}
-            yearMax={yearMax}
-            setYearMax={setYearMax}
-            yearBounds={yearBounds}
-            activeFilterCount={activeFilterCount}
-            toggleGenre={toggleGenre}
-            toggleLanguage={toggleLanguage}
-            toggleTheme={toggleTheme}
-            toggleCulture={toggleCulture}
-            clearFilters={clearFilters}
-          />
+          <FilterPanel filters={filters} hierarchy={hierarchy} />
         )}
 
         {/* Song list: search results or browse list */}
@@ -305,24 +231,23 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 title={r.title}
                 slug={r.slug}
                 displayArtist={r.display_artist}
+                byline={r.byline}
+                cardIdentity={r.card_identity}
                 composers={r.composers}
                 cultures={r.cultures ?? []}
                 productions={r.productions}
                 recordingArtists={r.recording_artists}
                 productionCredits={r.production_credits}
-                aka={r.aka}
+                aka={matchedAlternateTitles(r.aka, q, r.title)}
                 genres={r.genres}
+                forms={r.forms}
+                occasions={r.occasions}
+                communities={r.communities}
                 languages={r.languages ?? []}
                 popularity={r.popularity}
                 youtubeId={r.youtube_id}
                 spotifyTrackId={r.spotify_track_id}
-                repertoire={repertoire}
-                pendingAddId={pendingAddId}
-                singingVoice={singingVoice}
-                setPendingAddId={setPendingAddId}
-                onAdd={handlePendingAdd}
-                addSong={addSong}
-                onVoiceUpdated={(v) => setSingingVoice(v)}
+                {...actions.cardProps}
               />
             ))}
             {!loading && sortedSearch.length === 0 ? (
@@ -354,24 +279,23 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 title={r.title}
                 slug={r.slug}
                 displayArtist={r.display_artist}
+                byline={r.byline}
+                cardIdentity={r.card_identity}
                 composers={r.composers}
-                cultures={r.cultures}
+                cultures={r.cultures ?? []}
                 productions={r.productions}
                 recordingArtists={r.recording_artists}
                 productionCredits={r.production_credits}
                 aka={null}
                 genres={r.genres}
+                forms={r.forms}
+                occasions={r.occasions}
+                communities={r.communities}
                 languages={r.languages ?? []}
                 popularity={r.popularity}
                 youtubeId={r.youtube_id}
                 spotifyTrackId={r.spotify_track_id}
-                repertoire={repertoire}
-                pendingAddId={pendingAddId}
-                singingVoice={singingVoice}
-                setPendingAddId={setPendingAddId}
-                onAdd={handlePendingAdd}
-                addSong={addSong}
-                onVoiceUpdated={(v) => setSingingVoice(v)}
+                {...actions.cardProps}
               />
             ))}
 

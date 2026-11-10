@@ -8,12 +8,12 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import JamTagPicker, { jamTagSummary, loadJamTagOptions, type JamTagOption } from '@/components/JamTagPicker';
 import { useAddressTimezone } from '@/lib/useAddressTimezone';
 import { JAM_IMAGE_TYPE_ERROR, isJamImageType, zonedInputToIso, pickersToZonedInput, zoneAbbreviation, resolvePlaceAddress } from '@singjam/core';
 
 const PLACES_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 
-type LookupItem = { id: string; name: string };
 type PlaceSuggestion = { description: string; neighborhood: string; placeId: string };
 
 const VISIBILITY_OPTIONS: { value: 'community' | 'private'; label: string; desc: string }[] = [
@@ -142,52 +142,6 @@ function LocationModal({
 
 // ── Genre/Theme multi-select modal ────────────────────────────────────────────
 
-function MultiSelectModal({
-  visible,
-  title,
-  items,
-  selected,
-  onClose,
-  onToggle,
-}: {
-  visible: boolean;
-  title: string;
-  items: LookupItem[];
-  selected: string[];
-  onClose: () => void;
-  onToggle: (id: string) => void;
-}) {
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View className="flex-1 bg-white">
-        <View className="flex-row items-center px-4 pt-4 pb-3 border-b border-zinc-100">
-          <View style={{ width: 48 }} />
-          <Text className="flex-1 text-center font-semibold text-zinc-900">{title}</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text className="text-amber-600 font-medium">Done</Text>
-          </TouchableOpacity>
-        </View>
-        <FlatList
-          data={items}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => {
-            const checked = selected.includes(item.id);
-            return (
-              <TouchableOpacity
-                onPress={() => onToggle(item.id)}
-                className={`px-4 py-3 border-b border-zinc-100 flex-row items-center justify-between ${checked ? 'bg-amber-50' : ''}`}
-              >
-                <Text className={`${checked ? 'text-amber-800 font-semibold' : 'text-zinc-900'}`}>{item.name}</Text>
-                {checked && <Ionicons name="checkmark" size={16} color="#d97706" />}
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </View>
-    </Modal>
-  );
-}
-
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 function formatDateDisplay(d: Date): string {
@@ -215,17 +169,14 @@ export default function NewJamScreen() {
   const [neighborhood, setNeighborhood] = useState('');
   const { timezone, resolving: resolvingTimezone } = useAddressTimezone(locationTbd ? null : fullAddress, null, null);
 
-  const [genres, setGenres] = useState<LookupItem[]>([]);
-  const [themes, setThemes] = useState<LookupItem[]>([]);
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [allTags, setAllTags] = useState<JamTagOption[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [startPickerVisible, setStartPickerVisible] = useState(false);
   const [endPickerVisible, setEndPickerVisible] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
-  const [genreModalVisible, setGenreModalVisible] = useState(false);
-  const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [tagModalVisible, setTagModalVisible] = useState(false);
 
   const [coverAsset, setCoverAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [saving, setSaving] = useState(false);
@@ -233,22 +184,13 @@ export default function NewJamScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: g }, { data: t }] = await Promise.all([
-        supabase.from('genres').select('id, name').order('name'),
-        supabase.from('themes').select('id, name').order('name'),
-      ]);
-      setGenres((g as LookupItem[]) ?? []);
-      setThemes((t as LookupItem[]) ?? []);
+      setAllTags(await loadJamTagOptions().catch(() => []));
     }
     load();
   }, []);
 
-  function toggleGenre(id: string) {
-    setSelectedGenres(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
-
-  function toggleTheme(id: string) {
-    setSelectedThemes(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  function toggleTag(id: string) {
+    setSelectedTags(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
   // The pickers hold the venue's wall clock; read it in the venue's zone.
@@ -299,14 +241,8 @@ export default function NewJamScreen() {
 
     const jamId = data.id;
 
-    await Promise.all([
-      selectedGenres.length > 0
-        ? supabase.from('jam_genres').insert(selectedGenres.map(genre_id => ({ jam_id: jamId, genre_id })))
-        : Promise.resolve(),
-      selectedThemes.length > 0
-        ? supabase.from('jam_themes').insert(selectedThemes.map(theme_id => ({ jam_id: jamId, theme_id })))
-        : Promise.resolve(),
-    ]);
+    const tagIds = selectedTags;
+    if (tagIds.length > 0) await supabase.from('jam_tags').insert(tagIds.map(tag_id => ({ jam_id: jamId, tag_id })));
 
     if (coverAsset) {
       const ext = coverAsset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
@@ -346,8 +282,7 @@ export default function NewJamScreen() {
     setCoverAsset(asset);
   }
 
-  const selectedGenreNames = selectedGenres.map(id => genres.find(g => g.id === id)?.name).filter(Boolean).join(', ');
-  const selectedThemeNames = selectedThemes.map(id => themes.find(t => t.id === id)?.name).filter(Boolean).join(', ');
+  const selectedTagNames = jamTagSummary(allTags, selectedTags);
 
   return (
     <>
@@ -358,21 +293,12 @@ export default function NewJamScreen() {
         onClose={() => setLocationModalVisible(false)}
         onSelect={(addr, nbhd) => { setFullAddress(addr); setNeighborhood(nbhd); }}
       />
-      <MultiSelectModal
-        visible={genreModalVisible}
-        title="Genres"
-        items={genres}
-        selected={selectedGenres}
-        onClose={() => setGenreModalVisible(false)}
-        onToggle={toggleGenre}
-      />
-      <MultiSelectModal
-        visible={themeModalVisible}
-        title="Themes"
-        items={themes}
-        selected={selectedThemes}
-        onClose={() => setThemeModalVisible(false)}
-        onToggle={toggleTheme}
+      <JamTagPicker
+        visible={tagModalVisible}
+        options={allTags}
+        selected={selectedTags}
+        onClose={() => setTagModalVisible(false)}
+        onToggle={toggleTag}
       />
 
       {/* iOS date/time pickers (shown inline on iOS) */}
@@ -601,25 +527,15 @@ export default function NewJamScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Genres & Themes */}
+            {/* Tags */}
             <View className="bg-white rounded-xl border border-zinc-100 overflow-hidden mb-6">
               <TouchableOpacity
-                onPress={() => setGenreModalVisible(true)}
-                className="px-4 py-3 border-b border-zinc-100 flex-row items-center justify-between"
-              >
-                <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Genres</Text>
-                <Text className={`font-medium flex-1 text-right ml-4 ${selectedGenreNames ? 'text-zinc-900' : 'text-zinc-400'}`} numberOfLines={1}>
-                  {selectedGenreNames || 'None selected'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setThemeModalVisible(true)}
+                onPress={() => setTagModalVisible(true)}
                 className="px-4 py-3 flex-row items-center justify-between"
               >
-                <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Themes</Text>
-                <Text className={`font-medium flex-1 text-right ml-4 ${selectedThemeNames ? 'text-zinc-900' : 'text-zinc-400'}`} numberOfLines={1}>
-                  {selectedThemeNames || 'None selected'}
+                <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Tags</Text>
+                <Text className={`font-medium flex-1 text-right ml-4 ${selectedTagNames ? 'text-zinc-900' : 'text-zinc-400'}`} numberOfLines={1}>
+                  {selectedTagNames || 'None selected'}
                 </Text>
               </TouchableOpacity>
             </View>

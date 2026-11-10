@@ -1,11 +1,15 @@
 "use client";
 
-import { formatJammers, formatRecordingArtists, hasLeadVoice, productionCredits, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
-import { Fragment, useState } from "react";
+import { browsePath, songCardPills, songCardCredits, hasLeadVoice, productionCredits, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { Fragment, memo, useState } from "react";
 import Link from "next/link";
-import { formatComposers } from "@/lib/formatComposers";
 import RoleSelect from "@/components/RoleSelect";
+import CreditLinks from "@/components/CreditLinks";
 import ConfidencePicker from "@/components/ConfidencePicker";
+import MyKeySelect from "@/components/MyKeySelect";
+import AddToSetPanel from "@/components/AddToSetPanel";
+import ChordChartSlot from "@/components/ChordChartSlot";
+import type { MySongTools } from "@/hooks/useSongCardActions";
 
 export const LEVELS = [
   { key: "lead", label: "Lead" },
@@ -29,11 +33,13 @@ function SpotifyIcon() {
   );
 }
 
-export default function SongCard({
+function SongCard({
   songId,
   title,
   slug,
   displayArtist,
+  byline,
+  cardIdentity,
   composers,
   cultures,
   productions,
@@ -41,7 +47,11 @@ export default function SongCard({
   recordingArtists,
   aka,
   genres,
+  forms,
+  occasions,
+  communities,
   languages,
+  context,
   popularity,
   youtubeId,
   spotifyTrackId,
@@ -52,11 +62,14 @@ export default function SongCard({
   onAdd,
   addSong,
   onVoiceUpdated,
+  tools,
 }: {
   songId: string;
   title: string;
   slug: string | null;
   displayArtist: string | null;
+  byline?: string | null;
+  cardIdentity?: CardIdentity;
   composers: string[];
   cultures: string[];
   productions: string[];
@@ -64,6 +77,11 @@ export default function SongCard({
   recordingArtists?: RecordingArtistCredit[] | null;
   aka: string[] | null;
   genres: string[];
+  forms?: string[] | null;
+  occasions?: string[] | null;
+  communities?: string[] | null;
+  // One extra line for where the card appears: a songwriter's role, a match reason…
+  context?: string | null;
   languages: string[];
   popularity?: number;
   youtubeId?: string | null;
@@ -75,6 +93,8 @@ export default function SongCard({
   onAdd: (id: string, slug?: string | null) => void | Promise<void>;
   addSong: (songId: string, level: string) => void;
   onVoiceUpdated: (voice: string) => void;
+  // For a song in My songs: key, sets and chart, as on the song page.
+  tools?: MySongTools;
 }) {
   const [youtubeOpen, setYoutubeOpen] = useState(false);
   const [spotifyOpen, setSpotifyOpen] = useState(false);
@@ -84,20 +104,23 @@ export default function SongCard({
   const confidenceLabel = LEVELS.find((l) => l.key === confidence)?.label ?? confidence;
   const picking = pendingAddId === songId;
   const href = `/songs/${slug ?? songId}`;
-  const artistsLine = formatRecordingArtists(recordingArtists, displayArtist);
+  const credits = songCardCredits({ title, byline, displayArtist, composers, cultures: cultures ?? [], recordingArtists, identity: cardIdentity });
   const shows = productionCredits(productionCreditsProp, productions);
+  const pills = songCardPills({ forms, occasions, genres, communities, languages });
 
+  // isolate keeps the stretched link inside the card, so the next card would
+  // paint over an open Add to set panel: a card with one open is raised.
   return (
-    <div className="rounded-2xl border border-zinc-200 p-4 shadow-sm">
+    <div className="relative isolate rounded-2xl border border-zinc-200 p-4 shadow-sm hover:border-zinc-300 has-[[data-popover-open]]:z-[1]">
       <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
           <div className="font-medium">
-            <Link href={href} className="hover:text-amber-600">
+            <Link href={href} className="relative z-10 hover:text-amber-600">
               {title}
             </Link>
-            {composers.length > 0 && (
+            {credits.writers.length > 0 && (
               <span className="ml-1 font-normal text-zinc-400">
-                ({formatComposers(composers, cultures ?? [])})
+                (<CreditLinks credits={credits.writers} linkClassName="relative z-10" />)
               </span>
             )}
           </div>
@@ -107,20 +130,22 @@ export default function SongCard({
               {shows.map((p, i) => (
                 <Fragment key={`${p.name}-${p.year}`}>
                   {i > 0 && ", "}
-                  <em>{p.name}</em>
-                  {p.year ? ` (${p.year})` : null}
+                  {p.slug ? (
+                    <Link href={browsePath("show", p.slug)} className="relative z-10 hover:text-amber-700 hover:underline"><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</Link>
+                  ) : <><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</>}
                 </Fragment>
               ))}
-              {artistsLine ? ` · ${artistsLine}` : null}
+              {credits.line.length > 0 && <> · <CreditLinks credits={credits.line} linkClassName="relative z-10" /></>}
             </div>
-          ) : artistsLine ? (
-            <div className="text-sm text-zinc-500">{artistsLine}</div>
+          ) : credits.line.length > 0 ? (
+            <div className="text-sm text-zinc-500"><CreditLinks credits={credits.line} linkClassName="relative z-10" /></div>
           ) : null}
           {aka && aka.length ? (
             <div className="text-xs text-zinc-500">aka: {aka.join(" · ")}</div>
           ) : null}
+          {context ? <div className="text-xs text-zinc-500">{context}</div> : null}
         </div>
-        <div className="shrink-0 flex items-center gap-0.5">
+        <div className="relative z-10 shrink-0 flex items-center gap-0.5">
           {youtubeId && (
             <button
               onClick={() => setYoutubeOpen((o) => !o)}
@@ -142,7 +167,7 @@ export default function SongCard({
         </div>
       </div>
       {youtubeOpen && youtubeId && (
-        <div className="mt-3 rounded-xl overflow-hidden border border-zinc-200">
+        <div className="relative z-10 mt-3 rounded-xl overflow-hidden border border-zinc-200">
           <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
             <iframe
               className="absolute inset-0 w-full h-full"
@@ -158,24 +183,28 @@ export default function SongCard({
           src={`https://open.spotify.com/embed/track/${spotifyTrackId}?utm_source=generator`}
           width="100%"
           height="152"
-          className="mt-3 rounded-xl border-0"
+          className="relative z-10 mt-3 rounded-xl border-0"
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
           loading="lazy"
         />
       )}
-      {(genres.length > 0 || (popularity ?? 0) > 0) && (
+      {(pills.length > 0 || (popularity ?? 0) > 0) && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {[...genres].sort().map((g) => (
-            <span key={g} className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-500">
-              {g}
-            </span>
+          {pills.map((p) => (
+            <Link
+              key={`${p.type}:${p.name}`}
+              href={browsePath(p.type, p.slug)}
+              className="relative z-10 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-500 hover:border-amber-300 hover:text-amber-700"
+            >
+              {p.name}
+            </Link>
           ))}
           {(popularity ?? 0) > 0 && (
-            <span className="text-xs text-zinc-400">{formatJammers(popularity ?? 0)}</span>
+            <span className="text-xs text-zinc-400">{popularity} know{popularity === 1 ? "s" : ""} it</span>
           )}
         </div>
       )}
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="relative z-10 mt-3 flex flex-wrap items-center gap-1.5">
         {inRepertoire && !askingLeadVoice ? (
           <>
             <RoleSelect
@@ -190,6 +219,20 @@ export default function SongCard({
                 }
               }}
             />
+            {tools && (
+              <>
+                <MyKeySelect value={tools.details.get(songId)?.key ?? null} onChange={(k) => tools.updateKey(songId, k)} size="md" label={`My key for ${title}`} />
+                <AddToSetPanel
+                  songId={songId}
+                  sets={tools.sets}
+                  inSets={tools.inSets[songId]}
+                  onOpen={() => tools.loadSetMemberships(songId)}
+                  onAdded={(setId) => tools.addedToSet(songId, setId)}
+                  onSetCreated={(set) => tools.setCreated(set)}
+                />
+                <ChordChartSlot songId={songId} url={tools.details.get(songId)?.chart} canAdd size="md" onAdded={(url) => tools.chartAdded(songId, url)} />
+              </>
+            )}
           </>
         ) : (inRepertoire && askingLeadVoice) || picking ? (
           <ConfidencePicker
@@ -213,12 +256,12 @@ export default function SongCard({
             </button>
           </>
         )}
-        {!picking && !askingLeadVoice && (
-          <Link href={href} className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50">
-            View
-          </Link>
-        )}
       </div>
+      {/* The whole card opens the song: an overlay last in the DOM, under the lifted controls. */}
+      <Link href={href} aria-label={title} tabIndex={-1} className="absolute inset-0 rounded-2xl" />
     </div>
   );
 }
+
+// Lists re-render on every filter or search keystroke; unchanged cards skip it.
+export default memo(SongCard);

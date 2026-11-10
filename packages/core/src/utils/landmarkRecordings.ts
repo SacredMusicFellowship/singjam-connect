@@ -63,3 +63,38 @@ export function landmarkYear(gptYear: number, claudeYear: number, musicbrainzYea
   if (musicbrainzYear != null && Math.abs(musicbrainzYear - gptYear) <= 2 && Math.abs(musicbrainzYear - claudeYear) <= 2) return musicbrainzYear;
   return gptYear === claudeYear ? gptYear : null;
 }
+
+// A song added without a recording (a folk song, a spiritual, a hymn): the
+// recordings people know it from. Unlike landmarks, one model naming a
+// recording is enough to look it up, because MusicBrainz must then confirm it
+// (a model plus an independent source). Recordings both models name go first.
+export type RecordingCandidate = LandmarkCandidate & { recorded_title?: string | null };
+export type FirstRecordingPick = { artist: string; agreed: boolean; years: number[]; titles: string[] };
+
+export function firstRecordingCandidates(gpt: RecordingCandidate[] | null, claude: RecordingCandidate[] | null): FirstRecordingPick[] {
+  const named = [...(gpt ?? []), ...(claude ?? [])].filter((c) => c?.artist?.trim());
+  const both = (gpt ?? []).filter((g) => (claude ?? []).some((c) => sameArtist(c.artist, g.artist)));
+  const picks: FirstRecordingPick[] = [];
+  for (const c of [...both, ...named]) {
+    if (picks.some((p) => sameArtist(p.artist, c.artist) || tokens(p.artist).join(" ") === tokens(c.artist).join(" "))) continue;
+    const said = named.filter((x) => sameArtist(x.artist, c.artist) || tokens(x.artist).join(" ") === tokens(c.artist).join(" "));
+    // The fuller name is usually the credited one ("Mahalia Jackson" over
+    // "Mahalia"); on a tie the first spelling named wins ("Pete Seeger" over "Seeger, Pete").
+    const artist = said.map((x) => x.artist.trim()).reduce((best, a) => (tokens(a).length > tokens(best).length ? a : best));
+    picks.push({
+      artist,
+      agreed: both.includes(c),
+      years: said.map((x) => x.year).filter((y): y is number => Number.isInteger(y)),
+      titles: [...new Set(said.map((x) => x.recorded_title?.trim()).filter((t): t is string => !!t))],
+    });
+  }
+  return picks;
+}
+
+// MusicBrainz's earliest release year counts when a model's year is within two
+// years of it (an earliest *reissue* doesn't); otherwise the models' years must
+// agree, and a recording named by one model alone gets no year.
+export function firstRecordingYear(modelYears: number[], musicbrainzYear: number | null): number | null {
+  if (musicbrainzYear != null && modelYears.some((y) => Math.abs(y - musicbrainzYear) <= 2)) return musicbrainzYear;
+  return modelYears.length >= 2 && modelYears.every((y) => y === modelYears[0]) ? modelYears[0] : null;
+}

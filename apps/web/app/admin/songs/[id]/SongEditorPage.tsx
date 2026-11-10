@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { getServerSupabase } from "@/lib/supabase/cached";
 import { resolveSongId } from "@/lib/resolveSongId";
-import { isUuid } from "@singjam/core";
+import { fetchAllRows, isUuid } from "@singjam/core";
 import { notFound, redirect } from "next/navigation";
 import SongEditor from "./SongEditor";
 
@@ -13,10 +13,8 @@ export const getSong = cache(async (id: string) => {
     .from("songs")
     .select(`
       *,
-      song_genres(genre_id),
-      song_themes(theme_id),
-      song_cultures(culture_id, context),
-      song_languages(language_id),
+      byline,
+      song_tags(context, tags(id, name, type)),
       song_composers(person_id),
       song_lyricists(person_id),
       song_recording_artists(artist_id, year, position, youtube_url, spotify_url),
@@ -35,28 +33,35 @@ export default async function SongEditorPage({ id, basePath, isAdmin }: { id: st
   if (id === "new") redirect(basePath);
   const supabase = await getServerSupabase();
 
-  const [song, genresRes, themesRes, culturesRes, langsRes, peopleRes, artistsRes, productionsRes] =
+  const [song, tags, peopleRes, artistsRes, productionsRes, texts, tunes] =
     await Promise.all([
       getSong(id),
-      supabase.from("genres").select("id, name").order("name"),
-      supabase.from("themes").select("id, name").order("name"),
-      supabase.from("cultures").select("id, name").order("name"),
-      supabase.from("languages").select("id, name").order("name"),
+      fetchAllRows<{ id: string; name: string; type: string }>((from, to) =>
+        supabase.from("tags").select("id, name, type").order("name").order("id").range(from, to)
+      ),
       supabase.from("people").select("id, name").order("name").limit(10000),
       supabase.from("artists").select("id, name").order("name").limit(10000),
       supabase.from("productions").select("id, name, year").order("name").order("year"),
+      fetchAllRows<{ id: string; title: string; slug: string }>((from, to) => supabase.from("texts").select("id, title, slug").order("title").order("id").range(from, to)),
+      fetchAllRows<{ id: string; slug: string; tune_label: string }>((from, to) => supabase.from("tunes").select("id, slug, tune_label").order("id").range(from, to)),
     ]);
 
   if (!song) notFound();
+  const ofType = (type: string) => tags.filter((t) => t.type === type);
   if (song.slug && song.slug !== id && !isUuid(id)) redirect(`${basePath}/${song.slug}`);
 
   return (
     <SongEditor
       song={song}
-      allGenres={genresRes.data ?? []}
-      allThemes={themesRes.data ?? []}
-      allCultures={culturesRes.data ?? []}
-      allLanguages={langsRes.data ?? []}
+      allGenres={ofType("genre")}
+      allThemes={ofType("theme")}
+      allCultures={ofType("culture")}
+      allLanguages={ofType("language")}
+      allForms={ofType("form")}
+      allOccasions={ofType("occasion")}
+      allCommunities={ofType("community")}
+      allTexts={texts}
+      allTunes={tunes.sort((a, b) => a.tune_label.localeCompare(b.tune_label))}
       allPeople={peopleRes.data ?? []}
       allArtists={artistsRes.data ?? []}
       allProductions={productionsRes.data ?? []}

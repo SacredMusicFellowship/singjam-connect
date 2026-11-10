@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import { mergeSuggestionsById } from "@/lib/mergeSuggestionsById";
 import SubmitSongForm from "@/components/SubmitSongForm";
@@ -13,18 +12,20 @@ import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { useSongSearch, type SongSearchResult } from "@/hooks/useSongSearch";
 import { sortRepertoireSearchResults } from "@/lib/sortRepertoireSearchResults";
 import { SortDropdown } from "@/components/SortDropdown";
-import { FilterPanel } from "@/components/FilterPanel";
+import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
+import { matchedAlternateTitles } from "@singjam/core";
+import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
+import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, songRowText, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
 import ChordChartSlot from "@/components/ChordChartSlot";
 import SearchInput from "@/components/SearchInput";
 import Select from "@/components/Select";
-import SongSubtitle from "@/components/SongSubtitle";
+import FiltersButton from "@/components/FiltersButton";
 
 const CONFIDENCE_LEVELS = [
   { key: "lead", label: "Lead" },
@@ -35,13 +36,16 @@ const CONFIDENCE_LEVELS = [
 type ConfidenceKey = (typeof CONFIDENCE_LEVELS)[number]["key"];
 
 const SORT_OPTIONS = [
-  { value: "title_asc" as const, label: "A → Z" },
-  { value: "title_desc" as const, label: "Z → A" },
+  { value: "title_asc" as const, label: "A–Z" },
+  { value: "title_desc" as const, label: "Z–A" },
   { value: "popularity" as const, label: "Popular" },
 ];
 
 type Item = {
   song_id: string;
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
   slug: string | null;
   confidence: string | null;
   key_note: string | null;
@@ -57,6 +61,9 @@ type Item = {
   genres: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
@@ -79,6 +86,8 @@ type RepertoireCache = {
 
 type SuggestionResult = {
   song_id: string;
+  byline?: string | null;
+  card_identity?: CardIdentity;
   title: string;
   display_artist: string | null;
   first_line: string | null;
@@ -88,6 +97,7 @@ type SuggestionResult = {
   productions: string[];
   genres: string[];
   languages: string[];
+  communities?: string[];
   year: number | null;
   popularity: number;
   youtube_id: string | null;
@@ -106,6 +116,9 @@ type AddableSong = {
   productions: string[];
   genres: string[];
   languages: string[] | null;
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
 };
 
 
@@ -154,6 +167,8 @@ function SuggestionsPanel({
             slug={s.slug}
             title={s.title}
             displayArtist={s.display_artist}
+            byline={s.byline}
+            cardIdentity={s.card_identity}
             composers={s.composers}
             cultures={s.cultures}
             productions={s.productions}
@@ -161,6 +176,7 @@ function SuggestionsPanel({
             productionCredits={s.production_credits}
             aka={null}
             genres={s.genres}
+            communities={s.communities}
             languages={s.languages}
             popularity={s.popularity}
             youtubeId={s.youtube_id}
@@ -212,6 +228,16 @@ const RepertoireRow = memo(function RepertoireRow({
   canAddCharts: boolean;
   actions: RowActions;
 }) {
+  const row = songRowText({
+    title: it.title,
+    byline: it.byline,
+    displayArtist: it.display_artist,
+    composers: it.composers,
+    cultures: it.cultures,
+    recordingArtists: it.recording_artists,
+    identity: it.card_identity,
+    productions: it.productions,
+  });
   return (
   <div
     className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
@@ -231,13 +257,9 @@ const RepertoireRow = memo(function RepertoireRow({
           <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => actions.saveScroll()} className="hover:text-amber-600">
             {it.title}
           </Link>
-          {it.composers.length > 0 && (
-            <span className="ml-1 font-normal text-slate-400">
-              ({formatComposers(it.composers, it.cultures)})
-            </span>
-          )}
+          {row.writers && <span className="ml-1 font-normal text-slate-400">({row.writers})</span>}
         </div>
-        <SongSubtitle productions={it.productions} artist={it.display_artist} fallback="—" className="block truncate text-sm text-zinc-500" />
+        <div className="truncate text-sm text-zinc-500">{row.line || "—"}</div>
         {(it.popularity ?? 0) > 0 && (
           <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
         )}
@@ -315,19 +337,9 @@ export default function RepertoirePage() {
 
   const [isPending, startTransition] = useTransition();
 
-  const {
-    filterOptions, matchesFilters,
-    selectedGenres, selectedLanguages, selectedThemes, selectedCultures,
-    selectedVibe, setSelectedVibe,
-    selectedTonality, setSelectedTonality,
-    selectedMeter, setSelectedMeter,
-    yearMin, setYearMin,
-    yearMax, setYearMax,
-    yearBounds,
-    activeFilterCount,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, clearFilters,
-    sortBy, setSortBy,
-  } = useSongFilters(items, "title_asc");
+  const hierarchy = useTagHierarchy();
+  const filters = useSongFilters(items, "title_asc", hierarchy);
+  const { matchesFilters, activeFilterCount, clearFilters, sortBy, setSortBy } = filters;
 
   const saveScrollPosition = useScrollRestoration(
     "scroll:/repertoire",
@@ -415,6 +427,9 @@ export default function RepertoirePage() {
           updated_at: r.updated_at,
           title: r.title,
           display_artist: r.display_artist,
+          byline: r.byline ?? null,
+          card_identity: r.card_identity ?? null,
+          recording_artists: r.recording_artists ?? [],
           first_line: r.first_line ?? null,
           hook: r.hook ?? null,
           notes: r.notes ?? null,
@@ -428,6 +443,9 @@ export default function RepertoirePage() {
           genres: r.genres ?? [],
           languages: r.languages ?? [],
           themes: r.themes ?? [],
+          forms: r.forms ?? [],
+          occasions: r.occasions ?? [],
+          communities: r.communities ?? [],
           popularity: r.popularity ?? 0,
           chord_chart_url: r.chord_chart_url ?? null,
         }));
@@ -724,6 +742,9 @@ export default function RepertoirePage() {
         updated_at: new Date().toISOString(),
         title: result.title,
         display_artist: result.display_artist ?? null,
+        byline: result.byline ?? null,
+        card_identity: result.card_identity ?? null,
+        recording_artists: result.recording_artists ?? [],
         first_line: result.first_line ?? null,
         hook: null,
         notes: null,
@@ -733,6 +754,9 @@ export default function RepertoirePage() {
         genres: result.genres ?? [],
         languages: result.languages ?? [] as string[],
         themes: [],
+        forms: [],
+        occasions: [],
+        communities: [],
         vibe: null,
         tonality: null,
         meter: null,
@@ -894,13 +918,18 @@ export default function RepertoirePage() {
                       slug={result.slug}
                       title={result.title}
                       displayArtist={result.display_artist}
+                      byline={result.byline}
+                      cardIdentity={result.card_identity}
                       composers={result.composers}
                       cultures={result.cultures ?? []}
                       productions={result.productions}
                       recordingArtists={result.recording_artists}
                       productionCredits={result.production_credits}
-                      aka={result.aka}
+                      aka={matchedAlternateTitles(result.aka, query, result.title)}
                       genres={result.genres}
+                      forms={result.forms}
+                      occasions={result.occasions}
+                      communities={result.communities}
                       languages={result.languages ?? []}
                       youtubeId={result.youtube_id}
                       spotifyTrackId={result.spotify_track_id}
@@ -951,19 +980,7 @@ export default function RepertoirePage() {
             </p>
             <div className="flex items-center gap-2">
               <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
-              <button
-                onClick={() => setFiltersOpen((o) => !o)}
-                className={`h-7 flex items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
-                  activeFilterCount > 0
-                    ? "border-amber-400 bg-amber-50 text-amber-700"
-                    : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
-                }`}
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1.5 3h13a.5.5 0 0 1 0 1H1.5a.5.5 0 0 1 0-1zm2 4h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1 0-1zm3 4h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1 0-1z" />
-                </svg>
-                Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-              </button>
+              <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
             </div>
           </div>
 
@@ -1085,31 +1102,10 @@ export default function RepertoirePage() {
             )}
           </div>
 
+          <ActiveFilterChips filters={filters} />
+
           {filtersOpen && (
-            <FilterPanel
-              filterOptions={filterOptions}
-              selectedGenres={selectedGenres}
-              selectedLanguages={selectedLanguages}
-              selectedThemes={selectedThemes}
-              selectedCultures={selectedCultures}
-              selectedVibe={selectedVibe}
-              setSelectedVibe={setSelectedVibe}
-              selectedTonality={selectedTonality}
-              setSelectedTonality={setSelectedTonality}
-              selectedMeter={selectedMeter}
-              setSelectedMeter={setSelectedMeter}
-              yearMin={yearMin}
-              setYearMin={setYearMin}
-              yearMax={yearMax}
-              setYearMax={setYearMax}
-              yearBounds={yearBounds}
-              activeFilterCount={activeFilterCount}
-              toggleGenre={toggleGenre}
-              toggleLanguage={toggleLanguage}
-              toggleTheme={toggleTheme}
-              toggleCulture={toggleCulture}
-              clearFilters={clearFilters}
-            />
+            <FilterPanel filters={filters} hierarchy={hierarchy} />
           )}
 
           <div className="divide-y rounded-md border">

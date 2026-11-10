@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { canRemoveSetSong, createLatestWinsQueue, fetchAllRows, jamPath, reorderSongsForPlayed, setPath, webUrl } from "@singjam/core";
+import { canRemoveSetSong, createLatestWinsQueue, fetchAllRows, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -201,7 +201,7 @@ export default function SetDetail({
         const { data } = await supabase
           .from("songs")
           .select(
-            "id, title, display_artist, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url)"
+            "id, title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url)"
           )
           .in("id", ids);
         if (!data) return;
@@ -345,7 +345,7 @@ export default function SetDetail({
             supabase
               .from("set_songs")
               .select(
-                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
+                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))"
               )
               .eq("id", row.id)
               .single(),
@@ -443,9 +443,7 @@ export default function SetDetail({
     for (const joinTable of [
       "song_composers",
       "song_lyricists",
-      "song_cultures",
-      "song_genres",
-      "song_themes",
+      "song_tags",
       "song_recording_artists",
     ]) {
       channel.on(
@@ -690,7 +688,7 @@ export default function SetDetail({
         const q = songListFilter.toLowerCase();
         return (
           s.songs.title.toLowerCase().includes(q) ||
-          (s.songs.display_artist ?? "").toLowerCase().includes(q)
+          ((s.songs.byline ?? "") + " " + (s.songs.display_artist ?? "")).toLowerCase().includes(q)
         );
       })
     : sortedSongs;
@@ -833,19 +831,19 @@ export default function SetDetail({
       if (csvColumns.songwriters) {
         const composerNames = (s.songs.song_composers ?? []).map((c) => c.people?.name).filter(Boolean) as string[];
         const lyricistNames = (s.songs.song_lyricists ?? []).map((l) => l.people?.name).filter(Boolean) as string[];
-        const musicCultures = (s.songs.song_cultures ?? []).filter((c) => c.context === "music").map((c) => c.cultures?.name).filter(Boolean) as string[];
-        const lyricCultures = (s.songs.song_cultures ?? []).filter((c) => c.context === "lyrics").map((c) => c.cultures?.name).filter(Boolean) as string[];
+        const musicCultures = songTagNames(s.songs.song_tags, "culture", "music");
+        const lyricCultures = songTagNames(s.songs.song_tags, "culture", "lyrics");
         const composerStr = formatComposers(composerNames, musicCultures);
         const lyricistStr = formatComposers(lyricistNames, lyricCultures);
         cols.push(`"${composerStr.replace(/"/g, '""')}"`);
         cols.push(`"${lyricistStr.replace(/"/g, '""')}"`);
       }
       if (csvColumns.genres) {
-        const names = (s.songs.song_genres ?? []).map((g) => g.genres?.name).filter(Boolean).join("; ");
+        const names = songTagNames(s.songs.song_tags, "genre").join("; ");
         cols.push(`"${names.replace(/"/g, '""')}"`);
       }
       if (csvColumns.themes) {
-        const names = (s.songs.song_themes ?? []).map((t) => t.themes?.name).filter(Boolean).join("; ");
+        const names = songTagNames(s.songs.song_tags, "theme").join("; ");
         cols.push(`"${names.replace(/"/g, '""')}"`);
       }
       if (csvColumns.singjam) cols.push(s.songs.slug ? `https://singjam.org/songs/${s.songs.slug}` : "");
@@ -1530,8 +1528,8 @@ export default function SetDetail({
           <div className="flex gap-0.5 rounded-lg bg-zinc-100 p-0.5">
             {([
               { value: "custom", label: "Custom" },
-              { value: "az",     label: "A → Z" },
-              { value: "za",     label: "Z → A" },
+              { value: "az",     label: "A–Z" },
+              { value: "za",     label: "Z–A" },
               { value: "popularity", label: "Popular" },
             ] as const).map(({ value, label }) => (
               <button
@@ -1578,6 +1576,7 @@ export default function SetDetail({
         {currentUserId && (
           <SetSongPanel
             setId={set.id}
+            jamId={set.jam_id ?? null}
             canEdit={canEdit}
             isSolo={isSolo}
             currentSongIds={songs.map((s) => s.song_id)}

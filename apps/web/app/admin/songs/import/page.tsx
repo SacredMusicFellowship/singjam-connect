@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-
-type ParsedRow = { title: string; artist: string };
+import { importRowBody, parseImportCsv, type ImportRow } from "@/lib/songImportCsv";
+import EnrichmentSpend from "@/components/EnrichmentSpend";
 
 type RowResult =
   | { status: "pending" }
@@ -11,30 +11,9 @@ type RowResult =
   | { status: "added"; detail: string }
   | { status: "error"; reason: string };
 
-function parseCSV(text: string): ParsedRow[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (!lines.length) return [];
-  const first = lines[0].toLowerCase();
-  const hasHeader = first.includes("title") || first.includes("song");
-  return (hasHeader ? lines.slice(1) : lines)
-    .map((line) => {
-      const cols: string[] = [];
-      let cur = "";
-      let inQuote = false;
-      for (const ch of line) {
-        if (ch === '"') { inQuote = !inQuote; }
-        else if (ch === "," && !inQuote) { cols.push(cur.trim()); cur = ""; }
-        else { cur += ch; }
-      }
-      cols.push(cur.trim());
-      return { title: cols[0] ?? "", artist: cols[1] ?? "" };
-    })
-    .filter((r) => r.title);
-}
-
 export default function ImportCSVPage() {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [rows, setRows] = useState<ImportRow[]>([]);
   const [results, setResults] = useState<RowResult[]>([]);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -44,7 +23,7 @@ export default function ImportCSVPage() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const parsed = parseCSV(ev.target?.result as string);
+      const parsed = parseImportCsv(ev.target?.result as string);
       setRows(parsed);
       setResults(parsed.map(() => ({ status: "pending" })));
       setProgress(0);
@@ -61,14 +40,13 @@ export default function ImportCSVPage() {
     setResults([...current]);
 
     for (let i = 0; i < rows.length; i++) {
-      const { title, artist } = rows[i];
       current[i] = { status: "running" };
       setResults([...current]);
       try {
         const res = await fetch("/api/songs/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, artist }),
+          body: JSON.stringify(importRowBody(rows[i])),
         });
         const json = await res.json().catch(() => ({}));
         current[i] =
@@ -94,11 +72,15 @@ export default function ImportCSVPage() {
 
   return (
     <div className="space-y-6">
+      <EnrichmentSpend refreshKey={progress === rows.length && rows.length > 0 ? 1 : 0} />
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Import songs from CSV</h1>
         <p className="mt-1 text-sm text-slate-500">
           CSV should have <code className="rounded bg-slate-100 px-1">title</code> and{" "}
-          <code className="rounded bg-slate-100 px-1">artist</code> columns. Looks up composers, recording artists, genres, language, and Genius URL automatically.
+          <code className="rounded bg-slate-100 px-1">artist</code> columns, and may add{" "}
+          <code className="rounded bg-slate-100 px-1">writers</code> (separated by ;),{" "}
+          <code className="rounded bg-slate-100 px-1">tags</code> (<code className="rounded bg-slate-100 px-1">form:Shanty; occasion:Pub sing</code>) and{" "}
+          <code className="rounded bg-slate-100 px-1">first_line</code>. A row with writers and no artist is added without a recording. Everything left blank fills in automatically.
         </p>
       </div>
 
@@ -142,6 +124,7 @@ export default function ImportCSVPage() {
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">Title</th>
                   <th className="px-4 py-2 text-left font-medium">Artist</th>
+                  <th className="px-4 py-2 text-left font-medium">Writers</th>
                   <th className="px-4 py-2 text-left font-medium">Status</th>
                 </tr>
               </thead>
@@ -152,6 +135,7 @@ export default function ImportCSVPage() {
                     <tr key={i} className="hover:bg-slate-50">
                       <td className="px-4 py-2 font-medium text-slate-800">{row.title}</td>
                       <td className="px-4 py-2 text-slate-500">{row.artist}</td>
+                      <td className="px-4 py-2 text-slate-500">{row.writers}</td>
                       <td className="px-4 py-2">
                         {result?.status === "pending" && <span className="text-slate-300">—</span>}
                         {result?.status === "running" && <span className="text-amber-500">Looking up…</span>}

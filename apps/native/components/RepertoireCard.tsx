@@ -2,8 +2,7 @@ import { memo } from 'react';
 import { View, Text, TouchableOpacity, Linking, Alert } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { formatComposers, formatJammers } from '@singjam/core';
-import SubtitleText from '@/components/SubtitleText';
+import { formatJammers, songRowText, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RolePill from '@/components/RolePill';
 import MyKeyChip from '@/components/MyKeyChip';
@@ -14,8 +13,12 @@ export type RepertoireCardSong = {
   confidence: string;
   key_note: string | null;
   display_artist: string | null;
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
   composers: string[];
   cultures: string[];
+  communities?: string[];
   productions: string[];
   popularity: number;
   chord_chart_url?: string | null;
@@ -53,9 +56,16 @@ function RepertoireCard({
     });
   }
 
-  const composersLabel = song.composers.length > 0
-    ? formatComposers(song.composers, song.cultures)
-    : null;
+  const row = songRowText({
+    title: song.title,
+    byline: song.byline,
+    displayArtist: song.display_artist,
+    composers: song.composers,
+    cultures: song.cultures,
+    recordingArtists: song.recording_artists,
+    identity: song.card_identity,
+    productions: song.productions,
+  });
 
   return (
     <View
@@ -80,13 +90,11 @@ function RepertoireCard({
           <TouchableOpacity onPress={() => onView(song)}>
             <Text numberOfLines={1}>
               <Text className="font-medium text-zinc-900">{song.title}</Text>
-              {composersLabel ? (
-                <Text className="text-zinc-400"> ({composersLabel})</Text>
-              ) : null}
+              {row.writers ? <Text className="text-zinc-400"> ({row.writers})</Text> : null}
             </Text>
           </TouchableOpacity>
           <Text className="text-sm text-zinc-500 mt-0.5" numberOfLines={1}>
-            <SubtitleText productions={song.productions} artist={song.display_artist} fallback="—" />
+            {row.line || '—'}
           </Text>
           {song.popularity > 0 && (
             <Text className="text-xs text-zinc-400 mt-0.5">
@@ -99,6 +107,12 @@ function RepertoireCard({
       <View className="flex-row flex-wrap items-center gap-2 mt-3 ml-8">
         <RolePill level={song.confidence} onPress={handleConfidenceTap} size="md" />
         <MyKeyChip value={song.key_note} onPress={() => onKeyTap(song)} size="md" />
+        <TouchableOpacity
+          onPress={() => onAddToSet(song)}
+          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5"
+        >
+          <Text className="text-sm text-zinc-600">Add to set</Text>
+        </TouchableOpacity>
         {song.chord_chart_url ? (
           // Same Chords link as the set list.
           <TouchableOpacity
@@ -111,12 +125,6 @@ function RepertoireCard({
           </TouchableOpacity>
         ) : null}
 
-        <TouchableOpacity
-          onPress={() => onAddToSet(song)}
-          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5"
-        >
-          <Text className="text-sm text-zinc-600">Add to set</Text>
-        </TouchableOpacity>
 
 
       </View>

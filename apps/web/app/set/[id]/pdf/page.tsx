@@ -30,7 +30,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     getSet(id),
     supabase
       .from("set_songs")
-      .select("song_id, position, key_note, leader_user_ids, songs(title, display_artist, song_productions(productions(name)), tonality, song_recording_artists(position, youtube_url), song_composers(people(name)))")
+      .select("song_id, position, key_note, leader_user_ids, songs(title, display_artist, byline, song_productions(productions(name)), tonality, song_recording_artists(position, youtube_url), song_composers(people(name)))")
       .eq("set_id", id)
       .order("position", { ascending: true }),
     user
@@ -76,7 +76,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     return {
       song_id: s.song_id as string,
       title: (s.songs?.title ?? "") as string,
-      artist: songSubtitleText(productions, s.songs?.display_artist),
+      artist: songSubtitleText(productions, s.songs?.byline),
       key: (s.key_note ?? null) as string | null,
       tonality: (s.songs?.tonality ?? null) as string | null,
       songwriters,

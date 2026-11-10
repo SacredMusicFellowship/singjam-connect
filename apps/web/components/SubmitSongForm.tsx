@@ -202,7 +202,7 @@ function MatchPreview({ match }: { match: Match }) {
       {match.existing ? (
         <p className="text-sm text-zinc-700">
           Already in the library: <span className="font-medium">{match.existing.title}</span>
-          {match.existing.display_artist && <span className="text-zinc-500"> — {match.existing.display_artist}</span>}
+          {match.existing.display_artist && <span className="text-zinc-500"> · {match.existing.display_artist}</span>}
           <Link href={`/songs/${match.existing.slug ?? match.existing.id}`} className="ml-2 font-medium text-amber-600 hover:text-amber-500">
             Open it
           </Link>
@@ -210,7 +210,7 @@ function MatchPreview({ match }: { match: Match }) {
       ) : (
         <p className="text-sm text-zinc-700">
           Is this the song? <span className="font-medium">{match.title}</span>
-          {match.artist && <span className="text-zinc-500"> — {match.artist}</span>}
+          {match.artist && <span className="text-zinc-500"> · {match.artist}</span>}
         </p>
       )}
       {match.youtube_id ? (

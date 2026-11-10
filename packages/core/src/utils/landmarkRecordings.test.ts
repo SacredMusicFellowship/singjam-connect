@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agreedLandmarks, landmarkYear, leadArtist, sameArtist, type LandmarkCandidate } from "./landmarkRecordings";
+import { agreedLandmarks, firstRecordingCandidates, firstRecordingYear, landmarkYear, leadArtist, sameArtist, type LandmarkCandidate } from "./landmarkRecordings";
 import { MAX_RECORDINGS } from "./formatRecordingArtists";
 
 const rec = (artist: string, year: number, why: LandmarkCandidate["why"] = "iconic"): LandmarkCandidate => ({ artist, year, why });
@@ -76,5 +76,30 @@ describe("leadArtist on hostile input", () => {
     const start = Date.now();
     expect(leadArtist("a" + " ".repeat(50000) + "and b")).toBe("a");
     expect(Date.now() - start).toBeLessThan(100);
+  });
+});
+
+describe("firstRecordingCandidates", () => {
+  it("puts recordings both models name first, merges spellings, and keeps one model's picks", () => {
+    const picks = firstRecordingCandidates(
+      [{ artist: "Pete Seeger", year: 1957, why: "iconic", recorded_title: "Erie Canal" }, { artist: "The Weavers", year: 1951, why: "iconic" }],
+      [{ artist: "Bruce Springsteen", year: 2006, why: "iconic" }, { artist: "Seeger, Pete", year: 1957, why: "iconic", recorded_title: "Erie Canal" }],
+    );
+    expect(picks.map((p) => [p.artist, p.agreed])).toEqual([["Pete Seeger", true], ["The Weavers", false], ["Bruce Springsteen", false]]);
+    expect(picks[0].titles).toEqual(["Erie Canal"]);
+    expect(picks[0].years).toEqual([1957, 1957]);
+  });
+  it("copes with a model that answered nothing", () => {
+    expect(firstRecordingCandidates(null, [{ artist: "Mahalia Jackson", year: 1958, why: "iconic" }]).map((p) => p.artist)).toEqual(["Mahalia Jackson"]);
+    expect(firstRecordingCandidates(null, null)).toEqual([]);
+  });
+});
+
+describe("firstRecordingYear", () => {
+  it("trusts MusicBrainz near a model's year, else agreeing models, else nothing", () => {
+    expect(firstRecordingYear([1957], 1958)).toBe(1958);
+    expect(firstRecordingYear([1939, 1939], 1989)).toBe(1939);
+    expect(firstRecordingYear([1939], 1989)).toBeNull();
+    expect(firstRecordingYear([1939, 1940], null)).toBeNull();
   });
 });

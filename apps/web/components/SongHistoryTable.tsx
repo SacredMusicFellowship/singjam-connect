@@ -98,7 +98,7 @@ export default function SongHistoryTable({ stats }: { stats: SongPlayStat[] }) {
                 )}
                 <div className="mt-1 text-xs text-slate-400">
                   Last played {formatDate(s.lastPlayedAt)}
-                  {s.lastJamName ? ` — ${s.lastJamName}` : ""}
+                  {s.lastJamName ? ` · ${s.lastJamName}` : ""}
                 </div>
               </div>
               <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
@@ -141,7 +141,7 @@ export default function SongHistoryTable({ stats }: { stats: SongPlayStat[] }) {
                 <td className="px-4 py-2.5 text-slate-500">{s.playCount}</td>
                 <td className="px-4 py-2.5 text-slate-500">
                   {formatDate(s.lastPlayedAt)}
-                  {s.lastJamName ? ` — ${s.lastJamName}` : ""}
+                  {s.lastJamName ? ` · ${s.lastJamName}` : ""}
                 </td>
               </tr>
             ))}
