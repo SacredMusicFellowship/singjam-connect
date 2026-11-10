@@ -3,13 +3,14 @@ import { View, Text, FlatList, TextInput, TouchableOpacity, RefreshControl, Aler
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { mergeSuggestionsById, songMatchesFilters, deriveFilterOptions, deriveFilterFacets, expandFilterState, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
+import { mergeSuggestionsById, songMatchesFilters, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
 import { useAuth } from '@/lib/auth-context';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
-import { useTagHierarchy } from '@/lib/useTagHierarchy';
+import { useFilterFacets } from '@/lib/useFilterFacets';
+import { noteMySong } from '@/lib/mySongsStore';
 import InlineDropdown from '@/components/InlineDropdown';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RepertoireCard from '@/components/RepertoireCard';
@@ -190,18 +191,7 @@ export default function RepertoireScreen() {
     })();
   }, []);
 
-  // Derive each filter dimension's options from songs passing the OTHER active
-  // filters, so choosing one facet narrows the rest (cascading, like web).
-  const hierarchy = useTagHierarchy();
-  // A selected tag also covers everything below it (Rock covers Classic Rock).
-  const expandedFilters = useMemo(() => expandFilterState(extFilters, hierarchy), [extFilters, hierarchy]);
-  const options = useMemo(() => deriveFilterOptions(songs, expandedFilters), [songs, expandedFilters]);
-  const facets = useMemo(() => deriveFilterFacets(songs, extFilters, hierarchy), [songs, extFilters, hierarchy]);
-
-  const yearBounds = useMemo(() => {
-    const years = songs.map(s => s.year).filter((y): y is number => y != null);
-    return years.length ? { min: Math.min(...years), max: Math.max(...years) } : { min: null, max: null };
-  }, [songs]);
+  const { hierarchy, expanded: expandedFilters, options, facets, yearBounds } = useFilterFacets(songs, extFilters);
 
   // Typing searches the whole catalogue, matching web: results include songs you
   // already own (rendered with their role controls) as well as ones you don't.
@@ -263,13 +253,13 @@ export default function RepertoireScreen() {
     const songId = song.song_id;
     setSongs(prev => prev.map(s => s.song_id === songId ? { ...s, confidence } : s));
     const { error } = await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
-    if (error) { Alert.alert('Error', error.message); latest.current.load(); }
+    if (error) { Alert.alert('Error', error.message); latest.current.load(); } else noteMySong(songId, { confidence });
   }, [userId, singingVoice]);
 
   const handleKeyChange = useCallback(async (songId: string, key_note: string | null) => {
     setSongs(prev => prev.map(s => s.song_id === songId ? { ...s, key_note } : s));
     const { error } = await supabase.from('user_songs').update({ key_note }).eq('user_id', userId).eq('song_id', songId);
-    if (error) { Alert.alert('Error', error.message); latest.current.load(); }
+    if (error) { Alert.alert('Error', error.message); latest.current.load(); } else noteMySong(songId, { key: key_note });
   }, [userId]);
 
   const handleKeyTap = useCallback((song: { song_id: string }) => setKeyPickerSongId(song.song_id), []);
@@ -341,7 +331,7 @@ export default function RepertoireScreen() {
       Alert.alert('Error', error.message);
       setSongs(prevSongs);
       setSuggestions(prevSuggestions);
-    }
+    } else noteMySong(s.song_id, { confidence });
   }, [userId, singingVoice]);
 
   const toggleSelect = useCallback((song: { song_id: string }) => {
@@ -374,7 +364,8 @@ export default function RepertoireScreen() {
       setSongs(prev => prev.map(s => selectedIds.has(s.song_id) ? { ...s, confidence } : s));
       setSelectedIds(new Set());
       for (const songId of ids) {
-        await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
+        const { error } = await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
+        if (!error) noteMySong(songId, { confidence });
       }
     }
     showOptionsSheet({
@@ -397,7 +388,8 @@ export default function RepertoireScreen() {
             setSongs(prev => prev.filter(s => !selectedIds.has(s.song_id)));
             setSelectedIds(new Set());
             for (const songId of ids) {
-              await supabase.from('user_songs').delete().eq('user_id', userId).eq('song_id', songId);
+              const { error } = await supabase.from('user_songs').delete().eq('user_id', userId).eq('song_id', songId);
+              if (!error) noteMySong(songId, null);
             }
           },
         },

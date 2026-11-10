@@ -6,7 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useSongCardActions } from "@/hooks/useSongCardActions";
-import { matchedAlternateTitles } from "@singjam/core";
+import { matchedAlternateTitles, loadSongFilterMeta } from "@singjam/core";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import { useBrowseSongs, type BrowseFilters } from "@/hooks/useBrowseSongs";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
@@ -109,9 +109,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
   useEffect(() => {
     // Slim per-song filter fields for the cascading filter-pill options —
     // the browse list itself is paginated via the browse_songs RPC
-    supabase.rpc("song_filter_meta").then(({ data }) => {
-      setFilterMeta((data ?? []) as FilterMeta[]);
-    });
+    loadSongFilterMeta(supabase).then((m) => setFilterMeta(m as FilterMeta[]), () => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

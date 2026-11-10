@@ -1576,6 +1576,7 @@ export default function SetDetail({
         {currentUserId && (
           <SetSongPanel
             setId={set.id}
+            jamId={set.jam_id ?? null}
             canEdit={canEdit}
             isSolo={isSolo}
             currentSongIds={songs.map((s) => s.song_id)}

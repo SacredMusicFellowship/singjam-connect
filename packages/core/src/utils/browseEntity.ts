@@ -8,10 +8,13 @@ import { fetchAllRows } from "./fetchAllRows";
 import { browsePath, SHOW_MEDIUM_LABEL, type BrowseKind } from "./browsePaths";
 import type { TagType } from "./songTags";
 import { formatYear } from "./yearDisplay";
+import type { FilterableSong } from "./songFilters";
 
 export const BROWSE_LIMIT = 200;
 
-export type BrowseSongRow = {
+// A browse_songs row carries every filter field too, so a page filters its
+// songs without asking for them again.
+export type BrowseSongRow = FilterableSong & {
   song_id: string;
   title: string;
   slug: string | null;
@@ -215,10 +218,11 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
   let { data: tag } = await db.from("tags").select(columns).eq("type", kind).eq("slug", slug).maybeSingle();
   if (!tag) ({ data: tag } = await db.from("tags").select(columns).eq("type", kind).eq("name", slug).maybeSingle());
   if (!tag) return null;
-  const [{ data: links }, { data: descendants }] = await Promise.all([
-    db.from("tag_relations").select("kind, tag_id, related_tag_id, a:tags!tag_relations_tag_id_fkey(name, slug, type), b:tags!tag_relations_related_tag_id_fkey(name, slug, type)")
+  const [{ data: links }, songIds] = await Promise.all([
+    db.from("tag_relations")
+      .select("kind, tag_id, related_tag_id, a:tags!tag_relations_tag_id_fkey(name, slug, type), b:tags!tag_relations_related_tag_id_fkey(name, slug, type)")
       .or(`tag_id.eq.${tag.id},related_tag_id.eq.${tag.id}`),
-    db.rpc("tag_descendants", { p_tag_ids: [tag.id] }),
+    tagSongIds(db, tag.id),
   ]);
   const parents: LinkedTag[] = [], children: LinkedTag[] = [], related: LinkedTag[] = [];
   for (const l of (links ?? []) as any[]) {
@@ -228,48 +232,49 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
     else related.push(other);
   }
   const byName = (a: LinkedTag, b: LinkedTag) => (a.name < b.name ? -1 : 1);
-  const tagIds = ((descendants ?? []) as { tag_id: string }[]).map((d) => d.tag_id);
-  const ids = tagIds.length ? tagIds : [tag.id];
-  // Songs tagged directly, and songs whose tune or text carries the tag (a raga
-  // or maqam usually belongs to the tune; a language or source to the text).
-  const [rows, tuneRows, textRows] = await Promise.all([
-    fetchAllRows<{ song_id: string }>((f: number, t: number) =>
-      db.from("song_tags").select("song_id").in("tag_id", ids).order("song_id").order("tag_id").range(f, t)
-    ),
-    fetchAllRows<{ tune_id: string }>((f: number, t: number) =>
-      db.from("tune_tags").select("tune_id").in("tag_id", ids).order("tune_id").order("tag_id").range(f, t)
-    ),
-    fetchAllRows<{ text_id: string }>((f: number, t: number) =>
-      db.from("text_tags").select("text_id").in("tag_id", ids).order("text_id").order("tag_id").range(f, t)
-    ),
-  ]);
-  const viaTunes = tuneRows.length
-    ? await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").in("tune_id", [...new Set(tuneRows.map((r) => r.tune_id))]).order("id").range(f, t))
-    : [];
-  const viaTexts = textRows.length
-    ? await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").in("text_id", [...new Set(textRows.map((r) => r.text_id))]).order("id").range(f, t))
-    : [];
   return {
     kind, slug: tag.slug, name: tag.name, subtitle: null, notes: tag.description ?? null,
     parents: parents.sort(byName), children: children.sort(byName), related: related.sort(byName),
-    songIds: [...new Set([...rows.map((r) => r.song_id), ...viaTunes.map((r) => r.id), ...viaTexts.map((r) => r.id)])], roles: new Map(),
+    songIds, roles: new Map(),
   };
 }
 
+// The songs that belong to a tag: tagged with it or any tag below it, on the
+// song itself or on its tune or text (tag_song_pairs, migration 228; the same
+// rule counts songs on the Browse hub).
+export async function tagSongIds(db: any, tagId: string): Promise<string[]> {
+  const rows = await fetchAllRows<{ song_id: string }>((f: number, t: number) =>
+    db.rpc("tag_song_pairs", { p_tag_ids: [tagId] }).select("song_id").order("song_id").range(f, t)
+  );
+  return rows.map((r) => r.song_id);
+}
+
+export type SongFilterMeta = FilterableSong & { song_id: string };
+
+// The filter fields (tags, vibe, key, meter, year) for these songs, or for
+// every song when no ids are given.
+export async function loadSongFilterMeta(db: any, songIds?: string[]): Promise<SongFilterMeta[]> {
+  if (songIds && songIds.length === 0) return [];
+  return fetchAllRows<SongFilterMeta>((f: number, t: number) =>
+    db.rpc("song_filter_meta", songIds ? { p_song_ids: songIds } : {}).order("song_id").range(f, t)
+  );
+}
+
 // All of the page's songs, most-known first, as the Song Library orders them
-// (browse_songs returns at most 200 rows a call, so this pages through).
+// (browse_songs returns at most 200 rows a call, so the pages load together).
 export async function loadBrowseSongs(db: any, songIds: string[]): Promise<{ songs: BrowseSongRow[]; members: number }> {
   if (songIds.length === 0) return { songs: [], members: 0 };
-  const songs: BrowseSongRow[] = [];
-  const membersCall = db.rpc("members_knowing", { p_song_ids: songIds });
-  for (let offset = 0; offset < songIds.length; offset += BROWSE_LIMIT) {
-    const { data, error } = await db.rpc("browse_songs", { p_song_ids: songIds, p_limit: BROWSE_LIMIT, p_offset: offset, p_sort: "popularity" });
-    if (error) throw error;
-    songs.push(...((data ?? []) as BrowseSongRow[]));
-    if ((data ?? []).length < BROWSE_LIMIT) break;
-  }
-  const { data: members } = await membersCall;
-  return { songs, members: (members as number | null) ?? 0 };
+  const offsets: number[] = [];
+  for (let offset = 0; offset < songIds.length; offset += BROWSE_LIMIT) offsets.push(offset);
+  const [pages, { data: members }] = await Promise.all([
+    Promise.all(offsets.map(async (offset) => {
+      const { data, error } = await db.rpc("browse_songs", { p_song_ids: songIds, p_limit: BROWSE_LIMIT, p_offset: offset, p_sort: "popularity" });
+      if (error) throw error;
+      return (data ?? []) as BrowseSongRow[];
+    })),
+    db.rpc("members_knowing", { p_song_ids: songIds }),
+  ]);
+  return { songs: pages.flat(), members: (members as number | null) ?? 0 };
 }
 
 export type BrowseRelatedChip = { href: string; label: string; count: number };

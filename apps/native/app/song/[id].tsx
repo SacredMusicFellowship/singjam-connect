@@ -35,6 +35,7 @@ import {
   type SongTagRow,
   type TagContext,
 } from '@singjam/core';
+import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { nativeBrowseHref } from '@/lib/browseLinks';
 import CreditText from '@/components/CreditText';
@@ -278,13 +279,14 @@ export default function SongDetailScreen() {
   }, [song?.id, fillingIn]);
 
   async function load() {
-    const { data: { user } } = await supabase.auth.getUser();
-    setMyUserId(user?.id ?? null);
+    // Doesn't wait for getUser's round trip: the client sends the session either way.
     const forSong = songId;
     melodiesFor.current = forSong;
     supabase.rpc('song_melodies', { p_song_id: forSong }).then(({ data: m }) => {
       if (melodiesFor.current === forSong) setMelodies((m as Melodies | null) ?? NO_MELODIES);
     });
+    const { data: { user } } = await supabase.auth.getUser();
+    setMyUserId(user?.id ?? null);
 
     const [songRes, confidenceRes, profileRes, jammersRes, count] = await Promise.all([
       supabase
@@ -427,7 +429,7 @@ export default function SongDetailScreen() {
     if (!next && previousConfidence) setPopularity(n => Math.max(n - 1, 0));
 
     write().then(({ error }) => {
-      if (!error) return;
+      if (!error) { noteMySong(songId, next ? { confidence: next } : null); return; }
       Alert.alert('Error', error.message);
       setMyConfidence(previousConfidence);
       setJammers(previousJammers);
@@ -580,7 +582,7 @@ export default function SongDetailScreen() {
     const prev = myKey;
     setMyKey(next);
     const { error } = await supabase.from('user_songs').update({ key_note: next }).eq('user_id', myUserId).eq('song_id', songId);
-    if (error) { setMyKey(prev); Alert.alert('Error', error.message); }
+    if (error) { setMyKey(prev); Alert.alert('Error', error.message); } else noteMySong(songId, { key: next });
   }
 
   function renderRepertoireControls() {

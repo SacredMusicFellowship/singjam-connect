@@ -9,6 +9,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WIDE_BREAKPOINT } from '@/components/BrandHeader';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
+import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
@@ -1322,7 +1323,7 @@ export default function SetDetailScreen() {
       setMyRepertoire(previous);
       setSongKnowledge(previousKnowledge);
       Alert.alert('Error', error.message);
-    }
+    } else noteMySong(songId, { confidence });
   }
 
   // Per-song lookup: songId → Map<userId, confidence>.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchAllRows, setsAcceptingSongs } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -7,7 +7,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 // My songs: your key, your sets, and its chord chart.
 export type MySongTools = {
   details: Map<string, { key: string | null; chart: string | null }>;
-  sets: { id: string; name: string }[];
+  // Null until an Add to set panel first opens (it loads them then).
+  sets: { id: string; name: string }[] | null;
   inSets: Record<string, Set<string>>;
   loadSetMemberships: (songId: string) => void;
   addedToSet: (songId: string, setId: string) => void;
@@ -28,8 +29,12 @@ export function useSongCardActions({ onAdded }: { onAdded?: (songId: string, lev
   const [pendingAddId, setPendingAddId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [details, setDetails] = useState<MySongTools["details"]>(new Map());
-  const [sets, setSets] = useState<MySongTools["sets"]>([]);
+  const [sets, setSets] = useState<MySongTools["sets"]>(null);
   const [inSets, setInSets] = useState<MySongTools["inSets"]>({});
+  // Read through refs so the callbacks, and so `tools`, stay the same between renders.
+  const latest = useRef({ details, inSets });
+  latest.current = { details, inSets };
+  const setsRequested = useRef(false);
 
   useEffect(() => {
     // Session from local storage (fast), then profile and the viewer's songs — all of them.
@@ -41,12 +46,10 @@ export function useSongCardActions({ onAdded }: { onAdded?: (songId: string, lev
         fetchAllRows<{ song_id: string; confidence: string | null; key_note: string | null; songs: any }>((f, t) =>
           supabase.from("user_songs").select("song_id, confidence, key_note, songs(chord_chart_url)").eq("user_id", session.user.id).order("song_id").range(f, t) as any
         ),
-        fetch("/api/sets").then((r) => (r.ok ? r.json() : { owned: [], collaborating: [] })).catch(() => ({ owned: [], collaborating: [] })),
-      ]).then(([profileRes, rows, setsJson]) => {
+      ]).then(([profileRes, rows]) => {
         setSingingVoice((profileRes.data as any)?.singing_voice ?? null);
         setRepertoire(new Map(rows.map((r) => [r.song_id, r.confidence ?? ""])));
         setDetails(new Map(rows.map((r) => [r.song_id, { key: r.key_note, chart: r.songs?.chord_chart_url ?? null }])));
-        setSets(setsAcceptingSongs([...(setsJson.owned ?? []), ...(setsJson.collaborating ?? [])]));
       }, () => {});
     });
   }, [supabase]);
@@ -75,45 +78,53 @@ export function useSongCardActions({ onAdded }: { onAdded?: (songId: string, lev
       setRepertoire((prev) => new Map(prev).set(songId, level));
       onAdded?.(songId, level);
       // The card now shows the song's tools, so it needs the chart it already has.
-      if (!details.has(songId)) {
+      if (!latest.current.details.has(songId)) {
         const { data: song } = await supabase.from("songs").select("chord_chart_url").eq("id", songId).maybeSingle();
         setDetails((prev) => new Map(prev).set(songId, { key: null, chart: (song as any)?.chord_chart_url ?? null }));
       }
     }
-  }, [supabase, router, onAdded, details]);
+  }, [supabase, router, onAdded]);
 
+  // Your sets (a Netlify function) load the first time any card's panel opens.
   const loadSetMemberships = useCallback(async (songId: string) => {
-    if (inSets[songId] !== undefined) return;
+    if (!setsRequested.current) {
+      setsRequested.current = true;
+      fetch("/api/sets")
+        .then((r) => (r.ok ? r.json() : { owned: [], collaborating: [] }))
+        .catch(() => ({ owned: [], collaborating: [] }))
+        .then((json) => setSets(setsAcceptingSongs([...(json.owned ?? []), ...(json.collaborating ?? [])])));
+    }
+    if (latest.current.inSets[songId] !== undefined) return;
     const { data } = await supabase.from("set_songs").select("set_id").eq("song_id", songId);
     if (data) setInSets((prev) => ({ ...prev, [songId]: new Set(data.map((r: any) => r.set_id as string)) }));
-  }, [supabase, inSets]);
+  }, [supabase]);
 
   const updateKey = useCallback(async (songId: string, key: string | null) => {
     if (!currentUser) return;
-    const before = details.get(songId);
+    const before = latest.current.details.get(songId);
     setDetails((prev) => new Map(prev).set(songId, { key, chart: prev.get(songId)?.chart ?? null }));
     const { error } = await supabase.from("user_songs").update({ key_note: key }).eq("user_id", currentUser.id).eq("song_id", songId);
     if (error) {
       setDetails((prev) => new Map(prev).set(songId, before ?? { key: null, chart: null }));
       setStatus(error.message);
     }
-  }, [supabase, currentUser, details]);
+  }, [supabase, currentUser]);
 
-  const tools: MySongTools = {
+  const tools = useMemo<MySongTools>(() => ({
     details,
     sets,
     inSets,
     loadSetMemberships,
     addedToSet: (songId, setId) => setInSets((prev) => ({ ...prev, [songId]: new Set([...(prev[songId] ?? []), setId]) })),
-    setCreated: (set) => setSets((prev) => [set, ...prev]),
+    setCreated: (set) => setSets((prev) => [set, ...(prev ?? [])]),
     updateKey,
     chartAdded: (songId, url) => setDetails((prev) => new Map(prev).set(songId, { key: prev.get(songId)?.key ?? null, chart: url })),
-  };
+  }), [details, sets, inSets, loadSetMemberships, updateKey]);
 
-  return {
-    currentUser,
-    status,
-    repertoire,
-    cardProps: { repertoire, pendingAddId, singingVoice, setPendingAddId, onAdd, addSong, onVoiceUpdated: setSingingVoice, tools },
-  };
+  const cardProps = useMemo(
+    () => ({ repertoire, pendingAddId, singingVoice, setPendingAddId, onAdd, addSong, onVoiceUpdated: setSingingVoice, tools }),
+    [repertoire, pendingAddId, singingVoice, onAdd, addSong, tools]
+  );
+
+  return { currentUser, status, repertoire, cardProps };
 }

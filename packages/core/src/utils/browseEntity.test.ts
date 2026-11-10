@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadBrowseEntity, loadBrowseRelated, traditionalCultureChips } from "./browseEntity";
+import { loadBrowseEntity, loadBrowseRelated, loadBrowseSongs, loadSongFilterMeta, tagSongIds, traditionalCultureChips } from "./browseEntity";
 
 describe("loadBrowseRelated", () => {
   const rows = [
@@ -112,5 +112,62 @@ describe("loadBrowseEntity scripture", () => {
     expect(e?.children.map((c) => c.slug)).toEqual(["psalms/90", "psalms/133"]);
     expect(e?.roles.has("s2")).toBe(false);
     expect(await loadBrowseEntity(db, "scripture", "masnavi")).toBeNull();
+  });
+});
+
+// An rpc call that records its arguments and pages its rows by range.
+function rpcDb(rows: Record<string, any[] | ((args: any) => any[])>) {
+  const calls: { fn: string; args: any }[] = [];
+  return {
+    calls,
+    rpc(fn: string, args: any) {
+      calls.push({ fn, args });
+      const all = typeof rows[fn] === "function" ? (rows[fn] as (a: any) => any[])(args) : (rows[fn] as any[]) ?? [];
+      const q: any = {
+        select: () => q, order: () => q,
+        range: async (f: number, t: number) => ({ data: all.slice(f, t + 1), error: null }),
+        then: (res: any, rej: any) => Promise.resolve({ data: all, error: null }).then(res, rej),
+      };
+      return q;
+    },
+  };
+}
+
+describe("tagSongIds", () => {
+  it("asks tag_song_pairs for the tag and pages through every song", async () => {
+    const ids = Array.from({ length: 1500 }, (_, i) => ({ song_id: `s${i}` }));
+    const db = rpcDb({ tag_song_pairs: ids });
+    const out = await tagSongIds(db, "t1");
+    expect(out).toHaveLength(1500);
+    expect(db.calls.map((c) => c.args)).toEqual([{ p_tag_ids: ["t1"] }, { p_tag_ids: ["t1"] }]);
+  });
+});
+
+describe("loadSongFilterMeta", () => {
+  it("asks for just these songs, or every song when none are given", async () => {
+    const db = rpcDb({ song_filter_meta: [{ song_id: "a" }] });
+    await loadSongFilterMeta(db, ["a", "b"]);
+    await loadSongFilterMeta(db);
+    expect(db.calls.map((c) => c.args)).toEqual([{ p_song_ids: ["a", "b"] }, {}]);
+  });
+
+  it("skips the call for an empty list", async () => {
+    const db = rpcDb({});
+    expect(await loadSongFilterMeta(db, [])).toEqual([]);
+    expect(db.calls).toEqual([]);
+  });
+});
+
+describe("loadBrowseSongs", () => {
+  it("asks for every 200-song page at once and keeps them in order", async () => {
+    const ids = Array.from({ length: 450 }, (_, i) => `s${i}`);
+    const db = rpcDb({
+      browse_songs: (a) => ids.slice(a.p_offset, a.p_offset + a.p_limit).map((song_id) => ({ song_id })),
+      members_knowing: () => 7 as any,
+    });
+    const { songs, members } = await loadBrowseSongs(db, ids);
+    expect(songs.map((s) => s.song_id)).toEqual(ids);
+    expect(members).toBe(7);
+    expect(db.calls.filter((c) => c.fn === "browse_songs").map((c) => c.args.p_offset)).toEqual([0, 200, 400]);
   });
 });

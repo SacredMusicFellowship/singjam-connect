@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { View, Text, TouchableOpacity, Pressable, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
@@ -64,7 +64,6 @@ type Props = {
 // in its own app. Spacing is tighter than web's so more songs fit a phone.
 function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse, tools }: Props) {
   const mine = tools?.details.get(song.song_id);
-  useEffect(() => { if (confidence && tools && !mine) tools.ensure(song.song_id); }, [confidence, tools, mine, song.song_id]);
   function handleAddTap(event: GestureResponderEvent) {
     // A new add comes from "I know this song!", so it asks lead or support;
     // learning has its own link. Changing an existing role offers all three.

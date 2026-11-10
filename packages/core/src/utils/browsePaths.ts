@@ -30,6 +30,25 @@ export function browsePath(kind: BrowseKind, slug: string, opts: { traditional?:
   return `/${base}/${encodeURIComponent(slug)}${opts.traditional ? "?traditional=1" : ""}`;
 }
 
+// What a browse page is, shown above its name.
+export const KIND_LABEL: Record<BrowseKind, string> = {
+  genre: "Genre",
+  form: "Form",
+  occasion: "Occasion",
+  community: "Community",
+  culture: "Culture",
+  language: "Language",
+  theme: "Theme",
+  mode: "Mode",
+  rhythm: "Rhythm",
+  person: "Songwriter",
+  artist: "Recording artist",
+  show: "Show",
+  tune: "Tune",
+  text: "Text",
+  scripture: "Scripture",
+};
+
 export const SHOW_MEDIUM_LABEL: Record<string, string> = {
   stage: "Stage musical",
   film: "Film",

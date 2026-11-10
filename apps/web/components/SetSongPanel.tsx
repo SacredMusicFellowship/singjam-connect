@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FILTER_DIM_TAG_TYPE, fetchAllRows, songCardPills, type FilterableSong, type MultiFilterDim } from "@singjam/core";
+import { FILTER_DIM_TAG_TYPE, fetchAllRows, loadSongFilterMeta, songCardPills, type FilterableSong, type MultiFilterDim } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import ConfidencePicker from "@/components/ConfidencePicker";
@@ -83,6 +83,7 @@ function AddButton({
 
 export default function SetSongPanel({
   setId,
+  jamId,
   canEdit,
   isSolo,
   currentSongIds,
@@ -95,6 +96,8 @@ export default function SetSongPanel({
   onVoiceUpdated,
 }: {
   setId: string;
+  // The jam this set is for, if any: its tags start the filters as suggestions.
+  jamId: string | null;
   canEdit: boolean;
   isSolo: boolean;
   currentSongIds: string[];
@@ -175,24 +178,33 @@ export default function SetSongPanel({
   // both filterable with the Song Library's filters.
   const [source, setSource] = useState<"group" | "all">("group");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [meta, setMeta] = useState<SongMeta[]>([]);
+  // Filter fields for the group's songs; the whole catalog's only once "All songs" is chosen.
+  const [groupMeta, setGroupMeta] = useState<SongMeta[]>([]);
+  const [allMeta, setAllMeta] = useState<SongMeta[] | null>(null);
   const [jamTags, setJamTags] = useState<{ name: string; type: string }[]>([]);
+  const sharedIdsKey = (sharedSongs ?? []).map((s) => s.song_id).sort().join(",");
   useEffect(() => {
-    supabase.rpc("song_filter_meta").then(({ data }) => setMeta((data ?? []) as SongMeta[]));
+    if (!sharedIdsKey) { setGroupMeta([]); return; }
+    let live = true;
+    loadSongFilterMeta(supabase, sharedIdsKey.split(",")).then((m) => { if (live) setGroupMeta(m); }, () => {});
+    return () => { live = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedIdsKey]);
+  useEffect(() => {
+    if (source !== "all" || allMeta) return;
+    loadSongFilterMeta(supabase).then(setAllMeta, () => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source]);
+  useEffect(() => {
     // A set made for a jam starts from the jam's tags (Shabbat · Jewish) as suggestions.
-    supabase.from("sets").select("jam_id").eq("id", setId).maybeSingle().then(async ({ data }) => {
-      if (!data?.jam_id) return;
-      const { data: rows } = await supabase.from("jam_tags").select("tags(name, type)").eq("jam_id", data.jam_id);
+    if (!jamId) return;
+    supabase.from("jam_tags").select("tags(name, type)").eq("jam_id", jamId).then(({ data: rows }) => {
       setJamTags(((rows ?? []) as any[]).map((r) => r.tags).filter((t) => t && DIM_FOR_TYPE[t.type]));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setId]);
-  const metaById = useMemo(() => new Map(meta.map((m) => [m.song_id, m])), [meta]);
-  const sourceMeta = useMemo(
-    () => (source === "group" ? meta.filter((m) => sharedSongsMap.has(m.song_id)) : meta),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [meta, source, sharedSongs]
-  );
+  }, [jamId]);
+  const metaById = useMemo(() => new Map(groupMeta.map((m) => [m.song_id, m])), [groupMeta]);
+  const sourceMeta = useMemo(() => (source === "group" ? groupMeta : allMeta ?? []), [groupMeta, allMeta, source]);
   const hierarchy = useTagHierarchy();
   const filters = useSongFilters(sourceMeta, "popularity", hierarchy, { syncUrl: false });
   const { expandedState, activeFilterCount, matchesFilters } = filters;
@@ -451,7 +463,7 @@ export default function SetSongPanel({
                     />
                     <div className={`min-w-0 flex-1 ${inSet ? "opacity-40" : ""}`}>
                       <SongRowTitle title={song.title} displayArtist={song.display_artist} productions={song.productions} card={song} />
-                      <RowPills meta={metaById.get(song.song_id)} />
+                      <RowPills meta={song} />
                       {shared && <WhoKnows s={shared} />}
                       {inSet && <p className="text-xs text-zinc-400">Already in set</p>}
                     </div>
@@ -521,7 +533,7 @@ export default function SetSongPanel({
                   <AddButton inSet={inSet} isAdding={false} onClick={() => handleSearchSongSelect(song)} />
                   <div className={`min-w-0 flex-1 ${inSet ? "opacity-40" : ""}`}>
                     <SongRowTitle title={song.title} href={`/songs/${song.slug ?? song.song_id}`} displayArtist={song.display_artist} productions={song.productions} card={song} />
-                    <RowPills meta={metaById.get(song.song_id)} />
+                    <RowPills meta={song} />
                     {shared && !isSolo && <WhoKnows s={shared} />}
                   </div>
                 </li>

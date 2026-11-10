@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { BrowseKind } from "@singjam/core";
-import type { BrowseFilterMeta, BrowseSongRow } from "@/lib/browse";
+import type { BrowseSongRow } from "@/lib/browse";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
@@ -17,26 +16,24 @@ const SORT_OPTIONS = [
   { value: "title_desc" as const, label: "Z–A" },
 ];
 
-// A browse page's songs with the Song Library's filters, scoped to this page.
-export default function BrowseSongList({ songs, meta, roles }: {
-  kind: BrowseKind;
+// A browse page's songs with the Song Library's filters, scoped to this page
+// (each row carries its own filter fields).
+export default function BrowseSongList({ songs, roles }: {
   songs: BrowseSongRow[];
-  meta: BrowseFilterMeta[];
   roles: Record<string, string>;
 }) {
   const hierarchy = useTagHierarchy();
-  const filters = useSongFilters(meta, "popularity", hierarchy);
+  const filters = useSongFilters(songs, "popularity", hierarchy);
   const { matchesFilters, activeFilterCount, sortBy, setSortBy } = filters;
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const metaById = useMemo(() => new Map(meta.map((m) => [m.song_id, m])), [meta]);
   const actions = useSongCardActions();
 
   const shown = useMemo(() => {
-    const list = songs.filter((s) => activeFilterCount === 0 || matchesFilters(metaById.get(s.song_id)));
+    const list = activeFilterCount === 0 ? songs : songs.filter((s) => matchesFilters(s));
     if (sortBy === "title_asc") return [...list].sort((a, b) => a.title.localeCompare(b.title));
     if (sortBy === "title_desc") return [...list].sort((a, b) => b.title.localeCompare(a.title));
     return list;
-  }, [songs, activeFilterCount, matchesFilters, metaById, sortBy]);
+  }, [songs, activeFilterCount, matchesFilters, sortBy]);
 
   return (
     <section className="space-y-2">

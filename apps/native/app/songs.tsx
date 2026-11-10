@@ -1,20 +1,20 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity,
-  Alert, Platform, KeyboardAvoidingView,
+  Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { songMatchesFilters, deriveFilterOptions, deriveFilterFacets, expandFilterState, countActiveFilters, type CardIdentity, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { songMatchesFilters, type CardIdentity, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
-import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
 import ContentContainer from '@/components/ContentContainer';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
 import { useMySongTools } from '@/lib/useMySongTools';
+import { useMySongs } from '@/lib/useMySongs';
+import { useFilterFacets } from '@/lib/useFilterFacets';
 import SuggestionCard from '@/components/SuggestionCard';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
-import { useTagHierarchy } from '@/lib/useTagHierarchy';
 import { nativeBrowseHref } from '@/lib/browseLinks';
 import InlineDropdown from '@/components/InlineDropdown';
 import FiltersButton from '@/components/FiltersButton';
@@ -128,12 +128,6 @@ const CATALOG_CACHE_KEY = '/songs';
 // on the device plus the signed-out guest view. Nothing personal is in it.
 const CATALOG_CACHE_UID = null;
 
-// Which songs you own, cached alongside it and user-scoped. Without this the
-// warm catalog renders before ownership is known, so songs already in your
-// repertoire briefly offer "I know this song!" — and tapping that upserts,
-// silently overwriting the role you had.
-const OWNED_CACHE_KEY = '/songs:owned';
-
 // The catalog comes from browse_songs — the same RPC web /search browses — so
 // popularity and the media ids have a single source instead of being re-derived
 // here. Not fetchAllRows: that walks pages sequentially, and at 200 rows a page
@@ -172,11 +166,13 @@ export default function SongLibraryScreen() {
   const [query, setQuery] = useState('');
   const [allSongs, setAllSongs] = useState<SongMeta[]>([]);
   const [searchResults, setSearchResults] = useState<SongMeta[]>([]);
-  const [myConfidence, setMyConfidence] = useState<Map<string, string>>(new Map());
-  const [loadingAll, setLoadingAll] = useState(true);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [singingVoice, setSingingVoice] = useState<string | null>(null);
+  // Your songs come from the session's My-songs store. The list waits until
+  // they're known, or songs already yours would briefly offer "I know this
+  // song!" and a fast tap would overwrite your role.
+  const { userId, loaded: ownershipKnown, myConfidence, addSong } = useMySongs();
+  const loadingAll = catalogLoading || !ownershipKnown;
   const [filters, setFilters] = useState<Filters>(emptyFilters());
   const [hideMySongs, setHideMySongs] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -184,50 +180,22 @@ export default function SongLibraryScreen() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Show the cached catalog straight away, then revalidate — same
+    // stale-while-revalidate pattern as Repertoire and Jams. Reaching this
+    // screen is a nav push, so without this every visit waits on the full
+    // catalog fetch again.
     async function init() {
-      // Show the cached catalog straight away, then revalidate — same
-      // stale-while-revalidate pattern as Repertoire and Jams. Reaching this
-      // screen is a nav push, so without this every visit waits on the full
-      // catalog fetch again.
-      const { data: { session } } = await supabase.auth.getSession();
-      const cachedUid = session?.user.id ?? null;
-      const [cached, cachedOwned] = await Promise.all([
-        readCache<SongMeta[]>(CATALOG_CACHE_KEY, CATALOG_CACHE_UID),
-        readCache<[string, string][]>(OWNED_CACHE_KEY, cachedUid),
-      ]);
-      // Only render early once ownership is known too, otherwise owned songs
-      // would offer "I know this song!" and a fast tap would overwrite the
-      // role. A guest has no ownership to know, so it's already safe there;
-      // a signed-in user needs a cache entry matching their own id.
-      const ownershipKnown = cachedUid === null || cachedOwned !== null;
-      if (cached?.length && ownershipKnown) {
-        if (cachedOwned) setMyConfidence(new Map(cachedOwned));
+      const cached = await readCache<SongMeta[]>(CATALOG_CACHE_KEY, CATALOG_CACHE_UID);
+      if (cached?.length) {
         setAllSongs(cached);
-        setLoadingAll(false);
+        setCatalogLoading(false);
       }
-
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id ?? null);
-
-      const [songs, myRes, profileRes] = await Promise.all([
-        fetchCatalog(),
-        user
-          ? supabase.from('user_songs').select('song_id, confidence').eq('user_id', user.id)
-          : Promise.resolve({ data: null }),
-        user
-          ? supabase.from('profiles').select('singing_voice').eq('id', user.id).single()
-          : Promise.resolve({ data: null }),
-      ]);
-
-      const owned: [string, string][] = ((myRes.data ?? []) as any[]).map(r => [r.song_id, r.confidence ?? 'learn']);
-      setMyConfidence(new Map(owned));
-      setSingingVoice((profileRes.data as any)?.singing_voice ?? null);
+      const songs = await fetchCatalog();
       setAllSongs(songs);
-      setLoadingAll(false);
+      setCatalogLoading(false);
       writeCache(CATALOG_CACHE_KEY, CATALOG_CACHE_UID, songs);
-      if (user) writeCache(OWNED_CACHE_KEY, user.id, owned);
     }
-    init().catch(() => setLoadingAll(false));
+    init().catch(() => setCatalogLoading(false));
   }, []);
 
   useEffect(() => {
@@ -254,21 +222,12 @@ export default function SongLibraryScreen() {
   // edits shouldn't rebuild them either.
   const { genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax } = filters;
   const hiddenIds = hideMySongs ? myConfidence : null;
-  const hierarchy = useTagHierarchy();
   const dims = useMemo(
     () => ({ genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax }),
     [genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax]
   );
-  // A selected tag also covers everything below it (Rock covers Classic Rock).
-  const expandedDims = useMemo(() => expandFilterState(dims, hierarchy), [dims, hierarchy]);
   const pool = useMemo(() => (hiddenIds ? allSongs.filter(s => !hiddenIds.has(s.song_id)) : allSongs), [allSongs, hiddenIds]);
-  const options = useMemo(() => deriveFilterOptions(pool, expandedDims), [pool, expandedDims]);
-  const facets = useMemo(() => deriveFilterFacets(pool, dims, hierarchy), [pool, dims, hierarchy]);
-
-  const yearBounds = useMemo(() => {
-    const years = allSongs.map(s => s.year).filter((y): y is number => y != null);
-    return years.length ? { min: Math.min(...years), max: Math.max(...years) } : { min: null, max: null };
-  }, [allSongs]);
+  const { hierarchy, expanded: expandedDims, options, facets, yearBounds, activeCount: activeFilterCount } = useFilterFacets(pool, dims);
 
   const displayedSongs = useMemo(() => {
     const base = query.trim() ? searchResults : allSongs;
@@ -277,28 +236,6 @@ export default function SongLibraryScreen() {
     );
     return applySort(filtered, filters.sortBy);
   }, [query, allSongs, searchResults, filters, expandedDims, hideMySongs, myConfidence]);
-
-  // Read through a ref so the row callbacks below can stay referentially stable.
-  // Depending on the Map directly would rebuild them on every repertoire edit,
-  // which re-renders every visible row instead of just the one that changed.
-  const myConfidenceRef = useRef(myConfidence);
-  myConfidenceRef.current = myConfidence;
-
-  // Adding and changing the role are the same upsert, exactly as on web.
-  const addSong = useCallback(async (song: { song_id: string }, confidence: string) => {
-    if (!userId) { router.push('/(auth)/sign-in' as any); return; }
-    if (!(await ensureLeadVoice(confidence, singingVoice, userId, setSingingVoice))) return;
-    const previous = myConfidenceRef.current;
-    setMyConfidence(prev => new Map(prev).set(song.song_id, confidence));
-    const { error } = await supabase.from('user_songs').upsert(
-      { user_id: userId, song_id: song.song_id, confidence, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id,song_id' }
-    );
-    if (error) {
-      Alert.alert('Error', error.message);
-      setMyConfidence(previous);
-    }
-  }, [userId, router, singingVoice]);
 
   const viewSong = useCallback((song: { song_id: string }) => {
     router.push(`/song/${song.song_id}` as any);
@@ -317,7 +254,6 @@ export default function SongLibraryScreen() {
     />
   ), [myConfidence, addSong, viewSong, openBrowse, tools]);
 
-  const activeFilterCount = countActiveFilters(filters);
   const searching = query.trim().length > 0;
 
   const listHeader = (

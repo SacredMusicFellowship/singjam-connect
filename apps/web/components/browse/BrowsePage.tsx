@@ -1,28 +1,10 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { browsePath, traditionalCultureChips, type BrowseKind, type TagType } from "@singjam/core";
-import { loadBrowseEntity, loadBrowseFilterMeta, loadBrowseRelated, loadBrowseSongs, type LinkedTag } from "@/lib/browse";
+import { browsePath, KIND_LABEL, traditionalCultureChips, type BrowseKind } from "@singjam/core";
+import { loadBrowseEntity, loadBrowseRelated, loadBrowseSongs, type LinkedTag } from "@/lib/browse";
 import BrowseSongList from "@/components/browse/BrowseSongList";
 import CreditLinks from "@/components/CreditLinks";
-
-export const KIND_LABEL: Record<BrowseKind, string> = {
-  genre: "Genre",
-  form: "Form",
-  occasion: "Occasion",
-  community: "Community",
-  culture: "Culture",
-  language: "Language",
-  theme: "Theme",
-  mode: "Mode",
-  rhythm: "Rhythm",
-  person: "Songwriter",
-  artist: "Recording artist",
-  show: "Show",
-  tune: "Tune",
-  text: "Text",
-  scripture: "Scripture",
-};
 
 function TagLinks({ label, tags }: { label: string; tags: LinkedTag[] }) {
   if (tags.length === 0) return null;
@@ -43,15 +25,14 @@ export default async function BrowsePage({ kind, slug, traditional = false }: { 
   const entity = await loadBrowseEntity(kind, decoded, traditional);
   if (!entity) notFound();
   if (entity.slug && entity.slug !== decoded) redirect(browsePath(kind, entity.slug, { traditional }));
-  const [{ songs, members }, meta, related] = await Promise.all([
+  const [{ songs, members }, related] = await Promise.all([
     loadBrowseSongs(entity.songIds),
-    loadBrowseFilterMeta(entity.songIds),
     loadBrowseRelated(entity.songIds, { kind, slug: decoded }),
   ]);
   const total = entity.songIds.length;
   const sameTypeRelated = entity.related.filter((t) => t.type === kind);
   const otherRelated = entity.related.filter((t) => t.type !== kind);
-  const byCulture = kind === "person" && entity.slug === "traditional" ? traditionalCultureChips(meta) : [];
+  const byCulture = kind === "person" && entity.slug === "traditional" ? traditionalCultureChips(songs) : [];
 
   return (
     <div className="space-y-6 pb-16">
@@ -118,7 +99,7 @@ export default async function BrowsePage({ kind, slug, traditional = false }: { 
           <Link href="/search" className="font-medium text-amber-600 hover:underline">Browse the Song Library</Link>
         </div>
       ) : (
-        <BrowseSongList kind={kind} songs={songs} meta={meta} roles={Object.fromEntries(entity.roles)} />
+        <BrowseSongList songs={songs} roles={Object.fromEntries(entity.roles)} />
       )}
 
       {related.length > 0 && (

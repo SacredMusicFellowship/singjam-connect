@@ -1,7 +1,7 @@
 "use client";
 
 import { browsePath, songCardPills, songCardCredits, hasLeadVoice, productionCredits, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
-import { Fragment, useState } from "react";
+import { Fragment, memo, useState } from "react";
 import Link from "next/link";
 import RoleSelect from "@/components/RoleSelect";
 import CreditLinks from "@/components/CreditLinks";
@@ -33,7 +33,7 @@ function SpotifyIcon() {
   );
 }
 
-export default function SongCard({
+function SongCard({
   songId,
   title,
   slug,
@@ -220,17 +220,15 @@ export default function SongCard({
             {tools && (
               <>
                 <MyKeySelect value={tools.details.get(songId)?.key ?? null} onChange={(k) => tools.updateKey(songId, k)} size="md" label={`My key for ${title}`} />
-                {tools.sets.length > 0 && (
-                  <AddToSetPanel
-                    songId={songId}
-                    sets={tools.sets}
-                    inSets={tools.inSets[songId]}
-                    direction="down"
-                    onOpen={() => tools.loadSetMemberships(songId)}
-                    onAdded={(setId) => tools.addedToSet(songId, setId)}
-                    onSetCreated={(set) => tools.setCreated(set)}
-                  />
-                )}
+                <AddToSetPanel
+                  songId={songId}
+                  sets={tools.sets}
+                  inSets={tools.inSets[songId]}
+                  direction="down"
+                  onOpen={() => tools.loadSetMemberships(songId)}
+                  onAdded={(setId) => tools.addedToSet(songId, setId)}
+                  onSetCreated={(set) => tools.setCreated(set)}
+                />
                 <ChordChartSlot songId={songId} url={tools.details.get(songId)?.chart} canAdd size="md" onAdded={(url) => tools.chartAdded(songId, url)} />
               </>
             )}
@@ -263,3 +261,6 @@ export default function SongCard({
     </div>
   );
 }
+
+// Lists re-render on every filter or search keystroke; unchanged cards skip it.
+export default memo(SongCard);

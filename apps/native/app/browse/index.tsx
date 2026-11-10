@@ -3,11 +3,14 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'rea
 import { Stack, useRouter } from 'expo-router';
 import { loadBrowseHub, sortBrowseHub, type BrowseChip, type BrowseHub, type BrowseHubOrder } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
+import { readCache, writeCache } from '@/lib/cache';
 import ContentContainer from '@/components/ContentContainer';
 import { nativeBrowseHref } from '@/lib/browseLinks';
 import OrderToggle, { COUNT_OR_AZ } from '@/components/OrderToggle';
 
 const TOP_N = 24;
+// Public data, the same for everyone, so one entry serves every account.
+const HUB_CACHE_KEY = '/browse';
 
 // A section's most-used entries, and everything on "Show all" (for genres,
 // occasions and communities that adds the kinds within each) — as on web.
@@ -57,7 +60,15 @@ export default function BrowseHubScreen() {
   const [order, setOrder] = useState<BrowseHubOrder>('count');
   const hub = loaded ? sortBrowseHub(loaded, order) : null;
   const [error, setError] = useState(false);
-  useEffect(() => { loadBrowseHub(supabase).then(setHub, () => setError(true)); }, []);
+  // The last copy straight away, then the fresh one.
+  useEffect(() => {
+    let fresh = false;
+    readCache<BrowseHub>(HUB_CACHE_KEY, null).then((cached) => { if (cached && !fresh) setHub(cached); });
+    loadBrowseHub(supabase).then(
+      (h) => { fresh = true; setHub(h); setError(false); writeCache(HUB_CACHE_KEY, null, h); },
+      () => setError(true),
+    );
+  }, []);
   const open = (href: string) => router.push(nativeBrowseHref(href) as any);
 
   return (
@@ -71,7 +82,7 @@ export default function BrowseHubScreen() {
               <OrderToggle value={order} onChange={setOrder} options={COUNT_OR_AZ} className="mt-3" />
             )}
             {!hub && !error && <ActivityIndicator className="mt-10" color="#d97706" />}
-            {error && <Text className="text-sm text-slate-500 mt-10 text-center">Couldn’t load the browse page. Pull back and try again.</Text>}
+            {error && !hub && <Text className="text-sm text-slate-500 mt-10 text-center">Couldn’t load the browse page. Pull back and try again.</Text>}
             {hub?.sections.slice(0, 1).map(s => (
               <View key={s.type}>
                 <Heading title={s.title} />
