@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runYouTubeBackfill } from "./youtubeBackfill";
 
-type Row = { song_id: string; artist_id: string; youtube_url: string | null; songs: { title: string }; artists: { name: string } };
+type Row = { song_id: string; artist_id: string; youtube_url: string | null; recorded_title?: string | null; songs: { title: string; song_alternate_titles?: { title: string }[] }; artists: { name: string } };
 
 // select() calls are answered in order: first the unchecked links, then the search candidates.
 function fakeAdmin(unchecked: Row[], candidates: Row[]) {
@@ -90,5 +90,21 @@ describe("runYouTubeBackfill", () => {
 
     expect(result.quotaExceeded).toBe(true);
     expect(updates).toEqual([]);
+  });
+
+  it("searches with the title on the record and accepts the song's other titles", async () => {
+    const lowBridge: Row = { ...row("s1", "Low Bridge", "Pete Seeger"), recorded_title: "Erie Canal" };
+    const { admin, updates } = fakeAdmin([], [lowBridge]);
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      urls.push(url);
+      return { json: async () => ({ items: [{ id: { videoId: "ERIEERIEERI" }, snippet: { title: "Erie Canal", channelTitle: "Pete Seeger - Topic" } }] }) };
+    }));
+
+    const result = await runYouTubeBackfill(admin, "key");
+
+    expect(decodeURIComponent(urls[0])).toContain("q=Pete Seeger Erie Canal");
+    expect(result.found).toBe(1);
+    expect(updates[0].values).toMatchObject({ youtube_url: "https://www.youtube.com/watch?v=ERIEERIEERI", youtube_ok: true });
   });
 });

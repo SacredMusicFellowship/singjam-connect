@@ -22,6 +22,8 @@ describe("isOfficialYouTubeUpload", () => {
 
   it("rejects videos that don't name the song", () => {
     expect(isOfficialYouTubeUpload({ title: "Hey Jude", channelTitle: "The Beatles - Topic" }, "Yesterday", "The Beatles")).toBe(false);
+    expect(isOfficialYouTubeUpload({ title: "Erie Canal", channelTitle: "Pete Seeger - Topic" }, ["Low Bridge", "Erie Canal"], "Pete Seeger")).toBe(true);
+    expect(isOfficialYouTubeUpload({ title: "Erie Canal", channelTitle: "Pete Seeger - Topic" }, ["Low Bridge"], "Pete Seeger")).toBe(false);
   });
 
   it("rejects live, cover and karaoke versions unless the song itself is named that way", () => {

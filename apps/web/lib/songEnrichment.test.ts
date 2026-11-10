@@ -26,7 +26,9 @@ vi.mock("@anthropic-ai/sdk", () => ({
   },
 }));
 
-import { addLandmarkRecordings } from "./songEnrichment";
+vi.mock("@/lib/songLookup", () => ({ findOnSpotify: async () => null }));
+
+import { addFirstRecordings, addLandmarkRecordings } from "./songEnrichment";
 
 type Row = Record<string, unknown>;
 
@@ -141,6 +143,106 @@ describe("addLandmarkRecordings", () => {
     const { db, inserted } = fakeDb(["Ray Charles"]);
 
     expect((await run(db, { dryRun: true })).added).toEqual([{ artist: "Bessie Smith", year: 1927 }]);
+    expect(inserted).toEqual([]);
+  });
+});
+
+// Just enough of the Supabase client for addFirstRecordings.
+function fakeSongDb(song: Row) {
+  const artists: Row[] = [];
+  const inserted: Row[] = [];
+  const alternates: Row[] = [];
+  const db = {
+    from(table: string) {
+      let filter: string | null = null;
+      const q: any = {
+        select: () => q,
+        eq: () => q,
+        ilike: (_: string, v: string) => ((filter = v), q),
+        limit: () => q,
+        single: async () => ({ data: table === "songs" ? song : null }),
+        maybeSingle: async () => ({ data: artists.find((a) => String(a.name).toLowerCase() === filter?.toLowerCase()) ?? null }),
+        insert: (row: Row) => {
+          if (table === "artists") {
+            const created = { id: `a${artists.length}`, ...row };
+            artists.push(created);
+            return { select: () => ({ single: async () => ({ data: created }) }) };
+          }
+          inserted.push(row);
+          return Promise.resolve({ error: null });
+        },
+        upsert: async (row: Row) => { alternates.push(row); return { error: null }; },
+      };
+      return q;
+    },
+  };
+  return { db: db as any, inserted, alternates };
+}
+
+// MusicBrainz knows these recordings, each under its own title.
+function musicBrainzKnows(recordings: { artist: string; title: string; date: string }[]) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const q = decodeURIComponent(url);
+      const hits = recordings.filter((r) => q.includes(`recording:"${r.title}"`));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          recordings: hits.map((r) => ({
+            title: r.title,
+            "artist-credit": [{ name: r.artist }],
+            releases: [{ date: r.date, "release-group": { "primary-type": "Album", "secondary-types": [] } }],
+          })),
+        }),
+      };
+    }),
+  );
+}
+
+const lowBridge = { title: "Low Bridge, Everybody Down", first_line: null, youtube_url: null, tune_id: null, song_recording_artists: [{ count: 0 }], song_composers: [], song_lyricists: [], song_tags: [] };
+
+describe("addFirstRecordings", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    process.env.OPENAI_API_KEY = "test";
+    process.env.ANTHROPIC_API_KEY = "test";
+  });
+
+  async function run(db: any, opts = {}) {
+    const p = addFirstRecordings(db, "song-1", opts);
+    await vi.runAllTimersAsync();
+    return p;
+  }
+
+  it("adds a recording one model names once MusicBrainz confirms it, under the title on the record", async () => {
+    answers.gpt = [{ artist: "Pete Seeger", year: 1957, why: "iconic", recorded_title: "Erie Canal" }];
+    answers.claude = [{ artist: "Imaginary Folk Trio", year: 1960, why: "iconic", recorded_title: "Low Bridge" }];
+    musicBrainzKnows([{ artist: "Pete Seeger", title: "Erie Canal", date: "1958-01-01" }]);
+    const { db, inserted, alternates } = fakeSongDb(lowBridge);
+
+    const { added } = await run(db);
+
+    expect(added).toEqual([{ artist: "Pete Seeger", year: 1958, title: "Erie Canal" }]);
+    expect(inserted).toEqual([{ song_id: "song-1", artist_id: "a0", year: 1958, position: 1, recorded_title: "Erie Canal", spotify_url: null }]);
+    expect(alternates).toEqual([{ song_id: "song-1", title: "Erie Canal" }]);
+  });
+
+  it("stops at two recordings, those both models name first", async () => {
+    answers.gpt = [{ artist: "The Weavers", year: 1951, why: "iconic", recorded_title: "Erie Canal" }, { artist: "Pete Seeger", year: 1957, why: "iconic", recorded_title: "Erie Canal" }];
+    answers.claude = [{ artist: "Pete Seeger", year: 1957, why: "iconic", recorded_title: "Erie Canal" }, { artist: "Bruce Springsteen", year: 2006, why: "iconic", recorded_title: "Erie Canal" }];
+    musicBrainzKnows(["The Weavers", "Pete Seeger", "Bruce Springsteen"].map((artist) => ({ artist, title: "Erie Canal", date: "" })));
+    const { db } = fakeSongDb(lowBridge);
+
+    expect((await run(db, { dryRun: true })).added.map((a: any) => a.artist)).toEqual(["Pete Seeger", "The Weavers"]);
+  });
+
+  it("leaves a song that names its tune alone", async () => {
+    answers.gpt = answers.claude = [{ artist: "Westminster Abbey Choir", year: 2020, why: "iconic", recorded_title: "Love Divine" }];
+    const { db, inserted } = fakeSongDb({ ...lowBridge, title: "Love Divine, All Loves Excelling", tune_id: "blaenwern" });
+
+    expect((await run(db)).added).toEqual([]);
     expect(inserted).toEqual([]);
   });
 });

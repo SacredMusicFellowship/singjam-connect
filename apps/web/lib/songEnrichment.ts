@@ -11,6 +11,9 @@ import {
   hymnaryTunes,
   type HymnaryText,
   agreedLandmarks,
+  firstRecordingCandidates,
+  firstRecordingYear,
+  type RecordingCandidate,
   decideEnrichment,
   decideListedFacts,
   matchesGeniusHit,
@@ -35,6 +38,8 @@ import {
   type ModelAnswer,
   type WikipediaFacts,
 } from "@singjam/core";
+
+import { findOnSpotify } from "@/lib/songLookup";
 
 const USER_AGENT = "SingJam/1.0 ( https://singjam.org )";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -185,8 +190,9 @@ async function askClaude(song: SongContext, usage: ModelUsage[]): Promise<ModelA
 
 async function musicbrainz(path: string) {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(`https://musicbrainz.org/ws/2/${path}`, { headers: { "User-Agent": USER_AGENT } });
+    const res = await fetch(`https://musicbrainz.org/ws/2/${path}`, { headers: { "User-Agent": USER_AGENT } }).catch(() => null);
     await sleep(1100);
+    if (!res) continue;
     if (res.status === 503 || res.status === 429) continue;
     return res.ok ? res.json() : null;
   }
@@ -608,6 +614,137 @@ export async function addLandmarkRecordings(admin: SupabaseClient, songId: strin
   return { added, usage };
 }
 
+const FIRST_RECORDING_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["recordings"],
+  properties: {
+    recordings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["artist", "year", "why", "recorded_title"],
+        properties: {
+          artist: { type: "string" }, year: { type: "integer" }, why: { type: "string", enum: ["original", "iconic"] }, recorded_title: { type: "string" },
+        },
+      },
+    },
+  },
+};
+
+type FirstRecordingSong = { title: string; writers: string[]; firstLine: string | null; tags: string[] };
+
+function firstRecordingPrompt(s: FirstRecordingSong) {
+  const system = "You are a careful music researcher. Accuracy matters more than coverage: a wrong recording is far worse than a missing one.";
+  const user = `Song: "${s.title}"${s.writers.length ? `, written by ${s.writers.join(", ")}` : ""}${s.firstLine ? `, first line "${s.firstLine}"` : ""}${s.tags.length ? ` (${s.tags.join("; ")})` : ""}.
+Name the recordings of THIS song (not another song with the same title) that people would most likely know it from: the original recording if it is still known, or the best-known later recording. For a traditional, folk, children's, barbershop or hymn-like song, a widely known recording by a well-known performer or group counts.
+Never list: novelty or parody covers, karaoke or "kids' sing-along" compilations by anonymous studio groups, or recordings you are not sure exist. At most 3; an empty list is fine. Use the artist's credited name and the year that recording was first released.
+Return JSON: {"recordings": [{"artist", "year", "why", "recorded_title"}]} where why is "original" or "iconic" and recorded_title is the title as printed on that recording.`;
+  return { system, user };
+}
+
+async function askGptFirstRecordings(s: FirstRecordingSong, usage: ModelUsage[]): Promise<RecordingCandidate[] | null> {
+  if (!process.env.OPENAI_API_KEY) return null;
+  try {
+    const { system, user } = firstRecordingPrompt(s);
+    const res = await new OpenAI().chat.completions.create({
+      model: "gpt-5.5",
+      reasoning_effort: "low",
+      response_format: { type: "json_object" },
+      messages: [{ role: "system", content: system }, { role: "user", content: user }],
+    });
+    usage.push({ model: res.model, input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0, reasoning: res.usage?.completion_tokens_details?.reasoning_tokens ?? 0 });
+    return JSON.parse(res.choices[0].message.content ?? "{}").recordings ?? null;
+  } catch (e) {
+    console.error("[song-enrichment] gpt first recordings failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function askClaudeFirstRecordings(s: FirstRecordingSong, usage: ModelUsage[]): Promise<RecordingCandidate[] | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const { system, user } = firstRecordingPrompt(s);
+    const res: any = await new Anthropic().beta.messages.create({
+      model: "claude-opus-5-5",
+      max_tokens: 4000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: "low", format: { type: "json_schema", schema: FIRST_RECORDING_SCHEMA } },
+      system,
+      messages: [{ role: "user", content: user }],
+    } as any);
+    usage.push({ model: res.model, input: res.usage.input_tokens, output: res.usage.output_tokens });
+    if (res.stop_reason === "refusal") return null;
+    const text = res.content.find((b: any) => b.type === "text");
+    return text ? JSON.parse(text.text).recordings ?? null : null;
+  } catch (e) {
+    console.error("[song-enrichment] claude first recordings failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// A Spotify link only when the track really is this recording (title and artist).
+async function spotifyFor(title: string, artist: string): Promise<string | null> {
+  const hit = await findOnSpotify(title, leadArtist(artist)).catch(() => null);
+  return hit && norm(hit.title) === norm(title) && (sameArtist(hit.artist, artist) || norm(hit.artist) === norm(leadArtist(artist))) ? hit.spotify_url : null;
+}
+
+export type FirstRecordingResult = { artist: string; year: number | null; title: string };
+
+// A song added with no recording (a folk song, spiritual or hymn added by its
+// writers) gets up to two recordings people know it from: named by a model and
+// confirmed on MusicBrainz, under the song's title or the title on that record.
+// A record's own title ("Erie Canal" for "Low Bridge") is kept on the recording
+// (YouTube is searched with it) and as an alternate title (search finds it).
+// Runs when a song is added, not from the cron. ~3¢ a song.
+export async function addFirstRecordings(admin: SupabaseClient, songId: string, opts: { dryRun?: boolean } = {}) {
+  const usage: ModelUsage[] = [];
+  const { data: song } = await admin
+    .from("songs")
+    .select("title, first_line, youtube_url, tune_id, song_recording_artists(count), song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name))")
+    .eq("id", songId)
+    .single();
+  const s = song as any;
+  // A song that names its tune (Love Divine to Hyfrydol) or already has a
+  // reference recording is left alone: a model can't tell which melody a
+  // recording of the words uses.
+  if (!s || s.song_recording_artists?.[0]?.count || s.tune_id || s.youtube_url) return { added: [] as FirstRecordingResult[], usage };
+  const writers = [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])]
+    .map((r: any) => r.people?.name as string | undefined)
+    .filter((n, i, all): n is string => !!n && all.indexOf(n) === i);
+  const tags = (s.song_tags ?? []).filter((t: any) => t.context === "general" && ["genre", "form", "community"].includes(t.tags?.type)).map((t: any) => t.tags.name as string);
+  const ask = { title: s.title as string, writers, firstLine: s.first_line ?? null, tags };
+  const [gpt, claude] = await Promise.all([askGptFirstRecordings(ask, usage), askClaudeFirstRecordings(ask, usage)]);
+
+  const added: FirstRecordingResult[] = [];
+  for (const pick of firstRecordingCandidates(gpt, claude)) {
+    if (added.length >= 2) break;
+    const titles = [s.title as string, ...pick.titles].filter((t, i, all) => all.findIndex((u) => norm(u) === norm(t)) === i);
+    let found: { credit: string; year: number | null } | null = null;
+    let asTitle = s.title as string;
+    for (const t of titles) {
+      found = await musicBrainzRecording(t, pick.artist);
+      if (found) { asTitle = t; break; }
+    }
+    if (!found || added.some((a) => sameArtist(a.artist, found!.credit))) continue;
+    const year = firstRecordingYear(pick.years, found.year);
+    added.push({ artist: found.credit, year, title: asTitle });
+    if (opts.dryRun) continue;
+    const [artistId] = await idsFor(admin, "artists", [found.credit]);
+    if (!artistId) continue;
+    const recordedTitle = norm(asTitle) === norm(s.title) ? null : asTitle;
+    await admin.from("song_recording_artists").insert({
+      song_id: songId, artist_id: artistId, year, position: added.length, recorded_title: recordedTitle,
+      spotify_url: await spotifyFor(asTitle, found.credit),
+    });
+    // "Auld Lang Syne (The New Year's Anthem)" is the title plus a subtitle, not another name.
+    if (recordedTitle && !norm(recordedTitle).startsWith(norm(s.title))) await admin.from("song_alternate_titles").upsert({ song_id: songId, title: recordedTitle }, { onConflict: "song_id,title", ignoreDuplicates: true });
+  }
+  return { added, usage };
+}
+
 export async function idsFor(admin: SupabaseClient, table: "people" | "languages" | "artists", names: string[]) {
   const ids: string[] = [];
   for (const name of names) {
@@ -693,13 +830,20 @@ export async function enrichSong(
   if (!opts.dryRun) await admin.from("songs").update({ enrichment_started_at: new Date().toISOString() }).eq("id", songId);
   try {
     const filled = await fillSong(admin, songId, s, primary, artist, writers, wanted, opts);
-    const landmarks = await addLandmarkRecordings(admin, songId, opts).catch((e) => {
-      console.error("[song-enrichment] landmark recordings failed:", e instanceof Error ? e.message : e);
-      return { added: [] as LandmarkResult[], usage: [] as ModelUsage[] };
-    });
-    const usage = [...filled.usage, ...landmarks.usage];
+    // A song with a recording gets its iconic others; one without gets the
+    // recordings people know it from.
+    const [landmarks, first] = primary
+      ? [await addLandmarkRecordings(admin, songId, opts).catch((e) => {
+          console.error("[song-enrichment] landmark recordings failed:", e instanceof Error ? e.message : e);
+          return { added: [] as LandmarkResult[], usage: [] as ModelUsage[] };
+        }), { added: [] as FirstRecordingResult[], usage: [] as ModelUsage[] }]
+      : [{ added: [] as LandmarkResult[], usage: [] as ModelUsage[] }, await addFirstRecordings(admin, songId, opts).catch((e) => {
+          console.error("[song-enrichment] first recordings failed:", e instanceof Error ? e.message : e);
+          return { added: [] as FirstRecordingResult[], usage: [] as ModelUsage[] };
+        })];
+    const usage = [...filled.usage, ...landmarks.usage, ...first.usage];
     if (!opts.dryRun) await recordEnrichmentUsage(admin, songId, "fill", usage);
-    return { ...filled, usage, landmarks: landmarks.added };
+    return { ...filled, usage, landmarks: landmarks.added, firstRecordings: first.added };
   } finally {
     if (!opts.dryRun) await admin.from("songs").update({ enrichment_finished_at: new Date().toISOString() }).eq("id", songId);
   }
