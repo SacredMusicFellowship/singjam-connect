@@ -21,13 +21,14 @@ export const TAG_PATH_TYPE: Record<string, TagType> = Object.fromEntries(
 export type BrowseKind = TagType | "person" | "artist" | "show" | "tune" | "text" | "scripture";
 
 // `traditional` narrows a page to its traditional songs ("Trad. · American"
-// on a song card opens the American page that way).
+// on a song card opens /cultures/American/traditional). A path, not a query:
+// the pages are cached (ISR), and reading the query made them fail to render.
 export function browsePath(kind: BrowseKind, slug: string, opts: { traditional?: boolean } = {}): string {
   // A passage's key is "book/chapter" (/scripture/psalms/90), so its slash stays.
   if (kind === "scripture") return `/scripture/${slug.split("/").map(encodeURIComponent).join("/")}`;
   const base = kind === "person" ? "people" : kind === "artist" ? "artists" : kind === "show" ? "shows"
     : kind === "tune" ? "tunes" : kind === "text" ? "texts" : TAG_TYPE_PATH[kind];
-  return `/${base}/${encodeURIComponent(slug)}${opts.traditional ? "?traditional=1" : ""}`;
+  return `/${base}/${encodeURIComponent(slug)}${opts.traditional ? "/traditional" : ""}`;
 }
 
 // What a browse page is, shown above its name.

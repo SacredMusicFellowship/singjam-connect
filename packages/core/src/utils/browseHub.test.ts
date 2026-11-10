@@ -86,8 +86,8 @@ describe("loadBrowseHub", () => {
   it("lists each culture's traditional songs, most first", async () => {
     const hub = await loadBrowseHub(db);
     expect(hub.traditional).toEqual([
-      { href: "/cultures/scottish?traditional=1", label: "Scottish", count: 5 },
-      { href: "/cultures/irish?traditional=1", label: "Irish", count: 3 },
+      { href: "/cultures/scottish/traditional", label: "Scottish", count: 5 },
+      { href: "/cultures/irish/traditional", label: "Irish", count: 3 },
     ]);
   });
 });

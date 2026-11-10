@@ -6,10 +6,10 @@ export function generateStaticParams() {
   return [];
 }
 
-export async function generateMetadata({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ traditional?: string }> }) {
-  return browseMetadata("mode", (await params).slug, (await searchParams).traditional === "1");
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  return browseMetadata("mode", (await params).slug);
 }
 
-export default async function Page({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ traditional?: string }> }) {
-  return <BrowsePage kind="mode" slug={(await params).slug} traditional={(await searchParams).traditional === "1"} />;
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  return <BrowsePage kind="mode" slug={(await params).slug} />;
 }

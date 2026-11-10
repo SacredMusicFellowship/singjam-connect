@@ -27,8 +27,8 @@ describe("loadBrowseRelated", () => {
 describe("traditionalCultureChips", () => {
   it("counts each culture once per song, most songs first, linking to its traditional songs", () => {
     expect(traditionalCultureChips([{ cultures: ["Irish", "Scottish"] }, { cultures: ["Irish", "Irish"] }, { cultures: [] }])).toEqual([
-      { label: "Irish", count: 2, href: "/cultures/Irish?traditional=1" },
-      { label: "Scottish", count: 1, href: "/cultures/Scottish?traditional=1" },
+      { label: "Irish", count: 2, href: "/cultures/Irish/traditional" },
+      { label: "Scottish", count: 1, href: "/cultures/Scottish/traditional" },
     ]);
   });
 });
