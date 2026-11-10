@@ -49,7 +49,7 @@ export type BrowseEntity = {
   allSongCount?: number;
   name: string;
   subtitle: string | null;
-  // Tunes and texts: labelled lines under the name (Music or Words, From, Date,
+  // Tunes and texts: labelled lines under the name (Music or Words, Origin, Date,
   // Source, Meter, Language), each like a song page's credit lines: groups show
   // " · " apart, names in a group ", " apart.
   facts?: BrowseFact[];
@@ -145,7 +145,7 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
       kind, name: tune.tune_label, subtitle: null,
       facts: labelled([
         ["Music", [writerFacts(credits, { composer: "", arranger: "arr. ", adapter: "adapted by " })]],
-        ["From", [origin.map(tagFact)]],
+        ["Origin", [origin.map(tagFact)]],
         ["Date", dateGroups(formatYear(tune.year, tune.year_precision), tune.published_in)],
         ["Meter", [when(tune.meter)]],
       ]),
@@ -168,7 +168,7 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
       kind, name: text.title, subtitle: null,
       facts: labelled([
         ["Words", [writerFacts(text.text_credits ?? [], { author: "", translator: "trans. ", adapter: "adapted by " })]],
-        ["From", [origin.map(tagFact)]],
+        ["Origin", [origin.map(tagFact)]],
         ["Date", [when(formatYear(text.year, text.year_precision))]],
         [sources.length > 1 ? "Sources" : "Source", sources.map((r) => [sourceFact(r)])],
         [languages.length > 1 ? "Languages" : "Language", [languages.map(tagFact)]],

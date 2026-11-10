@@ -63,7 +63,7 @@ describe("loadBrowseEntity facts", () => {
     const e = await loadBrowseEntity(db, "tune", "kingsfold");
     expect(e?.facts).toEqual([
       { label: "Music", groups: [[{ text: "Traditional", link: { kind: "person", key: "traditional" } }, { lead: "arr. ", text: "Ralph Vaughan Williams", link: { kind: "person", key: "rvw" } }]] },
-      { label: "From", groups: [[{ text: "English", link: { kind: "culture", key: "english" } }]] },
+      { label: "Origin", groups: [[{ text: "English", link: { kind: "culture", key: "english" } }]] },
       { label: "Date", groups: [[{ text: "1906", link: null }], [{ lead: "first printed in ", text: "The English Hymnal", link: null }]] },
       { label: "Meter", groups: [[{ text: "CMD", link: null }]] },
     ]);
@@ -85,7 +85,7 @@ describe("loadBrowseEntity facts", () => {
     });
     const e = await loadBrowseEntity(db, "text", "etz-chayim-hi");
     expect(e?.facts?.map((l) => `${l.label}: ${l.groups.map((g) => g.map((c) => c.text).join(", ")).join(" · ")}`)).toEqual([
-      "From: Jewish", "Date: 16th c.", "Sources: Proverbs 3:17 · Proverbs 3:18 · Lamentations 5:21", "Language: Hebrew",
+      "Origin: Jewish", "Date: 16th c.", "Sources: Proverbs 3:17 · Proverbs 3:18 · Lamentations 5:21", "Language: Hebrew",
     ]);
     expect(e?.facts?.[2].groups[0][0].link).toEqual({ kind: "scripture", key: "proverbs/3" });
   });
