@@ -122,7 +122,7 @@ export default function AddToSetPanel({
   }
 
   return (
-    <div ref={panelRef}>
+    <div ref={panelRef} data-popover-open>
       <button
         onClick={() => setOpen(false)}
         className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition-colors"

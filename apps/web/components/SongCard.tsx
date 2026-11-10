@@ -108,8 +108,10 @@ function SongCard({
   const shows = productionCredits(productionCreditsProp, productions);
   const pills = songCardPills({ forms, occasions, genres, communities, languages });
 
+  // isolate keeps the stretched link inside the card, so the next card would
+  // paint over an open Add to set panel: a card with one open is raised.
   return (
-    <div className="relative isolate rounded-2xl border border-zinc-200 p-4 shadow-sm hover:border-zinc-300">
+    <div className="relative isolate rounded-2xl border border-zinc-200 p-4 shadow-sm hover:border-zinc-300 has-[[data-popover-open]]:z-30">
       <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
           <div className="font-medium">
