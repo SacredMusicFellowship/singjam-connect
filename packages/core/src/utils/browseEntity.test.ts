@@ -51,7 +51,7 @@ function fakeDb(tables: Record<string, any[]>) {
 }
 
 describe("loadBrowseEntity facts", () => {
-  it("leads a tune with culture, year, first printing, writers by role and meter", async () => {
+  it("labels a tune's writers by role, origin, date with its first printing, and meter", async () => {
     const db = fakeDb({
       tunes: [{
         id: "t", slug: "kingsfold", tune_label: "Kingsfold", meter: "CMD", year: 1906, year_precision: "exact", published_in: "The English Hymnal", notes: null,
@@ -62,16 +62,15 @@ describe("loadBrowseEntity facts", () => {
     });
     const e = await loadBrowseEntity(db, "tune", "kingsfold");
     expect(e?.facts).toEqual([
-      [{ text: "English", link: { kind: "culture", key: "english" } }],
-      [{ text: "1906", link: null }],
-      [{ text: "The English Hymnal", link: null }],
-      [{ text: "Traditional", link: { kind: "person", key: "traditional" } }, { lead: "arr. ", text: "Ralph Vaughan Williams", link: { kind: "person", key: "rvw" } }],
-      [{ text: "CMD", link: null }],
+      { label: "Music", groups: [[{ text: "Traditional", link: { kind: "person", key: "traditional" } }, { lead: "arr. ", text: "Ralph Vaughan Williams", link: { kind: "person", key: "rvw" } }]] },
+      { label: "From", groups: [[{ text: "English", link: { kind: "culture", key: "english" } }]] },
+      { label: "Date", groups: [[{ text: "1906", link: null }], [{ lead: "first printed in ", text: "The English Hymnal", link: null }]] },
+      { label: "Meter", groups: [[{ text: "CMD", link: null }]] },
     ]);
     expect(e?.related.map((t) => t.name)).toEqual(["Dorian"]);
   });
 
-  it("leads a text with its source, lists several sources in order, and drops a language the culture already names", async () => {
+  it("lists a text's sources in order and drops a language the culture already names", async () => {
     const db = fakeDb({
       texts: [{
         id: "x", title: "Etz Chayim Hi", year: 1550, year_precision: "century", notes: null, text_credits: [],
@@ -85,9 +84,10 @@ describe("loadBrowseEntity facts", () => {
       songs: [{ id: "s1" }],
     });
     const e = await loadBrowseEntity(db, "text", "etz-chayim-hi");
-    expect(e?.facts?.map((g) => g.map((c) => c.text).join(", "))).toEqual(["Jewish", "16th c.", "Proverbs 3:17", "Hebrew"]);
-    expect(e?.facts?.[2][0].link).toEqual({ kind: "scripture", key: "proverbs/3" });
-    expect(e?.sources?.map((c) => c.text)).toEqual(["Proverbs 3:17", "Proverbs 3:18", "Lamentations 5:21"]);
+    expect(e?.facts?.map((l) => `${l.label}: ${l.groups.map((g) => g.map((c) => c.text).join(", ")).join(" · ")}`)).toEqual([
+      "From: Jewish", "Date: 16th c.", "Sources: Proverbs 3:17 · Proverbs 3:18 · Lamentations 5:21", "Language: Hebrew",
+    ]);
+    expect(e?.facts?.[2].groups[0][0].link).toEqual({ kind: "scripture", key: "proverbs/3" });
   });
 });
 

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { browsePath, traditionalCultureChips, type BrowseKind, type TagType } from "@singjam/core";
@@ -61,11 +62,14 @@ export default async function BrowsePage({ kind, slug, traditional = false }: { 
         <h1 className="text-2xl font-semibold text-slate-900 text-balance">{entity.name}</h1>
         {entity.subtitle && <p className="text-base text-slate-500">{entity.subtitle}</p>}
         {entity.facts && entity.facts.length > 0 && (
-          <p className="text-base text-slate-600">
-            {entity.facts.map((g, i) => (
-              <span key={i}>{i > 0 && " · "}<CreditLinks credits={g} linkClassName="text-slate-600" /></span>
+          <div className="flex flex-col gap-1 pt-1">
+            {entity.facts.map((line) => (
+              <p key={line.label} className="text-sm text-slate-600">
+                <span className="font-medium">{line.label}:</span>{" "}
+                {line.groups.map((g, i) => <Fragment key={i}>{i > 0 && " · "}<CreditLinks credits={g} /></Fragment>)}
+              </p>
             ))}
-          </p>
+          </div>
         )}
         <p className="text-sm text-slate-500">
           {entity.traditionalOnly ? (
@@ -79,15 +83,6 @@ export default async function BrowsePage({ kind, slug, traditional = false }: { 
       </div>
 
       {entity.notes && <p className="max-w-prose text-sm text-slate-600">{entity.notes}</p>}
-
-      {entity.sources && (
-        <section className="space-y-1">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources</h2>
-          <ul className="text-sm text-slate-700">
-            {entity.sources.map((c, i) => <li key={i}><CreditLinks credits={[c]} /></li>)}
-          </ul>
-        </section>
-      )}
 
       {entity.readUrl && (
         <a href={entity.readUrl.href} target="_blank" rel="noopener noreferrer" className="inline-block text-sm font-medium text-amber-700 hover:underline">

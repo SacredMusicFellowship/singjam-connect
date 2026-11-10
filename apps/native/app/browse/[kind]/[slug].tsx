@@ -116,11 +116,16 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
             <Text className="text-2xl font-semibold text-slate-900 mt-1">{entity.name}</Text>
             {entity.subtitle ? <Text className="text-base text-slate-500">{entity.subtitle}</Text> : null}
             {entity.facts && entity.facts.length > 0 ? (
-              <Text className="text-base text-slate-600">
-                {entity.facts.map((g, i) => (
-                  <Text key={i}>{i > 0 ? ' · ' : ''}<CreditText credits={g} onOpen={openBrowse} linkClassName="text-amber-700" /></Text>
+              <View className="mt-1">
+                {entity.facts.map(line => (
+                  <Text key={line.label} className="text-sm text-slate-600 mb-0.5">
+                    <Text className="font-medium">{line.label}: </Text>
+                    {line.groups.map((g, i) => (
+                      <Text key={i}>{i > 0 ? ' · ' : ''}<CreditText credits={g} onOpen={openBrowse} linkClassName="text-amber-700" /></Text>
+                    ))}
+                  </Text>
                 ))}
-              </Text>
+              </View>
             ) : null}
             <Text className="text-sm text-slate-500 mt-1">
               {entity.traditionalOnly ? `${total} traditional song${total === 1 ? '' : 's'} · ` : `${total} song${total === 1 ? '' : 's'}`}
@@ -134,14 +139,6 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
               {members > 0 ? ` · ${members} member${members === 1 ? '' : 's'} know${members === 1 ? 's' : ''} at least one` : ''}
             </Text>
             {entity.notes ? <Text className="text-sm text-slate-600 mt-3">{entity.notes}</Text> : null}
-            {entity.sources ? (
-              <View className="mt-4">
-                <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Sources</Text>
-                {entity.sources.map((c, i) => (
-                  <Text key={i} className="text-sm text-slate-700"><CreditText credits={[c]} onOpen={openBrowse} linkClassName="text-amber-700" /></Text>
-                ))}
-              </View>
-            ) : null}
             {entity.readUrl ? (
               <Text className="text-sm font-medium text-amber-700 mt-3" onPress={() => Linking.openURL(entity.readUrl!.href)}>
                 Read {entity.name} on {entity.readUrl.site} ↗

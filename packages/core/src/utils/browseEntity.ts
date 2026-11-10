@@ -36,6 +36,8 @@ export type BrowseSongRow = {
 // A chip linking another browse page: a tag, or (on scripture pages) a book or chapter.
 export type LinkedTag = { name: string; slug: string; type: TagType | "scripture" };
 
+export type BrowseFact = { label: string; groups: CardCredit[][] };
+
 export type BrowseEntity = {
   kind: BrowseKind;
   // A person's or artist's own slug, when the page was opened by name.
@@ -47,12 +49,10 @@ export type BrowseEntity = {
   allSongCount?: number;
   name: string;
   subtitle: string | null;
-  // Tunes and texts: one line of linked facts under the name, in a fixed order
-  // (culture or community · year · source · writers · meter or language);
-  // groups show " · " apart, names in a group ", " apart (as song credit lines).
-  facts?: CardCredit[][];
-  // A text's sources when one line can't hold them (several, or an inspiration).
-  sources?: CardCredit[];
+  // Tunes and texts: labelled lines under the name (Music or Words, From, Date,
+  // Source, Meter, Language), each like a song page's credit lines: groups show
+  // " · " apart, names in a group ", " apart.
+  facts?: BrowseFact[];
   // A passage's page links out to read it.
   readUrl?: { href: string; site: string } | null;
   notes: string | null;
@@ -143,13 +143,12 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
     const credits = ((tune.tune_credits ?? []) as any[]).filter((c) => c.people && c.people.name !== tune.tune_label);
     return {
       kind, name: tune.tune_label, subtitle: null,
-      facts: [
-        origin.map(tagFact),
-        when(formatYear(tune.year, tune.year_precision)),
-        when(tune.published_in),
-        writerFacts(credits, { composer: "", arranger: "arr. ", adapter: "adapted by " }),
-        when(tune.meter),
-      ].filter((g) => g.length),
+      facts: labelled([
+        ["Music", [writerFacts(credits, { composer: "", arranger: "arr. ", adapter: "adapted by " })]],
+        ["From", [origin.map(tagFact)]],
+        ["Date", dateGroups(formatYear(tune.year, tune.year_precision), tune.published_in)],
+        ["Meter", [when(tune.meter)]],
+      ]),
       notes: tune.notes ?? null, parents: [], children: [], related: rest,
       songIds: songs.map((r) => r.id), roles: new Map(),
     };
@@ -165,19 +164,15 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
     // "English" the culture already says "English" the language.
     const languages = rest.filter((t) => t.type === "language" && !origin.some((o) => o.name === t.name));
     const sources = sortSources((text.text_sources ?? []) as (SourceRef & { id: string })[]);
-    const main = sources.find((r) => r.relation !== "inspired") ?? null;
     return {
       kind, name: text.title, subtitle: null,
-      facts: [
-        origin.map(tagFact),
-        when(formatYear(text.year, text.year_precision)),
-        main ? [sourceFact(main)] : [],
-        writerFacts(text.text_credits ?? [], { author: "", translator: "trans. ", adapter: "adapted by " }),
-        languages.map(tagFact),
-      ].filter((g) => g.length),
-      sources: sources.length > 1 || sources.some((r) => r.relation === "inspired")
-        ? sources.map((r) => ({ ...sourceFact(r), text: capitalizeFirst(formatSourceRef(r)) }))
-        : undefined,
+      facts: labelled([
+        ["Words", [writerFacts(text.text_credits ?? [], { author: "", translator: "trans. ", adapter: "adapted by " })]],
+        ["From", [origin.map(tagFact)]],
+        ["Date", [when(formatYear(text.year, text.year_precision))]],
+        [sources.length > 1 ? "Sources" : "Source", sources.map((r) => [sourceFact(r)])],
+        [languages.length > 1 ? "Languages" : "Language", [languages.map(tagFact)]],
+      ]),
       notes: text.notes ?? null, parents: [], children: [], related: rest.filter((t) => t.type !== "language"),
       songIds: songs.map((r) => r.id), roles: new Map(),
     };
@@ -324,6 +319,17 @@ export function traditionalCultureChips(meta: { cultures: string[] }[]): BrowseC
 }
 
 const ORIGIN_TYPES = new Set(["culture", "community"]);
+// Drops empty lines and empty groups.
+function labelled(lines: [string, CardCredit[][]][]): BrowseFact[] {
+  return lines.map(([label, groups]) => ({ label, groups: groups.filter((g) => g.length) })).filter((l) => l.groups.length);
+}
+
+// "1844 · first printed in Cyfaill y Cantorion"
+function dateGroups(year: string | null, publishedIn: string | null | undefined): CardCredit[][] {
+  const printed: CardCredit[] = publishedIn ? [{ lead: year ? "first printed in " : "First printed in ", text: publishedIn, link: null }] : [];
+  return [when(year), printed];
+}
+
 const when = (v: string | number | null | undefined): CardCredit[] => (v == null || v === "" ? [] : [{ text: String(v), link: null }]);
 const tagFact = (t: LinkedTag): CardCredit => ({ text: t.name, link: { kind: t.type, key: t.slug } });
 
