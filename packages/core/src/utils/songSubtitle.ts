@@ -1,5 +1,5 @@
 import { sortRecordingsByYear } from "./formatRecordingArtists";
-import { formatScriptureRef, type ScriptureRef } from "./scripture";
+import { capitalizeFirst, formatSourceRef, scriptureKey, type SourceRef } from "./scripture";
 import type { BrowseKind } from "./browsePaths";
 
 export type SongSubtitle = { kind: "production"; text: string } | { kind: "artist"; text: string } | null;
@@ -38,7 +38,7 @@ export type CardIdentity = {
   tune?: string | null;
   tune_slug?: string | null;
   text_slug?: string | null;
-  source?: ScriptureRef | null;
+  source?: SourceRef | null;
   first_line?: string | null;
 } | null | undefined;
 
@@ -49,8 +49,9 @@ const plain = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").tr
 export function songCardIdentity(identity: CardIdentity, title: string): CardCredit | null {
   if (identity?.tune) return { lead: "Tune: ", text: identity.tune, link: identity.tune_slug ? { kind: "tune", key: identity.tune_slug } : null };
   if (identity?.source) {
-    const ref = formatScriptureRef(identity.source);
-    if (ref) return { text: ref, link: identity.text_slug ? { kind: "text", key: identity.text_slug } : null };
+    const ref = formatSourceRef(identity.source);
+    const key = scriptureKey(identity.source);
+    if (ref) return { text: capitalizeFirst(ref), link: key ? { kind: "scripture", key } : identity.text_slug ? { kind: "text", key: identity.text_slug } : null };
   }
   const line = identity?.first_line?.trim().replace(/[\s,;:.!?—–-]+$/u, "");
   if (!line || plain(title).includes(plain(line))) return null;

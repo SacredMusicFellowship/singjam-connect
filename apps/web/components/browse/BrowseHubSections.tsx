@@ -16,6 +16,7 @@ export default function BrowseHubSections({ hub: loaded }: { hub: BrowseHub }) {
         <ChipSection title="Traditional songs" chips={hub.traditional} more={{ href: "/people/traditional", label: "All traditional songs" }} />
       )}
       {hub.sections.slice(1).map((s) => <ChipSection key={s.type} title={s.title} chips={s.chips} all={s.all} />)}
+      {hub.scripture.length > 0 && <ChipSection title="Scripture" chips={hub.scripture} />}
       {hub.shows.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stage &amp; screen</h2>

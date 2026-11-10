@@ -299,7 +299,7 @@ export default function SongDetailScreen() {
           song_tags(context, tags(name, type, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
           song_productions(productions(name, year, slug)),
-          texts(slug, songs(count), text_sources(book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          texts(slug, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
           tunes(name, slug)
         `)
         .eq('id', songId)
@@ -823,7 +823,7 @@ export default function SongDetailScreen() {
           </View>
         ) : null}
 
-        <SongMelodies title="Other melodies" items={melodies?.other_melodies ?? []} onOpen={(id) => router.push(`/song/${id}` as any)} />
+        <SongMelodies title="Other tunes" items={melodies?.other_melodies ?? []} onOpen={(id) => router.push(`/song/${id}` as any)} />
         <SongMelodies title="Also sung to this tune" items={melodies?.same_tune ?? []} onOpen={(id) => router.push(`/song/${id}` as any)} />
 
         {/* Media — inline YouTube player plus hand-off buttons for both apps */}

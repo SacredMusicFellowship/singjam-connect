@@ -12,5 +12,6 @@ export function browseKindFromSegment(segment: string): BrowseKind | null {
   if (segment === 'shows') return 'show';
   if (segment === 'tunes') return 'tune';
   if (segment === 'texts') return 'text';
+  if (segment === 'scripture') return 'scripture';
   return TAG_PATH_TYPE[segment] ?? null;
 }

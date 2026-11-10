@@ -22,11 +22,15 @@ describe("songSubtitle", () => {
 });
 
 describe("songCardIdentity", () => {
-  it("prefers the tune, then the scripture, then the first line, linking tune and text pages", () => {
+  it("prefers the tune, then the scripture, then the first line, linking tune, scripture and text pages", () => {
     expect(songCardIdentity({ tune: "Nettleton", tune_slug: "nettleton", first_line: "Come, thou Fount" }, "Come Thou Fount"))
       .toEqual({ lead: "Tune: ", text: "Nettleton", link: { kind: "tune", key: "nettleton" } });
     expect(songCardIdentity({ source: { book: "Psalms", chapter_start: 133, verse_start: 1 }, text_slug: "hinei-ma-tov" }, "Hinei Ma Tov"))
-      .toEqual({ text: "Psalm 133:1", link: { kind: "text", key: "hinei-ma-tov" } });
+      .toEqual({ text: "Psalm 133:1", link: { kind: "scripture", key: "psalms/133" } });
+    expect(songCardIdentity({ source: { book: "Psalms", chapter_start: 90, verse_start: null, relation: "metrical" }, text_slug: "o-god" }, "O God, Our Help"))
+      .toEqual({ text: "After Psalm 90", link: { kind: "scripture", key: "psalms/90" } });
+    expect(songCardIdentity({ source: { book: null, chapter_start: null, verse_start: null, citation: "Amidah; Kaddish" }, text_slug: "oseh-shalom" }, "Oseh Shalom"))
+      .toEqual({ text: "Amidah; Kaddish", link: { kind: "text", key: "oseh-shalom" } });
     expect(songCardIdentity({ first_line: "Oh Shenandoah, I long to see you," }, "Shenandoah"))
       .toEqual({ text: "“Oh Shenandoah, I long to see you…”", link: null });
   });

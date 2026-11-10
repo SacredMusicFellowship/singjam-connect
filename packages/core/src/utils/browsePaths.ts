@@ -18,11 +18,13 @@ export const TAG_PATH_TYPE: Record<string, TagType> = Object.fromEntries(
   Object.entries(TAG_TYPE_PATH).map(([type, path]) => [path, type as TagType])
 ) as Record<string, TagType>;
 
-export type BrowseKind = TagType | "person" | "artist" | "show" | "tune" | "text";
+export type BrowseKind = TagType | "person" | "artist" | "show" | "tune" | "text" | "scripture";
 
 // `traditional` narrows a page to its traditional songs ("Trad. · American"
 // on a song card opens the American page that way).
 export function browsePath(kind: BrowseKind, slug: string, opts: { traditional?: boolean } = {}): string {
+  // A passage's key is "book/chapter" (/scripture/psalms/90), so its slash stays.
+  if (kind === "scripture") return `/scripture/${slug.split("/").map(encodeURIComponent).join("/")}`;
   const base = kind === "person" ? "people" : kind === "artist" ? "artists" : kind === "show" ? "shows"
     : kind === "tune" ? "tunes" : kind === "text" ? "texts" : TAG_TYPE_PATH[kind];
   return `/${base}/${encodeURIComponent(slug)}${opts.traditional ? "?traditional=1" : ""}`;

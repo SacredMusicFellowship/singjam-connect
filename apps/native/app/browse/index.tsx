@@ -87,6 +87,9 @@ export default function BrowseHubScreen() {
                 <ChipCloud chips={s.chips} all={s.all} onPress={open} />
               </View>
             ))}
+            {hub && hub.scripture.length > 0 && (
+              <><Heading title="Scripture" /><ChipCloud chips={hub.scripture} onPress={open} /></>
+            )}
             {hub && hub.shows.length > 0 && (
               <>
                 <Heading title="Stage & screen" />

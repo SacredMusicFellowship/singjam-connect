@@ -121,7 +121,7 @@ const SONG_SELECT = `
           song_alternate_titles(title),
           song_tags(context, tags(name, type, slug)),
           song_productions(productions(name, year, slug)),
-          texts(slug, songs(count), text_sources(book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          texts(slug, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
           tunes(name, slug)
         `;
 
@@ -514,7 +514,7 @@ export default function SongPageContent() {
         </section>
       )}
 
-      <SongMelodies title="Other melodies" items={melodies?.other_melodies ?? []} />
+      <SongMelodies title="Other tunes" items={melodies?.other_melodies ?? []} />
       <SongMelodies title="Also sung to this tune" items={melodies?.same_tune ?? []} />
 
       {(() => {

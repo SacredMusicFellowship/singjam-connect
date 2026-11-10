@@ -7,7 +7,7 @@ function fakeDb(tables: Record<string, unknown[]>, rpc: Record<string, unknown>)
     from(table: string) {
       const rows = tables[table] ?? [];
       const q: any = {
-        select: () => q, order: () => q, eq: () => q,
+        select: () => q, order: () => q, eq: () => q, not: () => q, in: () => q,
         range: async () => ({ data: rows, error: null }),
         then: (resolve: (v: unknown) => void) => resolve({ data: rows, error: null }),
       };
@@ -37,6 +37,17 @@ describe("loadBrowseHub", () => {
         { name: "Cinderella", slug: "cinderella-1950", year: 1950, medium: "animated", song_productions: [{ count: 1 }] },
         { name: "Victory", slug: "victory", year: null, medium: null, song_productions: [{ count: 0 }] },
       ],
+      text_sources: [
+        { text_id: "ps90", book: "Psalms", relation: "metrical" },
+        { text_id: "ps133", book: "Psalms", relation: "quoted" },
+        { text_id: "etz", book: "Proverbs", relation: "quoted" },
+        { text_id: "etz", book: "Lamentations", relation: "quoted" },
+        { text_id: "grace", book: "1 Chronicles", relation: "inspired" },
+      ],
+      songs: [
+        { id: "s1", text_id: "ps90" }, { id: "s2", text_id: "ps133" }, { id: "s3", text_id: "ps133" },
+        { id: "s4", text_id: "etz" }, { id: "s5", text_id: "grace" },
+      ],
     },
     {
       tag_song_counts: [{ tag_id: "rock", songs: 5 }, { tag_id: "classic", songs: 3 }, { tag_id: "folk", songs: 7 }, { tag_id: "hymn", songs: 2 }],
@@ -52,6 +63,16 @@ describe("loadBrowseHub", () => {
     ]);
     expect(hub.sections.find((s) => s.type === "form")?.chips.map((c) => c.label)).toEqual(["Hymn"]);
     expect(hub.sections.find((s) => s.type === "genre")?.all.map((c) => c.label)).toEqual(["Folk", "Rock", "Classic Rock"]);
+  });
+
+  it("lists books of scripture in canonical order, counting each song once", async () => {
+    const hub = await loadBrowseHub(db);
+    expect(hub.scripture).toEqual([
+      { href: "/scripture/1-chronicles", label: "1 Chronicles", count: 1 },
+      { href: "/scripture/psalms", label: "Psalms", count: 3 },
+      { href: "/scripture/proverbs", label: "Proverbs", count: 1 },
+      { href: "/scripture/lamentations", label: "Lamentations", count: 1 },
+    ]);
   });
 
   it("leaves out Traditional and one-song writers, and shows without songs", async () => {
@@ -78,6 +99,7 @@ describe("sortBrowseHub", () => {
     writerTotal: 2, artists: [], artistTotal: 0,
     shows: [{ medium: "film", label: "Film", chips: [{ href: "/s/b", label: "Beta", count: 4 }, { href: "/s/a", label: "Alpha", count: 1 }] }],
     traditional: [{ href: "/c/s", label: "Scottish", count: 9 }, { href: "/c/i", label: "Irish", count: 2 }],
+    scripture: [],
   };
   it("keeps the loaded most-songs order", () => {
     expect(sortBrowseHub(hub, "count")).toBe(hub);

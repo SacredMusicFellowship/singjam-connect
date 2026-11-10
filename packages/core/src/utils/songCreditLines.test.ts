@@ -18,7 +18,7 @@ describe("songCreditLines", () => {
     expect(lines).toEqual([
       { label: "Words", groups: [
         [{ text: "Robert Robinson", link: { kind: "person", key: "robert-robinson" } }],
-        [{ text: "also sung as 2 other songs", link: { kind: "text", key: "come-thou-fount" } }],
+        [{ text: "also sung to 2 other tunes", link: { kind: "text", key: "come-thou-fount" } }],
       ] },
       { label: "Music", groups: [
         [{ text: "Nettleton", link: { kind: "tune", key: "nettleton" } }],
@@ -33,8 +33,23 @@ describe("songCreditLines", () => {
     });
     expect(lines[0]).toEqual({ label: "Words", groups: [
       [{ text: "Traditional", link: { kind: "person", key: "Traditional" } }],
-      [{ text: "Psalm 133:1", link: { kind: "text", key: "hinei-ma-tov" } }],
+      [{ text: "Psalm 133:1", link: { kind: "scripture", key: "psalms/133" } }],
     ] });
+  });
+  it("says a paraphrase is after its psalm and links a non-scripture source to the text", () => {
+    const watts = songCreditLines({
+      composers: [p("William Croft")], lyricists: [p("Isaac Watts")], musicCultures: [], lyricsCultures: [],
+      text: { slug: "o-god", songs: [{ count: 2 }], text_sources: [{ book: "Psalms", chapter_start: 90, verse_start: null, relation: "metrical" }] },
+    });
+    expect(watts[0].groups.slice(1)).toEqual([
+      [{ text: "after Psalm 90", link: { kind: "scripture", key: "psalms/90" } }],
+      [{ text: "also sung to 1 other tune", link: { kind: "text", key: "o-god" } }],
+    ]);
+    const yedid = songCreditLines({
+      composers: [p("Sara Zweig")], lyricists: [p("Elazar Azikri")], musicCultures: [], lyricsCultures: [],
+      text: { slug: "yedid-nefesh", songs: [{ count: 1 }], text_sources: [{ book: null, chapter_start: null, verse_start: null, citation: "Sefer Charedim (Venice, 1601)", relation: "quoted" }] },
+    });
+    expect(yedid[0].groups[1]).toEqual([{ text: "Sefer Charedim (Venice, 1601)", link: { kind: "text", key: "yedid-nefesh" } }]);
   });
   it("ignores an unnamed tune and leaves out empty lines", () => {
     expect(songCreditLines({ composers: [p("Shlomo Carlebach")], lyricists: [], musicCultures: [], lyricsCultures: [], tune: { name: null, slug: "tune-1" } }))

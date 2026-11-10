@@ -1,6 +1,7 @@
 import { fetchAllRows } from "./fetchAllRows";
 import { browsePath, SHOW_MEDIUM_LABEL } from "./browsePaths";
 import type { TagType } from "./songTags";
+import { NEW_TESTAMENT_BOOKS, TANAKH_BOOKS, scriptureBookSlug } from "./scripture";
 
 export type BrowseChip = { href: string; label: string; count: number };
 export type BrowseHub = {
@@ -13,6 +14,8 @@ export type BrowseHub = {
   shows: { medium: string; label: string; chips: BrowseChip[] }[];
   // Cultures with their traditional songs (migration 213).
   traditional: BrowseChip[];
+  // Books of scripture that songs' words set or paraphrase, in canonical order.
+  scripture: BrowseChip[];
 };
 
 const SECTIONS: { type: TagType; title: string; topLevelOnly: boolean }[] = [
@@ -30,7 +33,7 @@ const byCount = (a: BrowseChip, b: BrowseChip) => b.count - a.count || (a.label 
 // Everything the /browse hub lists, with song counts (a tag counts what's below
 // it too, via tag_song_counts in migration 206). Only entries with songs appear.
 export async function loadBrowseHub(db: any): Promise<BrowseHub> {
-  const [tags, { data: counts }, people, artists, { data: shows }, { data: tradCounts }] = await Promise.all([
+  const [tags, { data: counts }, people, artists, { data: shows }, { data: tradCounts }, scripture] = await Promise.all([
     fetchAllRows<{ id: string; name: string; slug: string; type: TagType; is_top_level: boolean }>((f, t) =>
       db.from("tags").select("id, name, slug, type, is_top_level").order("id").range(f, t)
     ),
@@ -43,6 +46,7 @@ export async function loadBrowseHub(db: any): Promise<BrowseHub> {
     ),
     db.from("productions").select("name, slug, year, medium, song_productions(count)").order("name").order("id"),
     db.rpc("traditional_culture_counts"),
+    scriptureChips(db),
   ]);
   const songCount = new Map(((counts ?? []) as { tag_id: string; songs: number }[]).map((c) => [c.tag_id, c.songs]));
 
@@ -78,7 +82,33 @@ export async function loadBrowseHub(db: any): Promise<BrowseHub> {
     traditional: ((tradCounts ?? []) as { name: string; slug: string; song_count: number }[])
       .map((c) => ({ href: browsePath("culture", c.slug, { traditional: true }), label: c.name, count: Number(c.song_count) }))
       .sort(byCount),
+    scripture,
   };
+}
+
+const CANON = [...TANAKH_BOOKS, ...NEW_TESTAMENT_BOOKS];
+
+// Each book counts its songs once, however many of its passages they set.
+async function scriptureChips(db: any): Promise<BrowseChip[]> {
+  const sources = await fetchAllRows<{ text_id: string; book: string | null; relation: string }>((f, t) =>
+    db.from("text_sources").select("text_id, book, relation").not("book", "is", null).order("id").range(f, t)
+  );
+  const textIds = [...new Set(sources.map((s) => s.text_id))];
+  if (!textIds.length) return [];
+  const songs = await fetchAllRows<{ id: string; text_id: string }>((f, t) =>
+    db.from("songs").select("id, text_id").in("text_id", textIds).order("id").range(f, t)
+  );
+  const songsByText = new Map<string, string[]>();
+  for (const s of songs) songsByText.set(s.text_id, [...(songsByText.get(s.text_id) ?? []), s.id]);
+  const byBook = new Map<string, Set<string>>();
+  for (const s of sources) {
+    if (!s.book || !CANON.includes(s.book)) continue;
+    const set = byBook.get(s.book) ?? new Set<string>();
+    for (const id of songsByText.get(s.text_id) ?? []) set.add(id);
+    byBook.set(s.book, set);
+  }
+  return CANON.filter((b) => (byBook.get(b)?.size ?? 0) > 0)
+    .map((b) => ({ href: browsePath("scripture", scriptureBookSlug(b)), label: b, count: byBook.get(b)!.size }));
 }
 
 type PersonRow = { name: string; slug: string; song_composers: { count: number }[]; song_lyricists: { count: number }[] };

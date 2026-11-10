@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { browsePath, traditionalCultureChips, type BrowseKind, type TagType } from "@singjam/core";
 import { loadBrowseEntity, loadBrowseFilterMeta, loadBrowseRelated, loadBrowseSongs, type LinkedTag } from "@/lib/browse";
 import BrowseSongList from "@/components/browse/BrowseSongList";
+import CreditLinks from "@/components/CreditLinks";
 
 export const KIND_LABEL: Record<BrowseKind, string> = {
   genre: "Genre",
@@ -19,6 +20,7 @@ export const KIND_LABEL: Record<BrowseKind, string> = {
   show: "Show",
   tune: "Tune",
   text: "Text",
+  scripture: "Scripture",
 };
 
 function TagLinks({ label, tags }: { label: string; tags: LinkedTag[] }) {
@@ -58,6 +60,13 @@ export default async function BrowsePage({ kind, slug, traditional = false }: { 
         </Link>
         <h1 className="text-2xl font-semibold text-slate-900 text-balance">{entity.name}</h1>
         {entity.subtitle && <p className="text-base text-slate-500">{entity.subtitle}</p>}
+        {entity.facts && entity.facts.length > 0 && (
+          <p className="text-base text-slate-600">
+            {entity.facts.map((g, i) => (
+              <span key={i}>{i > 0 && " · "}<CreditLinks credits={g} linkClassName="text-slate-600" /></span>
+            ))}
+          </p>
+        )}
         <p className="text-sm text-slate-500">
           {entity.traditionalOnly ? (
             <>
@@ -70,6 +79,21 @@ export default async function BrowsePage({ kind, slug, traditional = false }: { 
       </div>
 
       {entity.notes && <p className="max-w-prose text-sm text-slate-600">{entity.notes}</p>}
+
+      {entity.sources && (
+        <section className="space-y-1">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources</h2>
+          <ul className="text-sm text-slate-700">
+            {entity.sources.map((c, i) => <li key={i}><CreditLinks credits={[c]} /></li>)}
+          </ul>
+        </section>
+      )}
+
+      {entity.readUrl && (
+        <a href={entity.readUrl.href} target="_blank" rel="noopener noreferrer" className="inline-block text-sm font-medium text-amber-700 hover:underline">
+          Read {entity.name} on {entity.readUrl.site} ↗
+        </a>
+      )}
 
       {kind === "person" && entity.slug === "traditional" && byCulture.length > 0 && (
         <section className="space-y-2">
@@ -87,7 +111,7 @@ export default async function BrowsePage({ kind, slug, traditional = false }: { 
       {(entity.parents.length > 0 || entity.children.length > 0 || entity.related.length > 0) && (
         <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
           <TagLinks label="Part of" tags={entity.parents} />
-          <TagLinks label="Includes" tags={entity.children} />
+          <TagLinks label={kind === "scripture" ? "Chapters" : "Includes"} tags={entity.children} />
           <TagLinks label="Related" tags={sameTypeRelated} />
           <TagLinks label="See also" tags={otherRelated} />
         </section>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   browsePath, countActiveFilters, deriveFilterFacets, deriveFilterOptions, expandFilterState, loadBrowseEntity, loadBrowseRelated, loadBrowseSongs, traditionalCultureChips,
@@ -13,10 +13,11 @@ import { supabase } from '@/lib/supabase';
 import ContentContainer from '@/components/ContentContainer';
 import { browseKindFromSegment, nativeBrowseHref } from '@/lib/browseLinks';
 import FiltersButton from '@/components/FiltersButton';
+import CreditText from '@/components/CreditText';
 
 const KIND_LABEL: Record<BrowseKind, string> = {
   genre: 'Genre', form: 'Form', occasion: 'Occasion', community: 'Community', culture: 'Culture',
-  language: 'Language', theme: 'Theme', mode: 'Mode', rhythm: 'Rhythm', person: 'Songwriter', artist: 'Recording artist', show: 'Show', tune: 'Tune', text: 'Text',
+  language: 'Language', theme: 'Theme', mode: 'Mode', rhythm: 'Rhythm', person: 'Songwriter', artist: 'Recording artist', show: 'Show', tune: 'Tune', text: 'Text', scripture: 'Scripture',
 };
 
 function TagLinks({ label, tags, onPress }: { label: string; tags: LinkedTag[]; onPress: (t: LinkedTag) => void }) {
@@ -34,11 +35,14 @@ function TagLinks({ label, tags, onPress }: { label: string; tags: LinkedTag[]; 
 }
 
 // Native counterpart of web's browse pages (/genres/rock, /people/john-newton, …).
-export default function BrowseScreen() {
-  const { kind: segment, slug, traditional: tradParam } = useLocalSearchParams<{ kind: string; slug: string; traditional?: string }>();
-  const traditional = tradParam === '1';
+export default function BrowseRoute() {
+  const { kind: segment, slug, traditional } = useLocalSearchParams<{ kind: string; slug: string; traditional?: string }>();
+  return <BrowseScreen kind={browseKindFromSegment(segment ?? '')} slug={slug} traditional={traditional === '1'} />;
+}
+
+// One browse page; scripture passages reach it from their own route (browse/scripture/[...ref]).
+export function BrowseScreen({ kind, slug, traditional = false }: { kind: BrowseKind | null; slug: string | undefined; traditional?: boolean }) {
   const router = useRouter();
-  const kind = browseKindFromSegment(segment ?? '');
   const [entity, setEntity] = useState<BrowseEntity | null | undefined>(undefined);
   const [songs, setSongs] = useState<BrowseSongRow[]>([]);
   const [members, setMembers] = useState(0);
@@ -111,6 +115,13 @@ export default function BrowseScreen() {
             </TouchableOpacity>
             <Text className="text-2xl font-semibold text-slate-900 mt-1">{entity.name}</Text>
             {entity.subtitle ? <Text className="text-base text-slate-500">{entity.subtitle}</Text> : null}
+            {entity.facts && entity.facts.length > 0 ? (
+              <Text className="text-base text-slate-600">
+                {entity.facts.map((g, i) => (
+                  <Text key={i}>{i > 0 ? ' · ' : ''}<CreditText credits={g} onOpen={openBrowse} linkClassName="text-amber-700" /></Text>
+                ))}
+              </Text>
+            ) : null}
             <Text className="text-sm text-slate-500 mt-1">
               {entity.traditionalOnly ? `${total} traditional song${total === 1 ? '' : 's'} · ` : `${total} song${total === 1 ? '' : 's'}`}
               {entity.traditionalOnly ? (
@@ -123,6 +134,19 @@ export default function BrowseScreen() {
               {members > 0 ? ` · ${members} member${members === 1 ? '' : 's'} know${members === 1 ? 's' : ''} at least one` : ''}
             </Text>
             {entity.notes ? <Text className="text-sm text-slate-600 mt-3">{entity.notes}</Text> : null}
+            {entity.sources ? (
+              <View className="mt-4">
+                <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Sources</Text>
+                {entity.sources.map((c, i) => (
+                  <Text key={i} className="text-sm text-slate-700"><CreditText credits={[c]} onOpen={openBrowse} linkClassName="text-amber-700" /></Text>
+                ))}
+              </View>
+            ) : null}
+            {entity.readUrl ? (
+              <Text className="text-sm font-medium text-amber-700 mt-3" onPress={() => Linking.openURL(entity.readUrl!.href)}>
+                Read {entity.name} on {entity.readUrl.site} ↗
+              </Text>
+            ) : null}
 
             {byCulture.length > 0 && (
               <View className="mt-4">
@@ -140,7 +164,7 @@ export default function BrowseScreen() {
             {(entity.parents.length > 0 || entity.children.length > 0 || entity.related.length > 0) && (
               <View className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
                 <TagLinks label="Part of" tags={entity.parents} onPress={openTag} />
-                <TagLinks label="Includes" tags={entity.children} onPress={openTag} />
+                <TagLinks label={kind === 'scripture' ? 'Chapters' : 'Includes'} tags={entity.children} onPress={openTag} />
                 <TagLinks label="Related" tags={entity.related.filter(t => t.type === kind)} onPress={openTag} />
                 <TagLinks label="See also" tags={entity.related.filter(t => t.type !== kind)} onPress={openTag} />
               </View>

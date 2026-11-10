@@ -1,8 +1,8 @@
-import { formatScriptureRef, type ScriptureRef } from "./scripture";
+import { formatSourceRef, scriptureKey, sortSources, type SourceRef } from "./scripture";
 import { traditionalCredit, type CardCredit } from "./songSubtitle";
 
 export type CreditPerson = { name: string; slug?: string | null };
-export type CreditTextRef = { slug: string; songs?: { count: number }[] | null; text_sources?: (ScriptureRef & { relation?: string | null })[] | null } | null | undefined;
+export type CreditTextRef = { slug: string; songs?: { count: number }[] | null; text_sources?: SourceRef[] | null } | null | undefined;
 export type CreditTune = { name: string | null; slug: string } | null | undefined;
 
 // One line of a song page's Songwriters section: "Words & music", "Words" or
@@ -20,8 +20,9 @@ function writers(people: CreditPerson[], cultures: string[]): CardCredit[] {
 
 // "Words" and "Music" for every song, as on sheet music; one "Words & music"
 // line when the same people wrote both. A named tune leads the Music line and
-// opens its page; the words show the scripture they set and, when other songs
-// sing them too, link the text's page ("also sung as 2 other songs").
+// opens its page; the words show the scripture they set (opening its scripture
+// page) and, when other songs sing them to other tunes, link the text's page
+// ("also sung to 2 other tunes").
 export function songCreditLines(o: {
   composers: CreditPerson[];
   lyricists: CreditPerson[];
@@ -33,7 +34,9 @@ export function songCreditLines(o: {
   const text = o.text ?? null;
   const tune = o.tune?.name ? o.tune : null;
   // A text "inspired" by a verse (Amazing Grace and 1 Chronicles 17) doesn't set it.
-  const source = text?.text_sources?.filter((s) => s.relation !== "inspired").map(formatScriptureRef).find(Boolean) ?? null;
+  const ref = sortSources(text?.text_sources ?? []).find((s) => s.relation !== "inspired" && formatSourceRef(s)) ?? null;
+  const source = ref ? formatSourceRef(ref) : null;
+  const sourceKey = ref ? scriptureKey(ref) : null;
   const others = Math.max(0, (text?.songs?.[0]?.count ?? 1) - 1);
   const key = (p: CreditPerson[]) => p.map((x) => x.name.toLowerCase()).sort().join("|");
   if (o.composers.length && key(o.composers) === key(o.lyricists) && !tune && !source && !others) {
@@ -41,8 +44,8 @@ export function songCreditLines(o: {
   }
   const words: CardCredit[][] = [
     writers(o.lyricists, o.lyricsCultures),
-    source && text ? [{ text: source, link: { kind: "text" as const, key: text.slug } }] : [],
-    others && text ? [{ text: `also sung as ${others} other song${others === 1 ? "" : "s"}`, link: { kind: "text" as const, key: text.slug } }] : [],
+    source && text ? [{ text: source, link: sourceKey ? { kind: "scripture" as const, key: sourceKey } : { kind: "text" as const, key: text.slug } }] : [],
+    others && text ? [{ text: `also sung to ${others} other tune${others === 1 ? "" : "s"}`, link: { kind: "text" as const, key: text.slug } }] : [],
   ].filter((g) => g.length);
   const music: CardCredit[][] = [
     tune ? [{ text: tune.name!, link: { kind: "tune" as const, key: tune.slug } }] : [],

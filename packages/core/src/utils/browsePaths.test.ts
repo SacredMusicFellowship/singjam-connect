@@ -6,6 +6,8 @@ describe("browsePath", () => {
     expect(browsePath("genre", "rock")).toBe("/genres/rock");
     expect(browsePath("community", "rising-song-hadar")).toBe("/communities/rising-song-hadar");
     expect(browsePath("person", "john-newton")).toBe("/people/john-newton");
+    expect(browsePath("scripture", "psalms/90")).toBe("/scripture/psalms/90");
+    expect(browsePath("scripture", "song-of-songs")).toBe("/scripture/song-of-songs");
     expect(browsePath("artist", "the-beatles")).toBe("/artists/the-beatles");
     expect(browsePath("show", "cinderella-1950")).toBe("/shows/cinderella-1950");
   });

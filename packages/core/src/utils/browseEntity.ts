@@ -1,5 +1,8 @@
-import type { CardIdentity } from "./songSubtitle";
-import { formatScriptureRef, type ScriptureRef } from "./scripture";
+import type { CardCredit, CardIdentity } from "./songSubtitle";
+import {
+  capitalizeFirst, formatScriptureRef, formatSourceRef, scriptureBookFromSlug, scriptureBookSlug, scriptureKey, scriptureReadUrl,
+  sortSources, NEW_TESTAMENT_BOOKS, TANAKH_BOOKS, type SourceRef,
+} from "./scripture";
 import type { BrowseChip } from "./browseHub";
 import { fetchAllRows } from "./fetchAllRows";
 import { browsePath, SHOW_MEDIUM_LABEL, type BrowseKind } from "./browsePaths";
@@ -29,7 +32,8 @@ export type BrowseSongRow = {
   popularity: number;
 };
 
-export type LinkedTag = { name: string; slug: string; type: TagType };
+// A chip linking another browse page: a tag, or (on scripture pages) a book or chapter.
+export type LinkedTag = { name: string; slug: string; type: TagType | "scripture" };
 
 export type BrowseEntity = {
   kind: BrowseKind;
@@ -42,6 +46,14 @@ export type BrowseEntity = {
   allSongCount?: number;
   name: string;
   subtitle: string | null;
+  // Tunes and texts: one line of linked facts under the name, in a fixed order
+  // (culture or community · year · source · writers · meter or language);
+  // groups show " · " apart, names in a group ", " apart (as song credit lines).
+  facts?: CardCredit[][];
+  // A text's sources when one line can't hold them (several, or an inspiration).
+  sources?: CardCredit[];
+  // A passage's page links out to read it.
+  readUrl?: { href: string; site: string } | null;
   notes: string | null;
   parents: LinkedTag[];
   children: LinkedTag[];
@@ -121,37 +133,84 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
 
   if (kind === "tune") {
     const { data: tune } = await db.from("tunes")
-      .select("id, slug, tune_label, meter, year, notes, tune_credits(role, people(name)), tune_tags(tags(name, slug, type))")
+      .select("id, slug, tune_label, meter, year, period, published_in, notes, tune_credits(role, people(name, slug)), tune_tags(tags(name, slug, type))")
       .eq("slug", slug).maybeSingle();
     if (!tune) return null;
     const songs = await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").eq("tune_id", tune.id).order("id").range(f, t));
-    const composers = ((tune.tune_credits ?? []) as any[])
-      .filter((c) => c.people && c.people.name.toLowerCase() !== "traditional" && c.people.name !== tune.tune_label)
-      .map((c) => (c.role === "composer" ? c.people.name : `${c.people.name} (${c.role})`));
     const tags = ((tune.tune_tags ?? []) as any[]).map((t) => t.tags).filter(Boolean) as LinkedTag[];
+    const { origin, rest } = splitOrigin(tags);
+    const credits = ((tune.tune_credits ?? []) as any[]).filter((c) => c.people && c.people.name !== tune.tune_label);
     return {
-      kind, name: tune.tune_label,
-      subtitle: [composers.join(", "), tune.meter, tune.year].filter(Boolean).join(" · ") || null,
-      notes: tune.notes ?? null, parents: [], children: [], related: tags.sort((a, b) => (a.name < b.name ? -1 : 1)),
+      kind, name: tune.tune_label, subtitle: null,
+      facts: [
+        origin.map(tagFact),
+        when(tune.year ?? tune.period),
+        when(tune.published_in),
+        writerFacts(credits, { composer: "", arranger: "arr. ", adapter: "adapted by " }),
+        when(tune.meter),
+      ].filter((g) => g.length),
+      notes: tune.notes ?? null, parents: [], children: [], related: rest,
       songIds: songs.map((r) => r.id), roles: new Map(),
     };
   }
   if (kind === "text") {
     const { data: text } = await db.from("texts")
-      .select("id, title, notes, text_credits(role, people(name)), text_sources(book, chapter_start, verse_start, chapter_end, verse_end, citation), text_tags(tags(name, slug, type))")
+      .select("id, title, year, period, notes, text_credits(role, people(name, slug)), text_sources(id, corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation), text_tags(tags(name, slug, type))")
       .eq("slug", slug).maybeSingle();
     if (!text) return null;
     const songs = await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").eq("text_id", text.id).order("id").range(f, t));
-    const credits = ((text.text_credits ?? []) as any[])
-      .filter((c) => c.people && c.people.name.toLowerCase() !== "traditional")
-      .map((c) => (c.role === "author" ? c.people.name : `${c.people.name} (${c.role})`));
-    const sources = ((text.text_sources ?? []) as ScriptureRef[]).map(formatScriptureRef).filter(Boolean);
     const tags = ((text.text_tags ?? []) as any[]).map((t) => t.tags).filter(Boolean) as LinkedTag[];
+    const { origin, rest } = splitOrigin(tags);
+    // "English" the culture already says "English" the language.
+    const languages = rest.filter((t) => t.type === "language" && !origin.some((o) => o.name === t.name));
+    const sources = sortSources((text.text_sources ?? []) as (SourceRef & { id: string })[]);
+    const main = sources.find((r) => r.relation !== "inspired") ?? null;
     return {
-      kind, name: text.title,
-      subtitle: [sources.join(", "), credits.join(", ")].filter(Boolean).join(" · ") || null,
-      notes: text.notes ?? null, parents: [], children: [], related: tags.sort((a, b) => (a.name < b.name ? -1 : 1)),
+      kind, name: text.title, subtitle: null,
+      facts: [
+        origin.map(tagFact),
+        when(text.year ?? text.period),
+        main ? [sourceFact(main)] : [],
+        writerFacts(text.text_credits ?? [], { author: "", translator: "trans. ", adapter: "adapted by " }),
+        languages.map(tagFact),
+      ].filter((g) => g.length),
+      sources: sources.length > 1 || sources.some((r) => r.relation === "inspired")
+        ? sources.map((r) => ({ ...sourceFact(r), text: capitalizeFirst(formatSourceRef(r)) }))
+        : undefined,
+      notes: text.notes ?? null, parents: [], children: [], related: rest.filter((t) => t.type !== "language"),
       songIds: songs.map((r) => r.id), roles: new Map(),
+    };
+  }
+  if (kind === "scripture") {
+    const [bookSlug, chapterPart] = slug.split("/");
+    const book = scriptureBookFromSlug(bookSlug ?? "");
+    const chapter = chapterPart ? Number(chapterPart) : null;
+    if (!book || (chapterPart && !Number.isInteger(chapter))) return null;
+    const refs = await fetchAllRows<SourceRef & { text_id: string; id: string }>((f: number, t: number) =>
+      db.from("text_sources").select("id, text_id, corpus, book, chapter_start, verse_start, chapter_end, verse_end, relation").eq("book", book).order("id").range(f, t)
+    );
+    const inChapter = (r: SourceRef) => chapter == null || (r.chapter_start != null && r.chapter_start <= chapter && chapter <= (r.chapter_end ?? r.chapter_start));
+    const here = refs.filter(inChapter);
+    const textIds = [...new Set(here.map((r) => r.text_id))];
+    const songs = textIds.length
+      ? await fetchAllRows<{ id: string; text_id: string; tune_id: string | null }>((f: number, t: number) => db.from("songs").select("id, text_id, tune_id").in("text_id", textIds).order("id").range(f, t))
+      : [];
+    const refByText = new Map<string, SourceRef>();
+    for (const r of sortSources(here)) if (!refByText.has(r.text_id)) refByText.set(r.text_id, r);
+    // A song with no tune already shows its passage on its card (songCardIdentity).
+    const roles = new Map(songs.filter((s) => s.tune_id || refByText.get(s.text_id)!.relation === "inspired")
+      .map((s) => [s.id, capitalizeFirst(formatSourceRef(refByText.get(s.text_id)!))]));
+    const chapters = [...new Set(refs.map((r) => r.chapter_start).filter((c): c is number => c != null))].sort((a, b) => a - b);
+    const bookChip: LinkedTag = { name: book, slug: scriptureBookSlug(book), type: "scripture" };
+    return {
+      kind, slug, label: "Scripture",
+      name: chapter ? formatScriptureRef({ book, chapter_start: chapter, verse_start: null }) : book,
+      subtitle: TANAKH_BOOKS.includes(book) ? "Hebrew Bible" : NEW_TESTAMENT_BOOKS.includes(book) ? "New Testament" : null,
+      readUrl: chapter ? scriptureReadUrl({ book, chapter_start: chapter, verse_start: null }) : null,
+      notes: null,
+      parents: chapter ? [bookChip] : [],
+      children: chapter ? [] : chapters.map((c) => ({ name: formatScriptureRef({ book, chapter_start: c, verse_start: null }), slug: `${scriptureBookSlug(book)}/${c}`, type: "scripture" as const })),
+      related: [], songIds: songs.map((s) => s.id), roles,
     };
   }
 
@@ -261,4 +320,33 @@ export function traditionalCultureChips(meta: { cultures: string[] }[]): BrowseC
   return [...counts]
     .map(([label, count]) => ({ label, count, href: browsePath("culture", label, { traditional: true }) }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+const ORIGIN_TYPES = new Set(["culture", "community"]);
+const when = (v: string | number | null | undefined): CardCredit[] => (v == null || v === "" ? [] : [{ text: String(v), link: null }]);
+const tagFact = (t: LinkedTag): CardCredit => ({ text: t.name, link: { kind: t.type, key: t.slug } });
+
+// Where a tune or text comes from leads its facts; other tags stay as chips.
+function splitOrigin(tags: LinkedTag[]) {
+  const sorted = [...tags].sort((a, b) => (a.name < b.name ? -1 : 1));
+  return { origin: sorted.filter((t) => ORIGIN_TYPES.has(t.type)), rest: sorted.filter((t) => !ORIGIN_TYPES.has(t.type)) };
+}
+
+function sourceFact(r: SourceRef): CardCredit {
+  const key = scriptureKey(r);
+  return { text: formatSourceRef(r), link: key ? { kind: "scripture", key } : null };
+}
+
+// Writers by role, "Traditional" first: "Traditional, arr. Ralph Vaughan Williams".
+function writerFacts(credits: any[], prefix: Record<string, string>): CardCredit[] {
+  const order = Object.keys(prefix);
+  const trad = (c: any) => (c.people.name.toLowerCase() === "traditional" ? 0 : 1);
+  return [...credits]
+    .filter((c) => c.people)
+    .sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role) || trad(a) - trad(b))
+    .map((c): CardCredit => ({
+      ...(prefix[c.role] ? { lead: prefix[c.role] } : {}),
+      text: c.people.name,
+      link: { kind: "person", key: c.people.slug ?? c.people.name },
+    }));
 }
