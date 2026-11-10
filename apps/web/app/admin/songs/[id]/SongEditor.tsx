@@ -709,15 +709,15 @@ export default function SongEditor({
             <p className="py-2 font-mono text-xs text-slate-500 break-all">/songs/{slug || "…"}</p>
             <p className="text-xs text-slate-400">Set automatically from the title, first three writers and music culture. Old addresses keep working.</p>
           </Field>
-          <Field label="Line under the title">
+          <Field label="Known by">
             <select
               value={knownByRecording === null ? "auto" : knownByRecording ? "recording" : "writers"}
               onChange={(e) => setKnownByRecording(e.target.value === "auto" ? null : e.target.value === "recording")}
               className="input"
             >
               <option value="auto">Automatic</option>
-              <option value="recording">Recording artists (known by its recording)</option>
-              <option value="writers">Writers or tradition</option>
+              <option value="recording">Its recording: recording artists under the title</option>
+              <option value="writers">Its writers: writers or tradition on its page; tune, scripture or first line on cards</option>
             </select>
             <p className="text-xs text-slate-400">
               Automatic shows the writers, or &ldquo;Traditional · culture&rdquo;, for traditional songs and hymns, nigunim and other traditional forms, and the recording artists for everything else.

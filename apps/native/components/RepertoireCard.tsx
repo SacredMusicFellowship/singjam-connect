@@ -107,6 +107,12 @@ function RepertoireCard({
       <View className="flex-row flex-wrap items-center gap-2 mt-3 ml-8">
         <RolePill level={song.confidence} onPress={handleConfidenceTap} size="md" />
         <MyKeyChip value={song.key_note} onPress={() => onKeyTap(song)} size="md" />
+        <TouchableOpacity
+          onPress={() => onAddToSet(song)}
+          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5"
+        >
+          <Text className="text-sm text-zinc-600">Add to set</Text>
+        </TouchableOpacity>
         {song.chord_chart_url ? (
           // Same Chords link as the set list.
           <TouchableOpacity
@@ -119,12 +125,6 @@ function RepertoireCard({
           </TouchableOpacity>
         ) : null}
 
-        <TouchableOpacity
-          onPress={() => onAddToSet(song)}
-          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5"
-        >
-          <Text className="text-sm text-zinc-600">Add to set</Text>
-        </TouchableOpacity>
 
 
       </View>
