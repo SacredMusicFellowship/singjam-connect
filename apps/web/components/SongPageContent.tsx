@@ -421,7 +421,6 @@ export default function SongPageContent() {
                   songId={song.id}
                   sets={userSets}
                   inSets={songInSets}
-                  direction="down"
                   onOpen={loadSetData}
                   onAdded={(setId) => setSongInSets((prev) => new Set([...prev, setId]))}
                   onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
@@ -654,7 +653,6 @@ export default function SongPageContent() {
                 songId={song.id}
                 sets={userSets}
                 inSets={songInSets}
-                direction="up"
                 onOpen={loadSetData}
                 onAdded={(setId) => setSongInSets((prev) => new Set([...prev, setId]))}
                 onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { popoverSideFor } from "@/lib/popoverSide";
 
 type SetInfo = { id: string; name: string };
 
@@ -8,7 +9,6 @@ export default function AddToSetPanel({
   songId,
   sets,
   inSets,
-  direction = "up",
   onOpen,
   onAdded,
   onSetCreated,
@@ -16,12 +16,13 @@ export default function AddToSetPanel({
   songId: string;
   sets: SetInfo[] | null;
   inSets: Set<string> | undefined;
-  direction?: "up" | "down";
   onOpen?: () => void;
   onAdded?: (setId: string) => void;
   onSetCreated?: (set: SetInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Down unless the list would run off the bottom of the screen, decided as it opens.
+  const [side, setSide] = useState<"up" | "down">("down");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -81,7 +82,12 @@ export default function AddToSetPanel({
   if (!open) {
     return (
       <button
-        onClick={() => { setOpen(true); onOpen?.(); }}
+        onClick={(e) => {
+          // Each set is a ~45px row, plus "+ New set…"; the list scrolls past 224px.
+          setSide(popoverSideFor(e.currentTarget, Math.min(45 * ((sets?.length ?? 2) + 1), 270) + 8));
+          setOpen(true);
+          onOpen?.();
+        }}
         className="rounded-full border border-zinc-200 px-3 py-1 text-xs sm:py-1.5 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
       >
         Add to set
@@ -129,7 +135,7 @@ export default function AddToSetPanel({
       >
         Add to set
       </button>
-      <div className={`absolute left-0 z-20 w-72 rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden ${direction === "up" ? "bottom-full mb-1" : "top-full mt-1"}`}>
+      <div className={`absolute left-0 z-20 w-72 rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden ${side === "up" ? "bottom-full mb-1" : "top-full mt-1"}`}>
         <ul className="divide-y divide-zinc-100 max-h-56 overflow-y-auto">
           {(sets ?? []).map((s) => {
             const inSet = inSets?.has(s.id);

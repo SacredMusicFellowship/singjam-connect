@@ -226,7 +226,6 @@ function SongCard({
                   songId={songId}
                   sets={tools.sets}
                   inSets={tools.inSets[songId]}
-                  direction="down"
                   onOpen={() => tools.loadSetMemberships(songId)}
                   onAdded={(setId) => tools.addedToSet(songId, setId)}
                   onSetCreated={(set) => tools.setCreated(set)}
