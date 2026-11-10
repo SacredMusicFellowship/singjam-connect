@@ -10,13 +10,10 @@ import EventImageEditor from "./EventImageEditor";
 import JamTimezoneNote from "./JamTimezoneNote";
 import { useAddressTimezone } from "@/lib/useAddressTimezone";
 import { useJamImages, type JamImageFields } from "@/lib/useJamImages";
-import { fetchAllRows, jamPath, zonedInputToIso } from "@singjam/core";
+import { jamPath, zonedInputToIso, JAM_TAG_TYPE_LABEL, loadJamTagOptions, type JamTagOption } from "@singjam/core";
 import { visibilityForNewJam } from "@/lib/devSafety";
 
 // A jam can be tagged with any of these (jam_tags, migration 202), from one picker.
-const JAM_TAG_TYPES = ["genre", "occasion", "community", "form", "language", "theme"];
-const JAM_TAG_TYPE_LABEL: Record<string, string> = { genre: "Genre", occasion: "Occasion", community: "Community", form: "Form", language: "Language", theme: "Theme" };
-type JamTagOption = { id: string; name: string; type: string };
 
 
 export type NewJamInitialData = {
@@ -96,9 +93,7 @@ export default function NewJamForm({
         setCanPostOfficial((p as any)?.role === "admin" || (p as any)?.can_host_official === true);
         setDisplayName((p as any)?.display_name ?? (p as any)?.username ?? null);
       }
-      setAllTags(await fetchAllRows<JamTagOption>((from, to) =>
-        supabase.from("tags").select("id, name, type").in("type", JAM_TAG_TYPES).order("name").order("id").range(from, to)
-      ));
+      setAllTags(await loadJamTagOptions(supabase));
     }
     load();
   }, [supabase]);

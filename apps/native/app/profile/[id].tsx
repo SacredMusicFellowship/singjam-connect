@@ -200,8 +200,8 @@ export default function UserProfileScreen() {
             {sharedSongs.map(song => (
               <View key={song.song_id} className="py-2 border-b border-zinc-50 last:border-0">
                 <Text className="text-zinc-900 font-medium" numberOfLines={1}>{song.title}</Text>
-                {(song.byline ?? song.display_artist) ? (
-                  <Text className="text-sm text-zinc-400" numberOfLines={1}>{song.byline ?? song.display_artist}</Text>
+                {song.byline ? (
+                  <Text className="text-sm text-zinc-400" numberOfLines={1}>{song.byline}</Text>
                 ) : null}
               </View>
             ))}
@@ -217,8 +217,8 @@ export default function UserProfileScreen() {
             {additionalSongs.slice(0, 20).map(song => (
               <View key={song.song_id} className="py-2 border-b border-zinc-50 last:border-0">
                 <Text className="text-zinc-900" numberOfLines={1}>{song.title}</Text>
-                {(song.byline ?? song.display_artist) ? (
-                  <Text className="text-sm text-zinc-400" numberOfLines={1}>{song.byline ?? song.display_artist}</Text>
+                {song.byline ? (
+                  <Text className="text-sm text-zinc-400" numberOfLines={1}>{song.byline}</Text>
                 ) : null}
               </View>
             ))}

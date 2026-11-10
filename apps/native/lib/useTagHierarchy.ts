@@ -1,21 +1,14 @@
 import { useEffect, useState } from 'react';
-import { buildTagHierarchy, fetchAllRows, type TagGraphRow, type TagHierarchy, type TagRelationRow } from '@singjam/core';
+import { loadTagHierarchy, type TagHierarchy } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 
 let cached: Promise<TagHierarchy> | null = null;
 
 function loadHierarchy(): Promise<TagHierarchy> {
-  cached ??= Promise.all([
-    fetchAllRows<TagGraphRow>((from, to) => supabase.from('tags').select('id, name, type, is_top_level').order('id').range(from, to)),
-    fetchAllRows<TagRelationRow>((from, to) =>
-      supabase.from('tag_relations').select('tag_id, related_tag_id, kind').eq('kind', 'parent').order('tag_id').order('related_tag_id').range(from, to)
-    ),
-  ])
-    .then(([tags, relations]) => buildTagHierarchy(tags, relations))
-    .catch((e) => {
-      cached = null;
-      throw e;
-    });
+  cached ??= loadTagHierarchy(supabase).catch((e) => {
+    cached = null;
+    throw e;
+  });
   return cached;
 }
 

@@ -47,6 +47,12 @@ describe("songCardCredits", () => {
     expect(c.writers).toEqual([{ text: "V. Morrison", link: { kind: "person", key: "Van Morrison" } }]);
     expect(c.line).toEqual([{ text: "Van Morrison", suffix: " (1967)", link: { kind: "artist", key: "Van Morrison" } }]);
   });
+  it("lets an explicit known-by-recording choice override the byline either way", () => {
+    const base = { title: "Amazing Grace", byline: "Judy Collins", displayArtist: "Judy Collins", composers: ["John Newton"], cultures: [], recordingArtists: [{ name: "Judy Collins", year: 1970 }], identity: { tune: "New Britain", tune_slug: "new-britain" } };
+    expect(songCardCredits({ ...base, knownByRecording: false }).line).toEqual([{ lead: "Tune: ", text: "New Britain", link: { kind: "tune", key: "new-britain" } }]);
+    expect(songCardCredits({ ...base, byline: "John Newton", knownByRecording: true }).line).toEqual([{ text: "Judy Collins", suffix: " (1970)", link: { kind: "artist", key: "Judy Collins" } }]);
+    expect(songCardCredits({ ...base, byline: "John Newton", knownByRecording: null }).line[0].text).toBe("New Britain");
+  });
   it("treats a row from before byline existed as known by its recording", () => {
     expect(songCardCredits({ title: "x", displayArtist: "Van Morrison", composers: [], cultures: [], recordingArtists: null }).line).toEqual([{ text: "Van Morrison", link: null }]);
   });

@@ -9,6 +9,20 @@ describe("tagSlug", () => {
     expect(tagSlug("Black Church (US)")).toBe("black-church-us");
   });
 });
+// Each expected slug is what the database's tag_slug() (migration 202) returned
+// for the name: card pills build tag links in TS, so the two must agree. All
+// 426 tags matched when this was written. Rerun these through tag_slug() if
+// either side changes.
+describe("tagSlug matches the database's tag_slug()", () => {
+  const fromSql: [string, string][] = [
+    ["Ḥasidic", "hasidic"], ["Ça ira — Révolution", "ca-ira-revolution"], ["  Leading & trailing  ", "leading-and-trailing"],
+    ["Children's Music", "children-s-music"], ["R&B", "r-and-b"], ["Ōtsu", "otsu"], ["Zoë's Ståndchen", "zoe-s-standchen"],
+    ["Rock/Pop", "rock-pop"], ["Ǆ digraph", "dz-digraph"], ["日本 Folk", "folk"], ["Øresund", "resund"], ["Straße", "stra-e"],
+    ["Friday night (Kabbalat Shabbat)", "friday-night-kabbalat-shabbat"], ["Māori", "maori"],
+  ];
+  it.each(fromSql)("%s", (name, slug) => expect(tagSlug(name)).toBe(slug));
+});
+
 
 describe("songCardPills", () => {
   it("puts form, occasion, genre, community and a non-English language first, one of each", () => {

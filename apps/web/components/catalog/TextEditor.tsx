@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { formatScriptureRef, NEW_TESTAMENT_BOOKS, TANAKH_BOOKS } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { CreditsEditor, Section, TagsEditor, type Credit, type Person } from "@/components/catalog/CatalogBits";
+import { CreditsEditor, Section, TagsEditor, useCatalogSave, YearPrecisionField, type Credit, type Person } from "@/components/catalog/CatalogBits";
 import { personIdFor, syncTags } from "@/components/catalog/catalogWrites";
 
 type Source = { id: string; corpus: string; book: string | null; chapter_start: number | null; verse_start: number | null; chapter_end: number | null; verse_end: number | null; citation: string | null; relation: string };
@@ -25,24 +24,11 @@ const n = (v: string) => (v.trim() ? parseInt(v, 10) : null);
 
 export default function TextEditor(props: TextEditorProps) {
   const { text } = props;
-  const router = useRouter();
   const db = supabaseBrowser();
   const [details, setDetails] = useState({ title: text.title, first_line: text.first_line ?? "", kind: text.kind ?? "", year: text.year?.toString() ?? "", year_precision: text.year_precision ?? "exact", notes: text.notes ?? "" });
   const [newTitle, setNewTitle] = useState({ title: "", kind: "transliteration" });
   const [src, setSrc] = useState({ corpus: "tanakh", book: "", chapter_start: "", verse_start: "", chapter_end: "", verse_end: "", citation: "", relation: "quoted" });
-  const [status, setStatus] = useState<string | null>(null);
-
-  async function run(work: () => PromiseLike<{ error: any } | void> | Promise<void>, done = "Saved") {
-    setStatus("Saving…");
-    try {
-      const res = await work();
-      if (res && (res as any).error) throw (res as any).error;
-      setStatus(done);
-      router.refresh();
-    } catch (e: any) {
-      setStatus(e?.message ?? "Couldn't save that.");
-    }
-  }
+  const { status, run } = useCatalogSave();
 
   return (
     <div className="space-y-5">
@@ -63,9 +49,7 @@ export default function TextEditor(props: TextEditorProps) {
             </select>
           </label>
           <label className="text-sm text-slate-600">Year written<input id="text-year" value={details.year} onChange={(e) => setDetails({ ...details, year: e.target.value })} inputMode="numeric" placeholder="1719" className="input mt-1" /></label>
-          <label className="text-sm text-slate-600">How exact (any year in a decade or century)<select id="text-year-precision" value={details.year_precision} onChange={(e) => setDetails({ ...details, year_precision: e.target.value })} className="input mt-1">
-              <option value="exact">Exact year</option><option value="circa">About (c.)</option><option value="decade">That decade</option><option value="century">That century</option>
-            </select></label>
+          <YearPrecisionField id="text-year-precision" value={details.year_precision} onChange={(year_precision) => setDetails({ ...details, year_precision })} />
           <label className="text-sm text-slate-600 sm:col-span-2">First line<input id="text-first-line" value={details.first_line} onChange={(e) => setDetails({ ...details, first_line: e.target.value })} className="input mt-1" /></label>
           <label className="text-sm text-slate-600 sm:col-span-2">Notes<textarea id="text-notes" value={details.notes} onChange={(e) => setDetails({ ...details, notes: e.target.value })} rows={3} className="input mt-1" /></label>
         </div>

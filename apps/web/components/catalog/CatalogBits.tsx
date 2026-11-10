@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import TagCombobox from "@/components/TagCombobox";
 
 export type Person = { id: string; name: string };
@@ -58,6 +59,36 @@ export function TagsEditor({ label, options, selected, onChange }: {
       placeholder="Search tags…"
       optional
     />
+  );
+}
+
+// One save at a time with its outcome shown ("Saving…", "Saved" or the
+// error), then the page's data reloads.
+export function useCatalogSave() {
+  const router = useRouter();
+  const [status, setStatus] = useState<string | null>(null);
+  const run = useCallback(async (work: () => PromiseLike<{ error: any } | void> | Promise<void>, done = "Saved") => {
+    setStatus("Saving…");
+    try {
+      const res = await work();
+      if (res && (res as any).error) throw (res as any).error;
+      setStatus(done);
+      router.refresh();
+    } catch (e: any) {
+      setStatus(e?.message ?? "Couldn't save that.");
+    }
+  }, [router]);
+  return { status, run };
+}
+
+// How exact a text's or tune's year is (core formatYear shows it).
+export function YearPrecisionField({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="text-sm text-slate-600">How exact (any year in a decade or century)
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className="input mt-1">
+        <option value="exact">Exact year</option><option value="circa">About (c.)</option><option value="decade">That decade</option><option value="century">That century</option>
+      </select>
+    </label>
   );
 }
 

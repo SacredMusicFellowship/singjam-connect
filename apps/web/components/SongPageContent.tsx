@@ -402,11 +402,11 @@ export default function SongPageContent() {
                 </Fragment>
               ))}
             </p>
-          ) : (song.byline ?? song.display_artist) ? (
+          ) : song.byline ? (
             <p className="mt-0.5 text-base text-slate-500">
               <CreditLinks
                 separator=""
-                credits={bylineCredits(song.byline ?? song.display_artist, { people: [...composers, ...lyricists], artists: recordingArtists.map((a: any) => a.name) })}
+                credits={bylineCredits(song.byline, { people: [...composers, ...lyricists], artists: recordingArtists.map((a: any) => a.name) })}
               />
             </p>
           ) : null}

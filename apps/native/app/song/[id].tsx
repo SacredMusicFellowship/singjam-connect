@@ -342,7 +342,7 @@ export default function SongDetailScreen() {
       slug: s.slug ?? null,
       title: s.title ?? '',
       display_artist: s.display_artist ?? null,
-      byline: s.byline ?? s.display_artist ?? null,
+      byline: s.byline ?? null,
       first_line: s.first_line ?? null,
       hook: s.hook ?? null,
       notes: s.notes ?? null,

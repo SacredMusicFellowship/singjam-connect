@@ -63,9 +63,12 @@ export function songCardIdentity(identity: CardIdentity, title: string): CardCre
 // the song apart otherwise. The "line under the title" override decides which.
 // A traditional song names one culture ("Trad. · Irish"); when the song has a
 // named tune, "Traditional" is that tune's credit and the tune line says it.
+// `knownByRecording` decides it outright (the song editor's preview of its
+// "Line under the title" choice); otherwise the byline says.
 export function songCardCredits(o: {
   title: string;
   byline?: string | null;
+  knownByRecording?: boolean | null;
   displayArtist: string | null;
   composers: string[];
   cultures: string[];
@@ -76,13 +79,13 @@ export function songCardCredits(o: {
   const traditional = named.length < o.composers.length && !o.identity?.tune;
   const culture = o.cultures[0];
   const writers: CardCredit[] = [
-    ...(traditional ? [culture ? { text: `Trad. · ${culture}`, link: { kind: "culture" as const, key: culture, traditional: true } } : { text: "Trad.", link: { kind: "person" as const, key: "Traditional" } }] : []),
+    ...(traditional ? [traditionalCredit(culture ? `Trad. · ${culture}` : "Trad.")] : []),
     ...named.map((name): CardCredit => {
       const w = name.trim().split(" ");
       return { text: w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(" ")}` : name, link: { kind: "person", key: name } };
     }),
   ];
-  if (!knownByRecording(o.byline, o.displayArtist)) {
+  if (!(o.knownByRecording ?? knownByRecording(o.byline, o.displayArtist))) {
     const id = songCardIdentity(o.identity, o.title);
     return { writers, line: id ? [id] : [] };
   }

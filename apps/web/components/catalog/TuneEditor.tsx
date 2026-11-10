@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { CreditsEditor, Section, TagsEditor, type Credit, type Person } from "@/components/catalog/CatalogBits";
+import { CreditsEditor, Section, TagsEditor, useCatalogSave, YearPrecisionField, type Credit, type Person } from "@/components/catalog/CatalogBits";
 import { personIdFor, syncTags } from "@/components/catalog/catalogWrites";
 
 export type TuneEditorProps = {
@@ -18,25 +17,12 @@ export type TuneEditorProps = {
 
 export default function TuneEditor(props: TuneEditorProps) {
   const { tune } = props;
-  const router = useRouter();
   const db = supabaseBrowser();
   const [d, setD] = useState({
     name: tune.name ?? "", meter: tune.meter ?? "", fixed_melody: tune.fixed_melody, year: tune.year?.toString() ?? "", year_precision: tune.year_precision ?? "exact", published_in: tune.published_in ?? "",
     recording_url: tune.recording_url ?? "", notes: tune.notes ?? "",
   });
-  const [status, setStatus] = useState<string | null>(null);
-
-  async function run(work: () => PromiseLike<{ error: any } | void> | Promise<void>) {
-    setStatus("Saving…");
-    try {
-      const res = await work();
-      if (res && (res as any).error) throw (res as any).error;
-      setStatus("Saved");
-      router.refresh();
-    } catch (e: any) {
-      setStatus(e?.message ?? "Couldn't save that.");
-    }
-  }
+  const { status, run } = useCatalogSave();
 
   return (
     <div className="space-y-5">
@@ -54,9 +40,7 @@ export default function TuneEditor(props: TuneEditorProps) {
           <label className="text-sm text-slate-600">Name (if it has one)<input id="tune-name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Nettleton" className="input mt-1" /></label>
           <label className="text-sm text-slate-600">Meter<input id="tune-meter" value={d.meter} onChange={(e) => setD({ ...d, meter: e.target.value })} placeholder="8.7.8.7 D" className="input mt-1" /></label>
           <label className="text-sm text-slate-600">Year<input id="tune-year" value={d.year} onChange={(e) => setD({ ...d, year: e.target.value })} inputMode="numeric" className="input mt-1" /></label>
-          <label className="text-sm text-slate-600">How exact (any year in a decade or century)<select id="tune-year-precision" value={d.year_precision} onChange={(e) => setD({ ...d, year_precision: e.target.value })} className="input mt-1">
-              <option value="exact">Exact year</option><option value="circa">About (c.)</option><option value="decade">That decade</option><option value="century">That century</option>
-            </select></label>
+          <YearPrecisionField id="tune-year-precision" value={d.year_precision} onChange={(year_precision) => setD({ ...d, year_precision })} />
           <label className="text-sm text-slate-600">First published in<input id="tune-published-in" value={d.published_in} onChange={(e) => setD({ ...d, published_in: e.target.value })} placeholder="Wyeth's Repository of Sacred Music" className="input mt-1" /></label>
           <label className="text-sm text-slate-600">Reference recording (link)<input id="tune-recording" value={d.recording_url} onChange={(e) => setD({ ...d, recording_url: e.target.value })} placeholder="https://www.youtube.com/watch?v=…" className="input mt-1" /></label>
           <label className="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">

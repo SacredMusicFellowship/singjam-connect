@@ -731,8 +731,9 @@ export default function SongEditor({
               credits={songCardCredits({
                 title,
                 // The override decides at once; Automatic follows the saved song's line until you save.
-                byline: knownByRecording === true ? undefined : knownByRecording === false ? "\u0000writers" : song?.byline,
-                displayArtist: knownByRecording === false ? null : displayArtist || null,
+                knownByRecording,
+                byline: song?.byline,
+                displayArtist: displayArtist || null,
                 composers: [...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
                 cultures,
                 recordingArtists: recordingArtists.map((r, i) => ({ name: allArtists.find((a) => a.id === r.id)?.name ?? "", year: r.year, position: i })).filter((r) => r.name),

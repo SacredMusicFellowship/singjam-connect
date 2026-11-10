@@ -13,7 +13,7 @@ import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, formatComposers, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
 import SubtitleText from '@/components/SubtitleText';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
@@ -66,7 +66,6 @@ type SetSong = {
     byline?: string | null;
     chord_chart_url: string | null;
     tonality?: string | null;
-    song_composers: { people: { name: string } | null }[];
     song_productions?: { productions: { name: string } | null }[];
   };
 };
@@ -273,10 +272,7 @@ function SongRow({
   const [editingNotes, setEditingNotes] = useState(false);
   const [showAllPeople, setShowAllPeople] = useState(false);
   const [notesInput, setNotesInput] = useState('');
-  const composerNames = (song.songs.song_composers ?? [])
-    .map((sc) => sc.people?.name)
-    .filter(Boolean) as string[];
-  const artist = song.songs.byline ?? song.songs.display_artist ?? formatComposers(composerNames, []);
+  const artist = song.songs.byline;
   const productions = (song.songs.song_productions ?? [])
     .map((sp) => sp.productions?.name)
     .filter(Boolean) as string[];
@@ -917,7 +913,7 @@ export default function SetDetailScreen() {
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality, song_composers(people(name)))';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -1033,7 +1029,7 @@ export default function SetDetailScreen() {
         .single(),
       supabase
         .from('set_songs')
-        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality, song_composers(people(name)))')
+        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)')
         .eq('set_id', id)
         .order('position', { ascending: true }),
       user

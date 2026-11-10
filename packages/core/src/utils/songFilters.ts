@@ -1,3 +1,5 @@
+import { fetchAllRows } from "./fetchAllRows";
+
 // Shared song-filter logic for the extended (facet) filters used by both the web
 // repertoire/songs pages and the native songs/repertoire screens. Keeping the
 // predicate and option derivation here guarantees web and native filter songs
@@ -142,6 +144,18 @@ export type TagRelationRow = { tag_id: string; related_tag_id: string; kind: str
 // Per dimension: each tag name's direct children and parents, by name, and the
 // tags shown at the top level even though they have a parent (Country, also under Americana).
 export type TagHierarchy = Partial<Record<MultiFilterDim, { children: Map<string, string[]>; parents: Map<string, string[]>; topLevel: Set<string> }>>;
+
+// Every tag and parent link, built into the hierarchy (web and native load it
+// once per session).
+export async function loadTagHierarchy(db: any): Promise<TagHierarchy> {
+  const [tags, relations] = await Promise.all([
+    fetchAllRows<TagGraphRow>((from: number, to: number) => db.from("tags").select("id, name, type, is_top_level").order("id").range(from, to)),
+    fetchAllRows<TagRelationRow>((from: number, to: number) =>
+      db.from("tag_relations").select("tag_id, related_tag_id, kind").eq("kind", "parent").order("tag_id").order("related_tag_id").range(from, to)
+    ),
+  ]);
+  return buildTagHierarchy(tags, relations);
+}
 
 export function buildTagHierarchy(tags: TagGraphRow[], relations: TagRelationRow[]): TagHierarchy {
   const byId = new Map(tags.map((t) => [t.id, t]));

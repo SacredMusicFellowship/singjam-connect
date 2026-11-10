@@ -1,7 +1,9 @@
+import { fetchAllRows } from "./fetchAllRows";
+
 // Songs and jams are tagged through one shared tag graph (migration 202):
 // song_tags / jam_tags rows point at tags, each with a type. These helpers turn
-// the rows Supabase returns for SONG_TAGS_SELECT / JAM_TAGS_SELECT into the
-// per-type name lists the apps display, so web and native read tags the same way.
+// the rows Supabase returns for song_tags(context, tags(…)) / jam_tags(tags(…))
+// into the per-type name lists the apps display, so web and native read tags the same way.
 
 export const TAG_TYPES = ["genre", "theme", "culture", "language", "form", "occasion", "community", "mode", "rhythm"] as const;
 export type TagType = (typeof TAG_TYPES)[number];
@@ -23,8 +25,17 @@ export type TagRef = { id?: string; name: string; type: string; slug?: string };
 export type SongTagRow = { context?: string | null; tags: TagRef | null };
 export type JamTagRow = { tags: TagRef | null };
 
-export const SONG_TAGS_SELECT = "song_tags(context, tags(id, name, type, slug))";
-export const JAM_TAGS_SELECT = "jam_tags(tags(id, name, type))";
+// A jam can be tagged with any of these (jam_tags, migration 202), from one
+// picker on web and native, each option labelled with its type.
+export const JAM_TAG_TYPES = ["genre", "occasion", "community", "form", "language", "theme"] as const;
+export const JAM_TAG_TYPE_LABEL: Record<string, string> = { genre: "Genre", occasion: "Occasion", community: "Community", form: "Form", language: "Language", theme: "Theme" };
+export type JamTagOption = { id: string; name: string; type: string };
+
+export function loadJamTagOptions(db: any): Promise<JamTagOption[]> {
+  return fetchAllRows<JamTagOption>((from: number, to: number) =>
+    db.from("tags").select("id, name, type").in("type", JAM_TAG_TYPES).order("name").order("id").range(from, to)
+  );
+}
 
 const byName = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 

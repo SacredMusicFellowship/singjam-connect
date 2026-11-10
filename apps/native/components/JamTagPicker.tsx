@@ -1,20 +1,14 @@
 import { useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchAllRows } from '@singjam/core';
+import { JAM_TAG_TYPE_LABEL, loadJamTagOptions as loadOptions, type JamTagOption } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 
-// A jam can be tagged with any of these (jam_tags, migration 202) — the same
-// one picker as web's jam form.
-export const JAM_TAG_TYPES = ['genre', 'occasion', 'community', 'form', 'language', 'theme'];
-const TYPE_LABEL: Record<string, string> = { genre: 'Genre', occasion: 'Occasion', community: 'Community', form: 'Form', language: 'Language', theme: 'Theme' };
+export type { JamTagOption };
 
-export type JamTagOption = { id: string; name: string; type: string };
-
+// The jam tag choices (core JAM_TAG_TYPES), the same one picker as web's jam form.
 export function loadJamTagOptions(): Promise<JamTagOption[]> {
-  return fetchAllRows<JamTagOption>((from, to) =>
-    supabase.from('tags').select('id, name, type').in('type', JAM_TAG_TYPES).order('name').order('id').range(from, to)
-  );
+  return loadOptions(supabase);
 }
 
 export function jamTagSummary(options: JamTagOption[], selected: string[]): string {
@@ -67,7 +61,7 @@ export default function JamTagPicker({ visible, options, selected, onToggle, onC
                 className={`px-4 py-3 border-b border-zinc-100 flex-row items-center justify-between ${checked ? 'bg-amber-50' : ''}`}
               >
                 <Text className={checked ? 'text-amber-800 font-semibold' : 'text-zinc-900'}>
-                  {item.name}<Text className="text-zinc-400 font-normal">{`  ${TYPE_LABEL[item.type] ?? item.type}`}</Text>
+                  {item.name}<Text className="text-zinc-400 font-normal">{`  ${JAM_TAG_TYPE_LABEL[item.type] ?? item.type}`}</Text>
                 </Text>
                 {checked && <Ionicons name="checkmark" size={16} color="#d97706" />}
               </TouchableOpacity>
