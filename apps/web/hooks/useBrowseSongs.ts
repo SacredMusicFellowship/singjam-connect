@@ -43,7 +43,8 @@ export function firstLoadPages(limit: number): { offset: number; limit: number }
 
 export function useBrowseSongs(
   filters: BrowseFilters,
-  { pageSize = 20, initialCount = pageSize }: { pageSize?: number; initialCount?: number } = {}
+  // `enabled: false` loads nothing until it turns true (a set's catalog list while the group's songs show).
+  { pageSize = 20, initialCount = pageSize, enabled = true }: { pageSize?: number; initialCount?: number; enabled?: boolean } = {}
 ) {
   const supabase = useRef(supabaseBrowser()).current;
   const [songs, setSongs] = useState<BrowseSong[]>([]);
@@ -59,6 +60,7 @@ export function useBrowseSongs(
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
 
   useEffect(() => {
+    if (!enabled) return;
     const seq = ++requestSeq.current;
     const f = JSON.parse(filtersKey) as BrowseFilters;
     const limit = isFirstLoad.current ? Math.max(initialCount, pageSize) : pageSize;
@@ -84,7 +86,7 @@ export function useBrowseSongs(
       setTotal(rows[0]?.total_count ?? 0);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }, [filtersKey, enabled]);
 
   const hasMore = total !== null && songs.length < total;
 

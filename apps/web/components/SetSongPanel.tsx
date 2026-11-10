@@ -215,7 +215,7 @@ export default function SetSongPanel({
     yearMin: expandedState.yearMin, yearMax: expandedState.yearMax, excludeMine: false,
     sort: sortMode === "alpha" ? "title_asc" : sortMode === "za" ? "title_desc" : "popularity",
   }), [expandedState, sortMode]);
-  const { songs: catalogSongs, loading: catalogLoading } = useBrowseSongs(browseFilters, { pageSize: 50 });
+  const { songs: catalogSongs, loading: catalogLoading } = useBrowseSongs(browseFilters, { pageSize: 50, enabled: source === "all" });
   // In the whole catalog, songs more of the group knows come first.
   const groupCount = (id: string) => { const s = sharedSongsMap.get(id); return s ? s.who_else.length + (s.viewer_has ? 1 : 0) : 0; };
   const catalogRanked = useMemo(
