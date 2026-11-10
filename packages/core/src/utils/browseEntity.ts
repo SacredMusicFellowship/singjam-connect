@@ -7,6 +7,7 @@ import type { BrowseChip } from "./browseHub";
 import { fetchAllRows } from "./fetchAllRows";
 import { browsePath, SHOW_MEDIUM_LABEL, type BrowseKind } from "./browsePaths";
 import type { TagType } from "./songTags";
+import { formatYear } from "./yearDisplay";
 
 export const BROWSE_LIMIT = 200;
 
@@ -133,7 +134,7 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
 
   if (kind === "tune") {
     const { data: tune } = await db.from("tunes")
-      .select("id, slug, tune_label, meter, year, period, published_in, notes, tune_credits(role, people(name, slug)), tune_tags(tags(name, slug, type))")
+      .select("id, slug, tune_label, meter, year, year_precision, published_in, notes, tune_credits(role, people(name, slug)), tune_tags(tags(name, slug, type))")
       .eq("slug", slug).maybeSingle();
     if (!tune) return null;
     const songs = await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").eq("tune_id", tune.id).order("id").range(f, t));
@@ -144,7 +145,7 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
       kind, name: tune.tune_label, subtitle: null,
       facts: [
         origin.map(tagFact),
-        when(tune.year ?? tune.period),
+        when(formatYear(tune.year, tune.year_precision)),
         when(tune.published_in),
         writerFacts(credits, { composer: "", arranger: "arr. ", adapter: "adapted by " }),
         when(tune.meter),
@@ -155,7 +156,7 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
   }
   if (kind === "text") {
     const { data: text } = await db.from("texts")
-      .select("id, title, year, period, notes, text_credits(role, people(name, slug)), text_sources(id, corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation), text_tags(tags(name, slug, type))")
+      .select("id, title, year, year_precision, notes, text_credits(role, people(name, slug)), text_sources(id, corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation), text_tags(tags(name, slug, type))")
       .eq("slug", slug).maybeSingle();
     if (!text) return null;
     const songs = await fetchAllRows<{ id: string }>((f: number, t: number) => db.from("songs").select("id").eq("text_id", text.id).order("id").range(f, t));
@@ -169,7 +170,7 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
       kind, name: text.title, subtitle: null,
       facts: [
         origin.map(tagFact),
-        when(text.year ?? text.period),
+        when(formatYear(text.year, text.year_precision)),
         main ? [sourceFact(main)] : [],
         writerFacts(text.text_credits ?? [], { author: "", translator: "trans. ", adapter: "adapted by " }),
         languages.map(tagFact),

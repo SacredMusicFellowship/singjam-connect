@@ -54,7 +54,7 @@ describe("loadBrowseEntity facts", () => {
   it("leads a tune with culture, year, first printing, writers by role and meter", async () => {
     const db = fakeDb({
       tunes: [{
-        id: "t", slug: "kingsfold", tune_label: "Kingsfold", meter: "CMD", year: 1906, period: null, published_in: "The English Hymnal", notes: null,
+        id: "t", slug: "kingsfold", tune_label: "Kingsfold", meter: "CMD", year: 1906, year_precision: "exact", published_in: "The English Hymnal", notes: null,
         tune_credits: [{ role: "arranger", people: { name: "Ralph Vaughan Williams", slug: "rvw" } }, { role: "composer", people: { name: "Traditional", slug: "traditional" } }],
         tune_tags: [{ tags: { name: "English", slug: "english", type: "culture" } }, { tags: { name: "Dorian", slug: "dorian", type: "mode" } }],
       }],
@@ -74,7 +74,7 @@ describe("loadBrowseEntity facts", () => {
   it("leads a text with its source, lists several sources in order, and drops a language the culture already names", async () => {
     const db = fakeDb({
       texts: [{
-        id: "x", title: "Etz Chayim Hi", year: null, period: null, notes: null, text_credits: [],
+        id: "x", title: "Etz Chayim Hi", year: 1550, year_precision: "century", notes: null, text_credits: [],
         text_sources: [
           { id: "c", corpus: "tanakh", book: "Lamentations", chapter_start: 5, verse_start: 21, relation: "quoted" },
           { id: "a", corpus: "tanakh", book: "Proverbs", chapter_start: 3, verse_start: 18, relation: "quoted" },
@@ -85,8 +85,8 @@ describe("loadBrowseEntity facts", () => {
       songs: [{ id: "s1" }],
     });
     const e = await loadBrowseEntity(db, "text", "etz-chayim-hi");
-    expect(e?.facts?.map((g) => g.map((c) => c.text).join(", "))).toEqual(["Jewish", "Proverbs 3:17", "Hebrew"]);
-    expect(e?.facts?.[1][0].link).toEqual({ kind: "scripture", key: "proverbs/3" });
+    expect(e?.facts?.map((g) => g.map((c) => c.text).join(", "))).toEqual(["Jewish", "16th c.", "Proverbs 3:17", "Hebrew"]);
+    expect(e?.facts?.[2][0].link).toEqual({ kind: "scripture", key: "proverbs/3" });
     expect(e?.sources?.map((c) => c.text)).toEqual(["Proverbs 3:17", "Proverbs 3:18", "Lamentations 5:21"]);
   });
 });

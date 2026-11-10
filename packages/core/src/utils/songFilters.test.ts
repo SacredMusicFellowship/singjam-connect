@@ -86,6 +86,11 @@ describe("songMatchesFilters", () => {
     expect(songMatchesFilters(song({ year: 1970 }), emptyState({ yearMin: "1980" }))).toBe(false);
     expect(songMatchesFilters(song({ year: 2010 }), emptyState({ yearMax: "2000" }))).toBe(false);
     expect(songMatchesFilters(song({ year: null }), emptyState({ yearMin: "1980" }))).toBe(false);
+    // A rough date is a span; it matches any range it overlaps.
+    expect(songMatchesFilters(song({ year: 1501, year_max: 1600 }), emptyState({ yearMin: "1550", yearMax: "1700" }))).toBe(true);
+    expect(songMatchesFilters(song({ year: 1501, year_max: 1600 }), emptyState({ yearMin: "1590" }))).toBe(true);
+    expect(songMatchesFilters(song({ year: 1501, year_max: 1600 }), emptyState({ yearMin: "1601" }))).toBe(false);
+    expect(songMatchesFilters(song({ year: 1501, year_max: 1600 }), emptyState({ yearMax: "1500" }))).toBe(false);
     // no year bound set → a null-year song still passes
     expect(songMatchesFilters(song({ year: null }), emptyState())).toBe(true);
   });

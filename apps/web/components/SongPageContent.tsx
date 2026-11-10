@@ -121,8 +121,8 @@ const SONG_SELECT = `
           song_alternate_titles(title),
           song_tags(context, tags(name, type, slug)),
           song_productions(productions(name, year, slug)),
-          texts(slug, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
-          tunes(name, slug)
+          texts(slug, year, year_precision, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          tunes(name, slug, year, year_precision)
         `;
 
 export default function SongPageContent() {

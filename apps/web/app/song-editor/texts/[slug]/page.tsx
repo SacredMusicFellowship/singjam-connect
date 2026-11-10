@@ -8,7 +8,7 @@ export default async function TextPage({ params }: { params: Promise<{ slug: str
   const supabase = await getServerSupabase();
   const { data: text } = await supabase
     .from("texts")
-    .select("id, title, first_line, kind, year, period, notes, text_titles(id, title, kind), text_credits(person_id, role, people(name)), text_sources(*), text_tags(tag_id), songs(id, slug, title, tunes(tune_label))")
+    .select("id, title, first_line, kind, year, year_precision, notes, text_titles(id, title, kind), text_credits(person_id, role, people(name)), text_sources(*), text_tags(tag_id), songs(id, slug, title, tunes(tune_label))")
     .eq("slug", decodeURIComponent(slug))
     .maybeSingle();
   if (!text) notFound();
@@ -21,7 +21,7 @@ export default async function TextPage({ params }: { params: Promise<{ slug: str
   const t = text as any;
   return (
     <TextEditor
-      text={{ id: t.id, title: t.title, first_line: t.first_line, kind: t.kind, year: t.year, period: t.period, notes: t.notes }}
+      text={{ id: t.id, title: t.title, first_line: t.first_line, kind: t.kind, year: t.year, year_precision: t.year_precision, notes: t.notes }}
       titles={t.text_titles ?? []}
       credits={(t.text_credits ?? []).map((c: any) => ({ person_id: c.person_id, role: c.role, name: c.people?.name ?? "?" }))}
       sources={t.text_sources ?? []}

@@ -10,7 +10,7 @@ import { personIdFor, syncTags } from "@/components/catalog/catalogWrites";
 
 type Source = { id: string; corpus: string; book: string | null; chapter_start: number | null; verse_start: number | null; chapter_end: number | null; verse_end: number | null; citation: string | null; relation: string };
 export type TextEditorProps = {
-  text: { id: string; title: string; first_line: string | null; kind: string | null; year: number | null; period: string | null; notes: string | null };
+  text: { id: string; title: string; first_line: string | null; kind: string | null; year: number | null; year_precision: string; notes: string | null };
   titles: { id: string; title: string; kind: string }[];
   credits: Credit[];
   sources: Source[];
@@ -27,7 +27,7 @@ export default function TextEditor(props: TextEditorProps) {
   const { text } = props;
   const router = useRouter();
   const db = supabaseBrowser();
-  const [details, setDetails] = useState({ title: text.title, first_line: text.first_line ?? "", kind: text.kind ?? "", year: text.year?.toString() ?? "", period: text.period ?? "", notes: text.notes ?? "" });
+  const [details, setDetails] = useState({ title: text.title, first_line: text.first_line ?? "", kind: text.kind ?? "", year: text.year?.toString() ?? "", year_precision: text.year_precision ?? "exact", notes: text.notes ?? "" });
   const [newTitle, setNewTitle] = useState({ title: "", kind: "transliteration" });
   const [src, setSrc] = useState({ corpus: "tanakh", book: "", chapter_start: "", verse_start: "", chapter_end: "", verse_end: "", citation: "", relation: "quoted" });
   const [status, setStatus] = useState<string | null>(null);
@@ -63,13 +63,15 @@ export default function TextEditor(props: TextEditorProps) {
             </select>
           </label>
           <label className="text-sm text-slate-600">Year written<input id="text-year" value={details.year} onChange={(e) => setDetails({ ...details, year: e.target.value })} inputMode="numeric" placeholder="1719" className="input mt-1" /></label>
-          <label className="text-sm text-slate-600">Rough date (if no year)<input id="text-period" value={details.period} onChange={(e) => setDetails({ ...details, period: e.target.value })} placeholder="16th c." className="input mt-1" /></label>
+          <label className="text-sm text-slate-600">How exact (any year in a decade or century)<select id="text-year-precision" value={details.year_precision} onChange={(e) => setDetails({ ...details, year_precision: e.target.value })} className="input mt-1">
+              <option value="exact">Exact year</option><option value="circa">About (c.)</option><option value="decade">That decade</option><option value="century">That century</option>
+            </select></label>
           <label className="text-sm text-slate-600 sm:col-span-2">First line<input id="text-first-line" value={details.first_line} onChange={(e) => setDetails({ ...details, first_line: e.target.value })} className="input mt-1" /></label>
           <label className="text-sm text-slate-600 sm:col-span-2">Notes<textarea id="text-notes" value={details.notes} onChange={(e) => setDetails({ ...details, notes: e.target.value })} rows={3} className="input mt-1" /></label>
         </div>
         <button
           type="button"
-          onClick={() => run(() => db.from("texts").update({ title: details.title.trim(), first_line: details.first_line.trim() || null, kind: details.kind || null, year: n(details.year), period: details.period.trim() || null, notes: details.notes.trim() || null }).eq("id", text.id))}
+          onClick={() => run(() => db.from("texts").update({ title: details.title.trim(), first_line: details.first_line.trim() || null, kind: details.kind || null, year: n(details.year), year_precision: details.year_precision, notes: details.notes.trim() || null }).eq("id", text.id))}
           className="rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-400"
         >
           Save details

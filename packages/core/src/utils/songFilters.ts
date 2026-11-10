@@ -16,6 +16,9 @@ export type FilterableSong = {
   tonality: string | null;
   meter: string | null;
   year: number | null;
+  // The last year a song's date can mean (song_filter_meta, migration 225): a
+  // "16th c." text is 1501–1600. Missing means the same as `year`.
+  year_max?: number | null;
 };
 
 export type SongFilterState = {
@@ -72,8 +75,10 @@ export function songMatchesFilters(
   if (exclude !== "tonality" && f.tonality && !song.tonality?.split(/,\s*/).includes(f.tonality)) return false;
   if (exclude !== "meter" && f.meter && song.meter !== f.meter) return false;
   if (exclude !== "year" && (f.yearMin || f.yearMax)) {
+    // A song matches when its span overlaps the range asked for.
     if (song.year === null) return false;
-    if (f.yearMin && song.year < parseInt(f.yearMin, 10)) return false;
+    const last = song.year_max ?? song.year;
+    if (f.yearMin && last < parseInt(f.yearMin, 10)) return false;
     if (f.yearMax && song.year > parseInt(f.yearMax, 10)) return false;
   }
   return true;

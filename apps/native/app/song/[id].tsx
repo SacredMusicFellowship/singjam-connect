@@ -299,8 +299,8 @@ export default function SongDetailScreen() {
           song_tags(context, tags(name, type, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
           song_productions(productions(name, year, slug)),
-          texts(slug, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
-          tunes(name, slug)
+          texts(slug, year, year_precision, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          tunes(name, slug, year, year_precision)
         `)
         .eq('id', songId)
         .single(),

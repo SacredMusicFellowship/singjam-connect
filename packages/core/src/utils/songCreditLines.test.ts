@@ -51,6 +51,16 @@ describe("songCreditLines", () => {
     });
     expect(yedid[0].groups[1]).toEqual([{ text: "Sefer Charedim (Venice, 1601)", link: { kind: "text", key: "yedid-nefesh" } }]);
   });
+  it("dates the words and the music at their precision", () => {
+    const lines = songCreditLines({
+      composers: [p("Rowland H. Prichard")], lyricists: [p("Charles Wesley")], musicCultures: [], lyricsCultures: [],
+      text: { slug: "love-divine", year: 1747, year_precision: "exact", songs: [{ count: 1 }] },
+      tune: { name: "Hyfrydol", slug: "hyfrydol", year: 1844, year_precision: "exact" },
+    });
+    expect(lines.map((l) => l.groups.map((g) => g.map((c) => c.text).join(", ")).join(" · "))).toEqual(["Charles Wesley · 1747", "Hyfrydol · Rowland H. Prichard · 1844"]);
+    const old = songCreditLines({ composers: [p("Traditional")], lyricists: [p("Traditional")], musicCultures: [], lyricsCultures: [], text: { slug: "maoz", year: 1250, year_precision: "century", songs: [{ count: 1 }] } });
+    expect(old[0].groups[1]).toEqual([{ text: "13th c.", link: null }]);
+  });
   it("ignores an unnamed tune and leaves out empty lines", () => {
     expect(songCreditLines({ composers: [p("Shlomo Carlebach")], lyricists: [], musicCultures: [], lyricsCultures: [], tune: { name: null, slug: "tune-1" } }))
       .toEqual([{ label: "Music", groups: [[{ text: "Shlomo Carlebach", link: { kind: "person", key: "Shlomo Carlebach" } }]] }]);

@@ -8,7 +8,7 @@ export default async function TunePage({ params }: { params: Promise<{ slug: str
   const supabase = await getServerSupabase();
   const { data: tune } = await supabase
     .from("tunes")
-    .select("id, name, meter, fixed_melody, year, period, published_in, recording_url, notes, tune_label, tune_credits(person_id, role, people(name)), tune_tags(tag_id), songs(id, slug, title, texts(title))")
+    .select("id, name, meter, fixed_melody, year, year_precision, published_in, recording_url, notes, tune_label, tune_credits(person_id, role, people(name)), tune_tags(tag_id), songs(id, slug, title, texts(title))")
     .eq("slug", decodeURIComponent(slug))
     .maybeSingle();
   if (!tune) notFound();
@@ -21,7 +21,7 @@ export default async function TunePage({ params }: { params: Promise<{ slug: str
   const t = tune as any;
   return (
     <TuneEditor
-      tune={{ id: t.id, label: t.tune_label, name: t.name, meter: t.meter, fixed_melody: t.fixed_melody, year: t.year, period: t.period, published_in: t.published_in, recording_url: t.recording_url, notes: t.notes }}
+      tune={{ id: t.id, label: t.tune_label, name: t.name, meter: t.meter, fixed_melody: t.fixed_melody, year: t.year, year_precision: t.year_precision, published_in: t.published_in, recording_url: t.recording_url, notes: t.notes }}
       credits={(t.tune_credits ?? []).map((c: any) => ({ person_id: c.person_id, role: c.role, name: c.people?.name ?? "?" }))}
       tagIds={(t.tune_tags ?? []).map((x: any) => x.tag_id)}
       tagOptions={tagOptions}
