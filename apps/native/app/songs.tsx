@@ -11,6 +11,7 @@ import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
 import ContentContainer from '@/components/ContentContainer';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
+import { useMySongTools } from '@/lib/useMySongTools';
 import SuggestionCard from '@/components/SuggestionCard';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
 import { useTagHierarchy } from '@/lib/useTagHierarchy';
@@ -303,6 +304,7 @@ export default function SongLibraryScreen() {
     router.push(`/song/${song.song_id}` as any);
   }, [router]);
   const openBrowse = useCallback((webPath: string) => router.push(nativeBrowseHref(webPath) as any), [router]);
+  const { tools, modals: mySongModals } = useMySongTools();
 
   const renderItem = useCallback(({ item }: { item: SongMeta }) => (
     <SuggestionCard
@@ -311,8 +313,9 @@ export default function SongLibraryScreen() {
       onAdd={addSong}
       onView={viewSong}
       onOpenBrowse={openBrowse}
+      tools={tools}
     />
-  ), [myConfidence, addSong, viewSong, openBrowse]);
+  ), [myConfidence, addSong, viewSong, openBrowse, tools]);
 
   const activeFilterCount = countActiveFilters(filters);
   const searching = query.trim().length > 0;
@@ -461,6 +464,7 @@ export default function SongLibraryScreen() {
         )}
       </KeyboardAvoidingView>
       </ContentContainer>
+      {mySongModals}
     </>
   );
 }

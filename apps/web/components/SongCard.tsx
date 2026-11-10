@@ -6,6 +6,10 @@ import Link from "next/link";
 import RoleSelect from "@/components/RoleSelect";
 import CreditLinks from "@/components/CreditLinks";
 import ConfidencePicker from "@/components/ConfidencePicker";
+import MyKeySelect from "@/components/MyKeySelect";
+import AddToSetPanel from "@/components/AddToSetPanel";
+import ChordChartSlot from "@/components/ChordChartSlot";
+import type { MySongTools } from "@/hooks/useSongCardActions";
 
 export const LEVELS = [
   { key: "lead", label: "Lead" },
@@ -58,6 +62,7 @@ export default function SongCard({
   onAdd,
   addSong,
   onVoiceUpdated,
+  tools,
 }: {
   songId: string;
   title: string;
@@ -88,6 +93,8 @@ export default function SongCard({
   onAdd: (id: string, slug?: string | null) => void | Promise<void>;
   addSong: (songId: string, level: string) => void;
   onVoiceUpdated: (voice: string) => void;
+  // For a song in My songs: key, sets and chart, as on the song page.
+  tools?: MySongTools;
 }) {
   const [youtubeOpen, setYoutubeOpen] = useState(false);
   const [spotifyOpen, setSpotifyOpen] = useState(false);
@@ -210,6 +217,23 @@ export default function SongCard({
                 }
               }}
             />
+            {tools && (
+              <>
+                <MyKeySelect value={tools.details.get(songId)?.key ?? null} onChange={(k) => tools.updateKey(songId, k)} size="md" label={`My key for ${title}`} />
+                {tools.sets.length > 0 && (
+                  <AddToSetPanel
+                    songId={songId}
+                    sets={tools.sets}
+                    inSets={tools.inSets[songId]}
+                    direction="down"
+                    onOpen={() => tools.loadSetMemberships(songId)}
+                    onAdded={(setId) => tools.addedToSet(songId, setId)}
+                    onSetCreated={(set) => tools.setCreated(set)}
+                  />
+                )}
+                <ChordChartSlot songId={songId} url={tools.details.get(songId)?.chart} canAdd size="md" onAdded={(url) => tools.chartAdded(songId, url)} />
+              </>
+            )}
           </>
         ) : (inRepertoire && askingLeadVoice) || picking ? (
           <ConfidencePicker

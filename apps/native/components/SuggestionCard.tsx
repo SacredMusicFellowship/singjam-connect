@@ -1,10 +1,13 @@
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Pressable, Alert, Linking } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import CreditText from '@/components/CreditText';
 import { browsePath, productionCredits, songCardCredits, songCardPills, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
+import RolePill from '@/components/RolePill';
+import MyKeyChip from '@/components/MyKeyChip';
+import type { MySongTools } from '@/lib/useMySongTools';
 
 export type Suggestion = {
   song_id: string;
@@ -49,6 +52,8 @@ type Props = {
   context?: string | null;
   // Opens a browse page (web path); without it the pills aren't tappable.
   onOpenBrowse?: (webPath: string) => void;
+  // For a song in My songs: key, Add to set and chart, as on the song screen.
+  tools?: MySongTools;
 };
 
 // Mirrors web's SongCard: title + (songwriters), then how the song is known
@@ -57,7 +62,9 @@ type Props = {
 // YouTube and Spotify players inline; here they open the apps instead, since a
 // WebView per row would hurt list scrolling and Spotify only plays full tracks
 // in its own app. Spacing is tighter than web's so more songs fit a phone.
-function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse }: Props) {
+function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse, tools }: Props) {
+  const mine = tools?.details.get(song.song_id);
+  useEffect(() => { if (confidence && tools && !mine) tools.ensure(song.song_id); }, [confidence, tools, mine, song.song_id]);
   function handleAddTap(event: GestureResponderEvent) {
     // A new add comes from "I know this song!", so it asks lead or support;
     // learning has its own link. Changing an existing role offers all three.
@@ -165,7 +172,29 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
       )}
 
       <View className="mt-3 flex-row flex-wrap items-center" style={{ gap: 6 }}>
-        {confidence ? (
+        {confidence && tools ? (
+          <>
+            <RolePill level={confidence} onPress={handleAddTap} size="md" />
+            <MyKeyChip value={mine?.key ?? null} onPress={() => tools.openKey(song.song_id)} size="md" />
+            <TouchableOpacity
+              onPress={() => tools.openAddToSet(song)}
+              className="flex-row items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5"
+            >
+              <Ionicons name="list-outline" size={14} color="#64748b" />
+              <Text className="text-slate-600 text-sm">Add to set</Text>
+            </TouchableOpacity>
+            {mine?.chart ? (
+              <TouchableOpacity
+                onPress={() => Linking.openURL(mine.chart!).catch(() => Alert.alert('Could not open link'))}
+                className="flex-row items-center gap-1 px-3 py-1.5 rounded-full border border-zinc-200 bg-white"
+                accessibilityLabel="Chord chart"
+              >
+                <Text className="text-sm font-medium text-zinc-600">Chords</Text>
+                <Ionicons name="open-outline" size={11} color="#a1a1aa" />
+              </TouchableOpacity>
+            ) : null}
+          </>
+        ) : confidence ? (
           <>
             <View className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1.5">
               <Text className="text-sm text-amber-700">✓ In your repertoire</Text>

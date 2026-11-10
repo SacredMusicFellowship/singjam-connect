@@ -14,6 +14,7 @@ import ContentContainer from '@/components/ContentContainer';
 import { browseKindFromSegment, nativeBrowseHref } from '@/lib/browseLinks';
 import FiltersButton from '@/components/FiltersButton';
 import CreditText from '@/components/CreditText';
+import { useMySongTools } from '@/lib/useMySongTools';
 
 const KIND_LABEL: Record<BrowseKind, string> = {
   genre: 'Genre', form: 'Form', occasion: 'Occasion', community: 'Community', culture: 'Culture',
@@ -76,6 +77,7 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
   const openBrowse = useCallback((webPath: string) => router.push(nativeBrowseHref(webPath) as any), [router]);
   const viewSong = useCallback((song: { song_id: string }) => router.push(`/song/${song.song_id}` as any), [router]);
   const { myConfidence, addSong } = useMySongs();
+  const { tools, modals: mySongModals } = useMySongTools();
   // The Song Library's filters, scoped to this page's songs.
   const expanded = useMemo(() => expandFilterState(filters, hierarchy), [filters, hierarchy]);
   const facets = useMemo(() => deriveFilterFacets(meta, filters, hierarchy), [meta, filters, hierarchy]);
@@ -185,6 +187,7 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
                   onAdd={addSong}
                   onView={viewSong}
                   onOpenBrowse={openBrowse}
+                  tools={tools}
                 />
               ))}
             </View>
@@ -218,6 +221,7 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
         onChange={setFilters}
         onClose={() => setSheetOpen(false)}
       />
+      {mySongModals}
     </>
   );
 }
