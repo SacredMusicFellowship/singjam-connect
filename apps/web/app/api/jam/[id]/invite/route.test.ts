@@ -150,7 +150,7 @@ describe("POST /api/jam/[id]/invite", () => {
       .mockReturnValueOnce(chain({ data: JAM }))
       .mockReturnValueOnce(chain({ data: { display_name: "Ben" } }));
 
-    const res = await POST(makeReq({ inviteeEmail: " joel@example.com " }), { params: Promise.resolve({ id: JAM_ID }) });
+    const res = (await POST(makeReq({ inviteeEmail: " joel@example.com " }), { params: Promise.resolve({ id: JAM_ID }) }))!;
 
     expect(await res.json()).toEqual({ existingMemberId: INVITEE_ID });
     expect(mockSend).not.toHaveBeenCalled();
@@ -165,7 +165,7 @@ describe("POST /api/jam/[id]/invite", () => {
       .mockReturnValueOnce(chain({ data: [] })) // not already invited
       .mockReturnValueOnce(chain({ data: { token: "tok-1" } })); // insert
 
-    const res = await POST(makeReq({ inviteeEmail: " New@Example.com" }), { params: Promise.resolve({ id: JAM_ID }) });
+    const res = (await POST(makeReq({ inviteeEmail: " New@Example.com" }), { params: Promise.resolve({ id: JAM_ID }) }))!;
 
     expect(res.status).toBe(200);
     expect(mockAdminFrom.mock.results[2].value.eq).toHaveBeenCalledWith("invitee_email", "new@example.com");
