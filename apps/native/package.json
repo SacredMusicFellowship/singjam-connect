@@ -46,6 +46,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.0",
     "@react-native/jest-preset": "^0.88.1",
+    "@singjam/test-fixtures": "*",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "30.0.0",
     "@types/react": "~19.3.0",
