@@ -1,3 +1,4 @@
+import type { CardIdentity, ProductionCredit, RecordingArtistCredit } from "@singjam/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { browseRpcParams, type BrowseFilters } from "@/lib/browseSongsParams";
@@ -9,12 +10,17 @@ export type BrowseSong = {
   title: string;
   slug: string | null;
   display_artist: string | null;
+  byline?: string | null;
+  card_identity?: CardIdentity;
   composers: string[];
   cultures: string[];
   productions: string[];
   genres: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
@@ -22,12 +28,23 @@ export type BrowseSong = {
   popularity: number;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
   total_count: number;
 };
 
+const MAX_RPC_ROWS = 200;
+
+export function firstLoadPages(limit: number): { offset: number; limit: number }[] {
+  const pages = [];
+  for (let offset = 0; offset < limit; offset += MAX_RPC_ROWS) pages.push({ offset, limit: Math.min(MAX_RPC_ROWS, limit - offset) });
+  return pages;
+}
+
 export function useBrowseSongs(
   filters: BrowseFilters,
-  { pageSize = 20, initialCount = pageSize }: { pageSize?: number; initialCount?: number } = {}
+  // `enabled: false` loads nothing until it turns true (a set's catalog list while the group's songs show).
+  { pageSize = 20, initialCount = pageSize, enabled = true }: { pageSize?: number; initialCount?: number; enabled?: boolean } = {}
 ) {
   const supabase = useRef(supabaseBrowser()).current;
   const [songs, setSongs] = useState<BrowseSong[]>([]);
@@ -43,28 +60,33 @@ export function useBrowseSongs(
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
 
   useEffect(() => {
+    if (!enabled) return;
     const seq = ++requestSeq.current;
     const f = JSON.parse(filtersKey) as BrowseFilters;
     const limit = isFirstLoad.current ? Math.max(initialCount, pageSize) : pageSize;
     isFirstLoad.current = false;
     setLoading(true);
     setLoadingMore(false);
-    supabase.rpc("browse_songs", browseRpcParams(f, 0, limit)).then(({ data, error: rpcError }) => {
+    // browse_songs caps a page at 200 rows, so a return visit that had scrolled
+    // further reloads in 200-row pages, all at once.
+    Promise.all(
+      firstLoadPages(limit).map((p) => supabase.rpc("browse_songs", browseRpcParams(f, p.offset, p.limit)))
+    ).then((pages) => {
       if (seq !== requestSeq.current) return;
       setLoading(false);
-      if (rpcError) {
+      if (pages.some((p) => p.error)) {
         setError("Could not load songs. Please try again.");
         setSongs([]);
         setTotal(null);
         return;
       }
-      const rows = (data ?? []) as BrowseSong[];
+      const rows = pages.flatMap((p) => (p.data ?? []) as BrowseSong[]);
       setError(null);
       setSongs(rows);
       setTotal(rows[0]?.total_count ?? 0);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }, [filtersKey, enabled]);
 
   const hasMore = total !== null && songs.length < total;
 

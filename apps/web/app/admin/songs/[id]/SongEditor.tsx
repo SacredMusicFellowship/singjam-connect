@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import CatalogLinkField from "@/components/catalog/CatalogLinkField";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { generateSlug } from "@/lib/generateSlug";
+import { songSavePayload } from "@/lib/songSavePayload";
+import { MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -23,31 +26,32 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 type Lookup = { id: string; name: string };
+
+const creditText = (list: CardCredit[]) => list.map((c) => `${c.lead ?? ""}${c.text}${c.suffix ?? ""}`).join(", ");
+
+// How the song's card will read (songCardCredits, as every song card): the
+// title with its writers in brackets, and the line under it.
+function CardPreview({ credits, title }: { credits: { writers: CardCredit[]; line: CardCredit[] }; title: string }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="font-medium text-zinc-900">
+        {title || "Untitled"}
+        {credits.writers.length > 0 && <span className="ml-1 font-normal text-zinc-400">({creditText(credits.writers)})</span>}
+      </div>
+      {credits.line.length > 0 && <div className="text-sm text-zinc-500">{creditText(credits.line)}</div>}
+    </div>
+  );
+}
+type ProductionLookup = Lookup & { year: number | null };
+
+function productionLabel(p: ProductionLookup) {
+  return p.year ? `${p.name} (${p.year})` : p.name;
+}
+
 type AltTitle = { id: string; title: string };
 
 function toTitleCase(s: string) {
   return s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-}
-
-const LANG_NAMES: Record<string, string> = {
-  eng: "English", fra: "French", deu: "German", spa: "Spanish",
-  ita: "Italian", por: "Portuguese", jpn: "Japanese", zho: "Chinese",
-  kor: "Korean", rus: "Russian", ara: "Arabic", nld: "Dutch",
-  pol: "Polish", swe: "Swedish", nor: "Norwegian", fin: "Finnish",
-  dan: "Danish", ces: "Czech", hun: "Hungarian", ron: "Romanian",
-  tur: "Turkish", heb: "Hebrew", hin: "Hindi", ben: "Bengali",
-  ind: "Indonesian", vie: "Vietnamese", tha: "Thai", ukr: "Ukrainian",
-  cat: "Catalan", lat: "Latin", gle: "Irish", cym: "Welsh",
-  eus: "Basque", glg: "Galician", hrv: "Croatian", srp: "Serbian",
-  slk: "Slovak", slv: "Slovenian", bul: "Bulgarian", ell: "Greek",
-  lit: "Lithuanian", lav: "Latvian", est: "Estonian", afr: "Afrikaans",
-  swa: "Swahili", yor: "Yoruba", amh: "Amharic", msa: "Malay",
-  tgl: "Filipino", nob: "Norwegian Bokmål", nno: "Norwegian Nynorsk",
-  yid: "Yiddish", bre: "Breton", oci: "Occitan", scr: "Croatian",
-};
-
-function langCodeToName(code: string): string {
-  return LANG_NAMES[code.toLowerCase()] ?? toTitleCase(code);
 }
 
 const TONALITY_OPTIONS = [
@@ -75,27 +79,46 @@ type Song = {
   tonality: string | null;
   meter: string | null;
   vibe: "Banger" | "Ballad" | null;
-  song_genres: { genre_id: string }[];
-  song_themes: { theme_id: string }[];
-  song_cultures: { culture_id: string; context: string | null }[];
-  song_languages: { language_id: string }[];
+  known_by_recording?: boolean | null;
+  text_id?: string | null;
+  tune_id?: string | null;
+  byline?: string | null;
+  song_tags: SongTagRow[];
   song_composers: { person_id: string }[];
   song_lyricists: { person_id: string }[];
   song_recording_artists: { artist_id: string; year: number | null; position: number | null; youtube_url: string | null; spotify_url: string | null }[];
   song_alternate_titles: AltTitle[];
   song_productions: { production_id: string }[];
+  enrichment_proposal?: Proposal | null;
+};
+
+type Proposal = {
+  requested_at: string;
+  finished_at?: string;
+  error?: boolean;
+  suggestions?: EnrichmentReview["suggestions"];
+  agreed?: string[];
+  fromWikipedia?: string[];
+  wikipedia?: { title: string; url: string } | null;
+  checks?: { name: string; ok: boolean }[];
 };
 
 type Props = {
   song: Song | null;
-  isNew: boolean;
   allGenres: Lookup[];
   allThemes: Lookup[];
   allCultures: Lookup[];
   allLanguages: Lookup[];
+  allForms: Lookup[];
+  allOccasions: Lookup[];
+  allCommunities: Lookup[];
+  allTexts: { id: string; title: string; slug: string }[];
+  allTunes: { id: string; slug: string; tune_label: string }[];
   allPeople: Lookup[];
   allArtists: Lookup[];
-  allProductions: Lookup[];
+  allProductions: ProductionLookup[];
+  basePath: string;
+  isAdmin: boolean;
 };
 
 function toSet(ids: string[]) {
@@ -104,14 +127,20 @@ function toSet(ids: string[]) {
 
 export default function SongEditor({
   song,
-  isNew,
   allGenres,
   allThemes,
   allCultures,
   allLanguages,
+  allForms,
+  allOccasions,
+  allCommunities,
+  allTexts: initialTexts,
+  allTunes: initialTunes,
   allPeople,
   allArtists,
   allProductions,
+  basePath,
+  isAdmin,
 }: Props) {
   const supabase = supabaseBrowser();
   const router = useRouter();
@@ -134,6 +163,22 @@ export default function SongEditor({
     song?.meter ? song.meter.split(",").map((s) => s.trim()).filter(Boolean) : []
   );
   const [vibe, setVibe] = useState<"Banger" | "Ballad" | null>(song?.vibe ?? null);
+  const [knownByRecording, setKnownByRecording] = useState<boolean | null>(song?.known_by_recording ?? null);
+  // Which text this song sings, to which tune (migration 208).
+  const [textId, setTextId] = useState<string>(song?.text_id ?? "");
+  const [tuneId, setTuneId] = useState<string>(song?.tune_id ?? "");
+  const [allTexts, setAllTexts] = useState(initialTexts);
+  const [allTunes, setAllTunes] = useState(initialTunes);
+  // The text's first quoted source, which a card without a named tune shows.
+  const [textSource, setTextSource] = useState<SourceRef | null>(null);
+  useEffect(() => {
+    if (!textId) { setTextSource(null); return; }
+    let live = true;
+    supabase.from("text_sources").select("corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation")
+      .eq("text_id", textId).neq("relation", "inspired").order("id")
+      .then(({ data }) => { if (live) setTextSource(((data ?? []) as SourceRef[])[0] ?? null); });
+    return () => { live = false; };
+  }, [textId, supabase]);
 
   const initialComposerIds = song?.song_composers.map((x) => x.person_id) ?? [];
   const initialLyricistIds = song?.song_lyricists.map((x) => x.person_id) ?? [];
@@ -157,23 +202,25 @@ export default function SongEditor({
   const [productions, setProductions] = useState<Set<string>>(new Set(initialProductionIds));
   const [pendingProductionNames, setPendingProductionNames] = useState<string[]>([]);
   const [productionQuery, setProductionQuery] = useState("");
+  const [productionYears, setProductionYears] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      initialProductionIds.map((id) => [id, String(allProductions.find((p) => p.id === id)?.year ?? "")])
+    )
+  );
+  const productionLookups: Lookup[] = allProductions.map((p) => ({ id: p.id, name: productionLabel(p) }));
+  const productionYearRows = [
+    ...[...productions].map((id) => ({ key: id, name: allProductions.find((p) => p.id === id)?.name ?? "" })),
+    ...pendingProductionNames.map((name) => ({ key: `new:${name}`, name })),
+  ];
 
   // Tag pill arrays
-  const [genres, setGenres] = useState<string[]>(() =>
-    (song?.song_genres ?? []).map((x) => allGenres.find((g) => g.id === x.genre_id)?.name).filter((n): n is string => !!n)
-  );
-  const [themes, setThemes] = useState<string[]>(() =>
-    (song?.song_themes ?? []).map((x) => allThemes.find((t) => t.id === x.theme_id)?.name).filter((n): n is string => !!n)
-  );
-  const [cultures, setCultures] = useState<string[]>(() =>
-    (song?.song_cultures ?? [])
-      .filter((x) => !x.context)
-      .map((x) => allCultures.find((c) => c.id === x.culture_id)?.name)
-      .filter((n): n is string => !!n)
-  );
-  const [languages, setLanguages] = useState<string[]>(() =>
-    (song?.song_languages ?? []).map((x) => allLanguages.find((l) => l.id === x.language_id)?.name).filter((n): n is string => !!n)
-  );
+  const [genres, setGenres] = useState<string[]>(() => songTagNames(song?.song_tags, "genre", "general"));
+  const [themes, setThemes] = useState<string[]>(() => songTagNames(song?.song_tags, "theme", "general"));
+  const [cultures, setCultures] = useState<string[]>(() => songTagNames(song?.song_tags, "culture", "general"));
+  const [languages, setLanguages] = useState<string[]>(() => songTagNames(song?.song_tags, "language", "general"));
+  const [forms, setForms] = useState<string[]>(() => songTagNames(song?.song_tags, "form", "general"));
+  const [occasions, setOccasions] = useState<string[]>(() => songTagNames(song?.song_tags, "occasion", "general"));
+  const [communities, setCommunities] = useState<string[]>(() => songTagNames(song?.song_tags, "community", "general"));
 
   // Alternate titles
   const [altTitles, setAltTitles] = useState<AltTitle[]>(song?.song_alternate_titles ?? []);
@@ -183,130 +230,27 @@ export default function SongEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // AI enrichment
-  type AISuggestions = {
-    year_written: number | null;
-    first_line: string | null;
-    hook: string | null;
-    composers: string[];
-    lyricists: string[];
-    primary_recording_year: number | null;
-    tonality: string | null;
-    meter: string | null;
-    vibe: "Banger" | "Ballad" | null;
-    genres: string[];
-    themes: string[];
-    cultures: string[];
-    music_culture: string | null;
-    lyric_culture: string | null;
-    languages: string[];
-    notes: string | null;
-    productions: string[];
-    alternate_titles: string[];
-    additional_recordings: { artist: string; year: number | null }[];
-    confidence: "high" | "medium" | "low";
-  };
+  // Suggestions from the multi-source enrichment, reviewed before applying
+  type AISuggestions = EnrichmentReview["suggestions"];
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestions | null>(null);
-  const [enrichingWithAI, setEnrichingWithAI] = useState(false);
+  const [agreedFields, setAgreedFields] = useState<Set<string>>(new Set());
+  const [reviewInfo, setReviewInfo] = useState<{
+    fromWikipedia: Set<string>;
+    wikipedia: { title: string; url: string } | null;
+    checks: { name: string; ok: boolean }[];
+  }>({ fromWikipedia: new Set(), wikipedia: null, checks: [] });
+  const [suggesting, setSuggesting] = useState(false);
+  const [showLessCertain, setShowLessCertain] = useState(false);
   const [acceptedFields, setAcceptedFields] = useState<Set<string>>(new Set());
 
-  // Lyric data
-  const [openingGenius, setOpeningGenius] = useState(false);
-
-  async function handleGetGeniusUrl() {
-    setOpeningGenius(true);
-    try {
-      const res = await fetch(`/api/enrich?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(displayArtist)}`);
-      const data = await res.json();
-      const url = data.genius?.lyrics_url;
-      if (url) setGeniusUrl(url);
-      if (data.genius?.first_line && !firstLine.trim()) setFirstLine(data.genius.first_line);
-      if (data.genius?.hook && !hook.trim()) setHook(data.genius.hook);
-    } catch {
-      // leave field blank if it fails
-    } finally {
-      setOpeningGenius(false);
-    }
-  }
-
-  // Tags enrichment
-  const [findingTags, setFindingTags] = useState(false);
-
-  async function handleFindTags() {
-    if (!title.trim()) return;
-    setFindingTags(true);
-    try {
-      console.log("[findTags] calling /api/enrich?mode=tags for:", title, displayArtist);
-      const t0 = Date.now();
-      const res = await fetch(`/api/enrich?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(displayArtist)}&mode=tags`);
-      console.log(`[findTags] enrich responded in ${Date.now() - t0}ms — status ${res.status}`);
-      const data = await res.json();
-      console.log("[findTags] musicbrainz languages:", data.musicbrainz?.languages ?? "none");
-      console.log("[findTags] spotify genres:", data.spotify?.genres ?? "none");
-      console.log("[findTags] lastfm tags:", data.lastfm?.tags ?? "none (check LASTFM_API_KEY)");
-
-      const lastfmTags: string[] = data.lastfm?.tags ?? [];
-      const spotifyGenres: string[] = data.spotify?.genres ?? [];
-      const mbLanguages: string[] = data.musicbrainz?.languages ?? [];
-
-      const allGenreSuggestions = [...new Set([...lastfmTags, ...spotifyGenres].map(toTitleCase))];
-      console.log("[findTags] genre suggestions:", allGenreSuggestions);
-      if (allGenreSuggestions.length) {
-        setGenres((prev) => {
-          const prevLower = new Set(prev.map((p) => p.toLowerCase()));
-          return [...prev, ...allGenreSuggestions.filter((s) => !prevLower.has(s.toLowerCase()))];
-        });
-      }
-      if (mbLanguages.length) {
-        const newLangs = mbLanguages.map(langCodeToName);
-        console.log("[findTags] language suggestions:", newLangs);
-        setLanguages((prev) => {
-          const prevLower = new Set(prev.map((p) => p.toLowerCase()));
-          return [...prev, ...newLangs.filter((l) => !prevLower.has(l.toLowerCase()))];
-        });
-      }
-    } catch (e) {
-      console.error("[findTags] error:", e);
-      setError("Could not fetch tag data.");
-    } finally {
-      setFindingTags(false);
-    }
-  }
-
-  // New-song chunk-1 state
-  const [finding, setFinding] = useState(false);
-  const [found, setFound] = useState(false);
-  const [standardizedTitle, setStandardizedTitle] = useState("");
-  const [standardizedArtist, setStandardizedArtist] = useState("");
-  const [newSongProduction, setNewSongProduction] = useState("");
   const [newComposerName, setNewComposerName] = useState("");
   const [newLyricistName, setNewLyricistName] = useState("");
   const [newRecordingArtistName, setNewRecordingArtistName] = useState("");
   const [pendingRecordingArtists, setPendingRecordingArtists] = useState<{ name: string; year: number | null; spotify_url: string | null }[]>([]);
-  const [pendingAltTitles, setPendingAltTitles] = useState<string[]>([]);
-  const [primaryArtist, setPrimaryArtist] = useState<{ name: string; year: number | null } | null>(null);
   const [pendingComposerNames, setPendingComposerNames] = useState<string[]>([]);
   const [pendingLyricistNames, setPendingLyricistNames] = useState<string[]>([]);
-  const [composerTraditionalCulture, setComposerTraditionalCulture] = useState(() => {
-    const mc = song?.song_cultures.find((x) => x.context === "music");
-    return mc ? (allCultures.find((c) => c.id === mc.culture_id)?.name ?? "") : "";
-  });
-  const [lyricistTraditionalCulture, setLyricistTraditionalCulture] = useState(() => {
-    const lc = song?.song_cultures.find((x) => x.context === "lyrics");
-    return lc ? (allCultures.find((c) => c.id === lc.culture_id)?.name ?? "") : "";
-  });
-  const [duplicateSong, setDuplicateSong] = useState<{ id: string; slug: string | null; title: string } | null>(null);
-  const [sameTitleSongs, setSameTitleSongs] = useState<{ id: string; slug: string | null; title: string }[]>([]);
-
-  // Clear duplicate warnings when the user manually adjusts composers
-  useEffect(() => {
-    if (duplicateSong || sameTitleSongs.length > 0) {
-      setDuplicateSong(null);
-      setSameTitleSongs([]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composers]);
-
+  const [composerTraditionalCulture, setComposerTraditionalCulture] = useState(() => songTraditionTag(song?.song_tags, "music")?.name ?? "");
+  const [lyricistTraditionalCulture, setLyricistTraditionalCulture] = useState(() => songTraditionTag(song?.song_tags, "lyrics")?.name ?? "");
   // Find or create a person/artist by canonical name. Returns the DB id.
   async function resolvePersonName(
     name: string,
@@ -340,100 +284,6 @@ export default function SongEditor({
     return { existingIds, pendingNames };
   }
 
-  async function handleAILookup() {
-    if (!title.trim()) return;
-    setFinding(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/songs/ai-lookup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), artist: displayArtist.trim(), production: newSongProduction.trim() }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { ai, genius_url } = await res.json();
-
-      const canonicalTitle: string = ai.title ?? title.trim();
-      const canonicalArtist: string = ai.display_artist ?? displayArtist.trim();
-
-      setStandardizedTitle(canonicalTitle);
-      setStandardizedArtist(canonicalArtist);
-
-      // Scalar fields
-      if (ai.year_written) setYearWritten(String(ai.year_written));
-      if (ai.year) setYear(String(ai.year));
-      if (ai.first_line) setFirstLine(ai.first_line);
-      if (ai.hook) setHook(ai.hook);
-      if (ai.notes) setNotes(ai.notes);
-      if (genius_url) setGeniusUrl(genius_url);
-      if (ai.production) {
-        setIsFromProduction(true);
-        const existingProd = allProductions.find((p) => p.name.toLowerCase() === (ai.production as string).toLowerCase());
-        if (existingProd) {
-          setProductions(new Set([existingProd.id]));
-        } else {
-          setPendingProductionNames([ai.production as string]);
-        }
-      }
-      if (ai.tonality && TONALITY_OPTIONS.includes(ai.tonality)) setTonalities([ai.tonality]);
-      if (ai.meter && METER_OPTIONS.includes(ai.meter)) setMeters([ai.meter]);
-      if (ai.vibe === "Banger" || ai.vibe === "Ballad") setVibe(ai.vibe);
-
-      // Tag arrays — merge with existing to avoid clobbering manual edits
-      if (ai.genres?.length) setGenres(ai.genres.slice(0, 3));
-      if (ai.languages?.length) setLanguages(ai.languages);
-      if (ai.themes?.length) setThemes(ai.themes.slice(0, 3));
-      if (ai.cultures?.length) setCultures(ai.cultures);
-      if (ai.music_culture) setComposerTraditionalCulture(ai.music_culture);
-      if (ai.lyric_culture) setLyricistTraditionalCulture(ai.lyric_culture);
-
-      // People
-      const { existingIds: cIds, pendingNames: cPending } = splitExistingAndPending(ai.composers ?? [], allPeople);
-      const { existingIds: lIds, pendingNames: lPending } = splitExistingAndPending(ai.lyricists ?? [], allPeople);
-      setComposers(new Set(cIds));
-      setPendingComposerNames(cPending);
-      setLyricists(new Set(lIds));
-      setPendingLyricistNames(lPending);
-
-      // Recording artists from AI — split into existing DB records and pending new entries
-      const aiArtists: { artist: string; year: number | null; spotify_url: string | null }[] = ai.recording_artists ?? [];
-      const existingRAEntries: RecordingArtistEntry[] = [];
-      const pendingRAEntries: { name: string; year: number | null; spotify_url: string | null }[] = [];
-      for (const ra of aiArtists) {
-        const match = allArtists.find((a) => a.name.toLowerCase() === ra.artist.trim().toLowerCase());
-        if (match) {
-          existingRAEntries.push({ id: match.id, year: ra.year, youtube_url: null, spotify_url: ra.spotify_url ?? null });
-        } else {
-          pendingRAEntries.push({ name: ra.artist.trim(), year: ra.year, spotify_url: ra.spotify_url ?? null });
-        }
-      }
-      setRecordingArtists(existingRAEntries);
-      setPendingRecordingArtists(pendingRAEntries);
-      if (aiArtists[0]) setPrimaryArtist({ name: aiArtists[0].artist, year: aiArtists[0].year });
-
-      // Alternate titles
-      if (ai.alternate_titles?.length) setPendingAltTitles(ai.alternate_titles);
-
-      // Duplicate check
-      const composerNamesForSlug = cIds.map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n);
-      const lyricistNamesForSlug = lIds.map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n);
-      const potentialSlug = generateSlug(canonicalTitle, [...composerNamesForSlug, ...cPending, ...lyricistNamesForSlug, ...lPending], ai.music_culture || undefined);
-      const { data: existing } = await supabase
-        .from("songs")
-        .select("id, slug, title")
-        .or(`slug.eq.${potentialSlug},title.ilike.${canonicalTitle}`)
-        .limit(10);
-      setDuplicateSong((existing?.find((s) => s.slug === potentialSlug) ?? null) as typeof duplicateSong);
-      setSameTitleSongs((existing ?? []).filter((s) => s.slug !== potentialSlug) as typeof sameTitleSongs);
-
-      setFound(true);
-    } catch {
-      setError("AI lookup failed. Check that OPENAI_API_KEY is set.");
-    } finally {
-      setFinding(false);
-    }
-  }
-
   function splitNames(names: string[]) {
     const existingIds: string[] = [];
     const pendingNames: string[] = [];
@@ -445,108 +295,204 @@ export default function SongEditor({
     return { existingIds, pendingNames };
   }
 
-  async function handleEnrichWithAI() {
+  const formSnapshot = JSON.stringify([
+    title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
+    [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
+    isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
+    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, knownByRecording, textId, tuneId,
+  ]);
+  const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
+
+  function confirmLeave(e: React.MouseEvent) {
+    if (formSnapshot !== savedSnapshot && !confirm("You have unsaved changes. Leave without saving?")) e.preventDefault();
+  }
+
+  function showProposal(proposal: Proposal) {
+    if (!proposal.suggestions) return;
+    const agreed = new Set(proposal.agreed ?? []);
+    // Genres, themes and vibe are matters of taste: two AIs agreeing is no reason
+    // to pre-tick replacing what someone already chose.
+    const taste = new Set(["genres", "themes", "vibe"]);
+    const preTicked = suggestionRows(proposal.suggestions)
+      .filter((r) => agreed.has(r.key) && !(taste.has(r.key) && r.current))
+      .map((r) => r.key);
+    setAiSuggestions(proposal.suggestions);
+    setAgreedFields(agreed);
+    setAcceptedFields(new Set(preTicked));
+    setReviewInfo({ fromWikipedia: new Set(proposal.fromWikipedia ?? []), wikipedia: proposal.wikipedia ?? null, checks: proposal.checks ?? [] });
+    setShowLessCertain(false);
+  }
+
+  async function waitForReview(requestedAt: string) {
+    setSuggesting(true);
+    try {
+      const deadline = new Date(requestedAt).getTime() + 4 * 60_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const poll = await fetch(`/api/songs/${song!.id}/enrich`);
+        if (!poll.ok) continue;
+        const { proposal } = await poll.json();
+        if (proposal?.requested_at !== requestedAt) throw new Error("superseded");
+        if (!proposal.finished_at) continue;
+        if (proposal.error) throw new Error("failed");
+        showProposal(proposal);
+        return;
+      }
+      throw new Error("timed out");
+    } catch {
+      setError("Couldn't gather suggestions. Try again in a minute.");
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  async function handleSuggest() {
     if (!song?.id) return;
-    setEnrichingWithAI(true);
     setError(null);
     setAiSuggestions(null);
-    try {
-      const res = await fetch(`/api/admin/songs/${song.id}/ai-enrich`, { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const s = data.suggestions;
-      setAiSuggestions(s);
-      const initial = new Set<string>();
-      if (s.year_written != null) initial.add("year_written");
-      if (s.first_line) initial.add("first_line");
-      if (s.hook) initial.add("hook");
-      if (s.composers?.length) initial.add("composers");
-      if (s.lyricists?.length) initial.add("lyricists");
-      if (s.primary_recording_year != null) initial.add("primary_recording_year");
-      if (s.tonality) initial.add("tonality");
-      if (s.meter) initial.add("meter");
-      if (s.vibe) initial.add("vibe");
-      if (s.genres?.length) initial.add("genres");
-      if (s.themes?.length) initial.add("themes");
-      if (s.cultures?.length) initial.add("cultures");
-      if (s.music_culture) initial.add("music_culture");
-      if (s.lyric_culture) initial.add("lyric_culture");
-      if (s.languages?.length) initial.add("languages");
-      if (s.notes) initial.add("notes");
-      if (s.productions?.length) initial.add("productions");
-      if (s.alternate_titles?.length) initial.add("alternate_titles");
-      if (s.additional_recordings?.length) initial.add("additional_recordings");
-      setAcceptedFields(initial);
-    } catch {
-      setError("AI enrichment failed. Check that OPENAI_API_KEY is set in .env.local.");
-    } finally {
-      setEnrichingWithAI(false);
+    const res = await fetch(`/api/songs/${song.id}/enrich`, { method: "POST" });
+    if (!res.ok) {
+      setError("Couldn't start gathering suggestions. Try again in a minute.");
+      return;
     }
+    const { requestedAt } = await res.json();
+    await waitForReview(requestedAt);
+  }
+
+  function closeReview() {
+    setAiSuggestions(null);
+    if (song?.id) void fetch(`/api/songs/${song.id}/enrich`, { method: "DELETE" });
+  }
+
+  // Coming back to the editor picks up a review that is still running or
+  // finished in the last half hour.
+  useEffect(() => {
+    const p = song?.enrichment_proposal;
+    if (!p?.requested_at) return;
+    const age = Date.now() - new Date(p.requested_at).getTime();
+    if (p.finished_at && !p.error && age < 30 * 60_000) showProposal(p);
+    else if (!p.finished_at && age < 4 * 60_000) void waitForReview(p.requested_at);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Only fields where a suggestion differs from what's in the form are shown
+  // (and applied), so a review lists real changes.
+  function suggestionRows(s: AISuggestions) {
+    const names = (ids: Iterable<string>, list: Lookup[]) => [...ids].map((id) => list.find((p) => p.id === id)?.name).filter((n): n is string => !!n);
+    const key = (v: string) => v.toLowerCase().split(/,\s*/).map((x) => x.trim()).sort().join("|");
+    const productionNames = names(productions, allProductions).concat(pendingProductionNames);
+    const recordingNames = names(recordingArtists.map((e) => e.id), allArtists);
+    const newOnly = (list: string[], have: string[]) => list.filter((x) => !have.some((h) => h.toLowerCase() === x.toLowerCase()));
+    const rows: { key: string; label: string; current: string; suggested: string }[] = [
+      { key: "year_written", label: "Year written", current: yearWritten, suggested: s.year_written?.toString() ?? "" },
+      { key: "first_line", label: "First line", current: firstLine, suggested: s.first_line ?? "" },
+      { key: "hook", label: "Hook", current: hook, suggested: s.hook ?? "" },
+      { key: "composers", label: "Composers", current: names(composers, allPeople).concat(pendingComposerNames).join(", "), suggested: s.composers.join(", ") },
+      { key: "lyricists", label: "Lyricists", current: names(lyricists, allPeople).concat(pendingLyricistNames).join(", "), suggested: s.lyricists.join(", ") },
+      { key: "primary_recording_year", label: "Primary recording year", current: recordingArtists[0]?.year?.toString() ?? "", suggested: recordingArtists.length ? s.primary_recording_year?.toString() ?? "" : "" },
+      { key: "tonality", label: "Tonality", current: tonalities.join(", "), suggested: s.tonality ?? "" },
+      { key: "meter", label: "Meter", current: meters.join(", "), suggested: s.meter ?? "" },
+      { key: "vibe", label: "Vibe", current: vibe ?? "", suggested: s.vibe ?? "" },
+      { key: "genres", label: "Genres", current: genres.join(", "), suggested: s.genres.join(", ") },
+      { key: "themes", label: "Themes", current: themes.join(", "), suggested: s.themes.join(", ") },
+      { key: "cultures", label: "Cultures", current: cultures.join(", "), suggested: s.cultures.join(", ") },
+      { key: "forms", label: "Forms", current: forms.join(", "), suggested: (s.forms ?? []).join(", ") },
+      { key: "occasions", label: "Occasions", current: occasions.join(", "), suggested: (s.occasions ?? []).join(", ") },
+      { key: "communities", label: "Communities", current: communities.join(", "), suggested: (s.communities ?? []).join(", ") },
+      { key: "music_culture", label: "Music culture", current: composerTraditionalCulture, suggested: s.music_culture ?? "" },
+      { key: "lyric_culture", label: "Lyric culture", current: lyricistTraditionalCulture, suggested: s.lyric_culture ?? "" },
+      { key: "languages", label: "Languages", current: languages.join(", "), suggested: s.languages.join(", ") },
+      { key: "additional_recordings", label: "Add recordings", current: "", suggested: s.additional_recordings.filter((r) => newOnly([r.artist], recordingNames).length).map((r) => (r.year ? `${r.artist} (${r.year})` : r.artist)).join(", ") },
+      { key: "notes", label: "Notes", current: notes, suggested: s.notes ?? "" },
+      { key: "productions", label: "Add productions", current: "", suggested: newOnly(s.productions, productionNames).join(", ") },
+      { key: "genius_url", label: "Genius lyrics link", current: geniusUrl, suggested: s.genius_url ?? "" },
+      { key: "alternate_titles", label: "Add alternate titles", current: "", suggested: newOnly(s.alternate_titles, altTitles.map((t) => t.title)).join(", ") },
+    ];
+    const split = (v: string) => v.split(/,\s*/).filter(Boolean);
+    const people = new Set(["composers", "lyricists"]);
+    return rows.filter(
+      (r) => r.suggested && key(r.suggested) !== key(r.current) && !(people.has(r.key) && samePeople(split(r.suggested), split(r.current)))
+    );
   }
 
   async function applyAISuggestions() {
     if (!aiSuggestions) return;
-    if (acceptedFields.has("year_written") && aiSuggestions.year_written != null) {
+    const visible = new Set(suggestionRows(aiSuggestions).map((r) => r.key));
+    const accept = (field: string) => acceptedFields.has(field) && visible.has(field);
+    if (accept("year_written") && aiSuggestions.year_written != null) {
       setYearWritten(aiSuggestions.year_written.toString());
     }
-    if (acceptedFields.has("first_line") && aiSuggestions.first_line) {
+    if (accept("first_line") && aiSuggestions.first_line) {
       setFirstLine(aiSuggestions.first_line);
     }
-    if (acceptedFields.has("hook") && aiSuggestions.hook) {
+    if (accept("hook") && aiSuggestions.hook) {
       setHook(aiSuggestions.hook);
     }
-    if (acceptedFields.has("composers") && aiSuggestions.composers.length) {
+    if (accept("composers") && aiSuggestions.composers.length) {
       const { existingIds, pendingNames } = splitNames(aiSuggestions.composers);
       setComposers(new Set(existingIds));
       setPendingComposerNames(pendingNames);
     }
-    if (acceptedFields.has("lyricists") && aiSuggestions.lyricists.length) {
+    if (accept("lyricists") && aiSuggestions.lyricists.length) {
       const { existingIds, pendingNames } = splitNames(aiSuggestions.lyricists);
       setLyricists(new Set(existingIds));
       setPendingLyricistNames(pendingNames);
     }
-    if (acceptedFields.has("primary_recording_year") && aiSuggestions.primary_recording_year != null) {
+    if (accept("primary_recording_year") && aiSuggestions.primary_recording_year != null) {
       const yr = aiSuggestions.primary_recording_year;
       setRecordingArtists((prev) => prev.map((e, i) => i === 0 ? { ...e, year: yr } : e));
     }
-    if (acceptedFields.has("tonality") && aiSuggestions.tonality) {
+    if (accept("tonality") && aiSuggestions.tonality) {
       setTonalities([aiSuggestions.tonality]);
     }
-    if (acceptedFields.has("meter") && aiSuggestions.meter) {
+    if (accept("meter") && aiSuggestions.meter) {
       setMeters([aiSuggestions.meter]);
     }
-    if (acceptedFields.has("vibe") && aiSuggestions.vibe) {
+    if (accept("vibe") && aiSuggestions.vibe) {
       setVibe(aiSuggestions.vibe);
     }
-    if (acceptedFields.has("genres") && aiSuggestions.genres.length) {
+    if (accept("genres") && aiSuggestions.genres.length) {
       setGenres(aiSuggestions.genres.slice(0, 3));
     }
-    if (acceptedFields.has("themes") && aiSuggestions.themes.length) {
+    if (accept("themes") && aiSuggestions.themes.length) {
       setThemes(aiSuggestions.themes.slice(0, 3));
     }
-    if (acceptedFields.has("cultures") && aiSuggestions.cultures.length) {
+    if (accept("cultures") && aiSuggestions.cultures.length) {
       setCultures(aiSuggestions.cultures);
     }
-    if (acceptedFields.has("music_culture") && aiSuggestions.music_culture) {
+    if (accept("forms") && aiSuggestions.forms?.length) {
+      setForms(aiSuggestions.forms);
+    }
+    if (accept("occasions") && aiSuggestions.occasions?.length) {
+      setOccasions(aiSuggestions.occasions);
+    }
+    if (accept("communities") && aiSuggestions.communities?.length) {
+      setCommunities(aiSuggestions.communities);
+    }
+    if (accept("music_culture") && aiSuggestions.music_culture) {
       setComposerTraditionalCulture(aiSuggestions.music_culture);
     }
-    if (acceptedFields.has("lyric_culture") && aiSuggestions.lyric_culture) {
+    if (accept("lyric_culture") && aiSuggestions.lyric_culture) {
       setLyricistTraditionalCulture(aiSuggestions.lyric_culture);
     }
-    if (acceptedFields.has("languages") && aiSuggestions.languages.length) {
+    if (accept("languages") && aiSuggestions.languages.length) {
       setLanguages(aiSuggestions.languages);
     }
-    if (acceptedFields.has("notes") && aiSuggestions.notes) {
+    if (accept("genius_url") && aiSuggestions.genius_url) {
+      setGeniusUrl(aiSuggestions.genius_url);
+    }
+    if (accept("notes") && aiSuggestions.notes) {
       setNotes(aiSuggestions.notes);
     }
-    if (acceptedFields.has("productions") && aiSuggestions.productions.length) {
+    if (accept("productions") && aiSuggestions.productions.length) {
       const { existingIds, pendingNames } = splitExistingAndPending(aiSuggestions.productions, allProductions);
       setProductions((prev) => new Set([...prev, ...existingIds]));
       setPendingProductionNames((prev) => [...prev, ...pendingNames.filter((n) => !prev.includes(n))]);
     }
-    if (acceptedFields.has("additional_recordings") && aiSuggestions.additional_recordings.length) {
+    if (accept("additional_recordings") && aiSuggestions.additional_recordings.length) {
       const toAdd: { id: string; year: number | null }[] = [];
-      for (const rec of aiSuggestions.additional_recordings) {
+      const openSlots = MAX_RECORDINGS - recordingArtists.length - pendingRecordingArtists.length;
+      for (const rec of aiSuggestions.additional_recordings.slice(0, Math.max(0, openSlots))) {
         const artistId = await resolvePersonName(rec.artist, "artists", allArtists);
         if (artistId && !recordingArtists.find((e) => e.id === artistId) && !toAdd.find((e) => e.id === artistId)) {
           toAdd.push({ id: artistId, year: rec.year });
@@ -559,7 +505,7 @@ export default function SongEditor({
         ]);
       }
     }
-    if (acceptedFields.has("alternate_titles") && aiSuggestions.alternate_titles.length && song?.id) {
+    if (accept("alternate_titles") && aiSuggestions.alternate_titles.length && song?.id) {
       const existingTitles = new Set(altTitles.map((t) => t.title.toLowerCase()));
       for (const title of aiSuggestions.alternate_titles) {
         if (!existingTitles.has(title.toLowerCase())) {
@@ -572,35 +518,8 @@ export default function SongEditor({
         }
       }
     }
-    setAiSuggestions(null);
+    closeReview();
     setAcceptedFields(new Set());
-  }
-
-  async function syncJoinTable(
-    songId: string,
-    table: string,
-    fkCol: string,
-    newIds: Set<string>,
-    originalIds: string[]
-  ) {
-    const toAdd = [...newIds].filter((id) => !originalIds.includes(id));
-    const toRemove = originalIds.filter((id) => !newIds.has(id));
-
-    if (toAdd.length) {
-      const { error } = await supabase
-        .from(table)
-        .insert(toAdd.map((id) => ({ song_id: songId, [fkCol]: id })));
-      if (error) throw error;
-    }
-
-    if (toRemove.length) {
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq("song_id", songId)
-        .in(fkCol, toRemove);
-      if (error) throw error;
-    }
   }
 
   async function handleSave() {
@@ -613,195 +532,26 @@ export default function SongEditor({
     setError(null);
 
     try {
-      const finalTitle = (standardizedTitle || title).trim();
-      const composerNamesForSlug = [
-        ...[...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
-        ...pendingComposerNames,
-      ];
-      const lyricistNamesForSlug = [
-        ...[...lyricists].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
-        ...pendingLyricistNames,
-      ];
-      const traditionalId = allPeople.find((p) => p.name === "Traditional")?.id;
-      const isTraditionalComposer = (traditionalId && composers.has(traditionalId)) || pendingComposerNames.some((n) => n.toLowerCase() === "traditional");
-      const isTraditionalLyricist = (traditionalId && lyricists.has(traditionalId)) || pendingLyricistNames.some((n) => n.toLowerCase() === "traditional");
-      const resolvedSlug = slug.trim() || generateSlug(finalTitle, [...composerNamesForSlug, ...lyricistNamesForSlug], (isTraditionalComposer && composerTraditionalCulture) || undefined);
-      const originalRecordingArtistIds = song?.song_recording_artists.map((x) => x.artist_id) ?? [];
+      // One call, one transaction (migration 200): either all of this is saved
+      // or none of it, and the database returns the slug it settles on.
+      const { data: newSlug, error: saveError } = await supabase.rpc("save_song", {
+        p_song_id: song!.id,
+        p: songSavePayload(
+          {
+            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, textId, tuneId,
+            genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
+            composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
+            productions, pendingProductionNames, productionYears,
+            hadRecordingArtists: (song?.song_recording_artists.length ?? 0) > 0,
+          },
+          { people: allPeople, artists: allArtists },
+        ),
+      });
+      if (saveError) throw saveError;
 
-      const payload = {
-        title: finalTitle,
-        slug: resolvedSlug,
-        display_artist: recordingArtists.map((e) => allArtists.find((a) => a.id === e.id)?.name).filter(Boolean).join(", ") || (originalRecordingArtistIds.length === 0 ? (standardizedArtist || displayArtist).trim() : null) || null,
-        first_line: firstLine.trim() || null,
-        hook: hook.trim() || null,
-        notes: notes.trim() || null,
-        genius_url: geniusUrl.trim() || null,
-        chord_chart_url: chordChartUrl.trim() || null,
-        year: year ? parseInt(year) : null,
-        year_written: yearWritten ? parseInt(yearWritten) : null,
-        tonality: tonalities.join(", ") || null,
-        meter: meters.join(", ") || null,
-        vibe: vibe,
-        updated_at: new Date().toISOString(),
-      };
-
-      let songId = song?.id;
-
-      if (isNew) {
-        // Duplicate check before inserting
-        const artistVal = payload.display_artist;
-        let dupeQuery = supabase.from("songs").select("id, slug").ilike("title", finalTitle);
-        dupeQuery = artistVal
-          ? dupeQuery.ilike("display_artist", artistVal)
-          : dupeQuery.is("display_artist", null);
-        const { data: dupe } = await dupeQuery.limit(1).maybeSingle();
-        if (dupe) {
-          setError(`This song already exists in the library.`);
-          setSaving(false);
-          return;
-        }
-
-        const { data, error } = await supabase.from("songs").insert(payload).select("id").single();
-        if (error) throw error;
-        songId = data.id;
-      } else {
-        const { error } = await supabase.from("songs").update(payload).eq("id", songId!);
-        if (error) throw error;
-      }
-
-      async function resolveNamesToIds(names: string[], table: string, lookup: Lookup[]) {
-        const ids: string[] = [];
-        for (const name of names) {
-          const existing = lookup.find((l) => l.name === name);
-          if (existing) {
-            ids.push(existing.id);
-          } else {
-            const { data: row } = await supabase.from(table).upsert({ name }, { onConflict: "name" }).select("id").single();
-            if (row?.id) {
-              ids.push(row.id);
-              lookup.push({ id: row.id, name });
-            }
-          }
-        }
-        return new Set(ids);
-      }
-      const originalGenres = song?.song_genres.map((x) => x.genre_id) ?? [];
-      const originalThemes = song?.song_themes.map((x) => x.theme_id) ?? [];
-      const originalCultures = (song?.song_cultures ?? []).filter((x) => !x.context).map((x) => x.culture_id);
-      const originalLanguages = song?.song_languages.map((x) => x.language_id) ?? [];
-      const [genreIds, themeIds, cultureIds, languageIds] = await Promise.all([
-        resolveNamesToIds(genres, "genres", allGenres),
-        resolveNamesToIds(themes, "themes", allThemes),
-        resolveNamesToIds(cultures, "cultures", allCultures),
-        resolveNamesToIds(languages, "languages", allLanguages),
-      ]);
-      const originalComposers = song?.song_composers.map((x) => x.person_id) ?? [];
-      const originalLyricists = song?.song_lyricists.map((x) => x.person_id) ?? [];
-
-      const resolvedPendingComposerIds = await Promise.all(
-        pendingComposerNames.map((name) => resolvePersonName(name, "people", allPeople))
-      );
-      const resolvedPendingLyricistIds = await Promise.all(
-        pendingLyricistNames.map((name) => resolvePersonName(name, "people", allPeople))
-      );
-      const allComposerIds = new Set([...composers, ...resolvedPendingComposerIds.filter((id): id is string => !!id)]);
-      const allLyricistIds = new Set([...lyricists, ...resolvedPendingLyricistIds.filter((id): id is string => !!id)]);
-
-      const resolvedPendingArtistIds = await Promise.all(
-        pendingRecordingArtists.map((ra) => resolvePersonName(ra.name, "artists", allArtists))
-      );
-      type ResolvedEntry = RecordingArtistEntry & { spotify_url?: string | null };
-      const resolvedPendingEntries: ResolvedEntry[] = resolvedPendingArtistIds
-        .map((id, i): ResolvedEntry | null => id ? {
-          id,
-          year: pendingRecordingArtists[i]?.year ?? null,
-          youtube_url: null,
-          spotify_url: pendingRecordingArtists[i]?.spotify_url ?? null,
-        } : null)
-        .filter((e): e is ResolvedEntry => e !== null)
-        .filter(({ id }) => !recordingArtists.find((e) => e.id === id));
-      const allRecordingArtists: ResolvedEntry[] = [...recordingArtists, ...resolvedPendingEntries];
-
-      const newRecordingArtistIds = allRecordingArtists.map((e) => e.id);
-      const toDeleteArtists = originalRecordingArtistIds.filter((id) => !newRecordingArtistIds.includes(id));
-
-      // Sync non-contextual cultures manually so the delete is scoped to context IS NULL
-      // (syncJoinTable would delete by culture_id alone, wiping traditional culture rows)
-      const toAddCultures = [...cultureIds].filter((id) => !originalCultures.includes(id));
-      const toRemoveCultures = originalCultures.filter((id) => !cultureIds.has(id));
-      if (toAddCultures.length) {
-        const { error } = await supabase.from("song_cultures").insert(toAddCultures.map((id) => ({ song_id: songId!, culture_id: id })));
-        if (error) throw error;
-      }
-      if (toRemoveCultures.length) {
-        const { error } = await supabase.from("song_cultures").delete().eq("song_id", songId!).in("culture_id", toRemoveCultures).is("context", null);
-        if (error) throw error;
-      }
-
-      await Promise.all([
-        syncJoinTable(songId!, "song_genres", "genre_id", genreIds, originalGenres),
-        syncJoinTable(songId!, "song_themes", "theme_id", themeIds, originalThemes),
-        syncJoinTable(songId!, "song_languages", "language_id", languageIds, originalLanguages),
-        syncJoinTable(songId!, "song_composers", "person_id", allComposerIds, originalComposers),
-        syncJoinTable(songId!, "song_lyricists", "person_id", allLyricistIds, originalLyricists),
-        toDeleteArtists.length
-          ? supabase.from("song_recording_artists").delete().eq("song_id", songId!).in("artist_id", toDeleteArtists)
-          : Promise.resolve(),
-        allRecordingArtists.length
-          ? supabase.from("song_recording_artists").upsert(
-              allRecordingArtists.map((e, i) => {
-                const row: Record<string, unknown> = { song_id: songId!, artist_id: e.id, year: e.year, position: i, youtube_url: e.youtube_url ?? null };
-                // Only write spotify_url when explicitly provided (pending entries from AI lookup)
-                // Omitting it for existing DB entries preserves their current value
-                if ("spotify_url" in e) row.spotify_url = e.spotify_url;
-                return row;
-              }),
-              { onConflict: "song_id,artist_id" }
-            )
-          : Promise.resolve(),
-      ]);
-
-      // Sync traditional cultures with context
-      await supabase.from("song_cultures").delete().eq("song_id", songId!).in("context", ["music", "lyrics"]);
-      const tCultures: { name: string; context: string }[] = [];
-      if (isTraditionalComposer && composerTraditionalCulture) {
-        tCultures.push({ name: composerTraditionalCulture, context: "music" });
-      }
-      if (isTraditionalLyricist && lyricistTraditionalCulture) {
-        tCultures.push({ name: lyricistTraditionalCulture, context: "lyrics" });
-      }
-      for (const { name: cultureName, context } of tCultures) {
-        const culture = allCultures.find((c) => c.name.toLowerCase() === cultureName.toLowerCase());
-        if (culture) {
-          await supabase.from("song_cultures").insert({ song_id: songId!, culture_id: culture.id, context });
-        }
-      }
-
-      // Sync productions
-      const resolvedProductionIds = new Set<string>([...productions]);
-      for (const name of pendingProductionNames) {
-        const { data } = await supabase.from("productions").upsert({ name }, { onConflict: "name" }).select("id").single();
-        if (data?.id) resolvedProductionIds.add(data.id);
-      }
-      const originalProductionIds = (song?.song_productions ?? []).map((x) => x.production_id);
-      await syncJoinTable(songId!, "song_productions", "production_id", resolvedProductionIds, originalProductionIds);
-
-      // Insert pending alternate titles (new-song flow only)
-      if (pendingAltTitles.length) {
-        const existingTitleSet = new Set(altTitles.map((t) => t.title.toLowerCase()));
-        const newTitles = pendingAltTitles.filter((t) => !existingTitleSet.has(t.toLowerCase()));
-        if (newTitles.length) {
-          const { data: inserted } = await supabase
-            .from("song_alternate_titles")
-            .insert(newTitles.map((t) => ({ song_id: songId!, title: t })))
-            .select("id, title");
-          if (inserted) setAltTitles((prev) => [...prev, ...inserted]);
-        }
-        setPendingAltTitles([]);
-      }
-
-      setSlug(resolvedSlug);
-      router.push(`/admin/songs/${resolvedSlug}`);
+      setSlug(newSlug ?? slug);
+      setSavedSnapshot(formSnapshot);
+      router.push(`${basePath}/${newSlug ?? slug}`);
       router.refresh();
     } catch (e: any) {
       setError(e.message ?? "Save failed.");
@@ -827,265 +577,6 @@ export default function SongEditor({
     setAltTitles((prev) => prev.filter((t) => t.id !== id));
   }
 
-  // ── Chunk 1: new song form ────────────────────────────────────────────────
-  if (isNew) {
-    const composerItems = [...composers]
-      .map((id) => allPeople.find((p) => p.id === id))
-      .filter((p): p is Lookup => !!p);
-
-    const lyricistItems = [...lyricists]
-      .map((id) => allPeople.find((p) => p.id === id))
-      .filter((p): p is Lookup => !!p);
-
-
-    return (
-      <div className="space-y-6 pb-16">
-        <h1 className="text-xl font-semibold text-slate-900">Add song</h1>
-
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-        )}
-
-        <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Title *">
-              <input value={title} onChange={(e) => setTitle(e.target.value)}
-                className="input" placeholder="Song title" />
-            </Field>
-            <Field label="Artist">
-              <input value={displayArtist} onChange={(e) => setDisplayArtist(e.target.value)}
-                className="input" placeholder="e.g. The Beatles" />
-            </Field>
-            <Field label="Show / film (optional)">
-              <input value={newSongProduction} onChange={(e) => setNewSongProduction(e.target.value)}
-                className="input" placeholder="e.g. Hamilton, The Lion King" />
-            </Field>
-          </div>
-          <button
-            onClick={handleAILookup}
-            disabled={finding || !title.trim()}
-            className="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
-          >
-            {finding ? "Looking up…" : "✦ Look up with AI"}
-          </button>
-        </section>
-
-        {found && (() => {
-          const traditionalId = allPeople.find((p) => p.name === "Traditional")?.id;
-          const composerIsTraditional = traditionalId ? composers.has(traditionalId) : false;
-          const lyricistIsTraditional = traditionalId ? lyricists.has(traditionalId) : false;
-          return (
-            <>
-              {/* Credits & recording artists */}
-              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-                <h2 className="text-sm font-semibold text-slate-700">Credits & recordings</h2>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Canonical title">
-                    <input value={standardizedTitle} onChange={(e) => setStandardizedTitle(e.target.value)} className="input" />
-                  </Field>
-                  <Field label="Display artist">
-                    <input value={standardizedArtist} onChange={(e) => setStandardizedArtist(e.target.value)} className="input" />
-                  </Field>
-                </div>
-                <PeopleField
-                  label="Composers"
-                  items={composerItems}
-                  query={newComposerName}
-                  onQueryChange={setNewComposerName}
-                  suggestions={allPeople.filter((p) => !composers.has(p.id) && p.name.toLowerCase().includes(newComposerName.toLowerCase().trim()))}
-                  onAdd={(p) => { setComposers((prev) => new Set([...prev, p.id])); setNewComposerName(""); }}
-                  onRemove={(id) => { setComposers((prev) => { const s = new Set(prev); s.delete(id); return s; }); if (id === traditionalId) setComposerTraditionalCulture(""); }}
-                  onAddNew={(name) => { if (!pendingComposerNames.includes(name)) setPendingComposerNames((prev) => [...prev, name]); setNewComposerName(""); }}
-                  pendingItems={pendingComposerNames}
-                  onRemovePending={(name) => setPendingComposerNames((prev) => prev.filter((n) => n !== name))}
-                />
-                {composerIsTraditional && (
-                  <TraditionalCultureField value={composerTraditionalCulture} onChange={setComposerTraditionalCulture} allCultures={allCultures} label="Music culture (e.g. English, Irish)" />
-                )}
-                <PeopleField
-                  label="Lyricists"
-                  items={lyricistItems}
-                  query={newLyricistName}
-                  onQueryChange={setNewLyricistName}
-                  suggestions={allPeople.filter((p) => !lyricists.has(p.id) && p.name.toLowerCase().includes(newLyricistName.toLowerCase().trim()))}
-                  onAdd={(p) => { setLyricists((prev) => new Set([...prev, p.id])); setNewLyricistName(""); }}
-                  onRemove={(id) => { setLyricists((prev) => { const s = new Set(prev); s.delete(id); return s; }); if (id === traditionalId) setLyricistTraditionalCulture(""); }}
-                  onAddNew={(name) => { if (!pendingLyricistNames.includes(name)) setPendingLyricistNames((prev) => [...prev, name]); setNewLyricistName(""); }}
-                  pendingItems={pendingLyricistNames}
-                  onRemovePending={(name) => setPendingLyricistNames((prev) => prev.filter((n) => n !== name))}
-                />
-                {lyricistIsTraditional && (
-                  <TraditionalCultureField value={lyricistTraditionalCulture} onChange={setLyricistTraditionalCulture} allCultures={allCultures} label="Lyrics culture (e.g. English, Irish)" />
-                )}
-                <RecordingArtistField
-                  items={recordingArtists}
-                  allArtists={allArtists}
-                  query={newRecordingArtistName}
-                  songTitle={standardizedTitle || title}
-                  onQueryChange={setNewRecordingArtistName}
-                  onAdd={(a) => { setRecordingArtists((prev) => [...prev, { id: a.id, year: null, youtube_url: null }]); setNewRecordingArtistName(""); }}
-                  onRemove={(id) => setRecordingArtists((prev) => prev.filter((e) => e.id !== id))}
-                  onYearChange={(id, yr) => setRecordingArtists((prev) => prev.map((e) => e.id === id ? { ...e, year: yr } : e))}
-                  onYoutubeUrlChange={(id, url) => setRecordingArtists((prev) => prev.map((e) => e.id === id ? { ...e, youtube_url: url } : e))}
-                  onSpotifyUrlChange={(id, url) => setRecordingArtists((prev) => prev.map((e) => e.id === id ? { ...e, spotify_url: url } : e))}
-                  onReorder={setRecordingArtists}
-                  onAddNew={(name) => { if (!pendingRecordingArtists.find((r) => r.name === name)) setPendingRecordingArtists((prev) => [...prev, { name, year: null, spotify_url: null }]); }}
-                  pendingItems={pendingRecordingArtists}
-                  onRemovePending={(name) => setPendingRecordingArtists((prev) => prev.filter((r) => r.name !== name))}
-                />
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isFromProduction}
-                      onChange={(e) => {
-                        setIsFromProduction(e.target.checked);
-                        if (!e.target.checked) { setProductions(new Set()); setPendingProductionNames([]); setProductionQuery(""); }
-                      }}
-                      className="rounded border-slate-300"
-                    />
-                    From theater, film, or TV?
-                  </label>
-                  {isFromProduction && (
-                    <PeopleField
-                      label="Production"
-                      items={[...productions].map((id) => allProductions.find((p) => p.id === id)).filter((p): p is Lookup => !!p)}
-                      query={productionQuery}
-                      onQueryChange={setProductionQuery}
-                      suggestions={allProductions.filter((p) => p.name.toLowerCase().includes(productionQuery.toLowerCase()) && !productions.has(p.id))}
-                      onAdd={(p) => { setProductions((prev) => new Set([...prev, p.id])); setProductionQuery(""); }}
-                      onRemove={(id) => setProductions((prev) => { const s = new Set(prev); s.delete(id); return s; })}
-                      onAddNew={(name) => { setPendingProductionNames((prev) => [...prev, name]); setProductionQuery(""); }}
-                      pendingItems={pendingProductionNames}
-                      onRemovePending={(name) => setPendingProductionNames((prev) => prev.filter((n) => n !== name))}
-                    />
-                  )}
-                </div>
-              </section>
-
-              {/* Lyrics & feel */}
-              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-                <h2 className="text-sm font-semibold text-slate-700">Lyrics & feel</h2>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="First line">
-                    <input value={firstLine} onChange={(e) => setFirstLine(e.target.value)} className="input" placeholder="First sung lyric line" />
-                  </Field>
-                  <Field label="Hook">
-                    <input value={hook} onChange={(e) => setHook(e.target.value)} className="input" placeholder="Most recognisable lyric phrase" />
-                  </Field>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="Year written">
-                    <input type="number" value={yearWritten} onChange={(e) => setYearWritten(e.target.value)} className="input" placeholder="e.g. 1962" />
-                  </Field>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Vibe</label>
-                    <div className="flex gap-2">
-                      {(["Banger", "Ballad"] as const).map((v) => (
-                        <button key={v} type="button" onClick={() => setVibe(vibe === v ? null : v)}
-                          className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${vibe === v ? "bg-amber-500 border-amber-500 text-white" : "border-slate-300 text-slate-600 hover:border-amber-400"}`}>
-                          {v}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Meter</label>
-                    <div className="flex flex-wrap gap-1">
-                      {METER_OPTIONS.map((m) => (
-                        <button key={m} type="button" onClick={() => setMeters((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m])}
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${meters.includes(m) ? "bg-amber-500 border-amber-500 text-white" : "border-slate-300 text-slate-600 hover:border-amber-400"}`}>
-                          {m}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Tonality</label>
-                  <div className="flex flex-wrap gap-1">
-                    {TONALITY_OPTIONS.map((t) => (
-                      <button key={t} type="button" onClick={() => setTonalities((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])}
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${tonalities.includes(t) ? "bg-amber-500 border-amber-500 text-white" : "border-slate-300 text-slate-600 hover:border-amber-400"}`}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </section>
-
-              {/* Tags */}
-              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-                <h2 className="text-sm font-semibold text-slate-700">Tags</h2>
-                <TagPillsField label="Genres" value={genres} suggestions={allGenres.map((g) => g.name)} onChange={setGenres} />
-                <TagPillsField label="Languages" value={languages} suggestions={allLanguages.map((l) => l.name)} onChange={setLanguages} />
-                <TagPillsField label="Themes" value={themes} suggestions={allThemes.map((t) => t.name)} onChange={setThemes} />
-                {/* Cultures was missing here while the edit form has it, so AI-suggested
-                    cultures were saved on create without ever being shown for review. */}
-                <TagPillsField label="Cultures" value={cultures} suggestions={allCultures.map((c) => c.name)} onChange={setCultures} allowNew placeholder="Search cultures…" />
-                {pendingAltTitles.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Alternate titles</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {pendingAltTitles.map((t) => (
-                        <span key={t} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700">
-                          {t}
-                          <button type="button" onClick={() => setPendingAltTitles((prev) => prev.filter((x) => x !== t))} className="text-slate-400 hover:text-slate-600 leading-none">×</button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              {/* Additional notes */}
-              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-                <h2 className="text-sm font-semibold text-slate-700">Additional notes</h2>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-                  className="input min-h-[80px] resize-y" placeholder="Any extra context, performance notes, etc." />
-              </section>
-            </>
-          );
-        })()}
-
-        {duplicateSong && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            This song already exists in the database.{" "}
-            <a
-              href={`/admin/songs/${duplicateSong.slug ?? duplicateSong.id}`}
-              className="font-semibold underline hover:text-red-900"
-            >
-              Edit "{duplicateSong.title}" →
-            </a>
-          </div>
-        )}
-
-        {!duplicateSong && sameTitleSongs.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <span className="font-medium">Note:</span> A song with this title already exists:{" "}
-            {sameTitleSongs.map((s, i) => (
-              <span key={s.id}>
-                {i > 0 && ", "}
-                <a href={`/admin/songs/${s.slug ?? s.id}`} className="underline hover:text-amber-900">
-                  {s.title}
-                </a>
-              </span>
-            ))}
-            . If this is a different arrangement or version, continue saving.
-          </div>
-        )}
-
-        <button
-          onClick={handleSave}
-          disabled={saving || !title.trim() || !!duplicateSong}
-          className="rounded-lg bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
-        >
-          {saving ? "Saving…" : found ? "Save" : "Save & continue"}
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 pb-16">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1093,27 +584,27 @@ export default function SongEditor({
           {title || "Edit song"}
         </h1>
         <div className="flex flex-wrap gap-2">
-          {slug && (
-            <a
-              href={`/songs/${slug}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          {song?.slug && (
+            <Link
+              href={`/songs/${song.slug}`}
+              onClick={confirmLeave}
+              className="rounded-full border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              View ↗
-            </a>
+              View
+            </Link>
           )}
           <button
-            onClick={handleEnrichWithAI}
-            disabled={enrichingWithAI || !song?.id}
-            className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
+            onClick={handleSuggest}
+            disabled={suggesting || !song?.id}
+            title="Asks two AIs, MusicBrainz, LRCLIB, Wikipedia and Genius about every field, then lets you pick what to apply."
+            className="rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
           >
-            {enrichingWithAI ? "Asking AI…" : "✦ Enrich with AI"}
+            {suggesting ? "Gathering suggestions…" : "✦ Suggest improvements"}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-lg bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+            className="rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -1126,98 +617,81 @@ export default function SongEditor({
         </div>
       )}
 
+      {suggesting && (
+        <div role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-5 py-4 text-sm text-violet-800">
+          Checking GPT, Claude, MusicBrainz, LRCLIB, Wikipedia and Genius — usually about 20 seconds. You can keep editing meanwhile.
+        </div>
+      )}
+
       {aiSuggestions && (() => {
-        const currentComposerNames = [...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter(Boolean).join(", ");
-        const currentLyricistNames = [...lyricists].map((id) => allPeople.find((p) => p.id === id)?.name).filter(Boolean).join(", ");
+        const rows = suggestionRows(aiSuggestions);
+        const sourceOf = (key: string) =>
+          agreedFields.has(key) ? null : reviewInfo.fromWikipedia.has(key) && reviewInfo.wikipedia ? reviewInfo.wikipedia : ("unconfirmed" as const);
+        const rank = (r: (typeof rows)[number]) => (agreedFields.has(r.key) ? 0 : reviewInfo.fromWikipedia.has(r.key) ? 1 : 2);
+        // An unconfirmed answer that would overwrite something already filled in
+        // is the least useful suggestion, so those wait behind a toggle.
+        const lessCertain = (r: (typeof rows)[number]) => sourceOf(r.key) === "unconfirmed" && !!r.current;
+        const main = rows.filter((r) => !lessCertain(r)).sort((x, y) => rank(x) - rank(y));
+        const extra = rows.filter(lessCertain);
+        const acceptedCount = rows.filter((r) => acceptedFields.has(r.key)).length;
         const toggleField = (field: string) => (on: boolean) =>
           setAcceptedFields((prev) => { const s = new Set(prev); on ? s.add(field) : s.delete(field); return s; });
+        const renderRow = (r: (typeof rows)[number]) => (
+          <SuggestionRow
+            key={r.key}
+            label={r.label}
+            current={r.current}
+            suggested={r.suggested}
+            source={sourceOf(r.key)}
+            accepted={acceptedFields.has(r.key)}
+            onChange={toggleField(r.key)}
+          />
+        );
         return (
           <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-semibold text-violet-900">AI Suggestions</h2>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  aiSuggestions.confidence === "high" ? "bg-green-100 text-green-700" :
-                  aiSuggestions.confidence === "medium" ? "bg-amber-100 text-amber-700" :
-                  "bg-red-100 text-red-700"
-                }`}>
-                  {aiSuggestions.confidence} confidence
-                </span>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-violet-900">Suggested improvements</h2>
+                <p className="mt-0.5 text-xs text-violet-700">Unlabelled items were confirmed by two sources. Genres, themes and vibe you&apos;ve already set are never pre-ticked.</p>
               </div>
-              <button onClick={() => setAiSuggestions(null)} className="text-violet-400 hover:text-violet-600 text-lg leading-none">×</button>
+              <button onClick={closeReview} aria-label="Close suggestions" className="text-violet-400 hover:text-violet-600 text-lg leading-none">×</button>
             </div>
 
-            {aiSuggestions.notes && (
-              <p className="rounded-lg bg-violet-100 px-3 py-2 text-xs text-violet-700">{aiSuggestions.notes}</p>
+            {rows.length === 0 ? (
+              <p className="text-sm text-violet-800">No changes to suggest — the sources match what&apos;s already here.</p>
+            ) : (
+              <>
+                {main.length > 0 ? (
+                  <div className="space-y-2">{main.map(renderRow)}</div>
+                ) : (
+                  <p className="text-sm text-violet-800">Nothing confirmed to change.</p>
+                )}
+                {extra.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setShowLessCertain((v) => !v)}
+                      aria-expanded={showLessCertain}
+                      className="text-xs font-medium text-violet-700 hover:text-violet-900"
+                    >
+                      {showLessCertain ? "Hide" : "Show"} {extra.length} less certain change{extra.length !== 1 ? "s" : ""} to filled-in fields
+                    </button>
+                    {showLessCertain && extra.map(renderRow)}
+                  </div>
+                )}
+                <button
+                  onClick={applyAISuggestions}
+                  disabled={acceptedCount === 0}
+                  className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                >
+                  Apply {acceptedCount} suggestion{acceptedCount !== 1 ? "s" : ""}
+                </button>
+              </>
             )}
-
-            <div className="space-y-2">
-              {aiSuggestions.year_written != null && (
-                <SuggestionRow label="Year written" current={yearWritten || "—"} suggested={aiSuggestions.year_written.toString()} accepted={acceptedFields.has("year_written")} onChange={toggleField("year_written")} />
-              )}
-              {aiSuggestions.first_line && (
-                <SuggestionRow label="First line" current={firstLine || "—"} suggested={aiSuggestions.first_line} accepted={acceptedFields.has("first_line")} onChange={toggleField("first_line")} />
-              )}
-              {aiSuggestions.hook && (
-                <SuggestionRow label="Hook" current={hook || "—"} suggested={aiSuggestions.hook} accepted={acceptedFields.has("hook")} onChange={toggleField("hook")} />
-              )}
-              {aiSuggestions.composers.length > 0 && (
-                <SuggestionRow label="Composers" current={currentComposerNames || "—"} suggested={aiSuggestions.composers.join(", ")} accepted={acceptedFields.has("composers")} onChange={toggleField("composers")} />
-              )}
-              {aiSuggestions.lyricists.length > 0 && (
-                <SuggestionRow label="Lyricists" current={currentLyricistNames || "—"} suggested={aiSuggestions.lyricists.join(", ")} accepted={acceptedFields.has("lyricists")} onChange={toggleField("lyricists")} />
-              )}
-              {aiSuggestions.primary_recording_year != null && (
-                <SuggestionRow label="Primary recording year" current={recordingArtists[0]?.year?.toString() || "—"} suggested={aiSuggestions.primary_recording_year.toString()} accepted={acceptedFields.has("primary_recording_year")} onChange={toggleField("primary_recording_year")} />
-              )}
-              {aiSuggestions.tonality && (
-                <SuggestionRow label="Tonality" current={tonalities.join(", ") || "—"} suggested={aiSuggestions.tonality} accepted={acceptedFields.has("tonality")} onChange={toggleField("tonality")} />
-              )}
-              {aiSuggestions.meter && (
-                <SuggestionRow label="Meter" current={meters.join(", ") || "—"} suggested={aiSuggestions.meter} accepted={acceptedFields.has("meter")} onChange={toggleField("meter")} />
-              )}
-              {aiSuggestions.vibe && (
-                <SuggestionRow label="Vibe" current={vibe || "—"} suggested={aiSuggestions.vibe} accepted={acceptedFields.has("vibe")} onChange={toggleField("vibe")} />
-              )}
-              {aiSuggestions.genres.length > 0 && (
-                <SuggestionRow label="Genres" current={genres.join(", ") || "—"} suggested={aiSuggestions.genres.join(", ")} accepted={acceptedFields.has("genres")} onChange={toggleField("genres")} />
-              )}
-              {aiSuggestions.themes.length > 0 && (
-                <SuggestionRow label="Themes" current={themes.join(", ") || "—"} suggested={aiSuggestions.themes.join(", ")} accepted={acceptedFields.has("themes")} onChange={toggleField("themes")} />
-              )}
-              {aiSuggestions.cultures.length > 0 && (
-                <SuggestionRow label="Cultures" current={cultures.join(", ") || "—"} suggested={aiSuggestions.cultures.join(", ")} accepted={acceptedFields.has("cultures")} onChange={toggleField("cultures")} />
-              )}
-              {aiSuggestions.music_culture && (
-                <SuggestionRow label="Music culture" current={composerTraditionalCulture || "—"} suggested={aiSuggestions.music_culture} accepted={acceptedFields.has("music_culture")} onChange={toggleField("music_culture")} />
-              )}
-              {aiSuggestions.lyric_culture && (
-                <SuggestionRow label="Lyric culture" current={lyricistTraditionalCulture || "—"} suggested={aiSuggestions.lyric_culture} accepted={acceptedFields.has("lyric_culture")} onChange={toggleField("lyric_culture")} />
-              )}
-              {aiSuggestions.languages.length > 0 && (
-                <SuggestionRow label="Languages" current={languages.join(", ") || "—"} suggested={aiSuggestions.languages.join(", ")} accepted={acceptedFields.has("languages")} onChange={toggleField("languages")} />
-              )}
-              {aiSuggestions.additional_recordings?.length > 0 && (
-                <SuggestionRow label="Additional recordings" current={recordingArtists.map((e) => allArtists.find((a) => a.id === e.id)?.name).filter(Boolean).join(", ") || "—"} suggested={aiSuggestions.additional_recordings.map((r) => r.year ? `${r.artist} (${r.year})` : r.artist).join(", ")} accepted={acceptedFields.has("additional_recordings")} onChange={toggleField("additional_recordings")} />
-              )}
-              {aiSuggestions.notes && (
-                <SuggestionRow label="Notes" current={notes || "—"} suggested={aiSuggestions.notes} accepted={acceptedFields.has("notes")} onChange={toggleField("notes")} />
-              )}
-              {aiSuggestions.productions?.length > 0 && (
-                <SuggestionRow label="Productions" current={[...productions].map((id) => allProductions.find((p) => p.id === id)?.name).filter(Boolean).join(", ") || "—"} suggested={aiSuggestions.productions.join(", ")} accepted={acceptedFields.has("productions")} onChange={toggleField("productions")} />
-              )}
-              {aiSuggestions.alternate_titles.length > 0 && (
-                <SuggestionRow label="Alternate titles" current={altTitles.map((t) => t.title).join(", ") || "—"} suggested={aiSuggestions.alternate_titles.join(", ")} accepted={acceptedFields.has("alternate_titles")} onChange={toggleField("alternate_titles")} />
-              )}
-            </div>
-
-            <button
-              onClick={applyAISuggestions}
-              disabled={acceptedFields.size === 0}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
-            >
-              Apply {acceptedFields.size} suggestion{acceptedFields.size !== 1 ? "s" : ""}
-            </button>
+            {reviewInfo.checks.length > 0 && (
+              <p className="text-xs text-violet-700">
+                Checked: {reviewInfo.checks.map((c) => `${c.name} ${c.ok ? "✓" : "—"}`).join(" · ")}
+              </p>
+            )}
           </div>
         );
       })()}
@@ -1231,10 +705,46 @@ export default function SongEditor({
             <input value={title} onChange={(e) => setTitle(e.target.value)}
               className="input" placeholder="Song title" />
           </Field>
-          <Field label="Slug">
-            <input value={slug} onChange={(e) => setSlug(e.target.value)}
-              className="input font-mono text-xs" placeholder="e.g. blowin-in-the-wind-bob-dylan" />
+          <Field label="Address">
+            <p className="py-2 font-mono text-xs text-slate-500 break-all">/songs/{slug || "…"}</p>
+            <p className="text-xs text-slate-400">Set automatically from the title, first three writers and music culture. Old addresses keep working.</p>
           </Field>
+          <Field label="Known by">
+            <select
+              value={knownByRecording === null ? "auto" : knownByRecording ? "recording" : "writers"}
+              onChange={(e) => setKnownByRecording(e.target.value === "auto" ? null : e.target.value === "recording")}
+              className="input"
+            >
+              <option value="auto">Automatic</option>
+              <option value="recording">Its recording: recording artists under the title</option>
+              <option value="writers">Its writers: writers or tradition on its page; tune, scripture or first line on cards</option>
+            </select>
+            <p className="text-xs text-slate-400">
+              Automatic shows the writers, or &ldquo;Traditional · culture&rdquo;, for traditional songs and hymns, nigunim and other traditional forms, and the recording artists for everything else.
+              {song?.byline ? <> Now: <span className="text-slate-600">{song.byline}</span></> : null}
+            </p>
+          </Field>
+          <div className="sm:col-span-2 space-y-1">
+            <p className="text-sm font-medium text-slate-700">Card preview</p>
+            <CardPreview
+              title={title}
+              credits={songCardCredits({
+                title,
+                // The override decides at once; Automatic follows the saved song's line until you save.
+                knownByRecording,
+                byline: song?.byline,
+                displayArtist: displayArtist || null,
+                composers: [...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
+                cultures,
+                recordingArtists: recordingArtists.map((r, i) => ({ name: allArtists.find((a) => a.id === r.id)?.name ?? "", year: r.year, position: i })).filter((r) => r.name),
+                identity: {
+                  tune: allTunes.find((t) => t.id === tuneId)?.tune_label ?? null,
+                  source: textSource,
+                  first_line: firstLine || null,
+                },
+              })}
+            />
+          </div>
         </div>
 
         {(() => {
@@ -1327,18 +837,21 @@ export default function SongEditor({
           {isFromProduction && (
             <PeopleField
               label="Production"
-              items={[...productions].map((id) => allProductions.find((p) => p.id === id)).filter((p): p is Lookup => !!p)}
+              items={[...productions].map((id) => productionLookups.find((p) => p.id === id)).filter((p): p is Lookup => !!p)}
               query={productionQuery}
               onQueryChange={setProductionQuery}
-              suggestions={allProductions.filter(
+              suggestions={productionLookups.filter(
                 (p) => p.name.toLowerCase().includes(productionQuery.toLowerCase()) && !productions.has(p.id)
               )}
-              onAdd={(p) => { setProductions((prev) => new Set([...prev, p.id])); setProductionQuery(""); }}
+              onAdd={(p) => { setProductions((prev) => new Set([...prev, p.id])); setProductionYears((prev) => ({ ...prev, [p.id]: String(allProductions.find((x) => x.id === p.id)?.year ?? "") })); setProductionQuery(""); }}
               onRemove={(id) => setProductions((prev) => { const s = new Set(prev); s.delete(id); return s; })}
               onAddNew={(name) => { setPendingProductionNames((prev) => [...prev, name]); setProductionQuery(""); }}
               pendingItems={pendingProductionNames}
               onRemovePending={(name) => setPendingProductionNames((prev) => prev.filter((n) => n !== name))}
             />
+          )}
+          {isFromProduction && productionYearRows.length > 0 && (
+            <ProductionYearInputs rows={productionYearRows} years={productionYears} onChange={(key, v) => setProductionYears((prev) => ({ ...prev, [key]: v }))} />
           )}
         </div>
 
@@ -1349,7 +862,7 @@ export default function SongEditor({
             value={yearWritten}
             onChange={(e) => setYearWritten(e.target.value)}
             placeholder="e.g. 1929"
-            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-32 rounded-xl border border-slate-300 px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
           />
           <p className="mt-1 text-xs text-slate-400">Only set if different from the first recording year</p>
         </div>
@@ -1392,13 +905,6 @@ export default function SongEditor({
       <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700">Lyric data</h2>
-          <button
-            onClick={handleGetGeniusUrl}
-            disabled={openingGenius || !title.trim()}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-40 flex items-center gap-1.5"
-          >
-            {openingGenius ? "Finding…" : "♪ Get Genius URL"}
-          </button>
         </div>
         <Field label="Genius URL">
           <div className="flex gap-2">
@@ -1406,7 +912,7 @@ export default function SongEditor({
               className="input flex-1" placeholder="https://genius.com/…" />
             {geniusUrl && (
               <a href={geniusUrl} target="_blank" rel="noopener noreferrer"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>
             )}
@@ -1418,7 +924,7 @@ export default function SongEditor({
               className="input flex-1" placeholder="https://…" />
             {chordChartUrl && (
               <a href={chordChartUrl} target="_blank" rel="noopener noreferrer"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>
             )}
@@ -1438,96 +944,117 @@ export default function SongEditor({
       <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700">Tags</h2>
-          <button
-            onClick={handleFindTags}
-            disabled={findingTags || !title.trim()}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 disabled:opacity-40"
-          >
-            {findingTags ? "Finding…" : "✦ Find more information"}
-          </button>
         </div>
         <TagPillsField label="Genres" value={genres} onChange={setGenres} suggestions={allGenres.map((g) => g.name)} allowNew placeholder="Search genres…" />
         <TagPillsField label="Themes" value={themes} onChange={setThemes} suggestions={allThemes.map((t) => t.name)} allowNew placeholder="Search themes…" />
         <TagPillsField label="Languages" value={languages} onChange={setLanguages} suggestions={allLanguages.map((l) => l.name)} placeholder="Search languages…" />
         <TagPillsField label="Cultures" value={cultures} onChange={setCultures} suggestions={allCultures.map((c) => c.name)} allowNew placeholder="Search cultures…" />
+        <TagPillsField label="Forms" value={forms} onChange={setForms} suggestions={allForms.map((f) => f.name)} allowNew placeholder="Search forms…" />
+        <TagPillsField label="Occasions" value={occasions} onChange={setOccasions} suggestions={allOccasions.map((o) => o.name)} allowNew placeholder="Search occasions…" />
+        <TagPillsField label="Communities" value={communities} onChange={setCommunities} suggestions={allCommunities.map((c) => c.name)} allowNew placeholder="Search communities…" />
       </section>
+      {/* Text & tune */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Text &amp; tune</h2>
+        <p className="text-xs text-slate-500">For songs whose words are sung to more than one melody (hymns, psalms, liturgy) or a melody that carries several texts. Most songs need neither.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CatalogLinkField
+            kind="text"
+            songTitle={title}
+            options={allTexts.map((t) => ({ id: t.id, name: t.title, slug: t.slug }))}
+            value={textId}
+            savedValue={song?.text_id ?? ""}
+            onChange={setTextId}
+            onCreated={(t) => { setAllTexts((prev) => [...prev, { id: t.id, title: t.name, slug: t.slug }]); setTextId(t.id); }}
+            people={allPeople}
+            communities={allCommunities}
+          />
+          <CatalogLinkField
+            kind="tune"
+            songTitle={title}
+            options={allTunes.map((t) => ({ id: t.id, name: t.tune_label, slug: t.slug }))}
+            value={tuneId}
+            savedValue={song?.tune_id ?? ""}
+            onChange={setTuneId}
+            onCreated={(t) => { setAllTunes((prev) => [...prev, { id: t.id, tune_label: t.name, slug: t.slug }]); setTuneId(t.id); }}
+            people={allPeople}
+            communities={allCommunities}
+          />
+        </div>
+      </section>
+
       {/* Alternate titles */}
-      {!isNew && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-700">Alternate titles (AKA)</h2>
-          <div className="flex gap-2">
-            <input
-              value={newAltTitle}
-              onChange={(e) => setNewAltTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addAltTitle()}
-              placeholder="Add alternate title…"
-              className="input flex-1"
-            />
-            <button onClick={addAltTitle}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700">
-              Add
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {altTitles.map((t) => (
-              <span key={t.id}
-                className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm">
-                {t.title}
-                <button onClick={() => removeAltTitle(t.id)}
-                  className="text-slate-400 hover:text-red-500">×</button>
-              </span>
-            ))}
-            {!altTitles.length && (
-              <span className="text-sm text-slate-400">None added yet.</span>
-            )}
-          </div>
-        </section>
-      )}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Alternate titles (AKA)</h2>
+        <div className="flex gap-2">
+          <input
+            value={newAltTitle}
+            onChange={(e) => setNewAltTitle(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addAltTitle()}
+            placeholder="Add alternate title…"
+            className="input flex-1"
+          />
+          <button onClick={addAltTitle}
+            className="rounded-full bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700">
+            Add
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {altTitles.map((t) => (
+            <span key={t.id}
+              className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm">
+              {t.title}
+              <button onClick={() => removeAltTitle(t.id)}
+                className="text-slate-400 hover:text-red-500">×</button>
+            </span>
+          ))}
+          {!altTitles.length && (
+            <span className="text-sm text-slate-400">None added yet.</span>
+          )}
+        </div>
+      </section>
 
       {/* Additional notes */}
-      {!isNew && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-700">Additional notes</h2>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-            className="input min-h-[80px] resize-y" placeholder="Any extra context, performance notes, etc." />
-        </section>
-      )}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Additional notes</h2>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+          className="input min-h-[80px] resize-y" placeholder="Any extra context, performance notes, etc." />
+      </section>
 
-      {!isNew && (
-        <div className="border-t border-slate-200 pt-6 flex items-center justify-between">
-          <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+      <div className="border-t border-slate-200 pt-6 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          {song?.slug && (
+            <Link
+              href={`/songs/${song.slug}`}
+              onClick={confirmLeave}
+              className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              {saving ? "Saving…" : "Save"}
-            </button>
-            {slug && (
-              <a
-                href={`/songs/${slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                View ↗
-              </a>
-            )}
-          </div>
+              View
+            </Link>
+          )}
+        </div>
+        {isAdmin && (
           <button
             onClick={async () => {
               if (!confirm("Delete this song? This cannot be undone.")) return;
               const { error } = await supabase.from("songs").delete().eq("id", song!.id);
               if (error) { setError(error.message); return; }
-              router.push("/admin/songs");
+              router.push(basePath);
               router.refresh();
             }}
-            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+            className="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
           >
             Delete song
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -1580,7 +1107,7 @@ function SortableArtistRow({
             value={e.year ?? ""}
             onChange={(ev) => onYearChange(e.id, ev.target.value ? parseInt(ev.target.value) : null)}
             placeholder="year"
-            className="w-16 rounded border border-slate-200 bg-white px-2 py-0.5 text-xs focus:border-amber-400 focus:outline-none"
+            className="w-16 rounded-xl border border-slate-200 bg-white px-2 py-0.5 text-xs focus:border-amber-400 focus:outline-none"
           />
           <button onClick={() => onRemove(e.id)} className="text-slate-400 hover:text-red-500 shrink-0">×</button>
         </div>
@@ -1659,7 +1186,7 @@ function SortableArtistRow({
             value={pasteSpotifyValue}
             onChange={(ev) => onPasteSpotifyChange(ev.target.value)}
             placeholder="https://open.spotify.com/track/…"
-            className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs focus:border-green-400 focus:outline-none"
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-2 py-1 text-xs focus:border-green-400 focus:outline-none"
           />
           <button
             type="button"
@@ -1682,7 +1209,7 @@ function SortableArtistRow({
               <button
                 type="button"
                 onClick={() => { onYoutubeUrlChange(e.id, r.url); onCloseResults(); }}
-                className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600"
+                className="shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600"
               >
                 Select
               </button>
@@ -1769,13 +1296,14 @@ function RecordingArtistField({
 
   const trimmedQuery = query.trim();
   const showSuggestions = trimmedQuery.length > 0;
+  const atCap = items.length + pendingItems.length >= MAX_RECORDINGS;
   const suggestions = allArtists.filter(
     (a) => !items.find((e) => e.id === a.id) && !pendingItems.find((p) => p.name === a.name) && a.name.toLowerCase().includes(trimmedQuery.toLowerCase())
   );
 
   return (
     <div className="space-y-2">
-      <label className="block text-xs font-medium text-slate-600">Recording artists <span className="font-normal text-slate-400">(drag to reorder)</span></label>
+      <label className="block text-xs font-medium text-slate-600">Recording artists <span className="font-normal text-slate-400">(up to {MAX_RECORDINGS}, drag to reorder)</span></label>
       <div className="space-y-1">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={items.map((e) => e.id)} strategy={verticalListSortingStrategy}>
@@ -1826,6 +1354,9 @@ function RecordingArtistField({
         ))}
         {!items.length && !pendingItems.length && <span className="text-sm text-slate-400">None added.</span>}
       </div>
+      {atCap ? (
+        <p className="text-xs text-slate-400">That's the most a song can list — remove one to add another.</p>
+      ) : (
       <div className="relative">
         <input
           value={query}
@@ -1855,6 +1386,32 @@ function RecordingArtistField({
           </ul>
         )}
       </div>
+      )}
+    </div>
+  );
+}
+
+// A production's year belongs to the production, so changing it here changes it
+// for every song from that production.
+function ProductionYearInputs({ rows, years, onChange }: {
+  rows: { key: string; name: string }[];
+  years: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {rows.map((r) => (
+        <label key={r.key} className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="min-w-0 flex-1 truncate">Year for {r.name}</span>
+          <input
+            type="number"
+            value={years[r.key] ?? ""}
+            onChange={(e) => onChange(r.key, e.target.value)}
+            className="input w-24"
+            placeholder="e.g. 1939"
+          />
+        </label>
+      ))}
     </div>
   );
 }
@@ -2091,16 +1648,17 @@ function SuggestionRow({
   label,
   current,
   suggested,
+  source,
   accepted,
   onChange,
 }: {
   label: string;
   current: string;
   suggested: string;
+  source: null | "unconfirmed" | { title: string; url: string };
   accepted: boolean;
   onChange: (v: boolean) => void;
 }) {
-  const unchanged = current === suggested;
   return (
     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-violet-100 bg-white px-3 py-2.5">
       <input
@@ -2111,15 +1669,24 @@ function SuggestionRow({
       />
       <div className="min-w-0 flex-1 text-sm">
         <span className="font-medium text-slate-700">{label}</span>
-        {unchanged ? (
-          <span className="ml-2 text-slate-400 text-xs">(no change)</span>
-        ) : (
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            <span className="text-slate-400 line-through">{current}</span>
-            <span className="text-slate-400">→</span>
-            <span className="font-medium text-violet-700">{suggested}</span>
-          </div>
+        {source === "unconfirmed" && (
+          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">unconfirmed</span>
         )}
+        {source && source !== "unconfirmed" && (
+          <a href={source.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+            className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-200">
+            from Wikipedia
+          </a>
+        )}
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+          {current && (
+            <>
+              <span className="text-slate-400 line-through">{current}</span>
+              <span className="text-slate-400">→</span>
+            </>
+          )}
+          <span className="font-medium text-violet-700">{suggested}</span>
+        </div>
       </div>
     </label>
   );

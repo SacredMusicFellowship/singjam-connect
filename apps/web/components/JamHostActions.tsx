@@ -89,7 +89,7 @@ export default function JamHostActions({ jamId, canEdit, isOfficial, attendingCo
         {isOfficial && (
           <Link
             href={`/jam/${jamId}/tickets/manage`}
-            className="block w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors text-left"
+            className="block w-full rounded-full border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors text-left"
           >
             Tickets &amp; guest list
           </Link>
@@ -98,7 +98,7 @@ export default function JamHostActions({ jamId, canEdit, isOfficial, attendingCo
         <button
           onClick={() => setShowMessageModal(true)}
           disabled={attendingCount === 0 && pendingInviteCount === 0}
-          className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-left"
+          className="w-full rounded-full border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-left"
         >
           Message attendees
           {attendingCount > 0 && (
@@ -113,14 +113,14 @@ export default function JamHostActions({ jamId, canEdit, isOfficial, attendingCo
               <button
                 onClick={() => setConfirming(false)}
                 disabled={deleting}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
                 Keep it
               </button>
               <button
                 onClick={deleteJam}
                 disabled={deleting}
-                className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Cancelling…" : "Yes, cancel"}
               </button>
