@@ -1,7 +1,7 @@
 import { MUSICAL_KEYS } from "@singjam/core";
 import type { FixtureContext } from "../context";
-import { ARTISTS, METERS, SONGS, SONGWRITERS } from "../names";
-import type { ArtistRow, PersonRow, SongComposerRow, SongGenreRow, SongRecordingArtistRow, SongRow } from "../types";
+import { ARTISTS, METERS, SONGS, SONGWRITERS, TAGS } from "../names";
+import type { ArtistRow, PersonRow, SongComposerRow, SongTagRow, SongRecordingArtistRow, SongRow } from "../types";
 
 export type SongCatalog = {
   people: PersonRow[];
@@ -9,7 +9,7 @@ export type SongCatalog = {
   songs: SongRow[];
   songComposers: SongComposerRow[];
   songRecordingArtists: SongRecordingArtistRow[];
-  songGenres: SongGenreRow[];
+  songTags: SongTagRow[];
 };
 
 // The slug the database gives a song (song_slug_base, migrations 196 and 202): the title, then up to
@@ -36,7 +36,7 @@ export function buildSongCatalog(ctx: FixtureContext): SongCatalog {
   const people = SONGWRITERS.map((name) => ({ id: ctx.id("person", name), name }));
   const artists = ARTISTS.map((name) => ({ id: ctx.id("artist", name), name }));
 
-  const catalog: SongCatalog = { people, artists, songs: [], songComposers: [], songRecordingArtists: [], songGenres: [] };
+  const catalog: SongCatalog = { people, artists, songs: [], songComposers: [], songRecordingArtists: [], songTags: [] };
 
   SONGS.forEach((spec, index) => {
     const id = ctx.id("song", spec.title);
@@ -60,7 +60,7 @@ export function buildSongCatalog(ctx: FixtureContext): SongCatalog {
     });
     for (const person of composers) catalog.songComposers.push({ song_id: id, person_id: person.id });
     catalog.songRecordingArtists.push({ song_id: id, artist_id: artist.id, year, position: 0 });
-    catalog.songGenres.push({ song_id: id, genre_name: spec.genre });
+    catalog.songTags.push({ song_id: id, tag_type: TAGS[spec.genre], tag_name: spec.genre });
   });
 
   return catalog;
