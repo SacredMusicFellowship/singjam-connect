@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { attendeeSummaryParts } from "@singjam/core";
+import { attendeeRole, attendeeSummaryParts, sortAttendees } from "@singjam/core";
 import { SINGING_LABEL, voiceBadgeClass } from "@/lib/singingVoice";
 
 type GuestAttendee = { name: string; extra: number };
@@ -37,6 +37,15 @@ function parseTags(profile: any): { label: string; voice: "lead" | "backup" | nu
   return tags;
 }
 
+function displayName(profile: any): string {
+  return [profile?.display_name, profile?.last_name].filter(Boolean).join(" ") || profile?.username || "Unknown";
+}
+
+type ListEntry =
+  | { kind: "host"; userId: string }
+  | { kind: "member"; userId: string }
+  | { kind: "guest"; guest: GuestAttendee; key: string };
+
 function AttendeeRow({
   profile,
   badge,
@@ -49,7 +58,7 @@ function AttendeeRow({
   /** Seats this person bought beyond their own, shown as "+2". */
   extra?: number;
 }) {
-  const fullName = [profile?.display_name, profile?.last_name].filter(Boolean).join(" ") || profile?.username || "Unknown";
+  const fullName = displayName(profile);
   const tags = parseTags(profile);
   return (
     <li className="py-3">
@@ -176,14 +185,15 @@ async function loadAttendees(
 export default function JamAttendeeList({
   jamId,
   hostId,
-  isHost,
+  canAppointCohosts,
   leaderIds = [],
   myLeader = null,
   version = 0,
 }: {
   jamId: string;
   hostId: string | null;
-  isHost: boolean;
+  /** A community jam's host. Official events have no co-hosts (migration 185). */
+  canAppointCohosts: boolean;
   /** Members leading the music who are listed publicly. */
   leaderIds?: string[];
   /** Set when the viewer leads this event: their row says Leader even if they aren't listed publicly. */
@@ -222,40 +232,84 @@ export default function JamAttendeeList({
   if (!data) return null;
   const { profileMap, attending, waitlist, guests, memberExtras, totalGoing, cohostIds } = data;
 
+  const isLeader = (userId: string) => myLeader?.userId === userId || leaderIds.includes(userId);
+  const entries = sortAttendees<ListEntry>(
+    [
+      ...(hostId ? [{ kind: "host" as const, userId: hostId }] : []),
+      ...attending.map((r: any) => ({ kind: "member" as const, userId: r.user_id as string })),
+      ...guests.map((guest, i) => ({ kind: "guest" as const, guest, key: `guest-${i}` })),
+    ],
+    (e) =>
+      e.kind === "guest"
+        ? { role: "going", name: e.guest.name }
+        : {
+            role: e.kind === "host" ? "host" : attendeeRole({ cohost: cohostIds.has(e.userId), leader: isLeader(e.userId) }),
+            name: displayName(profileMap.get(e.userId)),
+          }
+  );
+
   return (
     <div id="whos-going" className="scroll-mt-24 rounded-2xl border border-zinc-200 bg-white p-5 space-y-1">
       <h2 className="text-base font-semibold mb-2">
         Who's going <span className="text-sm font-normal text-zinc-400">({totalGoing})</span>
       </h2>
       <ul className="divide-y divide-zinc-100">
-        {hostId && (
-          <AttendeeRow
-            profile={profileMap.get(hostId)}
-            extra={memberExtras.get(hostId) ?? 0}
-            badge={
-              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                Host
-              </span>
-            }
-          />
-        )}
-        {attending.map((r: any) => {
-          const isCohost = cohostIds.has(r.user_id);
-          const isMyLeaderRow = myLeader?.userId === r.user_id;
+        {/* Host, co-hosts and leaders first, then everyone else by name, guests
+            without an account included: no account is needed to be counted as
+            coming. Guests carry no profile, so no link and no tags. */}
+        {entries.map((e) => {
+          if (e.kind === "host") {
+            return (
+              <AttendeeRow
+                key={e.userId}
+                profile={profileMap.get(e.userId)}
+                extra={memberExtras.get(e.userId) ?? 0}
+                badge={
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                    Host
+                  </span>
+                }
+              />
+            );
+          }
+          if (e.kind === "guest") {
+            return (
+              <li key={e.key} className="py-3">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                  <p className="text-sm font-medium text-zinc-900">
+                    {e.guest.name}
+                    {e.guest.extra > 0 && (
+                      <span className="ml-1.5 text-xs font-normal text-zinc-400">+{e.guest.extra}</span>
+                    )}
+                  </p>
+                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                    Going
+                  </span>
+                </div>
+              </li>
+            );
+          }
+          const isCohost = cohostIds.has(e.userId);
+          const leads = isLeader(e.userId);
           return (
             <AttendeeRow
-              key={r.user_id}
-              profile={profileMap.get(r.user_id)}
-              extra={memberExtras.get(r.user_id) ?? 0}
+              key={e.userId}
+              profile={profileMap.get(e.userId)}
+              extra={memberExtras.get(e.userId) ?? 0}
               badge={
-                isMyLeaderRow || leaderIds.includes(r.user_id) ? (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                    Leader
-                  </span>
-                ) : isCohost ? (
-                  <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700">
-                    Co-host
-                  </span>
+                leads || isCohost ? (
+                  <>
+                    {leads && (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                        Leader
+                      </span>
+                    )}
+                    {isCohost && (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                        Co-host
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
                     Going
@@ -263,10 +317,10 @@ export default function JamAttendeeList({
                 )
               }
               action={
-                isHost && (
+                canAppointCohosts && (
                   <button
-                    onClick={() => toggleCohost(r.user_id, !isCohost)}
-                    disabled={pending === r.user_id}
+                    onClick={() => toggleCohost(e.userId, !isCohost)}
+                    disabled={pending === e.userId}
                     className="rounded-full border border-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
                   >
                     {isCohost ? "Remove co-host" : "Make co-host"}
@@ -276,23 +330,6 @@ export default function JamAttendeeList({
             />
           );
         })}
-        {/* Guests sit with everyone else who is going — no account is needed to
-            be counted as coming. They carry no profile, so no link and no tags. */}
-        {guests.map((g, i) => (
-          <li key={`guest-${i}`} className="py-3">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-              <p className="text-sm font-medium text-zinc-900">
-                {g.name}
-                {g.extra > 0 && (
-                  <span className="ml-1.5 text-xs font-normal text-zinc-400">+{g.extra}</span>
-                )}
-              </p>
-              <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                Going
-              </span>
-            </div>
-          </li>
-        ))}
         {/* Reachable only since official events stopped seating their creator
             as host — before that, row one always existed. */}
         {totalGoing === 0 && waitlist.length === 0 && (

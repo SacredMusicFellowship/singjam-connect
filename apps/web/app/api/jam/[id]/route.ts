@@ -11,6 +11,7 @@ import { jamUpdatedHtml } from "@/emails/jam-updated";
 import { buildIcs } from "@/lib/ics";
 import { isValidTimeZone } from "@singjam/core";
 import { devRefusesVisibility, DEV_PRIVATE_JAMS_MESSAGE } from "@/lib/devSafety";
+import { jamTagIdsFromBody } from "@/lib/jamTagIds";
 
 // The web editor sends its baked per-layout crops along with the image. A
 // client that only sends image_url (the native editor) and changes it leaves
@@ -59,7 +60,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const {
     name, starts_at, ends_at, neighborhood, full_address, notes, visibility,
     guests_can_invite, tickets_url, image_url, image_focal_point, capacity,
-    genre_ids, theme_ids,
+    genre_ids, theme_ids, tag_ids,
   } = body;
   // The client converts the typed times using the venue's zone (from /api/timezone),
   // so store that same zone; anything unusable keeps the event's existing one.
@@ -88,14 +89,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-  await Promise.all([
-    admin.from("jam_genres").delete().eq("jam_id", id),
-    admin.from("jam_themes").delete().eq("jam_id", id),
-  ]);
-  await Promise.all([
-    genre_ids?.length > 0 ? admin.from("jam_genres").insert(genre_ids.map((genre_id: string) => ({ jam_id: id, genre_id }))) : Promise.resolve(),
-    theme_ids?.length > 0 ? admin.from("jam_themes").insert(theme_ids.map((theme_id: string) => ({ jam_id: id, theme_id }))) : Promise.resolve(),
-  ]);
+  // A jam's tags are its genres and themes; the form sends both lists in full.
+  await admin.from("jam_tags").delete().eq("jam_id", id);
+  const tagIds = jamTagIdsFromBody({ tag_ids, genre_ids, theme_ids });
+  if (tagIds.length > 0) await admin.from("jam_tags").insert(tagIds.map((tag_id) => ({ jam_id: id, tag_id })));
 
   // Postgres returns "+00:00" while clients send toISOString()'s ".000Z", so compare instants, not strings.
   const sameInstant = (a: string | null, b: string | null) => (a && b ? Date.parse(a) === Date.parse(b) : a === b);

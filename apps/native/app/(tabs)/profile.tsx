@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Alert, Image, ScrollView, ActivityIndicat
 import { Redirect, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { VOICE_BADGE_STYLES } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { unregisterPushToken } from '@/lib/push';
 import { useAuth } from '@/lib/auth-context';
@@ -25,11 +26,6 @@ const SINGING_LABEL: Record<string, string> = {
   backup: 'Backup vocals',
 };
 
-// Matches web's voiceBadgeClass in @singjam/core
-const VOICE_BADGE: Record<string, { box: string; text: string }> = {
-  lead: { box: 'bg-amber-50 border-amber-200', text: 'text-amber-700' },
-  backup: { box: 'bg-violet-50 border-violet-200', text: 'text-violet-700' },
-};
 
 function ProfileCard({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
@@ -228,7 +224,7 @@ export default function ProfileScreen() {
             <ProfileCard label="Singing">
               <View className="flex-row flex-wrap" style={{ gap: 8 }}>
                 {singingVoices.map((v) => {
-                  const badge = VOICE_BADGE[v] ?? { box: 'bg-zinc-50 border-zinc-200', text: 'text-zinc-600' };
+                  const badge = VOICE_BADGE_STYLES[v as keyof typeof VOICE_BADGE_STYLES] ?? VOICE_BADGE_STYLES.none;
                   return (
                     <View key={v} className={`rounded-full border px-3 py-1 ${badge.box}`}>
                       <Text className={`text-sm ${badge.text}`}>{SINGING_LABEL[v] ?? v}</Text>
@@ -270,26 +266,26 @@ export default function ProfileScreen() {
       <View className="mx-4 mt-6 flex-row" style={{ gap: 8 }}>
         <TouchableOpacity
           onPress={() => router.push('/profile-edit')}
-          className="flex-1 items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5"
+          className="flex-1 items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
         >
           <Text className="text-sm text-zinc-600">Edit profile</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={handleSignOut}
-          className="items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5"
+          className="items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
         >
           <Text className="text-sm text-zinc-600">Log out</Text>
         </TouchableOpacity>
       </View>
       <TouchableOpacity
         onPress={() => router.push('/account' as any)}
-        className="mx-4 mt-2 items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5"
+        className="mx-4 mt-2 items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
       >
         <Text className="text-sm text-zinc-600">Account settings</Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => router.push('/feedback' as any)}
-        className="mx-4 mt-2 items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5"
+        className="mx-4 mt-2 items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
       >
         <Text className="text-sm text-zinc-600">Report a bug</Text>
       </TouchableOpacity>

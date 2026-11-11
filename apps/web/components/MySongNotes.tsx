@@ -72,14 +72,14 @@ export default function MySongNotes({ songId, userId, className = "" }: { songId
           placeholder="Capo, strumming, the bridge you always forget…"
           aria-label="My notes"
           autoFocus
-          className="w-full rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+          className="w-full rounded-xl border border-zinc-300 px-2.5 py-1.5 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
         />
         {/* onMouseDown keeps the textarea from blurring (and saving) before the click lands. */}
         <div className="flex items-center gap-2">
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => save()}
-            className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
+            className="rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             Save
           </button>

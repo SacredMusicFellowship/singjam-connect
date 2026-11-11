@@ -24,6 +24,15 @@ Use a hybrid of conventional and descriptive style:
 - Keep solutions simple — do not add features, abstractions, or refactors beyond what was asked
 - Do not add comments unless the logic is genuinely non-obvious
 
+## Punctuation in UI text
+
+Same rules on web, native and in emails:
+- **Middle dot ` · `** (spaced) separates independent facts on one line: `3 songs · 2 jams`, `Traditional · Jewish`, a title and its artist (`Jolene · Dolly Parton`), `Filters · 2`
+- **Em dash ` — `** (spaced) is for a break inside a sentence (`Thanks — a song editor will check it`) and for a name with a subtitle (`Spring Sing — General admission`). A lone `—` marks an empty table cell
+- **En dash `–`** is for ranges: no spaces between numbers or letters (`3–20 characters`, `1987–2015`, `A–Z`), spaced between times (`7:00 PM – 9:00 PM`)
+- **Hyphen `-`** only inside words and codes (`sign-in`, `Lin-Manuel`). Never as a separator
+- **No typed bullets `•`.** Lists use list markup or rows; `••••` only as a password placeholder
+
 ## Web / Native Parity
 
 The native app (`apps/native`) is the mobile companion to the web app (`apps/web`). It should look and behave like the mobile web experience, plus native-only capabilities (local data caching, push notifications).
@@ -65,6 +74,10 @@ The native app (`apps/native`) is the mobile companion to the web app (`apps/web
 - A new main page goes in `apps/web/e2e/support/screens.ts` so it gets page, accessibility and screenshot coverage. Don't add entries to `KNOWN_A11Y`
 - After changing a fixture factory or the scenario, run `npm run seed:write -w @singjam/test-fixtures` and commit the regenerated seed
 - Before opening a PR, run the unit tests for what you touched, plus `npm run e2e` for any UI or flow change
+
+## Automated checks
+
+`.github/workflows/checks.yml` runs on every PR and push to `main`: `scripts/check-repo-rules.mjs` (no test files or helpers in `apps/web/netlify/functions`, explicit grants for every new table from migration 201 on, unique migration numbers, no `select('*')` from `jams`) and the web + core unit tests. When a rule bites us, add it to that script.
 
 ## Pull Requests
 

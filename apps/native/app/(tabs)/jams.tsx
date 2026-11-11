@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, SectionList, RefreshControl, TouchableOpacity,
   Alert,
@@ -6,7 +6,7 @@ import {
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { canEditJam, fetchAllRows, summarizeTicketTiers, type JamTicketTier } from '@singjam/core';
+import { canEditJam, fetchAllRows, jamTags, OLDER_PAST_JAMS_PAGE, pastJamsOrFilter, pastJamsWindowStart, summarizeTicketTiers, type JamTicketTier } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import { readCache, writeCache } from '@/lib/cache';
@@ -18,11 +18,46 @@ import PromptCard from '@/components/PromptCard';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
-type Section = { title: string; data: JamItem[]; hosting?: boolean };
+type Section = { title: string; data: JamItem[]; hosting?: boolean; past?: boolean };
+
+type OlderPast = { cutoff: string; filter: string; loaded: number; hasMore: boolean; loading: boolean };
+
+const JAM_LIST_SELECT = `
+  id, name, visibility, starts_at, ends_at, timezone,
+  neighborhood, notes, image_url, image_list_url, tickets_url, capacity, host_user_id,
+  profiles!host_user_id ( display_name, username ),
+  jam_tags ( tags ( name, type ) )
+`;
+
+function toJamItem(j: any, rsvpMap: Map<string, any>, inviteMap: Map<string, string>): JamItem {
+  return {
+    id: j.id,
+    name: j.name,
+    visibility: j.visibility,
+    starts_at: j.starts_at,
+    ends_at: j.ends_at,
+    timezone: j.timezone,
+    neighborhood: j.neighborhood,
+    notes: j.notes,
+    image_url: j.image_url,
+    image_list_url: j.image_list_url,
+    tickets_url: j.tickets_url,
+    capacity: j.capacity,
+    host_id: j.host_user_id,
+    host_display_name: j.profiles?.display_name ?? null,
+    host_username: j.profiles?.username ?? null,
+    // Genres first, then everything else the jam is tagged with (occasion, community, …).
+    tags: [...jamTags(j.jam_tags, 'genre'), ...jamTags(j.jam_tags).filter((t) => t.type !== 'genre')].map((t) => t.name),
+    rsvp_status: rsvpMap.get(j.id)?.status ?? null,
+    rsvp_waitlist_position: rsvpMap.get(j.id)?.waitlist_position ?? null,
+    invite_status: inviteMap.get(j.id) ?? null,
+    ticket_summary: null,
+  };
+}
 
 // Section logic mirrors web's JamsContent. Pure so cached items can be
 // re-sectioned at hydrate time (past/upcoming shifts as time passes).
-function buildSections(items: JamItem[], uid: string | null): Section[] {
+function buildSections(items: JamItem[], uid: string | null, hasOlderPast = false): Section[] {
   const now = new Date().toISOString();
   const isUpcoming = (j: JamItem) => (j.ends_at ?? j.starts_at ?? '') >= now;
 
@@ -63,7 +98,7 @@ function buildSections(items: JamItem[], uid: string | null): Section[] {
   if (invitations.length > 0) built.push({ title: 'Invitations', data: invitations });
   if (community.length > 0) built.push({ title: 'Community jams', data: community });
   if (privateJams.length > 0) built.push({ title: 'Private jams', data: privateJams });
-  if (past.length > 0) built.push({ title: 'Past events', data: past });
+  if (past.length > 0 || hasOlderPast) built.push({ title: 'Past events', data: past, past: true });
   return built;
 }
 
@@ -86,6 +121,21 @@ export default function JamsScreen() {
   const [canHostOfficial, setCanHostOfficial] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [items, setItems] = useState<JamItem[]>([]);
+  const [olderPast, setOlderPast] = useState<OlderPast | null>(null);
+  const [maps, setMaps] = useState<{ rsvp: Map<string, any>; invite: Map<string, string> }>({ rsvp: new Map(), invite: new Map() });
+  // Filter every section by one tag; the row offers the tags upcoming jams use (as on web).
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const filterTags = useMemo(() => {
+    const now = new Date().toISOString();
+    const counts = new Map<string, number>();
+    for (const s of sections) for (const j of s.data) if ((j.ends_at ?? j.starts_at ?? "") >= now) for (const t of j.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
+    return [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([t]) => t);
+  }, [sections]);
+  const shownSections = useMemo(
+    () => (tagFilter ? sections.map(s => ({ ...s, data: s.data.filter(j => j.tags.includes(tagFilter)) })).filter(s => s.data.length > 0) : sections),
+    [sections, tagFilter]
+  );
   const router = useRouter();
 
   const load = useCallback(async (isRefresh = false) => {
@@ -94,22 +144,15 @@ export default function JamsScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     setUserId(user?.id ?? null);
 
-    // Same 90-day lookback as web's JamsContent
-    const windowStart = new Date();
-    windowStart.setDate(windowStart.getDate() - 90);
+    // Same 90-day lookback as web's JamsContent; older past events load on request
+    const pastCutoff = pastJamsWindowStart();
 
     const [jamsResult, rsvpsResult, invitesResult, profileResult] = await Promise.all([
       fetchAllRows<any>((from, to) =>
         supabase
           .from('jams')
-          .select(`
-            id, name, visibility, starts_at, ends_at, timezone,
-            neighborhood, notes, image_url, image_list_url, tickets_url, capacity, host_user_id,
-            profiles!host_user_id ( display_name, username ),
-            jam_genres ( genres ( name ) ),
-            jam_themes ( themes ( name ) )
-          `)
-          .gte('starts_at', windowStart.toISOString())
+          .select(JAM_LIST_SELECT)
+          .gte('starts_at', pastCutoff)
           .order('starts_at', { ascending: true })
           .order('id')
           .range(from, to)
@@ -139,31 +182,7 @@ export default function JamsScreen() {
       (invitesResult.data ?? []).map((i: { jam_id: string; status: string }) => [i.jam_id, i.status])
     );
 
-    const items: JamItem[] = (jamsResult.data ?? []).map((j: any) => ({
-      id: j.id,
-      name: j.name,
-      visibility: j.visibility,
-      starts_at: j.starts_at,
-      ends_at: j.ends_at,
-      timezone: j.timezone,
-      neighborhood: j.neighborhood,
-      notes: j.notes,
-      image_url: j.image_url,
-      image_list_url: j.image_list_url,
-      tickets_url: j.tickets_url,
-      capacity: j.capacity,
-      host_id: j.host_user_id,
-      host_display_name: j.profiles?.display_name ?? null,
-      host_username: j.profiles?.username ?? null,
-      tags: [
-        ...(j.jam_genres ?? []).map((jg: any) => jg.genres?.name),
-        ...(j.jam_themes ?? []).map((jt: any) => jt.themes?.name),
-      ].filter(Boolean),
-      rsvp_status: rsvpMap.get(j.id)?.status ?? null,
-      rsvp_waitlist_position: rsvpMap.get(j.id)?.waitlist_position ?? null,
-      invite_status: inviteMap.get(j.id) ?? null,
-      ticket_summary: null,
-    }));
+    const items: JamItem[] = (jamsResult.data ?? []).map((j: any) => toJamItem(j, rsvpMap, inviteMap));
 
     // Ticket state is only shown on upcoming official events (web's
     // JamsContent scopes the same call the same way).
@@ -171,17 +190,26 @@ export default function JamsScreen() {
     const officialIds = items
       .filter(j => j.visibility === 'official' && (j.ends_at ?? j.starts_at ?? '') >= summaryNow)
       .map(j => j.id);
+    const uid = user?.id ?? null;
+    const pastFilter = pastJamsOrFilter(uid, (rsvpsResult.data ?? []) as any[], (invitesResult.data ?? []) as any[]);
+    const [tiersResult, olderProbe] = await Promise.all([
+      officialIds.length
+        ? supabase.rpc('jam_ticket_tiers', { jam_ids: officialIds })
+        : Promise.resolve({ data: null }),
+      supabase.from('jams').select('id').lt('starts_at', pastCutoff).or(pastFilter).limit(1),
+    ]);
     if (officialIds.length) {
-      const { data: tiers } = await supabase.rpc('jam_ticket_tiers', { jam_ids: officialIds });
-      const byJam = summarizeTicketTiers(tiers as JamTicketTier[] | null);
+      const byJam = summarizeTicketTiers(tiersResult.data as JamTicketTier[] | null);
       for (const item of items) item.ticket_summary = byJam.get(item.id) ?? null;
     }
 
-    const uid = user?.id ?? null;
     writeCache('/jams', uid, items);
 
-    const built = buildSections(items, uid);
-    setSections(built);
+    const hasOlderPast = (olderProbe.data ?? []).length > 0;
+    setItems(items);
+    setMaps({ rsvp: rsvpMap, invite: inviteMap as Map<string, string> });
+    setOlderPast({ cutoff: pastCutoff, filter: pastFilter, loaded: 0, hasMore: hasOlderPast, loading: false });
+    setSections(buildSections(items, uid, hasOlderPast));
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -203,6 +231,31 @@ export default function JamsScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  async function loadOlderPast() {
+    if (!olderPast || olderPast.loading) return;
+    const { cutoff, filter, loaded } = olderPast;
+    setOlderPast({ ...olderPast, loading: true });
+    const { data: rows, error } = await supabase
+      .from('jams')
+      .select(JAM_LIST_SELECT)
+      .lt('starts_at', cutoff)
+      .or(filter)
+      .order('starts_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(loaded, loaded + OLDER_PAST_JAMS_PAGE);
+    if (error) {
+      console.error(`[jams] could not load older events: ${error.message}`);
+      setOlderPast(prev => (prev && prev.cutoff === cutoff ? { ...prev, loading: false } : prev));
+      return;
+    }
+    const page = (rows ?? []).slice(0, OLDER_PAST_JAMS_PAGE).map(j => toJamItem(j, maps.rsvp, maps.invite));
+    const hasMore = (rows ?? []).length > OLDER_PAST_JAMS_PAGE;
+    const merged = [...page.reverse(), ...items];
+    setItems(merged);
+    setOlderPast({ cutoff, filter, loaded: loaded + page.length, hasMore, loading: false });
+    setSections(buildSections(merged, userId, hasMore));
+  }
 
   const isEmpty = !loading && sections.every(s => s.data.length === 0);
 
@@ -279,7 +332,25 @@ export default function JamsScreen() {
         </View>
       ) : (
         <SectionList
-          sections={sections}
+          sections={shownSections}
+          ListHeaderComponent={filterTags.length > 1 || tagFilter ? (
+            <View className="flex-row flex-wrap px-4 pt-3">
+              {filterTags.map(t => (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => setTagFilter(cur => (cur === t ? null : t))}
+                  className={`px-2.5 py-1 rounded-full border mr-1.5 mb-1.5 ${tagFilter === t ? 'border-amber-400 bg-amber-50' : 'border-zinc-200 bg-white'}`}
+                >
+                  <Text className={`text-xs ${tagFilter === t ? 'text-amber-700' : 'text-zinc-600'}`}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+              {tagFilter ? (
+                <TouchableOpacity onPress={() => setTagFilter(null)} className="px-1.5 py-1 mb-1.5">
+                  <Text className="text-xs font-medium text-zinc-500">Show all jams</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : undefined}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <JamCard
@@ -298,7 +369,17 @@ export default function JamsScreen() {
             </View>
           )}
           renderSectionFooter={({ section }) =>
-            section.hosting ? (
+            section.past && olderPast?.hasMore ? (
+              <TouchableOpacity
+                onPress={loadOlderPast}
+                disabled={olderPast.loading}
+                className={`mx-4 mb-3 items-center rounded-full border border-zinc-200 bg-white py-2.5 ${olderPast.loading ? 'opacity-60' : ''}`}
+              >
+                <Text className="text-sm font-medium text-zinc-600">
+                  {olderPast.loading ? 'Loading…' : 'Load more'}
+                </Text>
+              </TouchableOpacity>
+            ) : section.hosting ? (
               <TouchableOpacity
                 onPress={() => router.push('/jam/new' as any)}
                 className="mx-4 mb-3 items-center rounded-2xl border-2 border-dashed border-zinc-200 py-6"
