@@ -23,6 +23,7 @@ import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, so
 import ConfidencePicker from "@/components/ConfidencePicker";
 import RoleSelect from "@/components/RoleSelect";
 import ChordChartSlot from "@/components/ChordChartSlot";
+import { SongRowLine } from "@/components/SongRowTitle";
 import SearchInput from "@/components/SearchInput";
 import Select from "@/components/Select";
 import FiltersButton from "@/components/FiltersButton";
@@ -259,7 +260,7 @@ const RepertoireRow = memo(function RepertoireRow({
           </Link>
           {row.writers && <span className="ml-1 font-normal text-slate-400">({row.writers})</span>}
         </div>
-        <div className="truncate text-sm text-zinc-500">{row.line || "—"}</div>
+        <SongRowLine shows={row.shows} credits={row.credits} className="truncate text-sm text-zinc-500" empty="—" />
         {(it.popularity ?? 0) > 0 && (
           <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
         )}

@@ -127,13 +127,15 @@ export function songCardCredits(o: {
 }
 
 // A compact row's text (My songs, a set's Add songs lists): the card's credits
-// as plain text, without recording years, which only cards show.
-export function songRowText(o: Parameters<typeof songCardCredits>[0] & { productions?: string[] | null }): { writers: string; line: string } {
-  const credits = songCardCredits(o);
+// as plain text, without recording years, which only cards show. `line` is the
+// whole second line; `shows` and `credits` are its parts, for rows that
+// italicise the show titles ("from *Hamilton* · Lin-Manuel Miranda").
+export function songRowText(o: Parameters<typeof songCardCredits>[0] & { productions?: string[] | null }): { writers: string; line: string; shows: string[]; credits: string } {
+  const card = songCardCredits(o);
   const text = (list: CardCredit[]) => list.map((c) => `${c.lead ?? ""}${c.text}`).join(", ");
   const shows = (o.productions ?? []).filter(Boolean);
-  const line = text(credits.line);
-  return { writers: text(credits.writers), line: shows.length ? `from ${shows.join(", ")}${line ? ` · ${line}` : ""}` : line };
+  const credits = text(card.line);
+  return { writers: text(card.writers), line: shows.length ? `from ${shows.join(", ")}${credits ? ` · ${credits}` : ""}` : credits, shows, credits };
 }
 
 // "Traditional" or "Traditional · Irish" as a link: to the Traditional page,
