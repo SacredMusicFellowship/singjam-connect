@@ -1,25 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import { mergeSuggestionsById } from "@/lib/mergeSuggestionsById";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
+import { useProgressiveRows } from "@/hooks/useProgressiveRows";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { useSongSearch, type SongSearchResult } from "@/hooks/useSongSearch";
 import { sortRepertoireSearchResults } from "@/lib/sortRepertoireSearchResults";
 import { SortDropdown } from "@/components/SortDropdown";
-import { FilterPanel } from "@/components/FilterPanel";
+import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
+import { matchedAlternateTitles } from "@singjam/core";
+import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
 import MyKeySelect from "@/components/MyKeySelect";
 import { bulkAddStatus, type BulkStatus } from "@/lib/bulkAddStatus";
-import { hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs } from "@singjam/core";
+import { formatJammers, hasLeadVoice, LEAD_VOICE_UPGRADE, setsAcceptingSongs, songRowText, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import ConfidencePicker from "@/components/ConfidencePicker";
+import RoleSelect from "@/components/RoleSelect";
+import ChordChartSlot from "@/components/ChordChartSlot";
 import SearchInput from "@/components/SearchInput";
+import Select from "@/components/Select";
+import FiltersButton from "@/components/FiltersButton";
 
 const CONFIDENCE_LEVELS = [
   { key: "lead", label: "Lead" },
@@ -30,13 +36,16 @@ const CONFIDENCE_LEVELS = [
 type ConfidenceKey = (typeof CONFIDENCE_LEVELS)[number]["key"];
 
 const SORT_OPTIONS = [
-  { value: "title_asc" as const, label: "A → Z" },
-  { value: "title_desc" as const, label: "Z → A" },
+  { value: "title_asc" as const, label: "A–Z" },
+  { value: "title_desc" as const, label: "Z–A" },
   { value: "popularity" as const, label: "Popular" },
 ];
 
 type Item = {
   song_id: string;
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
   slug: string | null;
   confidence: string | null;
   key_note: string | null;
@@ -52,11 +61,15 @@ type Item = {
   genres: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
   year: number | null;
   popularity?: number;
+  chord_chart_url?: string | null;
 };
 
 const CACHE_KEY = "cache:/repertoire";
@@ -73,6 +86,8 @@ type RepertoireCache = {
 
 type SuggestionResult = {
   song_id: string;
+  byline?: string | null;
+  card_identity?: CardIdentity;
   title: string;
   display_artist: string | null;
   first_line: string | null;
@@ -82,10 +97,13 @@ type SuggestionResult = {
   productions: string[];
   genres: string[];
   languages: string[];
+  communities?: string[];
   year: number | null;
   popularity: number;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
 };
 
 type AddableSong = {
@@ -98,6 +116,9 @@ type AddableSong = {
   productions: string[];
   genres: string[];
   languages: string[] | null;
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
 };
 
 
@@ -146,12 +167,16 @@ function SuggestionsPanel({
             slug={s.slug}
             title={s.title}
             displayArtist={s.display_artist}
+            byline={s.byline}
+            cardIdentity={s.card_identity}
             composers={s.composers}
             cultures={s.cultures}
             productions={s.productions}
-            year={s.year}
+            recordingArtists={s.recording_artists}
+            productionCredits={s.production_credits}
             aka={null}
             genres={s.genres}
+            communities={s.communities}
             languages={s.languages}
             popularity={s.popularity}
             youtubeId={s.youtube_id}
@@ -175,6 +200,101 @@ function SuggestionsPanel({
   );
 }
 
+type RowActions = {
+  toggleSelect: (songId: string) => void;
+  updateConfidence: (songId: string, level: string) => void;
+  updateKey: (songId: string, key: string | null) => void;
+  loadSetMemberships: (songId: string) => void;
+  saveScroll: () => void;
+  addedToSet: (songId: string, setId: string) => void;
+  setCreated: (set: { id: string; name: string }) => void;
+  chartAdded: (songId: string, url: string) => void;
+};
+
+const RepertoireRow = memo(function RepertoireRow({
+  it,
+  selectable,
+  selected,
+  userSets,
+  inSets,
+  canAddCharts,
+  actions,
+}: {
+  it: Item;
+  selectable: boolean;
+  selected: boolean;
+  userSets: { id: string; name: string }[];
+  inSets: Set<string> | undefined;
+  canAddCharts: boolean;
+  actions: RowActions;
+}) {
+  const row = songRowText({
+    title: it.title,
+    byline: it.byline,
+    displayArtist: it.display_artist,
+    composers: it.composers,
+    cultures: it.cultures,
+    recordingArtists: it.recording_artists,
+    identity: it.card_identity,
+    productions: it.productions,
+  });
+  return (
+  <div
+    className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
+      !selectable ? "rounded-md border" : selected ? "bg-amber-50/60" : ""
+    }`}
+  >
+    <div className="flex min-w-0 items-start gap-3">
+      {selectable && <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => actions.toggleSelect(it.song_id)}
+        className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-zinc-300 accent-amber-500"
+        aria-label={`Select ${it.title}`}
+      />}
+      <div className="min-w-0">
+        <div className="line-clamp-2 font-medium">
+          <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => actions.saveScroll()} className="hover:text-amber-600">
+            {it.title}
+          </Link>
+          {row.writers && <span className="ml-1 font-normal text-slate-400">({row.writers})</span>}
+        </div>
+        <div className="truncate text-sm text-zinc-500">{row.line || "—"}</div>
+        {(it.popularity ?? 0) > 0 && (
+          <div className="text-xs text-zinc-400">{formatJammers(it.popularity ?? 0)}</div>
+        )}
+      </div>
+    </div>
+
+    <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
+      <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => actions.updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
+
+      <MyKeySelect value={it.key_note} onChange={(k) => actions.updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
+
+      {userSets.length > 0 && (
+        <AddToSetPanel
+          songId={it.song_id}
+          sets={userSets}
+          inSets={inSets}
+          onOpen={() => actions.loadSetMemberships(it.song_id)}
+          onAdded={(setId) => actions.addedToSet(it.song_id, setId)}
+          onSetCreated={(set) => actions.setCreated(set)}
+        />
+      )}
+
+      <ChordChartSlot
+        songId={it.song_id}
+        url={it.chord_chart_url}
+        canAdd={canAddCharts}
+        size="md"
+        onAdded={(url) => actions.chartAdded(it.song_id, url)}
+      />
+
+    </div>
+  </div>
+  );
+});
+
 export default function RepertoirePage() {
   const supabase = useMemo(() => supabaseBrowser(), []);
 
@@ -182,6 +302,8 @@ export default function RepertoirePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null);
+  // Admins and song editors can attach a missing chord chart, as on the set list.
+  const [canAddCharts, setCanAddCharts] = useState(false);
   const [singingVoice, setSingingVoice] = useState<string | null>(null);
 
   const [items, setItems] = useState<Item[]>([]);
@@ -215,21 +337,14 @@ export default function RepertoirePage() {
 
   const [isPending, startTransition] = useTransition();
 
-  const {
-    filterOptions, matchesFilters,
-    selectedGenres, selectedLanguages, selectedThemes, selectedCultures,
-    selectedVibe, setSelectedVibe,
-    selectedTonality, setSelectedTonality,
-    selectedMeter, setSelectedMeter,
-    yearMin, setYearMin,
-    yearMax, setYearMax,
-    yearBounds,
-    activeFilterCount,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, clearFilters,
-    sortBy, setSortBy,
-  } = useSongFilters(items, "title_asc");
+  const hierarchy = useTagHierarchy();
+  const filters = useSongFilters(items, "title_asc", hierarchy);
+  const { matchesFilters, activeFilterCount, clearFilters, sortBy, setSortBy } = filters;
 
-  const saveScrollPosition = useScrollRestoration("scroll:/repertoire", !loading);
+  const saveScrollPosition = useScrollRestoration(
+    "scroll:/repertoire",
+    !loading && (!query.trim() || (!searchLoading && searchResults.length > 0))
+  );
 
   // Show the cached repertoire immediately on return visits (the fresh fetch
   // below still runs and silently replaces it). Layout effect so the cached
@@ -287,7 +402,7 @@ export default function RepertoirePage() {
         }
 
         const [{ data: p }, repertoireRes, setsJson, suggestionsRes] = await Promise.all([
-          supabase.from("profiles").select("singing_voice").eq("id", uid).single(),
+          supabase.from("profiles").select("singing_voice, role").eq("id", uid).single(),
           supabase.rpc("my_repertoire"),
           fetch("/api/sets").then((r) => (r.ok ? r.json() : { owned: [], collaborating: [] })),
           supabase.rpc("suggest_songs_for_user", { p_user_id: uid, p_limit: 20 }),
@@ -295,6 +410,7 @@ export default function RepertoirePage() {
         if (repertoireRes.error) throw repertoireRes.error;
 
         setSingingVoice((p as any)?.singing_voice ?? null);
+        setCanAddCharts(true);
         setUserSets(setsAcceptingSongs([...(setsJson.owned ?? []), ...(setsJson.collaborating ?? [])]));
         const initialSuggestions = (suggestionsRes.data ?? []) as SuggestionResult[];
         setSuggestions(initialSuggestions);
@@ -311,6 +427,9 @@ export default function RepertoirePage() {
           updated_at: r.updated_at,
           title: r.title,
           display_artist: r.display_artist,
+          byline: r.byline ?? null,
+          card_identity: r.card_identity ?? null,
+          recording_artists: r.recording_artists ?? [],
           first_line: r.first_line ?? null,
           hook: r.hook ?? null,
           notes: r.notes ?? null,
@@ -324,7 +443,11 @@ export default function RepertoirePage() {
           genres: r.genres ?? [],
           languages: r.languages ?? [],
           themes: r.themes ?? [],
+          forms: r.forms ?? [],
+          occasions: r.occasions ?? [],
+          communities: r.communities ?? [],
           popularity: r.popularity ?? 0,
+          chord_chart_url: r.chord_chart_url ?? null,
         }));
 
         if (!itemsMutatedRef.current) {
@@ -373,6 +496,41 @@ export default function RepertoirePage() {
   const repertoireMap = useMemo(() => new Map(items.map((it) => [it.song_id, it])), [items]);
   const searching = query.trim().length > 0;
 
+  // One row for a song already in the repertoire, used by both the list and
+  // search results so the two can't drift apart. Selection is list-only.
+  // Handlers the rows call. The object never changes identity (each entry calls
+  // the latest handler), so a memoized row only redraws when its own song,
+  // selection or set membership changes — not on every edit or batch.
+  const rowHandlers = useRef<RowActions>(null!);
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      toggleSelect: (id) => rowHandlers.current.toggleSelect(id),
+      updateConfidence: (id, level) => rowHandlers.current.updateConfidence(id, level),
+      updateKey: (id, key) => rowHandlers.current.updateKey(id, key),
+      loadSetMemberships: (id) => rowHandlers.current.loadSetMemberships(id),
+      saveScroll: () => rowHandlers.current.saveScroll(),
+      addedToSet: (songId, setId) => rowHandlers.current.addedToSet(songId, setId),
+      setCreated: (set) => rowHandlers.current.setCreated(set),
+      chartAdded: (songId, url) => rowHandlers.current.chartAdded(songId, url),
+    }),
+    []
+  );
+
+  // One row for a song already in the repertoire, used by both the list and
+  // search results so the two can't drift apart. Selection is list-only.
+  const renderRepertoireRow = (it: Item, selectable: boolean) => (
+    <RepertoireRow
+      key={it.song_id}
+      it={it}
+      selectable={selectable}
+      selected={selectable && selectedIds.has(it.song_id)}
+      userSets={userSets}
+      inSets={songSetMemberships[it.song_id]}
+      canAddCharts={canAddCharts}
+      actions={rowActions}
+    />
+  );
+
   const sortedSearchResults = useMemo(
     () => searching
       ? sortRepertoireSearchResults(searchResults, new Set(repertoireMap.keys()))
@@ -395,6 +553,7 @@ export default function RepertoirePage() {
     if (sortBy === "title_desc") return list.sort((a, b) => b.title.localeCompare(a.title));
     return list.sort((a, b) => a.title.localeCompare(b.title));
   }, [filtered, sortBy]);
+  const rowsToDraw = useProgressiveRows(sortedFiltered.length, "scroll:/repertoire");
 
   useEffect(() => {
     const el = selectAllRef.current;
@@ -551,6 +710,19 @@ export default function RepertoirePage() {
     });
   };
 
+  rowHandlers.current = {
+    toggleSelect,
+    updateConfidence,
+    updateKey,
+    loadSetMemberships,
+    saveScroll: () => saveScrollPosition(),
+    addedToSet: (songId, setId) =>
+      setSongSetMemberships((prev) => ({ ...prev, [songId]: new Set([...(prev[songId] ?? []), setId]) })),
+    setCreated: (set) => setUserSets((prev) => [set, ...prev]),
+    chartAdded: (songId, url) =>
+      setItems((prev) => prev.map((x) => (x.song_id === songId ? { ...x, chord_chart_url: url } : x))),
+  };
+
   const addSong = (songId: string, confidence: string, result: AddableSong) => {
     if (!userId) return;
     const prevItems = items;
@@ -570,6 +742,9 @@ export default function RepertoirePage() {
         updated_at: new Date().toISOString(),
         title: result.title,
         display_artist: result.display_artist ?? null,
+        byline: result.byline ?? null,
+        card_identity: result.card_identity ?? null,
+        recording_artists: result.recording_artists ?? [],
         first_line: result.first_line ?? null,
         hook: null,
         notes: null,
@@ -579,6 +754,9 @@ export default function RepertoirePage() {
         genres: result.genres ?? [],
         languages: result.languages ?? [] as string[],
         themes: [],
+        forms: [],
+        occasions: [],
+        communities: [],
         vibe: null,
         tonality: null,
         meter: null,
@@ -675,7 +853,7 @@ export default function RepertoirePage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold">My Repertoire</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-zinc-500">
           {items.length} song{items.length === 1 ? "" : "s"}
           {isPending ? "…" : ""}
         </p>
@@ -700,16 +878,16 @@ export default function RepertoirePage() {
           </div>
 
           {!searching && (
-            <select
+            <Select
               value={confidenceFilter}
               onChange={(e) => setConfidenceFilter(e.target.value)}
-              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm sm:w-56"
+              wrapperClassName="w-full sm:w-56"
             >
               <option value="all">Any role</option>
               {CONFIDENCE_LEVELS.map((l) => (
                 <option key={l.key} value={l.key}>{l.label}</option>
               ))}
-            </select>
+            </Select>
           )}
         </div>
       </div>
@@ -717,17 +895,20 @@ export default function RepertoirePage() {
       {/* Search results mode */}
       {searching ? (
         <>
-          <div className="text-sm text-muted-foreground px-1">
+          <div className="text-sm text-zinc-500 px-1">
             {searchLoading ? "Searching…" : `${sortedSearchResults.length} result${sortedSearchResults.length === 1 ? "" : "s"}`}
           </div>
-          <div className="grid gap-2">
+          <div
+            className="grid gap-2"
+            onClickCapture={(e) => {
+              if ((e.target as HTMLElement).closest('a[href^="/songs/"]')) saveScrollPosition();
+            }}
+          >
             {!searchLoading && sortedSearchResults.length === 0 ? (
-              <div className="rounded-md border p-4 text-sm text-muted-foreground">No songs found.</div>
+              <div className="rounded-md border p-4 text-sm text-zinc-500">No songs found.</div>
             ) : (
               sortedSearchResults.map((result) => {
                 const inRep = repertoireMap.get(result.song_id);
-                const isPicking = pendingAddId === result.song_id;
-                const href = `/songs/${result.slug ?? result.song_id}`;
 
                 if (!inRep) {
                   return (
@@ -737,12 +918,18 @@ export default function RepertoirePage() {
                       slug={result.slug}
                       title={result.title}
                       displayArtist={result.display_artist}
+                      byline={result.byline}
+                      cardIdentity={result.card_identity}
                       composers={result.composers}
                       cultures={result.cultures ?? []}
                       productions={result.productions}
-                      year={result.year}
-                      aka={result.aka}
+                      recordingArtists={result.recording_artists}
+                      productionCredits={result.production_credits}
+                      aka={matchedAlternateTitles(result.aka, query, result.title)}
                       genres={result.genres}
+                      forms={result.forms}
+                      occasions={result.occasions}
+                      communities={result.communities}
                       languages={result.languages ?? []}
                       youtubeId={result.youtube_id}
                       spotifyTrackId={result.spotify_track_id}
@@ -757,87 +944,7 @@ export default function RepertoirePage() {
                   );
                 }
 
-                return (
-                  <div key={result.song_id} className="rounded-md border flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">
-                        <Link href={href} className="hover:text-amber-600">
-                          {result.title}
-                        </Link>
-                        {result.composers.length > 0 && (
-                          <span className="ml-1 font-normal text-slate-400">
-                            ({formatComposers(result.composers, result.cultures ?? [])})
-                          </span>
-                        )}
-                      </div>
-                      <div className="truncate text-sm text-muted-foreground">
-                        {result.productions.length > 0
-                          ? <>from <em>{result.productions.join(", ")}</em></>
-                          : result.display_artist ?? "—"}
-                      </div>
-                    </div>
-
-                    <div className="relative flex flex-wrap items-center gap-2 sm:shrink-0">
-                      {inRep ? (
-                        <>
-                          <select
-                            value={(inRep.confidence ?? "") as ConfidenceKey}
-                            onChange={(e) => updateConfidence(inRep.song_id, e.target.value)}
-                            className={`rounded-xl border px-2 py-1.5 text-sm ${
-                              inRep.confidence === "lead"
-                                ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-                                : "border-zinc-200"
-                            }`}
-                            aria-label="Role"
-                          >
-                            {CONFIDENCE_LEVELS.map((l) => (
-                              <option
-                                key={l.key}
-                                value={l.key}
-                              >
-                                {l.label}
-                              </option>
-                            ))}
-                          </select>
-                          <MyKeySelect value={inRep.key_note} onChange={(k) => updateKey(inRep.song_id, k)} />
-                          {userSets.length > 0 && (
-                            <AddToSetPanel
-                              songId={result.song_id}
-                              sets={userSets}
-                              inSets={songSetMemberships[result.song_id]}
-                              onOpen={() => loadSetMemberships(result.song_id)}
-                              onAdded={(setId) => setSongSetMemberships((prev) => ({ ...prev, [result.song_id]: new Set([...(prev[result.song_id] ?? []), setId]) }))}
-                              onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
-                            />
-                          )}
-                          <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
-                            View
-                          </Link>
-                        </>
-                      ) : isPicking ? (
-                        <ConfidencePicker
-                          variant="compact"
-                          singingVoice={singingVoice}
-                          onSave={(level) => addSong(result.song_id, level, result)}
-                          onCancel={() => setPendingAddId(null)}
-                          onVoiceUpdated={(voice) => setSingingVoice(voice)}
-                        />
-                      ) : (
-                        <>
-                          <Link href={href} className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors">
-                            View
-                          </Link>
-                          <button
-                            onClick={() => setPendingAddId(result.song_id)}
-                            className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
-                          >
-                            Add
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
+                return renderRepertoireRow(inRep, false);
               })
             )}
           </div>
@@ -873,165 +980,138 @@ export default function RepertoirePage() {
             </p>
             <div className="flex items-center gap-2">
               <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
-              <button
-                onClick={() => setFiltersOpen((o) => !o)}
-                className={`h-7 flex items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors ${
-                  activeFilterCount > 0
-                    ? "border-amber-400 bg-amber-50 text-amber-700"
-                    : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
-                }`}
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1.5 3h13a.5.5 0 0 1 0 1H1.5a.5.5 0 0 1 0-1zm2 4h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1 0-1zm3 4h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1 0-1z" />
-                </svg>
-                Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-              </button>
+              <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
             </div>
           </div>
 
-          {/* Bulk action bar */}
-          {selectedIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <span className="text-sm font-medium text-amber-800">
-                {selectedIds.size} selected
-              </span>
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                className="text-xs text-amber-700 underline underline-offset-2"
-              >
-                Deselect all
-              </button>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                {bulkStatus ? (
-                  <span
-                    role={bulkStatus.ok ? undefined : "alert"}
-                    className={`text-xs ${bulkStatus.ok ? "text-green-700" : "text-red-600"}`}
-                  >
-                    {bulkStatus.text}
-                  </span>
-                ) : null}
-                {userSets.length > 0 && (
-                  bulkCreatingSet ? (
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={newSetName}
-                        onChange={(e) => setNewSetName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && newSetName.trim()) createSetAndBulkAdd(newSetName.trim());
-                          if (e.key === "Escape") { setBulkCreatingSet(false); setNewSetName(""); }
+          {/* Bulk action bar. Its wrapper is always rendered: the page's space-y
+              spacing is a sibling selector, so inserting the bar as a sibling of
+              the list made the browser restyle every row (~1.2s on a phone). */}
+          <div className="contents">
+            {selectedIds.size > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <span className="text-sm font-medium text-amber-800">
+                  {selectedIds.size} selected
+                </span>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs text-amber-700 underline underline-offset-2"
+                >
+                  Deselect all
+                </button>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {bulkStatus ? (
+                    <span
+                      role={bulkStatus.ok ? undefined : "alert"}
+                      className={`text-xs ${bulkStatus.ok ? "text-green-700" : "text-red-600"}`}
+                    >
+                      {bulkStatus.text}
+                    </span>
+                  ) : null}
+                  {userSets.length > 0 && (
+                    bulkCreatingSet ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={newSetName}
+                          onChange={(e) => setNewSetName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newSetName.trim()) createSetAndBulkAdd(newSetName.trim());
+                            if (e.key === "Escape") { setBulkCreatingSet(false); setNewSetName(""); }
+                          }}
+                          placeholder="Set name…"
+                          autoFocus
+                          className="w-28 rounded-xl border border-zinc-300 px-2 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => { if (newSetName.trim()) createSetAndBulkAdd(newSetName.trim()); }}
+                          disabled={!newSetName.trim()}
+                          className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        >
+                          Create
+                        </button>
+                        <button
+                          onClick={() => { setBulkCreatingSet(false); setNewSetName(""); }}
+                          className="text-zinc-400 hover:text-zinc-600 text-sm"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <Select
+                        value={bulkSetId}
+                        onChange={(e) => {
+                          if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
+                          else if (e.target.value) bulkAddToSet(e.target.value);
                         }}
-                        placeholder="Set name…"
-                        autoFocus
-                        className="w-28 rounded-xl border border-zinc-300 px-2 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
-                      />
-                      <button
-                        onClick={() => { if (newSetName.trim()) createSetAndBulkAdd(newSetName.trim()); }}
-                        disabled={!newSetName.trim()}
-                        className="rounded-xl border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        shape="pill"
+                        size="sm"
                       >
-                        Create
+                        <option value="">Add to set…</option>
+                        {userSets.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                        <option value="__new__">+ New set…</option>
+                      </Select>
+                    )
+                  )}
+                  <Select
+                    value={bulkConfidenceLevel}
+                    onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
+                    shape="pill"
+                    size="sm"
+                  >
+                    <option value="">Change role…</option>
+                    {CONFIDENCE_LEVELS.map((l) => (
+                      <option
+                        key={l.key}
+                        value={l.key}
+                      >
+                        {l.label}
+                      </option>
+                    ))}
+                  </Select>
+                  {bulkRemoveConfirm ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-700">
+                        Remove {selectedIds.size} song{selectedIds.size === 1 ? "" : "s"}?
+                      </span>
+                      <button
+                        onClick={bulkRemove}
+                        className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                      >
+                        Confirm
                       </button>
                       <button
-                        onClick={() => { setBulkCreatingSet(false); setNewSetName(""); }}
-                        className="text-zinc-400 hover:text-zinc-600 text-sm"
+                        onClick={() => setBulkRemoveConfirm(false)}
+                        className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
                       >
-                        ✕
+                        Cancel
                       </button>
                     </div>
                   ) : (
-                    <select
-                      value={bulkSetId}
-                      onChange={(e) => {
-                        if (e.target.value === "__new__") { setBulkCreatingSet(true); setBulkSetId(""); }
-                        else if (e.target.value) bulkAddToSet(e.target.value);
-                      }}
-                      className="rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
-                    >
-                      <option value="">Add to set…</option>
-                      {userSets.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                      <option value="__new__">+ New set…</option>
-                    </select>
-                  )
-                )}
-                <select
-                  value={bulkConfidenceLevel}
-                  onChange={(e) => { if (e.target.value) bulkUpdateConfidence(e.target.value); }}
-                  className="rounded-xl border border-zinc-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="">Change role…</option>
-                  {CONFIDENCE_LEVELS.map((l) => (
-                    <option
-                      key={l.key}
-                      value={l.key}
-                    >
-                      {l.label}
-                    </option>
-                  ))}
-                </select>
-                {bulkRemoveConfirm ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-red-700">
-                      Remove {selectedIds.size} song{selectedIds.size === 1 ? "" : "s"}?
-                    </span>
                     <button
-                      onClick={bulkRemove}
-                      className="rounded-xl border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                      onClick={() => setBulkRemoveConfirm(true)}
+                      className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
                     >
-                      Confirm
+                      Remove
                     </button>
-                    <button
-                      onClick={() => setBulkRemoveConfirm(false)}
-                      className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setBulkRemoveConfirm(true)}
-                    className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
-                  >
-                    Remove
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          <ActiveFilterChips filters={filters} />
 
           {filtersOpen && (
-            <FilterPanel
-              filterOptions={filterOptions}
-              selectedGenres={selectedGenres}
-              selectedLanguages={selectedLanguages}
-              selectedThemes={selectedThemes}
-              selectedCultures={selectedCultures}
-              selectedVibe={selectedVibe}
-              setSelectedVibe={setSelectedVibe}
-              selectedTonality={selectedTonality}
-              setSelectedTonality={setSelectedTonality}
-              selectedMeter={selectedMeter}
-              setSelectedMeter={setSelectedMeter}
-              yearMin={yearMin}
-              setYearMin={setYearMin}
-              yearMax={yearMax}
-              setYearMax={setYearMax}
-              yearBounds={yearBounds}
-              activeFilterCount={activeFilterCount}
-              toggleGenre={toggleGenre}
-              toggleLanguage={toggleLanguage}
-              toggleTheme={toggleTheme}
-              toggleCulture={toggleCulture}
-              clearFilters={clearFilters}
-            />
+            <FilterPanel filters={filters} hierarchy={hierarchy} />
           )}
 
           <div className="divide-y rounded-md border">
             {sortedFiltered.length === 0 ? (
               <div className="p-4 text-center">
-                <p className="text-sm text-muted-foreground">No songs match these filters.</p>
+                <p className="text-sm text-zinc-500">No songs match these filters.</p>
                 {activeFilterCount > 0 && (
                   <button onClick={clearFilters} className="mt-3 text-sm font-medium text-amber-600 hover:underline">
                     Clear filters
@@ -1051,87 +1131,7 @@ export default function RepertoirePage() {
                   />
                   <span className="text-xs text-zinc-400">Select all</span>
                 </div>
-                {sortedFiltered.map((it) => (
-                <div
-                  key={it.song_id}
-                  className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
-                    selectedIds.has(it.song_id) ? "bg-amber-50/60" : ""
-                  }`}
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(it.song_id)}
-                      onChange={() => toggleSelect(it.song_id)}
-                      className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-zinc-300 accent-amber-500"
-                      aria-label={`Select ${it.title}`}
-                    />
-                    <div className="min-w-0">
-                    <div className="truncate font-medium">
-                      <Link href={`/songs/${it.slug ?? it.song_id}`} onClick={() => saveScrollPosition()} className="hover:text-amber-600">
-                        {it.title}
-                      </Link>
-                      {it.composers.length > 0 && (
-                        <span className="ml-1 font-normal text-slate-400">
-                          ({formatComposers(it.composers, it.cultures)})
-                        </span>
-                      )}
-                    </div>
-                    <div className="truncate text-sm text-muted-foreground">
-                      {it.productions.length > 0
-                        ? <>from <em>{it.productions.join(", ")}</em></>
-                        : it.display_artist ?? "—"}
-                    </div>
-                    {(it.popularity ?? 0) > 0 && (
-                      <div className="text-xs text-zinc-400">{it.popularity} {it.popularity === 1 ? "jammer" : "jammers"}</div>
-                    )}
-                  </div>
-                  </div>
-
-                  <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
-                    <select
-                      value={(it.confidence ?? "") as ConfidenceKey}
-                      onChange={(e) => updateConfidence(it.song_id, e.target.value)}
-                      className={`rounded-xl border px-2 py-1.5 text-xs sm:text-sm ${
-                        it.confidence === "lead"
-                          ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-                          : "border-zinc-200"
-                      }`}
-                      aria-label="Confidence"
-                    >
-                      {CONFIDENCE_LEVELS.map((l) => (
-                        <option
-                          key={l.key}
-                          value={l.key}
-                        >
-                          {l.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    <MyKeySelect value={it.key_note} onChange={(k) => updateKey(it.song_id, k)} />
-
-                    {userSets.length > 0 && (
-                      <AddToSetPanel
-                        songId={it.song_id}
-                        sets={userSets}
-                        inSets={songSetMemberships[it.song_id]}
-                        onOpen={() => loadSetMemberships(it.song_id)}
-                        onAdded={(setId) => setSongSetMemberships((prev) => ({ ...prev, [it.song_id]: new Set([...(prev[it.song_id] ?? []), setId]) }))}
-                        onSetCreated={(s) => setUserSets((prev) => [s, ...prev])}
-                      />
-                    )}
-
-                    <Link
-                      href={`/songs/${it.slug ?? it.song_id}`}
-                      onClick={() => saveScrollPosition()}
-                      className="rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs sm:px-3 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
-                    >
-                      View
-                    </Link>
-                  </div>
-                </div>
-              ))}
+                {sortedFiltered.slice(0, rowsToDraw).map((it) => renderRepertoireRow(it, true))}
               </>
             )}
           </div>

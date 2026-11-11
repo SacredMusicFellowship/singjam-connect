@@ -25,7 +25,7 @@ export default function UgBackTip({ className = 'mx-4 mt-3' }: { className?: str
   return (
     <View className={`flex-row items-start rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 ${className}`}>
       <Text className="flex-1 text-xs text-zinc-600 mr-3">
-        Using the Ultimate Guitar app? Tap the back arrow <Text className="italic">inside UG</Text> before you return here, or the next chart will open this song again.
+        Using the Ultimate Guitar app? Tap the back arrow <Text className="italic">inside UG</Text> before you return here, or the next chart will open the same song again.
       </Text>
       <TouchableOpacity onPress={dismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
         <Text className="text-xs font-medium text-amber-600">Got it</Text>

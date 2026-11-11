@@ -5,6 +5,16 @@ export function isMusicalKey(value: unknown): value is (typeof MUSICAL_KEYS)[num
   return typeof value === "string" && (MUSICAL_KEYS as readonly string[]).includes(value);
 }
 
+// A chosen key (the set's key, or your own) looks the same everywhere: violet,
+// which no confidence level, Played (green) or "add this song" (indigo) uses.
+// An unset key stays a neutral outline pill. Tailwind classes, read by both apps.
+export const KEY_STYLE = {
+  chip: "border border-violet-200 bg-violet-50",
+  text: "text-violet-800",
+  emptyChip: "border border-zinc-200 bg-white",
+  emptyText: "text-zinc-500",
+} as const;
+
 export const SET_SONG_NOTE_MAX = 200;
 
 // A member's private notes on a song (user_song_notes, migration 178).

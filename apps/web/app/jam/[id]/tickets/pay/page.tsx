@@ -151,7 +151,7 @@ function HoldExpired({ backToEvent }: { backToEvent: string }) {
       </p>
       <Link
         href={backToEvent}
-        className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+        className="inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
       >
         Back to tickets
       </Link>

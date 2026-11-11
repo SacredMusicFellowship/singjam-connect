@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import SongSearch from "@/components/SongSearch";
+import Link from "next/link";
 import InfoTooltip from "@/components/InfoTooltip";
 
 export const metadata: Metadata = {
@@ -18,6 +19,9 @@ export default function SongsPage() {
             <span className="block text-zinc-400">Tip: searching a person name returns songs connected via composer credits or recordings.</span>
           </span>
         } />
+        <Link href="/browse" className="ml-auto text-sm font-medium text-amber-600 hover:underline">
+          Browse by genre, occasion, community…
+        </Link>
       </div>
       <SongSearch />
     </div>
