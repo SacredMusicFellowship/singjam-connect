@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { BLOG_NAME, BLOG_SUMMARY_COLUMNS, fetchAllRows, formatBlogDate, type BlogPostSummary } from '@singjam/core';
-import { supabase } from '@/lib/supabase';
+import { BLOG_NAME, formatBlogDate, type BlogPostSummary } from '@singjam/core';
 import ContentContainer from '@/components/ContentContainer';
 
-// Mirrors web's /blog (apps/web/app/blog/page.tsx).
+const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
+
+// Mirrors web's /blog (apps/web/app/blog/page.tsx). Posts are Markdown files in
+// the web app, so they're read from its /api/blog.
 export default function BlogIndexScreen() {
   const router = useRouter();
   const [posts, setPosts] = useState<BlogPostSummary[] | null>(null);
@@ -14,16 +16,10 @@ export default function BlogIndexScreen() {
 
   const load = useCallback(async () => {
     try {
-      const rows = await fetchAllRows<BlogPostSummary>((from, to) =>
-        supabase
-          .from('blog_posts')
-          .select(BLOG_SUMMARY_COLUMNS)
-          .eq('status', 'published')
-          .order('published_at', { ascending: false })
-          .order('id')
-          .range(from, to)
-      );
-      setPosts(rows);
+      const res = await fetch(`${WEB_URL}/api/blog`);
+      if (!res.ok) throw new Error(String(res.status));
+      const body: { posts: BlogPostSummary[] } = await res.json();
+      setPosts(body.posts);
       setError(null);
     } catch {
       setError("Couldn't load posts. Pull to try again.");
@@ -44,7 +40,7 @@ export default function BlogIndexScreen() {
       <ContentContainer>
         <FlatList
           data={posts ?? []}
-          keyExtractor={(p) => p.id}
+          keyExtractor={(p) => p.slug}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 40, gap: 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
           ListHeaderComponent={

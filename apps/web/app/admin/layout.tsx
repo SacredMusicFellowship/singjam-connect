@@ -45,9 +45,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/attendance" className="text-slate-600 hover:text-slate-900">
             Attendance
           </Link>
-          <Link href="/admin/blog" className="text-slate-600 hover:text-slate-900">
-            Blog
-          </Link>
           <Link href="/admin/settings" className="text-slate-600 hover:text-slate-900">
             Settings
           </Link>

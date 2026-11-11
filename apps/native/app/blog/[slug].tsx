@@ -3,29 +3,26 @@ import { ActivityIndicator, Image, ScrollView, Share, Text, TouchableOpacity, Vi
 import { Stack, useLocalSearchParams } from 'expo-router';
 import {
   BLOG_NAME,
-  BLOG_POST_COLUMNS,
   blogPostUrl,
   blogReadingMinutes,
   formatBlogDate,
   type BlogPost,
 } from '@singjam/core';
-import { supabase } from '@/lib/supabase';
 import ContentContainer from '@/components/ContentContainer';
 import BlogBody from '@/components/BlogBody';
 
-// Mirrors web's /blog/[slug] (apps/web/app/blog/[slug]/page.tsx).
+const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
+
+// Mirrors web's /blog/[slug] (apps/web/app/blog/[slug]/page.tsx), read from /api/blog/<slug>.
 export default function BlogPostScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const [post, setPost] = useState<BlogPost | null | undefined>(undefined);
 
   useEffect(() => {
-    supabase
-      .from('blog_posts')
-      .select(BLOG_POST_COLUMNS)
-      .eq('slug', slug)
-      .eq('status', 'published')
-      .maybeSingle()
-      .then(({ data }) => setPost((data as BlogPost | null) ?? null));
+    fetch(`${WEB_URL}/api/blog/${encodeURIComponent(slug)}`)
+      .then((res) => (res.ok ? res.json() : { post: null }))
+      .then((body: { post: BlogPost | null }) => setPost(body.post))
+      .catch(() => setPost(null));
   }, [slug]);
 
   return (

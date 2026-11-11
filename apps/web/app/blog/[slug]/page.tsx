@@ -1,37 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cache } from "react";
-import {
-  BLOG_NAME,
-  BLOG_POST_COLUMNS,
-  blogPostUrl,
-  blogReadingMinutes,
-  formatBlogDate,
-  type BlogPost,
-} from "@singjam/core";
-import { supabaseAnon } from "@/lib/supabase/anon";
+import { BLOG_NAME, blogPostUrl, blogReadingMinutes, formatBlogDate } from "@singjam/core";
+import { getBlogPost, loadBlogPosts } from "@/lib/blog";
 import BlogBody from "@/components/BlogBody";
 
-export const revalidate = 3600;
+export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return [];
+  return loadBlogPosts().map((p) => ({ slug: p.slug }));
 }
-
-const getPost = cache(async (slug: string) => {
-  const { data } = await supabaseAnon()
-    .from("blog_posts")
-    .select(BLOG_POST_COLUMNS)
-    .eq("slug", slug)
-    .eq("status", "published")
-    .maybeSingle();
-  return data as BlogPost | null;
-});
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const post = await getPost(slug);
+  const post = getBlogPost(slug);
   if (!post) return { title: BLOG_NAME };
   const url = blogPostUrl(post.slug);
   return {
@@ -51,7 +33,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const post = await getPost(slug);
+  const post = getBlogPost(slug);
   if (!post) notFound();
 
   return (

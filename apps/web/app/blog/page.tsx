@@ -1,16 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  BLOG_NAME,
-  BLOG_ORIGIN,
-  BLOG_SUMMARY_COLUMNS,
-  fetchAllRows,
-  formatBlogDate,
-  type BlogPostSummary,
-} from "@singjam/core";
-import { supabaseAnon } from "@/lib/supabase/anon";
-
-export const revalidate = 3600;
+import { BLOG_NAME, BLOG_ORIGIN, formatBlogDate } from "@singjam/core";
+import { loadBlogPosts } from "@/lib/blog";
 
 export const metadata: Metadata = {
   title: BLOG_NAME,
@@ -19,17 +10,8 @@ export const metadata: Metadata = {
   openGraph: { title: BLOG_NAME, url: BLOG_ORIGIN },
 };
 
-export default async function BlogIndexPage() {
-  const supabase = supabaseAnon();
-  const posts = await fetchAllRows<BlogPostSummary>((from, to) =>
-    supabase
-      .from("blog_posts")
-      .select(BLOG_SUMMARY_COLUMNS)
-      .eq("status", "published")
-      .order("published_at", { ascending: false })
-      .order("id")
-      .range(from, to)
-  );
+export default function BlogIndexPage() {
+  const posts = loadBlogPosts();
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
@@ -46,7 +28,7 @@ export default async function BlogIndexPage() {
       ) : (
         <ul className="space-y-4">
           {posts.map((post) => (
-            <li key={post.id}>
+            <li key={post.slug}>
               <Link
                 href={`/blog/${post.slug}`}
                 className="block overflow-hidden rounded-xl border border-slate-200 bg-white transition-colors hover:border-amber-300"
