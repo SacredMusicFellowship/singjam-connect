@@ -40,3 +40,14 @@ export async function fetchAllAuthEmails(
   }
   return emails;
 }
+
+/** The account registered to this address, if any — compared case-insensitively. */
+export async function findAuthUserByEmail(
+  admin: AuthAdmin,
+  email: string,
+  perPage = 1000
+): Promise<AuthUserRecord | null> {
+  const target = email.trim().toLowerCase();
+  const users = await fetchAllAuthUsers(admin, perPage);
+  return users.find((u) => u.email?.toLowerCase() === target) ?? null;
+}

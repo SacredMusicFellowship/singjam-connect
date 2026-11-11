@@ -2,8 +2,10 @@
 
 import { hasLeadVoice } from "@singjam/core";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import RoleSelect from "@/components/RoleSelect";
 import ConfidencePicker from "@/components/ConfidencePicker";
 
 type Level = "lead" | "support" | "learn";
@@ -19,12 +21,15 @@ export default function RepertoireButton({
   initialConfidence,
   singingVoice = null,
   onConfidenceChange,
+  knownTune = null,
   children,
 }: {
   songId: string;
   initialConfidence: string | null;
   singingVoice?: string | null;
   onConfidenceChange?: (level: string | null) => void;
+  // The viewer's Lead/Support song sung to this tune (song_melodies, migration 220).
+  knownTune?: { title: string; slug: string | null } | null;
   children?: React.ReactNode;
 }) {
   const supabase = supabaseBrowser();
@@ -85,28 +90,19 @@ export default function RepertoireButton({
   if (confidence !== null) {
     return (
       <div className="relative flex flex-wrap items-center gap-2">
-        <select
+        <RoleSelect
           value={confidence}
           disabled={saving}
-          onChange={(e) => {
-            if (e.target.value === "lead" && !hasLeadVoice(singingVoice)) {
+          size="md"
+          onChange={(level) => {
+            if (level === "lead" && !hasLeadVoice(singingVoice)) {
               setVoiceCheckPending(true);
               setPicking(true);
             } else {
-              save(e.target.value as Level);
+              save(level as Level);
             }
           }}
-          className={`rounded-xl border px-2 py-1.5 text-sm disabled:opacity-40 ${
-            confidence === "lead"
-              ? "border-amber-400 bg-amber-100 text-amber-800 font-semibold"
-              : "border-slate-300"
-          }`}
-          aria-label="Role"
-        >
-          {LEVELS.map((l) => (
-            <option key={l.key} value={l.key}>{l.label}</option>
-          ))}
-        </select>
+        />
         {children}
       </div>
     );
@@ -118,21 +114,51 @@ export default function RepertoireButton({
     setPicking(true);
   }
 
+  function addAsLead() {
+    if (!hasLeadVoice(singingVoice)) {
+      setVoiceCheckPending(true);
+      setPicking(true);
+    } else {
+      save("lead");
+    }
+  }
+
   return (
+    <div className="flex flex-col gap-2">
+    {knownTune && (
+      <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+        <span>
+          You know the tune from{" "}
+          {knownTune.slug ? (
+            <Link href={`/songs/${knownTune.slug}`} className="font-medium hover:text-amber-700 hover:underline">{knownTune.title}</Link>
+          ) : (
+            <span className="font-medium">{knownTune.title}</span>
+          )}
+        </span>
+        <button
+          onClick={addAsLead}
+          disabled={saving}
+          className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800 hover:bg-amber-200 transition-colors disabled:opacity-50"
+        >
+          Add as Lead
+        </button>
+      </p>
+    )}
     <div className="flex flex-wrap items-center gap-3">
       <button
         onClick={handleAddClick}
-        className="rounded-xl bg-indigo-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 transition-colors"
+        className="rounded-full bg-indigo-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 transition-colors"
       >
         I know this song!
       </button>
       <button
         onClick={() => save("learn")}
         disabled={saving}
-        className="rounded-xl bg-white px-4 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+        className="rounded-full bg-white px-4 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50 transition-colors disabled:opacity-50"
       >
         Want to learn it
       </button>
+    </div>
     </div>
   );
 }

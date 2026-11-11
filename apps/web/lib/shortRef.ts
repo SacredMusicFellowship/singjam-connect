@@ -1,7 +1,6 @@
 import { cache } from "react";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from "@singjam/core";
 
 // /jam/<ref> and /set/<ref> take either the row's short code (migrations 169,
 // 170) or its uuid, so links shared before short codes existed keep working.
@@ -9,7 +8,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // private jam or a link-shared set — this only maps it to the id, and the
 // page's own access rules still decide what the viewer sees.
 async function resolveId(table: "jams" | "sets", ref: string): Promise<string | null> {
-  if (UUID.test(ref)) return ref;
+  if (isUuid(ref)) return ref;
   const { data } = await supabaseAdmin()
     .from(table)
     .select("id")
