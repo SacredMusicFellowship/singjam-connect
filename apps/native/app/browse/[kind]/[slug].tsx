@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import {
   browsePath, KIND_LABEL, loadBrowseEntity, loadBrowseRelated, loadBrowseSongs, traditionalCultureChips,
   songMatchesFilters, type BrowseEntity, type BrowseKind, type BrowseRelatedGroup, type BrowseSongRow, type LinkedTag, type SongFilterState,
@@ -15,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import ContentContainer from '@/components/ContentContainer';
 import { browseKindFromSegment, nativeBrowseHref } from '@/lib/browseLinks';
 import FiltersButton from '@/components/FiltersButton';
+import HideMySongsToggle from '@/components/HideMySongsToggle';
 import CreditText from '@/components/CreditText';
 import { useMySongTools } from '@/lib/useMySongTools';
 
@@ -182,13 +182,7 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
         )}
         {songs.length > 1 && <FiltersButton count={activeCount} onPress={() => setSheetOpen(true)} />}
         {myConfidence.size > 0 && (
-          <TouchableOpacity
-            onPress={() => setHidden(h => (h ? null : new Set(myConfidence.keys())))}
-            className="h-7 flex-row items-center gap-1.5 rounded-full border border-zinc-200 px-3"
-          >
-            <Ionicons name={hidden ? 'checkbox' : 'square-outline'} size={13} color={hidden ? '#d97706' : '#d4d4d8'} />
-            <Text className="text-xs font-medium text-zinc-500">Hide my songs</Text>
-          </TouchableOpacity>
+          <HideMySongsToggle checked={hidden !== null} onPress={() => setHidden(h => (h ? null : new Set(myConfidence.keys())))} />
         )}
         {activeCount > 0 || hidden ? <Text className="text-xs text-zinc-500">{shownCards.length} of {songs.length}</Text> : null}
       </View>

@@ -16,6 +16,7 @@ import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import SearchInput from "@/components/SearchInput";
 import FiltersButton from "@/components/FiltersButton";
+import HideMySongsToggle from "@/components/HideMySongsToggle";
 
 type FilterMeta = {
   song_id: string;
@@ -194,15 +195,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
             <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} align="left" />
             <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
             {currentUser && repertoire.size > 0 && (
-              <label className="h-7 flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-500 cursor-pointer select-none hover:bg-zinc-50 transition-colors whitespace-nowrap">
-                <input
-                  type="checkbox"
-                  checked={hideMySongs}
-                  onChange={(e) => setHideMySongs(e.target.checked)}
-                  className="rounded border-zinc-300 accent-amber-500"
-                />
-                Hide my songs
-              </label>
+              <HideMySongsToggle checked={hideMySongs} onChange={setHideMySongs} />
             )}
           </div>
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">

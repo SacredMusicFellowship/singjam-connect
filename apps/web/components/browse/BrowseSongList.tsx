@@ -9,6 +9,7 @@ import { SortDropdown } from "@/components/SortDropdown";
 import SongCard from "@/components/SongCard";
 import { useSongCardActions } from "@/hooks/useSongCardActions";
 import FiltersButton from "@/components/FiltersButton";
+import HideMySongsToggle from "@/components/HideMySongsToggle";
 
 const SORT_OPTIONS = [
   { value: "popularity" as const, label: "Most known" },
@@ -46,15 +47,7 @@ export default function BrowseSongList({ songs, roles }: {
           <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
         )}
         {currentUser && repertoire.size > 0 && (
-          <label className="h-7 flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-500 cursor-pointer select-none hover:bg-zinc-50 transition-colors whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={hidden !== null}
-              onChange={(e) => setHidden(e.target.checked ? new Set(repertoire.keys()) : null)}
-              className="rounded border-zinc-300 accent-amber-500"
-            />
-            Hide my songs
-          </label>
+          <HideMySongsToggle checked={hidden !== null} onChange={(on) => setHidden(on ? new Set(repertoire.keys()) : null)} />
         )}
         {(activeFilterCount > 0 || hidden) && <span className="text-xs text-zinc-500">{shown.length} of {songs.length}</span>}
       </div>
