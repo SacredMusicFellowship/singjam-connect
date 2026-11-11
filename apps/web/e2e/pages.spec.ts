@@ -22,7 +22,10 @@ for (const { name, url, as } of SCREENS) {
 
     test(`loads for the ${as} without errors and passes the accessibility checks`, async ({ page }) => {
       const errors: string[] = [];
-      page.on("pageerror", (error) => errors.push(error.message));
+      // WebKit reports fetches a redirect cancels as "… due to access control checks"; those aren't app errors.
+      page.on("pageerror", (error) => {
+        if (!/due to access control checks/.test(error.message)) errors.push(error.message);
+      });
 
       const response = await page.goto(url);
       expect(response?.status()).toBeLessThan(400);
