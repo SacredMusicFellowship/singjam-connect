@@ -29,7 +29,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { setId } = await req.json();
+  const { setId, move } = await req.json();
   if (!setId) return NextResponse.json({ error: "setId is required" }, { status: 400 });
 
   const { data: set } = await supabase.from("sets").select("owner_user_id, jam_id").eq("id", setId).single();
@@ -49,10 +49,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!canLink) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  // A set belongs to one jam, so linking it here takes it off its current jam.
+  // The caller has to say so explicitly rather than have that happen silently.
+  if (set.jam_id && set.jam_id !== jamId && move !== true) {
+    return NextResponse.json(
+      { error: "This set list is already linked to another jam.", linkedJamId: set.jam_id },
+      { status: 409 }
+    );
+  }
   // Use admin here: app-level authorization is already verified above, but the
   // "sets_update" RLS policy only allows the set's owner — a non-owning editor
   // collaborator's own session would otherwise silently no-op this write.
   const { error } = await admin.from("sets").update({ jam_id: jamId }).eq("id", setId);
+  if (error?.code === "23505") {
+    return NextResponse.json({ error: "This jam already has a set list. Refresh the page to see it." }, { status: 409 });
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const [rsvpRes, existingCollabRes] = await Promise.all([

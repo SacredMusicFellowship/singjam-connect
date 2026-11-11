@@ -44,7 +44,7 @@ export default function ResetPasswordPage() {
           <p className="mt-2 text-sm text-slate-500">Your password has been changed.</p>
           <button
             onClick={() => router.push("/account")}
-            className="mt-4 w-full rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 transition-colors"
+            className="mt-4 w-full rounded-full bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 transition-colors"
           >
             Go to account
           </button>
@@ -81,7 +81,7 @@ export default function ResetPasswordPage() {
         <button
           onClick={submit}
           disabled={!password || !confirm || busy}
-          className="w-full rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 disabled:opacity-50 transition-colors"
+          className="w-full rounded-full bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 disabled:opacity-50 transition-colors"
         >
           {busy ? "Saving…" : "Set new password"}
         </button>
