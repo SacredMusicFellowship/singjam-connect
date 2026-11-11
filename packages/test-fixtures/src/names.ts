@@ -1,3 +1,4 @@
+import type { TagType } from "./types";
 // Invented data only. Places, venues, songs, artists and songwriters are fictional so that
 // nothing in a test or screenshot can be mistaken for a real member, event or recording.
 
@@ -39,11 +40,18 @@ export const INSTRUMENT_LEVELS = ["Beginner", "Intermediate", "Advanced", "Profe
 
 export const SINGING_VOICES = [["lead"], ["backup"], ["lead", "backup"], ["none"]] as const;
 
-// Must exist in public.genres, which the migrations seed.
-export const GENRES = [
-  "Folk", "Americana", "Bluegrass", "Blues", "Country", "Gospel", "Jazz", "Motown", "Pop",
-  "R&B", "Reggae", "Rock", "Soul", "Singer-Songwriter", "Shanties", "Celtic",
-] as const;
+// Tags songs and jams carry. Each must exist in public.tags with this type; the migrations seed the
+// vocabulary (202_tag_graph). Shanty is a form, the rest are genres.
+export const TAGS = {
+  Folk: "genre", Americana: "genre", Bluegrass: "genre", Blues: "genre", Country: "genre", Gospel: "genre",
+  Jazz: "genre", Motown: "genre", Pop: "genre", "R&B": "genre", Reggae: "genre", Rock: "genre", Soul: "genre",
+  Celtic: "genre", Shanty: "form",
+} as const satisfies Record<string, TagType>;
+
+export type TagName = keyof typeof TAGS;
+
+// Genres a member can list as favourites.
+export const GENRES = (Object.keys(TAGS) as TagName[]).filter((name) => TAGS[name] === "genre");
 
 export const ARTISTS = [
   "The Paper Moons", "Juniper & the Jackdaws", "Marigold Station", "The Lowland Lanterns",
@@ -59,7 +67,7 @@ export const SONGWRITERS = [
 // Titles and first lines are written for these fixtures.
 export const SONGS = [
   { title: "Lanterns Over the Harbor", firstLine: "We lit the lamps along the water", genre: "Folk", vibe: "Ballad" },
-  { title: "Paper Boats", firstLine: "Fold it twice and let it go", genre: "Singer-Songwriter", vibe: "Ballad" },
+  { title: "Paper Boats", firstLine: "Fold it twice and let it go", genre: "Pop", vibe: "Ballad" },
   { title: "Copper Ridge Rambler", firstLine: "Up the switchback, boots and banjo", genre: "Bluegrass", vibe: "Banger" },
   { title: "Saturday at the Grange", firstLine: "Push the chairs against the wall", genre: "Country", vibe: "Banger" },
   { title: "Moonlight on the Mill Pond", firstLine: "Still water, silver sky", genre: "Americana", vibe: "Ballad" },
@@ -67,7 +75,7 @@ export const SONGS = [
   { title: "Blue Kettle Blues", firstLine: "The kettle's cold and so am I", genre: "Blues", vibe: "Ballad" },
   { title: "Dancing in the Orchard", firstLine: "Apples falling, fiddles calling", genre: "Celtic", vibe: "Banger" },
   { title: "Keep the Light On", firstLine: "If you're out there on the road tonight", genre: "Soul", vibe: "Ballad" },
-  { title: "Ferryman's Shanty", firstLine: "Haul away, the tide is turning", genre: "Shanties", vibe: "Banger" },
+  { title: "Ferryman's Shanty", firstLine: "Haul away, the tide is turning", genre: "Shanty", vibe: "Banger" },
   { title: "Velvet Avenue", firstLine: "Neon hums on Velvet Avenue", genre: "Motown", vibe: "Banger" },
   { title: "Slow Train to Riverbend", firstLine: "Count the fence posts one by one", genre: "Americana", vibe: "Ballad" },
   { title: "Golden Hour Groove", firstLine: "Sun's low, let it roll", genre: "R&B", vibe: "Banger" },
@@ -89,7 +97,7 @@ export const SONGS = [
   { title: "The Lighthouse Keeper", firstLine: "Forty years of watching waves", genre: "Celtic", vibe: "Ballad" },
   { title: "Sunday Best", firstLine: "Shine your shoes and comb your hair", genre: "Motown", vibe: "Banger" },
   { title: "Rain on the Tin Roof", firstLine: "Pitter patter, let it come", genre: "Country", vibe: "Ballad" },
-  { title: "Tidewater", firstLine: "In and out the tide goes", genre: "Singer-Songwriter", vibe: "Ballad" },
+  { title: "Tidewater", firstLine: "In and out the tide goes", genre: "Pop", vibe: "Ballad" },
   { title: "Party at the Lantern Room", firstLine: "Doors open, come on in", genre: "Pop", vibe: "Banger" },
   { title: "Old Bridge Road", firstLine: "Gravel crunching under wheels", genre: "Americana", vibe: "Ballad" },
   { title: "Hearthside", firstLine: "Pull a chair up to the fire", genre: "Folk", vibe: "Ballad" },

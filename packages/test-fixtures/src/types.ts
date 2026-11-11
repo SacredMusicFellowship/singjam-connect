@@ -71,8 +71,9 @@ export type SongRow = {
 
 export type SongComposerRow = { song_id: Uuid; person_id: Uuid };
 export type SongRecordingArtistRow = { song_id: Uuid; artist_id: Uuid; year: number | null; position: number };
-// Genres are reference data seeded by the migrations with random ids, so they're referenced by name.
-export type SongGenreRow = { song_id: Uuid; genre_name: string };
+// Tags are reference data seeded by the migrations with random ids, so they're referenced by type and name.
+export type TagType = "genre" | "theme" | "culture" | "language" | "form" | "occasion" | "community";
+export type SongTagRow = { song_id: Uuid; tag_type: TagType; tag_name: string };
 
 export type UserSongRow = { user_id: Uuid; song_id: Uuid; confidence: Confidence; key_note: string | null };
 
@@ -95,7 +96,7 @@ export type JamRow = {
   created_at: Iso;
 };
 
-export type JamGenreRow = { jam_id: Uuid; genre_name: string };
+export type JamTagRow = { jam_id: Uuid; tag_type: TagType; tag_name: string };
 export type JamCohostRow = { id: Uuid; jam_id: Uuid; user_id: Uuid; added_by: Uuid };
 export type JamRsvpRow = { id: Uuid; jam_id: Uuid; user_id: Uuid; status: RsvpStatus; waitlist_position: number | null; created_at: Iso };
 export type JamInviteRow = { id: Uuid; jam_id: Uuid; invited_user_id: Uuid; invited_by: Uuid; status: InviteStatus; created_at: Iso };
@@ -198,10 +199,10 @@ export type Scenario = {
   songs: SongRow[];
   songComposers: SongComposerRow[];
   songRecordingArtists: SongRecordingArtistRow[];
-  songGenres: SongGenreRow[];
+  songTags: SongTagRow[];
   userSongs: UserSongRow[];
   jams: JamRow[];
-  jamGenres: JamGenreRow[];
+  jamTags: JamTagRow[];
   jamCohosts: JamCohostRow[];
   jamRsvps: JamRsvpRow[];
   jamInvites: JamInviteRow[];
