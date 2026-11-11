@@ -33,14 +33,14 @@ export default function JamInviteResponse({ jamId }: { jamId: string }) {
         <button
           onClick={() => respond("declined")}
           disabled={busy !== null}
-          className="rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+          className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
         >
           {busy === "declined" ? "Declining…" : "Decline"}
         </button>
         <button
           onClick={() => respond("accepted")}
           disabled={busy !== null}
-          className="rounded-xl bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+          className="rounded-full bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
         >
           {busy === "accepted" ? "RSVPing…" : "Accept & RSVP"}
         </button>

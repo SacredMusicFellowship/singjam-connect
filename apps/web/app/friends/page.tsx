@@ -197,7 +197,7 @@ export default function MatchesPage() {
                   </div>
                   <div className="mt-4 flex gap-2">
                     <a
-                      className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 px-3 py-2 text-sm no-underline hover:bg-zinc-50 sm:flex-none sm:py-1.5"
+                      className="flex flex-1 items-center justify-center rounded-full border border-zinc-200 px-3 py-2 text-sm no-underline hover:bg-zinc-50 sm:flex-none sm:py-1.5"
                       href={u.username ? `/u/${u.username}` : `/profile/${u.id}`}
                     >
                       View profile
@@ -298,7 +298,7 @@ export default function MatchesPage() {
                   {/* Actions */}
                   <div className="mt-4 flex gap-2">
                     <a
-                      className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 px-3 py-2 text-sm no-underline hover:bg-zinc-50 sm:flex-none sm:py-1.5"
+                      className="flex flex-1 items-center justify-center rounded-full border border-zinc-200 px-3 py-2 text-sm no-underline hover:bg-zinc-50 sm:flex-none sm:py-1.5"
                       href={m.username ? `/u/${m.username}` : `/profile/${m.user_id}`}
                     >
                       View profile
@@ -316,7 +316,7 @@ export default function MatchesPage() {
               <p className="mt-1 text-sm text-zinc-500">Add songs you know and SingJam will match you with musicians who share your repertoire.</p>
               <Link
                 href="/search"
-                className="mt-4 inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+                className="mt-4 inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
               >
                 Browse songs →
               </Link>
