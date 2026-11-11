@@ -39,10 +39,10 @@ describe("seed against the migrated schema", () => {
       ["public.profiles", scenario.profiles.length],
       ["public.songs", scenario.songs.length],
       ["public.song_composers", scenario.songComposers.length],
-      ["public.song_genres", scenario.songGenres.length],
+      ["public.song_tags", scenario.songTags.length],
       ["public.user_songs", scenario.userSongs.length],
       ["public.jams", scenario.jams.length],
-      ["public.jam_genres", scenario.jamGenres.length],
+      ["public.jam_tags", scenario.jamTags.length],
       ["public.jam_rsvps", scenario.jamRsvps.length],
       ["public.jam_invites", scenario.jamInvites.length],
       ["public.sets", scenario.sets.length],
@@ -57,9 +57,17 @@ describe("seed against the migrated schema", () => {
     for (const [table, n] of expected) expect([table, await count(table)]).toEqual([table, n]);
   });
 
-  it("resolves every genre by name", async () => {
-    const { rows } = await db.query<{ n: number }>("select count(*)::int n from public.song_genres where genre_id is null");
-    expect(rows[0].n).toBe(0);
+  it("gives every song the slug the fixtures predict, so tests can link to it", async () => {
+    const { rows } = await db.query<{ id: string; slug: string }>("select id, slug from public.songs");
+    const stored = new Map(rows.map((r) => [r.id, r.slug]));
+    for (const song of scenario.songs) expect(stored.get(song.id)).toBe(song.slug);
+  });
+
+  it("tags every song and jam with tags from the vocabulary", async () => {
+    const songs = await db.query<{ n: number }>("select count(distinct song_id)::int n from public.song_tags");
+    expect(songs.rows[0].n).toBe(scenario.songs.length);
+    const jams = await db.query<{ n: number }>("select count(distinct jam_id)::int n from public.jam_tags");
+    expect(jams.rows[0].n).toBe(new Set(scenario.jamTags.map((t) => t.jam_id)).size);
   });
 
   it("fills in the profiles created by the signup trigger", async () => {
