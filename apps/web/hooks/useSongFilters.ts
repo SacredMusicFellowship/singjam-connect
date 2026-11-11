@@ -1,41 +1,64 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   countActiveFilters,
+  deriveFilterFacets,
   deriveFilterOptions,
+  expandFilterState,
+  MULTI_FILTER_DIMS,
   songMatchesFilters,
   type FilterableSong,
+  type MultiFilterDim,
   type SongFilterState,
+  type TagHierarchy,
 } from "@singjam/core";
 
 export type SortBy = "popularity" | "title_asc" | "title_desc";
+export type SelectedTags = Record<MultiFilterDim, Set<string>>;
+
+// The URL parameter for each tag dimension (kept from before, so shared links still work).
+const URL_PARAM: Record<MultiFilterDim, string> = {
+  genres: "genre",
+  forms: "form",
+  occasions: "occasion",
+  communities: "community",
+  cultures: "culture",
+  languages: "lang",
+  themes: "theme",
+};
 
 function readUrlParams() {
   if (typeof window === "undefined") return new URLSearchParams();
   return new URLSearchParams(window.location.search);
 }
 
+function tagsFromUrl(): SelectedTags {
+  const params = readUrlParams();
+  return Object.fromEntries(MULTI_FILTER_DIMS.map((dim) => [dim, new Set(params.getAll(URL_PARAM[dim]))])) as SelectedTags;
+}
+
+const noTags = (): SelectedTags => Object.fromEntries(MULTI_FILTER_DIMS.map((dim) => [dim, new Set<string>()])) as SelectedTags;
+
 export function useSongFilters<T extends FilterableSong>(
   songs: T[],
-  initialSortBy: SortBy = "popularity"
+  initialSortBy: SortBy = "popularity",
+  hierarchy: TagHierarchy | null = null,
+  // Off for panels inside another page (a set's Add songs), which shouldn't touch its address.
+  { syncUrl = true }: { syncUrl?: boolean } = {}
 ) {
-  const [selectedGenres, setSelectedGenres] = useState<Set<string>>(() => new Set(readUrlParams().getAll("genre")));
-  const [selectedLanguages, setSelectedLanguages] = useState<Set<string>>(() => new Set(readUrlParams().getAll("lang")));
-  const [selectedThemes, setSelectedThemes] = useState<Set<string>>(() => new Set(readUrlParams().getAll("theme")));
-  const [selectedCultures, setSelectedCultures] = useState<Set<string>>(() => new Set(readUrlParams().getAll("culture")));
-  const [selectedVibe, setSelectedVibe] = useState(() => readUrlParams().get("vibe") ?? "");
-  const [selectedTonality, setSelectedTonality] = useState(() => readUrlParams().get("tonality") ?? "");
-  const [selectedMeter, setSelectedMeter] = useState(() => readUrlParams().get("meter") ?? "");
-  const [yearMin, setYearMin] = useState(() => readUrlParams().get("yrMin") ?? "");
-  const [yearMax, setYearMax] = useState(() => readUrlParams().get("yrMax") ?? "");
-  const [sortBy, setSortBy] = useState<SortBy>(() => (readUrlParams().get("sort") as SortBy | null) ?? initialSortBy);
+  const fromUrl = (key: string) => (syncUrl ? readUrlParams().get(key) ?? "" : "");
+  const [selectedTags, setSelectedTags] = useState<SelectedTags>(() => (syncUrl ? tagsFromUrl() : noTags()));
+  const [selectedVibe, setSelectedVibe] = useState(() => fromUrl("vibe"));
+  const [selectedTonality, setSelectedTonality] = useState(() => fromUrl("tonality"));
+  const [selectedMeter, setSelectedMeter] = useState(() => fromUrl("meter"));
+  const [yearMin, setYearMin] = useState(() => fromUrl("yrMin"));
+  const [yearMax, setYearMax] = useState(() => fromUrl("yrMax"));
+  const [sortBy, setSortBy] = useState<SortBy>(() => (fromUrl("sort") as SortBy) || initialSortBy);
 
   useEffect(() => {
+    if (!syncUrl) return;
     const params = new URLSearchParams(window.location.search);
-    ["genre", "lang", "theme", "culture", "vibe", "tonality", "meter", "sort", "yrMin", "yrMax"].forEach((k) => params.delete(k));
-    selectedGenres.forEach((g) => params.append("genre", g));
-    selectedLanguages.forEach((l) => params.append("lang", l));
-    selectedThemes.forEach((t) => params.append("theme", t));
-    selectedCultures.forEach((c) => params.append("culture", c));
+    [...Object.values(URL_PARAM), "vibe", "tonality", "meter", "sort", "yrMin", "yrMax"].forEach((k) => params.delete(k));
+    for (const dim of MULTI_FILTER_DIMS) selectedTags[dim].forEach((v) => params.append(URL_PARAM[dim], v));
     if (selectedVibe) params.set("vibe", selectedVibe);
     if (selectedTonality) params.set("tonality", selectedTonality);
     if (selectedMeter) params.set("meter", selectedMeter);
@@ -44,21 +67,22 @@ export function useSongFilters<T extends FilterableSong>(
     if (sortBy !== initialSortBy) params.set("sort", sortBy);
     const qs = params.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, sortBy, initialSortBy]);
+  }, [syncUrl, selectedTags, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax, sortBy, initialSortBy]);
 
   const filterState = useMemo<SongFilterState>(() => ({
-    genres: selectedGenres,
-    languages: selectedLanguages,
-    themes: selectedThemes,
-    cultures: selectedCultures,
+    ...selectedTags,
     vibe: selectedVibe,
     tonality: selectedTonality,
     meter: selectedMeter,
     yearMin,
     yearMax,
-  }), [selectedGenres, selectedLanguages, selectedThemes, selectedCultures, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax]);
+  }), [selectedTags, selectedVibe, selectedTonality, selectedMeter, yearMin, yearMax]);
 
-  const filterOptions = useMemo(() => deriveFilterOptions(songs, filterState), [songs, filterState]);
+  // What actually filters: each selected tag plus everything below it (Rock covers Classic Rock).
+  const expandedState = useMemo(() => expandFilterState(filterState, hierarchy), [filterState, hierarchy]);
+
+  const facets = useMemo(() => deriveFilterFacets(songs, filterState, hierarchy), [songs, filterState, hierarchy]);
+  const filterOptions = useMemo(() => deriveFilterOptions(songs, expandedState), [songs, expandedState]);
 
   const yearBounds = useMemo(() => {
     const years = songs.map((s) => s.year).filter((y): y is number => y !== null);
@@ -69,27 +93,20 @@ export function useSongFilters<T extends FilterableSong>(
   const activeFilterCount = countActiveFilters(filterState);
 
   const matchesFilters = useCallback(
-    (song: FilterableSong | undefined): boolean => (song ? songMatchesFilters(song, filterState) : true),
-    [filterState]
+    (song: FilterableSong | undefined): boolean => (song ? songMatchesFilters(song, expandedState) : true),
+    [expandedState]
   );
 
-  function toggleGenre(g: string) {
-    setSelectedGenres((prev) => { const next = new Set(prev); next.has(g) ? next.delete(g) : next.add(g); return next; });
-  }
-  function toggleLanguage(l: string) {
-    setSelectedLanguages((prev) => { const next = new Set(prev); next.has(l) ? next.delete(l) : next.add(l); return next; });
-  }
-  function toggleTheme(t: string) {
-    setSelectedThemes((prev) => { const next = new Set(prev); next.has(t) ? next.delete(t) : next.add(t); return next; });
-  }
-  function toggleCulture(c: string) {
-    setSelectedCultures((prev) => { const next = new Set(prev); next.has(c) ? next.delete(c) : next.add(c); return next; });
-  }
+  const toggleTag = useCallback((dim: MultiFilterDim, value: string) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev[dim]);
+      next.has(value) ? next.delete(value) : next.add(value);
+      return { ...prev, [dim]: next };
+    });
+  }, []);
+
   function clearFilters() {
-    setSelectedGenres(new Set());
-    setSelectedLanguages(new Set());
-    setSelectedThemes(new Set());
-    setSelectedCultures(new Set());
+    setSelectedTags(noTags());
     setSelectedVibe("");
     setSelectedTonality("");
     setSelectedMeter("");
@@ -98,7 +115,7 @@ export function useSongFilters<T extends FilterableSong>(
   }
 
   return {
-    selectedGenres, selectedLanguages, selectedThemes, selectedCultures,
+    selectedTags, toggleTag,
     selectedVibe, setSelectedVibe,
     selectedTonality, setSelectedTonality,
     selectedMeter, setSelectedMeter,
@@ -106,9 +123,13 @@ export function useSongFilters<T extends FilterableSong>(
     yearMax, setYearMax,
     yearBounds,
     activeFilterCount,
+    expandedState,
+    facets,
     filterOptions,
     matchesFilters,
-    toggleGenre, toggleLanguage, toggleTheme, toggleCulture, clearFilters,
+    clearFilters,
     sortBy, setSortBy,
   };
 }
+
+export type SongFilters = ReturnType<typeof useSongFilters>;

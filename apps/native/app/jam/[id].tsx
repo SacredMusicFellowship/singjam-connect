@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { canEditJam, dropUsCountry, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
+import { attendeeRole, canEditJam, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -62,6 +62,7 @@ type Attendee = {
   user_id: string;
   status: string;
   display_name: string | null;
+  last_name?: string | null;
   username: string | null;
   avatar_url: string | null;
 };
@@ -331,6 +332,7 @@ export default function JamDetailScreen() {
   const [canHostOfficial, setCanHostOfficial] = useState(false);
   const [jamSets, setJamSets] = useState<JamSet[]>([]);
   const [leaders, setLeaders] = useState<JamLeader[]>([]);
+  const [cohostIds, setCohostIds] = useState<Set<string>>(new Set());
   const [myLeader, setMyLeader] = useState<MyLeaderSpot | null>(null);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -353,7 +355,7 @@ export default function JamDetailScreen() {
           id, name, visibility, starts_at, ends_at, timezone,
           neighborhood, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
           profiles!host_user_id ( display_name, username, avatar_url ),
-          jam_genres ( genres ( name ) )
+          jam_tags ( tags ( name, type ) )
         `)
         .eq('id', id)
         .single(),
@@ -362,7 +364,7 @@ export default function JamDetailScreen() {
       // unordered fetch would understate a full jam.
       supabase
         .from('jam_rsvps')
-        .select('status, user_id, profiles!user_id ( display_name, username, avatar_url )')
+        .select('status, user_id, profiles!user_id ( display_name, last_name, username, avatar_url )')
         .eq('jam_id', id)
         .in('status', ['attending', 'waitlist'])
         .order('created_at', { ascending: true }),
@@ -407,13 +409,15 @@ export default function JamDetailScreen() {
       host_display_name: j.profiles?.display_name ?? null,
       host_username: j.profiles?.username ?? null,
       host_avatar: j.profiles?.avatar_url ?? null,
-      genres: (j.jam_genres ?? []).map((jg: any) => jg.genres?.name).filter(Boolean),
+      // Every tag the jam has, genres first (the field predates the other tag types).
+      genres: [...jamTags(j.jam_tags, 'genre'), ...jamTags(j.jam_tags).filter((t) => t.type !== 'genre')].map((t) => t.name),
     });
 
     const rawRsvps: Attendee[] = (rsvpsResult.data ?? []).map((r: any) => ({
       user_id: r.user_id,
       status: r.status,
       display_name: r.profiles?.display_name ?? null,
+      last_name: r.profiles?.last_name ?? null,
       username: r.profiles?.username ?? null,
       avatar_url: r.profiles?.avatar_url ?? null,
     }));
@@ -423,6 +427,12 @@ export default function JamDetailScreen() {
     // Ticket buyers without an account. Served by the web API because tickets is
     // service_role-only, so the app's Supabase client cannot read them. Failing
     // quietly is right: a missing guest row shouldn't blank the whole screen.
+    supabase
+      .from('jam_cohosts')
+      .select('user_id')
+      .eq('jam_id', id)
+      .then(({ data }) => setCohostIds(new Set((data ?? []).map((c: any) => c.user_id as string))));
+
     fetch(`${WEB_URL}/api/jam/${id}/attendees/guests`)
       .then(r => (r.ok ? r.json() : { guests: [], members: [] }))
       .then(d => {
@@ -649,6 +659,22 @@ export default function JamDetailScreen() {
   // can see is how a headcount stops being explainable. Mirrors web's
   // JamAttendeeList.
   const memberHeadcount = going.reduce((n, a) => n + (memberExtras[a.user_id] ?? 0), 0);
+  // Same order as web's Who's going: host, co-hosts, leaders, then everyone by
+  // name with guests mixed in. Only the first 20 show, so this decides who does.
+  const isLeaderId = (userId: string) => leaders.some(l => l.user_id === userId) || (!!myLeader && userId === myUserId);
+  const shownHostId = jam.host_id && jam.visibility !== 'official' ? jam.host_id : null;
+  const goingEntries = sortAttendees<{ kind: 'member'; a: Attendee } | { kind: 'guest'; g: GuestAttendee; key: string }>(
+    [
+      ...going.map(a => ({ kind: 'member' as const, a })),
+      ...guestAttendees.map((g, i) => ({ kind: 'guest' as const, g, key: `guest-${i}` })),
+    ],
+    e => e.kind === 'guest'
+      ? { role: 'going', name: e.g.name }
+      : {
+          role: attendeeRole({ host: e.a.user_id === shownHostId, cohost: cohostIds.has(e.a.user_id), leader: isLeaderId(e.a.user_id) }),
+          name: [e.a.display_name, e.a.last_name].filter(Boolean).join(' ') || e.a.username || '',
+        }
+  );
 
   return (
     <>
@@ -877,17 +903,16 @@ export default function JamDetailScreen() {
               Attending ({going.length + guestHeadcount + memberHeadcount})
             </Text>
             <View className="flex-row flex-wrap">
-              {going.slice(0, 20).map(a => (
+              {goingEntries.slice(0, 20).map(e => e.kind === 'guest' ? (
+                <GuestAvatar key={e.key} guest={e.g} />
+              ) : (
                 <AttendeeAvatar
-                  key={a.user_id}
-                  attendee={a}
-                  isMe={a.user_id === myUserId}
-                  extra={memberExtras[a.user_id] ?? 0}
-                  isLeader={leaders.some(l => l.user_id === a.user_id) || (!!myLeader && a.user_id === myUserId)}
+                  key={e.a.user_id}
+                  attendee={e.a}
+                  isMe={e.a.user_id === myUserId}
+                  extra={memberExtras[e.a.user_id] ?? 0}
+                  isLeader={isLeaderId(e.a.user_id)}
                 />
-              ))}
-              {guestAttendees.slice(0, Math.max(0, 20 - going.length)).map((g, i) => (
-                <GuestAvatar key={`guest-${i}`} guest={g} />
               ))}
               {going.length + guestAttendees.length > 20 ? (
                 <View className="items-center mr-3 mb-3" style={{ width: 52 }}>

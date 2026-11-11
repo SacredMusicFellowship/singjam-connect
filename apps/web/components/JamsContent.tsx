@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { canEditJam, fetchAllRows, jamImageFor, jamTicketCta, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
+import { canEditJam, fetchAllRows, jamImageFor, jamTags, jamTicketCta, OLDER_PAST_JAMS_PAGE, pastJamsOrFilter, pastJamsWindowStart, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -24,6 +24,31 @@ type JamsData = {
 };
 
 const CACHE_KEY = "cache:/jams";
+
+const JAM_LIST_SELECT = "id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, image_focal_point, image_list_url, visibility, host_user_id, jam_tags(tags(name, type)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)";
+
+type OlderPast = { cutoff: string; filter: string; loaded: number; hasMore: boolean; loading: boolean };
+
+function indexJams(
+  jams: any[],
+  genresByJam: Map<string, string[]>,
+  themesByJam: Map<string, string[]>,
+  profileById: Map<string, { label: string; username: string | null }>,
+) {
+  for (const j of jams) {
+    const genres = jamTags(j.jam_tags, "genre").map((t) => t.name);
+    if (genres.length > 0) genresByJam.set(j.id, genres);
+    // Everything a jam is tagged with besides genres: occasions, communities, forms, languages, themes.
+    const themes = jamTags(j.jam_tags).filter((t) => t.type !== "genre").map((t) => t.name);
+    if (themes.length > 0) themesByJam.set(j.id, themes);
+    if (j.host_user_id && j.host && !profileById.has(j.host_user_id)) {
+      profileById.set(j.host_user_id, {
+        label: [j.host.display_name, j.host.last_name].filter(Boolean).join(" ") || j.host.username || null,
+        username: j.host.username ?? null,
+      });
+    }
+  }
+}
 
 type JamsCache = {
   uid: string | null;
@@ -266,14 +291,14 @@ function JamListCard({ jam, tags, hostLabel, isOfficial, ticketSummary, rsvp, is
               <button
                 onClick={() => setConfirming(false)}
                 disabled={deleting}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
                 Keep it
               </button>
               <button
                 onClick={deleteJam}
                 disabled={deleting}
-                className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Cancelling…" : "Yes, cancel"}
               </button>
@@ -287,6 +312,8 @@ function JamListCard({ jam, tags, hostLabel, isOfficial, ticketSummary, rsvp, is
 
 export default function JamsContent() {
   const [data, setData] = useState<JamsData | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [olderPast, setOlderPast] = useState<OlderPast | null>(null);
   const supabase = supabaseBrowser();
   const hydratedUidRef = useRef<string | null | undefined>(undefined);
 
@@ -326,6 +353,9 @@ export default function JamsContent() {
       setData(null);
     }
 
+    const pastCutoff = pastJamsWindowStart();
+    setOlderPast(null);
+
     const [flagRes, adminRes, jamsRes, rsvpsRes, invitesRes] = await Promise.all([
       supabase.from("feature_flags").select("enabled").eq("key", "jam_invites").maybeSingle(),
       userId
@@ -334,8 +364,8 @@ export default function JamsContent() {
       fetchAllRows<any>((from, to) =>
         supabase
           .from("jams")
-          .select("id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, image_focal_point, image_list_url, visibility, host_user_id, jam_genres(genres(name)), jam_themes(themes(name)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)")
-          .gte("starts_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+          .select(JAM_LIST_SELECT)
+          .gte("starts_at", pastCutoff)
           .order("starts_at", { ascending: true, nullsFirst: false })
           .order("id")
           .range(from, to)
@@ -362,18 +392,7 @@ export default function JamsContent() {
     const themesByJam = new Map<string, string[]>();
     const profileById = new Map<string, { label: string; username: string | null }>();
 
-    for (const j of allJams) {
-      const genres = ((j.jam_genres ?? []) as any[]).map((r) => r.genres?.name).filter(Boolean);
-      if (genres.length > 0) genresByJam.set(j.id, genres);
-      const themes = ((j.jam_themes ?? []) as any[]).map((r) => r.themes?.name).filter(Boolean);
-      if (themes.length > 0) themesByJam.set(j.id, themes);
-      if (j.host_user_id && j.host && !profileById.has(j.host_user_id)) {
-        profileById.set(j.host_user_id, {
-          label: [j.host.display_name, j.host.last_name].filter(Boolean).join(" ") || j.host.username || null,
-          username: j.host.username ?? null,
-        });
-      }
-    }
+    indexJams(allJams, genresByJam, themesByJam, profileById);
 
     const invitesEnabled = flagRes.data?.enabled ?? true;
     const isAdmin = (adminRes.data as any)?.role === "admin";
@@ -385,9 +404,14 @@ export default function JamsContent() {
     const officialIds = allJams
       .filter((j) => j.visibility === "official" && (j.ends_at ?? j.starts_at) >= listNow)
       .map((j) => j.id);
-    const { data: tiers } = officialIds.length
-      ? await supabase.rpc("jam_ticket_tiers", { jam_ids: officialIds })
-      : { data: [] };
+    const pastFilter = pastJamsOrFilter(userId, (rsvpsRes.data ?? []) as any[], (invitesRes.data ?? []) as any[]);
+    const [{ data: tiers }, { data: olderProbe }] = await Promise.all([
+      officialIds.length
+        ? supabase.rpc("jam_ticket_tiers", { jam_ids: officialIds })
+        : Promise.resolve({ data: [] }),
+      supabase.from("jams").select("id").lt("starts_at", pastCutoff).or(pastFilter).limit(1),
+    ]);
+    setOlderPast({ cutoff: pastCutoff, filter: pastFilter, loaded: 0, hasMore: (olderProbe ?? []).length > 0, loading: false });
     const ticketSummaryByJam = summarizeTicketTiers(tiers as JamTicketTier[] | null);
 
     setData({
@@ -422,6 +446,39 @@ export default function JamsContent() {
     } catch {}
   }
 
+  async function loadOlderPast() {
+    if (!olderPast || olderPast.loading) return;
+    const { cutoff, filter, loaded } = olderPast;
+    setOlderPast({ ...olderPast, loading: true });
+    const { data: rows, error } = await supabase
+      .from("jams")
+      .select(JAM_LIST_SELECT)
+      .lt("starts_at", cutoff)
+      .or(filter)
+      .order("starts_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(loaded, loaded + OLDER_PAST_JAMS_PAGE);
+    if (error) {
+      console.error(`[jams] could not load older events: ${error.message}`);
+      setOlderPast((prev) => (prev && prev.cutoff === cutoff ? { ...prev, loading: false } : prev));
+      return;
+    }
+    const page = (rows ?? []).slice(0, OLDER_PAST_JAMS_PAGE);
+    setData((prev) => {
+      if (!prev) return prev;
+      const genresByJam = new Map(prev.genresByJam);
+      const themesByJam = new Map(prev.themesByJam);
+      const profileById = new Map(prev.profileById);
+      indexJams(page, genresByJam, themesByJam, profileById);
+      return { ...prev, allJams: [...[...page].reverse(), ...prev.allJams], genresByJam, themesByJam, profileById };
+    });
+    setOlderPast((prev) =>
+      prev && prev.cutoff === cutoff
+        ? { ...prev, loaded: loaded + page.length, hasMore: (rows ?? []).length > OLDER_PAST_JAMS_PAGE, loading: false }
+        : prev
+    );
+  }
+
   useEffect(() => {
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -453,7 +510,14 @@ export default function JamsContent() {
     );
   }
 
-  const { userId, invitesEnabled, isAdmin, canHostOfficial, allJams, rsvpByJam, inviteByJam, genresByJam, themesByJam, profileById, ticketSummaryByJam } = data;
+  const { userId, invitesEnabled, isAdmin, canHostOfficial, allJams: everyJam, rsvpByJam, inviteByJam, genresByJam, themesByJam, profileById, ticketSummaryByJam } = data;
+  // Filter every section by one tag; the row offers the tags upcoming jams use.
+  const tagsOf = (id: string) => [...(genresByJam.get(id) ?? []), ...(themesByJam.get(id) ?? [])];
+  const nowIso = new Date().toISOString();
+  const tagCounts = new Map<string, number>();
+  for (const j of everyJam) if ((j.ends_at ?? j.starts_at) >= nowIso) for (const t of tagsOf(j.id)) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  const filterTags = [...tagCounts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([t]) => t);
+  const allJams = tagFilter ? everyJam.filter((j) => tagsOf(j.id).includes(tagFilter)) : everyJam;
 
   function cardProps(jam: any, opts: { isOfficial?: boolean; isHosting?: boolean } = {}) {
     return {
@@ -522,6 +586,7 @@ export default function JamsContent() {
   const isEmpty =
     upcomingOfficialJams.length === 0 &&
     pastJams.length === 0 &&
+    !olderPast?.hasMore &&
     pendingInviteJams.length === 0 &&
     hostingJams.length === 0 &&
     communityJams.length === 0 &&
@@ -533,6 +598,26 @@ export default function JamsContent() {
         <h1 className="text-xl font-semibold">Jams</h1>
         <p className="text-sm text-zinc-500">Browse open jams or post your own.</p>
       </div>
+
+      {(filterTags.length > 1 || tagFilter) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {filterTags.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTagFilter((cur) => (cur === t ? null : t))}
+              aria-pressed={tagFilter === t}
+              className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                tagFilter === t ? "border-amber-400 bg-amber-50 text-amber-700" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+          {tagFilter && (
+            <button onClick={() => setTagFilter(null)} className="px-1.5 text-xs font-medium text-zinc-500 hover:text-red-600">Show all jams</button>
+          )}
+        </div>
+      )}
 
       {userId && (invitesEnabled || isAdmin) && (
         <section className="space-y-3">
@@ -588,7 +673,7 @@ export default function JamsContent() {
         </section>
       )}
 
-      {pastJams.length > 0 && (
+      {(pastJams.length > 0 || olderPast?.hasMore) && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Past events</h2>
           <div className="grid grid-cols-1 gap-3">
@@ -602,6 +687,16 @@ export default function JamsContent() {
                 onDeleted={fetchData}
               />
             ))}
+            {olderPast?.hasMore && (
+              <button
+                type="button"
+                onClick={loadOlderPast}
+                disabled={olderPast.loading}
+                className="rounded-full border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 hover:border-amber-300 hover:text-amber-600 disabled:opacity-60 transition-colors"
+              >
+                {olderPast.loading ? "Loading…" : "Load more"}
+              </button>
+            )}
           </div>
         </section>
       )}
