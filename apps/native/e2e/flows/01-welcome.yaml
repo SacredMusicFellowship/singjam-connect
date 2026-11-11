@@ -1,0 +1,8 @@
+appId: org.singjam.app
+name: Signed out, the welcome screen offers sign in and guest browsing
+---
+- runFlow: common/start.yaml
+- assertVisible: "Get started"
+- assertVisible: "Sign in"
+- assertVisible: "Continue as Guest"
+- takeScreenshot: welcome

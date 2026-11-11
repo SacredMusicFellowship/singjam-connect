@@ -10,6 +10,7 @@
     "test:rls": "npm run test:rls -w @singjam/test-fixtures",
     "e2e": "npm run e2e -w singjam-connect",
     "e2e:screenshots": "npm run e2e:screenshots -w singjam-connect",
+    "e2e:native": "npm run e2e -w @singjam/native",
     "pr-assets:publish": "node scripts/publish-pr-assets.mjs"
   },
   "workspaces": [

@@ -19,7 +19,8 @@ export const handlers: RequestHandler[] = [
 ];
 
 // Local services (the Next server, local Supabase, Metro) pass through untouched.
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0", "host.docker.internal"]);
+// 10.0.2.2 is this machine as the Android emulator sees it.
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0", "host.docker.internal", "10.0.2.2"]);
 
 export function isLocalRequest(url: string | URL): boolean {
   const { hostname } = new URL(url);

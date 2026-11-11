@@ -1,0 +1,19 @@
+# Signs in from the welcome screen as ${EMAIL}.
+appId: org.singjam.app
+---
+- tapOn: "Sign in"
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+# Return moves focus to the password field.
+- pressKey: Enter
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn: "Sign in"
+# iOS offers to save the password, hiding the screen underneath until it's dismissed.
+- extendedWaitUntil:
+    visible: "Not Now|My Repertoire"
+    timeout: 30000
+- tapOn:
+    text: "Not Now"
+    optional: true
+- assertVisible: "My Repertoire"
