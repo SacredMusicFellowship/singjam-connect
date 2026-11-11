@@ -4,6 +4,10 @@
   "engines": {
     "node": ">=22.13.0"
   },
+  "scripts": {
+    "e2e:db:reset": "supabase db reset",
+    "test:rls": "npm run test:rls -w @singjam/test-fixtures"
+  },
   "workspaces": [
     "apps/web",
     "apps/native",
