@@ -67,6 +67,13 @@ The native app (`apps/native`) is the mobile companion to the web app (`apps/web
 
 - All new features must include tests before merging
 - Focus especially on: auth flows, data mutations, and matching logic
+- See [TESTING.md](TESTING.md). Run `npm run e2e:setup` once; everything runs against a local Supabase and fake data
+- **Fake data only.** Tests, seeds and screenshots use `packages/test-fixtures`. Never use real members, production data or real service keys in a test, fixture or PR
+- A new or changed user-facing flow gets a Playwright spec in `apps/web/e2e/`. Specs that change data use the `freshMember` fixture (or their own jam/event) so browsers can run in parallel
+- A new outside service needs an MSW handler in `packages/test-fixtures/src/msw`. Unmocked outside requests fail the tests
+- A new main page goes in `apps/web/e2e/support/screens.ts` so it gets page, accessibility and screenshot coverage. Don't add entries to `KNOWN_A11Y`
+- After changing a fixture factory or the scenario, run `npm run seed:write -w @singjam/test-fixtures` and commit the regenerated seed
+- Before opening a PR, run the unit tests for what you touched, plus `npm run e2e` for any UI or flow change
 
 ## Automated checks
 
@@ -77,6 +84,6 @@ The native app (`apps/native`) is the mobile companion to the web app (`apps/web
 Every PR must include:
 - **What changed** — a clear summary of the changes
 - **Why** — the motivation or context behind the change
-- **Screenshots** — before/after visuals for any UI changes
+- **Screenshots** — before/after visuals for any UI changes, taken with `npm run e2e:screenshots` and published with `npm run pr-assets:publish`, which prints links for the description. Fake data only. Never commit `pr-assets/` (it's gitignored)
 - **Verification steps** — how to manually test or confirm the change works
 - **Build check** — confirm `npm run build` passes locally before opening the PR
