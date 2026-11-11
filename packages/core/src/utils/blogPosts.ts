@@ -20,15 +20,16 @@ export const BLOG_POST_COLUMNS = `${BLOG_SUMMARY_COLUMNS}, body_md`;
 
 /** "November 2026 engineering update!" → "november-2026-engineering-update" (matches the table's slug check). */
 export function slugifyBlogTitle(title: string): string {
-  return title
+  const slug = title
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80)
-    .replace(/-+$/, "");
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join("-")
+    .slice(0, 80);
+  return slug.endsWith("-") ? slug.slice(0, -1) : slug;
 }
 
 export function isValidBlogSlug(slug: string): boolean {

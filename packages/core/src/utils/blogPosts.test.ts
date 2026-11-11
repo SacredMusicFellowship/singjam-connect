@@ -47,3 +47,12 @@ describe("blogReadingMinutes", () => {
     expect(blogReadingMinutes("word ".repeat(660))).toBe(3);
   });
 });
+
+describe("slugifyBlogTitle on long runs of separators", () => {
+  it("stays fast and valid", () => {
+    const start = Date.now();
+    const slug = slugifyBlogTitle("a" + "-".repeat(100000) + "!");
+    expect(Date.now() - start).toBeLessThan(100);
+    expect(slug).toBe("a");
+  });
+});
