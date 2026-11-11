@@ -75,7 +75,7 @@ export function buildScenario(options: ScenarioOptions = {}): { scenario: Scenar
   const communityFull = buildJam(ctx, {
     key: "community-full", name: "Shanty Night", hostUserId: crowdIds[0], visibility: "community",
     startsInDays: 12, startHour: 19, durationHours: 2, neighborhood: "Harbor Point", fullAddress: HOUSE_ADDRESSES[1],
-    notes: "Sea shanties and drinking songs. Small room, so space is limited.", capacity: 4, genres: ["Shanties", "Celtic"],
+    notes: "Sea shanties and drinking songs. Small room, so space is limited.", capacity: 4, genres: ["Shanty", "Celtic"],
   });
   const privateUpcoming = buildJam(ctx, {
     key: "private-upcoming", name: "Leaders' Rehearsal", hostUserId: host.profile.id, visibility: "private",
@@ -173,10 +173,10 @@ export function buildScenario(options: ScenarioOptions = {}): { scenario: Scenar
     songs,
     songComposers: catalog.songComposers,
     songRecordingArtists: catalog.songRecordingArtists,
-    songGenres: catalog.songGenres,
+    songTags: catalog.songTags,
     userSongs,
     jams: builtJams.map((b) => b.jam),
-    jamGenres: builtJams.flatMap((b) => b.genres),
+    jamTags: builtJams.flatMap((b) => b.tags),
     jamCohosts,
     jamRsvps,
     jamInvites,

@@ -1,6 +1,7 @@
 import { TIMEZONE } from "../constants";
+import { TAGS, type TagName } from "../names";
 import type { FixtureContext } from "../context";
-import type { InviteStatus, JamGenreRow, JamInviteRow, JamRow, JamRsvpRow, JamVisibility } from "../types";
+import type { InviteStatus, JamTagRow, JamInviteRow, JamRow, JamRsvpRow, JamVisibility } from "../types";
 
 export type JamOptions = {
   key: string;
@@ -16,10 +17,10 @@ export type JamOptions = {
   capacity?: number | null;
   ticketLimit?: number | null;
   guestsCanInvite?: boolean;
-  genres?: readonly string[];
+  genres?: readonly TagName[];
 };
 
-export function buildJam(ctx: FixtureContext, options: JamOptions): { jam: JamRow; genres: JamGenreRow[] } {
+export function buildJam(ctx: FixtureContext, options: JamOptions): { jam: JamRow; tags: JamTagRow[] } {
   const id = ctx.id("jam", options.key);
   const startsAt = ctx.at(options.startsInDays, options.startHour);
   const endsAt = new Date(new Date(startsAt).getTime() + options.durationHours * 3_600_000).toISOString();
@@ -43,7 +44,7 @@ export function buildJam(ctx: FixtureContext, options: JamOptions): { jam: JamRo
       image_url: null,
       created_at: ctx.at(Math.min(options.startsInDays, 0) - 21),
     },
-    genres: (options.genres ?? []).map((genre_name) => ({ jam_id: id, genre_name })),
+    tags: (options.genres ?? []).map((name) => ({ jam_id: id, tag_type: TAGS[name], tag_name: name })),
   };
 }
 
