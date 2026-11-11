@@ -114,7 +114,7 @@ function usePinToTopOnLoad(loaded: boolean) {
 }
 
 const SONG_SELECT = `
-          id, title, slug, display_artist, byline, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          id, title, slug, display_artist, byline, first_line, hook, notes, genius_url, chord_chart_url, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_composers(people(name, slug)),
           song_lyricists(people(name, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
@@ -360,7 +360,7 @@ export default function SongPageContent() {
   const meterPills = song.meter ? song.meter.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
 
   function handleChartAdded(url: string) {
-    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url, chord_chart_pending: true } } : prev));
+    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url } } : prev));
   }
 
   return (
@@ -430,7 +430,6 @@ export default function SongPageContent() {
                 <ChordChartSlot
                   songId={song.id}
                   url={song.chord_chart_url}
-                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                   canAdd={isLoggedIn}
                   size="md"
                   onAdded={handleChartAdded}
@@ -441,7 +440,6 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -452,10 +450,7 @@ export default function SongPageContent() {
           {song.chord_chart_url && <UgBackTip className="mt-3" />}
           {song.chord_chart_url && isLoggedIn && (
             <div className="mt-2">
-              <ReportChartButton
-                songId={song.id}
-                onReported={() => setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_pending: true } } : prev))}
-              />
+              <ReportChartButton songId={song.id} />
             </div>
           )}
           {fillingIn && (
@@ -662,7 +657,6 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -673,7 +667,6 @@ export default function SongPageContent() {
             <ChordChartSlot
               songId={song.id}
               url={song.chord_chart_url}
-                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
               canAdd={isLoggedIn}
               size="md"
               onAdded={handleChartAdded}
