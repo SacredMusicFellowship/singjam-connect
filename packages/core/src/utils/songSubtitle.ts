@@ -60,9 +60,17 @@ function scriptureCredit(identity: CardIdentity): CardCredit | null {
   return ref ? { text: capitalizeFirst(ref), link: key ? { kind: "scripture", key } : identity.text_slug ? { kind: "text", key: identity.text_slug } : null } : null;
 }
 
+// A loop, not /[…]+$/: that regex backtracks quadratically on long runs of spaces.
+const TRAILING = /[\s,;:.!?—–-]/u;
+function trimTrailingPunctuation(text: string): string {
+  let end = text.length;
+  while (end > 0 && TRAILING.test(text[end - 1])) end--;
+  return text.slice(0, end).trim();
+}
+
 // Its first line, when that says more than the title.
 function firstLineCredit(identity: CardIdentity, title: string): CardCredit | null {
-  const line = identity?.first_line?.trim().replace(/[\s,;:.!?—–-]+$/u, "");
+  const line = trimTrailingPunctuation(identity?.first_line ?? "");
   if (!line || plain(title).includes(plain(line))) return null;
   return { text: `“${line}…”`, link: null };
 }
