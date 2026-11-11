@@ -16,6 +16,7 @@
     "e2e:screenshots": "E2E_SCREENSHOTS=1 playwright test --project=screenshots-phone --project=screenshots-desktop"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -26,8 +27,8 @@
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.45.4",
     "@types/qrcode": "^1.5.6",
-    "image-size": "^1.2.1",
-    "next": "^15.5.25",
+    "image-size": "^2.0.3",
+    "next": "^15.5.28",
     "openai": "^6.34.0",
     "qrcode": "^1.5.4",
     "react": "19.3.1",

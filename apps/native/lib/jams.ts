@@ -32,13 +32,13 @@ export async function duplicateJam(jamId: string, userId: string): Promise<strin
   }).select('id').single();
   if (error || !data?.id) return null;
 
-  const { data: genreRows } = await supabase
-    .from('jam_genres')
-    .select('genre_id')
+  const { data: tagRows } = await supabase
+    .from('jam_tags')
+    .select('tag_id')
     .eq('jam_id', jamId);
-  if (genreRows && genreRows.length > 0) {
-    await supabase.from('jam_genres').insert(
-      genreRows.map((g: any) => ({ jam_id: data.id, genre_id: g.genre_id }))
+  if (tagRows && tagRows.length > 0) {
+    await supabase.from('jam_tags').insert(
+      tagRows.map((t: any) => ({ jam_id: data.id, tag_id: t.tag_id }))
     );
   }
   return data.id;

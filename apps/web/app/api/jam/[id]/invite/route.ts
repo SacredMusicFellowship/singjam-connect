@@ -5,6 +5,7 @@ import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { createNotification } from "@/lib/notifications";
 import { memberInviteHtml, nonMemberInviteHtml } from "@/emails/jam-invite";
+import { findAuthUserByEmail } from "@/lib/authUsers";
 import { formatJamTime } from "@/lib/formatJamTime";
 import { isJamCohost } from "@/lib/jamCohosts";
 import { jamPathById } from "@/lib/shortRef";
@@ -23,7 +24,10 @@ export async function POST(
   }
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { inviteeUserId, inviteeEmail } = await req.json();
+  const body = await req.json();
+  const inviteeUserId = body.inviteeUserId;
+  // Stored lowercase so the duplicate check and the sign-in claim compare like with like.
+  const inviteeEmail = typeof body.inviteeEmail === "string" ? body.inviteeEmail.trim().toLowerCase() : body.inviteeEmail;
   if (!inviteeUserId && !inviteeEmail) {
     return NextResponse.json({ error: "Provide inviteeUserId or inviteeEmail" }, { status: 400 });
   }
@@ -146,8 +150,7 @@ export async function POST(
   // Non-member email invite
   if (inviteeEmail) {
     // Check if this email is already a member
-    const { data: existingUser } = await admin.auth.admin.listUsers();
-    const match = existingUser?.users?.find((u) => u.email?.toLowerCase() === inviteeEmail.toLowerCase());
+    const match = await findAuthUserByEmail(admin.auth.admin, inviteeEmail);
 
     if (match) {
       // Redirect caller to use the member flow

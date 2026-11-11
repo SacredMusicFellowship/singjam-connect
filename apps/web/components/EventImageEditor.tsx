@@ -168,7 +168,7 @@ export default function EventImageEditor({ images }: { images: JamImages }) {
         <button
           type="button"
           onClick={() => mainInput.current?.click()}
-          className="flex aspect-[3/2] w-full items-center justify-center rounded-2xl border-2 border-dashed border-zinc-200 text-sm text-zinc-400 transition-colors hover:border-zinc-300 hover:text-zinc-500 md:aspect-square"
+          className="flex aspect-[3/2] w-full items-center justify-center rounded-2xl border-2 border-dashed border-zinc-200 text-sm text-zinc-400 transition-colors hover:border-zinc-300 hover:text-zinc-500 sm:aspect-square"
         >
           Add an event image
         </button>

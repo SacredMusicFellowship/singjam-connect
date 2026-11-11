@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: "Users",
 };
 
-type ProfileRow = Omit<AdminUser, "email" | "events">;
+type ProfileRow = Omit<AdminUser, "email" | "events" | "songsAdded">;
 
 export default async function AdminUsersPage() {
   // The layout already guards /admin, but this page reads auth.users through
@@ -21,7 +21,7 @@ export default async function AdminUsersPage() {
 
   const supabase = await getServerSupabase();
   const admin = supabaseAdmin();
-  const [profiles, emails, attendance] = await Promise.all([
+  const [profiles, emails, attendance, submitted] = await Promise.all([
     fetchAllRows<ProfileRow>((from, to) =>
       supabase
         .from("profiles")
@@ -34,7 +34,12 @@ export default async function AdminUsersPage() {
     fetchAllRows<{ email: string }>((from, to) =>
       admin.from("event_attendance").select("email").order("id").range(from, to) as any
     ),
+    fetchAllRows<{ submitted_by: string }>((from, to) =>
+      supabase.from("songs").select("submitted_by").not("submitted_by", "is", null).order("id").range(from, to) as any
+    ),
   ]);
+  const songsByUser = new Map<string, number>();
+  for (const { submitted_by } of submitted) songsByUser.set(submitted_by, (songsByUser.get(submitted_by) ?? 0) + 1);
 
   // Matched on email rather than user_id so events from before someone made an
   // account, as a guest or a spring AC import, still count.
@@ -43,7 +48,7 @@ export default async function AdminUsersPage() {
 
   const users: AdminUser[] = profiles.map((p) => {
     const email = emails.get(p.id) ?? null;
-    return { ...p, email, events: email ? eventsByEmail.get(email.toLowerCase()) ?? 0 : 0 };
+    return { ...p, email, events: email ? eventsByEmail.get(email.toLowerCase()) ?? 0 : 0, songsAdded: songsByUser.get(p.id) ?? 0 };
   });
 
   return (
