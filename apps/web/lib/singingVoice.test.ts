@@ -17,9 +17,10 @@ describe("voiceBadgeClass", () => {
     expect(cls).not.toContain("zinc");
   });
 
-  it("returns violet classes for backup", () => {
+  it("returns sky classes for backup, matching Support (violet is keys)", () => {
     const cls = voiceBadgeClass("backup");
-    expect(cls).toContain("violet");
+    expect(cls).toContain("sky");
+    expect(cls).not.toContain("violet");
     expect(cls).not.toContain("amber");
     expect(cls).not.toContain("zinc");
   });

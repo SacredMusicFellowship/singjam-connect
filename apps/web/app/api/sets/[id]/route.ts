@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { webUrl } from "@singjam/core";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { resolveApiUser } from "@/lib/supabase/apiUser";
 
@@ -37,12 +38,16 @@ export async function PATCH(
   }
 
   if (ultimate_guitar_playlist_url !== undefined) {
+    const url = typeof ultimate_guitar_playlist_url === "string" ? webUrl(ultimate_guitar_playlist_url) : null;
+    if (ultimate_guitar_playlist_url && !url) {
+      return NextResponse.json({ error: "Enter a web address starting with https://" }, { status: 400 });
+    }
     const { error } = await admin
       .from("sets")
-      .update({ ultimate_guitar_playlist_url: ultimate_guitar_playlist_url || null, updated_at: new Date().toISOString() })
+      .update({ ultimate_guitar_playlist_url: url, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ultimate_guitar_playlist_url: url });
   }
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
