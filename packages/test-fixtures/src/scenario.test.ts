@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MUSICAL_KEYS } from "@singjam/core";
 import { EMAIL_DOMAIN, FIXED_NOW } from "./constants";
-import { GENRES } from "./names";
+import { TAGS } from "./names";
 import { buildScenario } from "./scenario";
 
 const { scenario, refs } = buildScenario();
@@ -91,8 +91,8 @@ describe("database constraints", () => {
     expect(uniqueBy(scenario.authUsers, (u) => u.email)).toBe(true);
   });
 
-  it("uses genres and keys the app knows", () => {
-    for (const g of scenario.songGenres) expect(GENRES).toContain(g.genre_name);
+  it("uses tags and keys the app knows", () => {
+    for (const t of [...scenario.songTags, ...scenario.jamTags]) expect(TAGS[t.tag_name as keyof typeof TAGS]).toBe(t.tag_type);
     for (const s of scenario.songs) expect(MUSICAL_KEYS).toContain(s.tonality);
     for (const r of scenario.setSongs) if (r.key_note) expect(MUSICAL_KEYS).toContain(r.key_note);
   });

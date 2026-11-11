@@ -14,7 +14,8 @@ const AUTH_INSTANCE = "00000000-0000-0000-0000-000000000000";
 
 export function scenarioToSql(scenario: Scenario, anchor: Date = FIXED_NOW): SeedFile[] {
   const at = (iso: string | null) => relativeTimestamp(iso, anchor);
-  const genreId = (name: string) => raw(`(select id from public.genres where name = ${literal(name)})`);
+  const tagId = (type: string, name: string) =>
+    raw(`(select id from public.tags where type = ${literal(type)} and name = ${literal(name)})`);
 
   const auth = [
     insert(
@@ -94,7 +95,7 @@ export function scenarioToSql(scenario: Scenario, anchor: Date = FIXED_NOW): See
       "public.song_recording_artists",
       scenario.songRecordingArtists.map((r) => ({ song_id: r.song_id, artist_id: r.artist_id, year: r.year, position: r.position })),
     ),
-    insert("public.song_genres", scenario.songGenres.map((r) => ({ song_id: r.song_id, genre_id: genreId(r.genre_name) }))),
+    insert("public.song_tags", scenario.songTags.map((r) => ({ song_id: r.song_id, tag_id: tagId(r.tag_type, r.tag_name) }))),
   ];
 
   const repertoire = insert(
@@ -112,7 +113,7 @@ export function scenarioToSql(scenario: Scenario, anchor: Date = FIXED_NOW): See
         guests_can_invite: j.guests_can_invite, image_url: j.image_url, created_at: at(j.created_at),
       })),
     ),
-    insert("public.jam_genres", scenario.jamGenres.map((r) => ({ jam_id: r.jam_id, genre_id: genreId(r.genre_name) }))),
+    insert("public.jam_tags", scenario.jamTags.map((r) => ({ jam_id: r.jam_id, tag_id: tagId(r.tag_type, r.tag_name) }))),
     insert("public.jam_cohosts", scenario.jamCohosts.map((r) => ({ id: r.id, jam_id: r.jam_id, user_id: r.user_id, added_by: r.added_by }))),
     insert(
       "public.jam_rsvps",

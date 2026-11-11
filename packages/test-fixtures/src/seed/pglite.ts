@@ -46,7 +46,8 @@ export async function createMigratedDatabase(migrationsDir: string): Promise<PGl
   for (const file of files) {
     const sql = fs.readFileSync(path.join(migrationsDir, file), "utf8");
     try {
-      await db.exec(`begin;\n${sql}\n;commit;`);
+      // Each migration gets a clean slate of pg_temp helpers, as it would in its own session.
+      await db.exec(`discard temp;\nbegin;\n${sql}\n;commit;`);
     } catch (error) {
       await db.exec("rollback;").catch(() => {});
       throw new Error(`${file}: ${(error as Error).message}`);
