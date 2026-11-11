@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { SongPlayStat } from "@/lib/songPlayStats";
 
+import Select from "@/components/Select";
 type SortCol = "title" | "artist" | "playCount" | "lastPlayedAt";
 type SortDir = "asc" | "desc";
 
@@ -57,21 +58,23 @@ export default function SongHistoryTable({ stats }: { stats: SongPlayStat[] }) {
         <label htmlFor="song-history-sort" className="text-xs font-medium text-slate-500">
           Sort by
         </label>
-        <select
+        <Select
           id="song-history-sort"
           value={sort.col}
           onChange={(e) => toggleSort(e.target.value as SortCol)}
-          className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-700"
+          shape="pill"
+          size="sm"
+          wrapperClassName="flex-1"
         >
           {COLUMNS.map((col) => (
             <option key={col.key} value={col.key}>
               {col.label}
             </option>
           ))}
-        </select>
+        </Select>
         <button
           onClick={() => setSort((prev) => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
-          className="rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-500"
+          className="rounded-full border border-slate-200 px-2 py-1 text-sm text-slate-500"
           aria-label={sort.dir === "asc" ? "Sort ascending" : "Sort descending"}
         >
           {sort.dir === "asc" ? "↑" : "↓"}
@@ -95,7 +98,7 @@ export default function SongHistoryTable({ stats }: { stats: SongPlayStat[] }) {
                 )}
                 <div className="mt-1 text-xs text-slate-400">
                   Last played {formatDate(s.lastPlayedAt)}
-                  {s.lastJamName ? ` — ${s.lastJamName}` : ""}
+                  {s.lastJamName ? ` · ${s.lastJamName}` : ""}
                 </div>
               </div>
               <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
@@ -138,7 +141,7 @@ export default function SongHistoryTable({ stats }: { stats: SongPlayStat[] }) {
                 <td className="px-4 py-2.5 text-slate-500">{s.playCount}</td>
                 <td className="px-4 py-2.5 text-slate-500">
                   {formatDate(s.lastPlayedAt)}
-                  {s.lastJamName ? ` — ${s.lastJamName}` : ""}
+                  {s.lastJamName ? ` · ${s.lastJamName}` : ""}
                 </td>
               </tr>
             ))}

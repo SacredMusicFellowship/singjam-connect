@@ -2,24 +2,31 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, Modal, FlatList, TextInput,
-  KeyboardAvoidingView, Platform, Linking,
+  KeyboardAvoidingView, Platform, Linking, useWindowDimensions,
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { WIDE_BREAKPOINT } from '@/components/BrandHeader';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
+import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { formatComposers, reorderSongsForPlayed, SET_SONG_NOTE_MAX } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
+import SubtitleText from '@/components/SubtitleText';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
+import { ensureLeadVoice } from '@/lib/leadVoice';
+import RolePill from '@/components/RolePill';
+import SongRowTitle, { type SongRowCard } from '@/components/SongRowTitle';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
 type SetSortOrder = 'custom' | 'title_asc' | 'title_desc';
+
 
 type SetData = {
   id: string;
@@ -52,28 +59,38 @@ type SetSong = {
   notes: string | null;
   played: boolean;
   leader_user_ids: string[];
+  added_by_user_id?: string | null;
   songs: {
     title: string;
     display_artist: string | null;
+    byline?: string | null;
     chord_chart_url: string | null;
-    song_composers: { people: { name: string } | null }[];
+    tonality?: string | null;
+    song_productions?: { productions: { name: string } | null }[];
   };
 };
 
-type SongSearchResult = {
+type SongSearchResult = SongRowCard & {
   song_id: string;
   title: string;
   display_artist: string | null;
+  productions: string[];
 };
 
 function AddSongModal({
   visible,
   existingIds,
+  userId,
+  singingVoice,
+  onVoiceUpgraded,
   onClose,
   onAdded,
 }: {
   visible: boolean;
   existingIds: Set<string>;
+  userId: string | null;
+  singingVoice: string | null;
+  onVoiceUpgraded: (voice: string) => void;
   onClose: () => void;
   onAdded: (song: SetSong) => void;
 }) {
@@ -96,19 +113,37 @@ function AddSongModal({
 
   async function search(q: string) {
     setSearching(true);
-    const { data } = await supabase
-      .from('songs')
-      .select('song_id, title, display_artist')
-      .or(`title.ilike.%${q}%,display_artist.ilike.%${q}%`)
-      .order('title')
-      .limit(30);
-    setResults(data ?? []);
+    const { data } = await supabase.rpc('search_songs', { q, limit_n: 30 });
+    setResults((data ?? []) as SongSearchResult[]);
     setSearching(false);
+  }
+
+  // As on web, a song that isn't in your songs yet asks your part first and joins your songs at that part.
+  function askPart(title: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      Alert.alert("What's your part?", `"${title}" will be added to your songs.`, [
+        { text: 'Lead', onPress: () => resolve('lead') },
+        { text: 'Support', onPress: () => resolve('support') },
+        { text: 'Learn', onPress: () => resolve('learn') },
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+      ], { cancelable: true, onDismiss: () => resolve(null) });
+    });
   }
 
   async function addSong(song: SongSearchResult) {
     setPendingId(song.song_id);
-    const { ok, json } = await setApi(`/api/sets/${setId}/songs`, 'POST', { songId: song.song_id });
+    const { data: mine } = userId
+      ? await supabase.from('user_songs').select('confidence').eq('user_id', userId).eq('song_id', song.song_id).maybeSingle()
+      : { data: null };
+    let confidence: string | null = null;
+    if (!mine) {
+      confidence = await askPart(song.title);
+      if (!confidence || !(await ensureLeadVoice(confidence, singingVoice, userId, onVoiceUpgraded))) {
+        setPendingId(null);
+        return;
+      }
+    }
+    const { ok, json } = await setApi(`/api/sets/${setId}/songs`, 'POST', confidence ? { songId: song.song_id, confidence } : { songId: song.song_id });
     setPendingId(null);
     if (!ok) { Alert.alert('Error', json?.error ?? 'Could not add song.'); return; }
     onAdded(json.song as SetSong);
@@ -161,10 +196,7 @@ function AddSongModal({
               return (
                 <View className="flex-row items-center px-4 py-3 border-b border-zinc-100">
                   <View className="flex-1 mr-3">
-                    <Text className="text-zinc-900 font-medium" numberOfLines={1}>{item.title}</Text>
-                    {item.display_artist ? (
-                      <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>{item.display_artist}</Text>
-                    ) : null}
+                    <SongRowTitle title={item.title} displayArtist={item.display_artist} productions={item.productions} card={item} />
                   </View>
                   {already ? (
                     <Text className="text-zinc-400 text-sm">Added</Text>
@@ -195,7 +227,9 @@ function AddSongModal({
 
 function SongRow({
   song,
-  canEdit,
+  canManage,
+  canRemove,
+  myUserId,
   displayPosition,
   drag,
   isActive,
@@ -204,6 +238,8 @@ function SongRow({
   participantKeys,
   hasEligible,
   isPublicViewer,
+  myConfidence,
+  onSetMyConfidence,
   onRemove,
   onKeyChange,
   onNotesChange,
@@ -211,7 +247,10 @@ function SongRow({
   onTogglePlayed,
 }: {
   song: SetSong;
-  canEdit: boolean;
+  /** Owner or co-owner: reorder, remove, key, played, notes, choosing leaders. */
+  canManage: boolean;
+  canRemove: boolean;
+  myUserId: string | null;
   displayPosition: number;
   drag?: () => void;
   isActive?: boolean;
@@ -220,6 +259,9 @@ function SongRow({
   participantKeys: Map<string, string>;
   hasEligible: boolean;
   isPublicViewer: boolean;
+  /** The viewer's own role for this song, if it's in their repertoire. */
+  myConfidence: string | null;
+  onSetMyConfidence: (level: string) => void;
   onRemove: () => void;
   onKeyChange: (key: string | null) => void;
   onNotesChange: (notes: string | null) => void;
@@ -228,11 +270,12 @@ function SongRow({
 }) {
   const [keyPickerVisible, setKeyPickerVisible] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
+  const [showAllPeople, setShowAllPeople] = useState(false);
   const [notesInput, setNotesInput] = useState('');
-  const composerNames = (song.songs.song_composers ?? [])
-    .map((sc) => sc.people?.name)
+  const artist = song.songs.byline;
+  const productions = (song.songs.song_productions ?? [])
+    .map((sp) => sp.productions?.name)
     .filter(Boolean) as string[];
-  const artist = song.songs.display_artist ?? formatComposers(composerNames, []);
 
   // Leader/support assignments are only shown to collaborators; public viewers
   // see none. Mirrors web SetSongRow.
@@ -250,7 +293,7 @@ function SongRow({
   );
   const showLeaderBlock =
     !isPublicViewer &&
-    (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canEdit && participants.length > 0));
+    (leadParticipants.length > 0 || supportParticipants.length > 0 || learnParticipants.length > 0 || (canManage && participants.length > 0));
 
   // Set when Cancel closes the editor, so the input's blur doesn't save.
   const discardNotesRef = useRef(false);
@@ -285,6 +328,69 @@ function SongRow({
     );
   }
 
+  const showPlayed = canManage || song.played;
+  const showFooter = !!myConfidence || showPlayed || canManage || canRemove;
+  // Removing their own song is the only action a guest has, so it gets a direct button instead of a ⋯ menu.
+  const guestRemove = canRemove && !canManage;
+  const wide = useWindowDimensions().width >= WIDE_BREAKPOINT;
+
+  // Same items as web's ⋯ menu, which only the owner and co-owners get.
+  function openMenu(event: GestureResponderEvent) {
+    showOptionsSheet({
+      title: song.songs.title,
+      anchor: anchorFrom(event),
+      options: [
+        ...(!song.notes ? [{ label: 'Add note', onPress: startEditingNotes }] : []),
+        { label: 'Remove from set', destructive: true, onPress: confirmRemove },
+      ],
+    });
+  }
+
+  function openRolePicker(event: GestureResponderEvent) {
+    showOptionsSheet({
+      title: song.songs.title,
+      anchor: anchorFrom(event),
+      options: [
+        { label: 'Lead', onPress: () => onSetMyConfidence('lead') },
+        { label: 'Support', onPress: () => onSetMyConfidence('support') },
+        { label: 'Learn', onPress: () => onSetMyConfidence('learn') },
+      ],
+    });
+  }
+
+  // "I know this song!" asks lead or support; learning has its own button, as on web.
+  function openKnowPicker(event: GestureResponderEvent) {
+    showOptionsSheet({
+      title: `Add "${song.songs.title}" as…`,
+      anchor: anchorFrom(event),
+      options: [
+        { label: 'Lead', onPress: () => onSetMyConfidence('lead') },
+        { label: 'Support', onPress: () => onSetMyConfidence('support') },
+      ],
+    });
+  }
+
+  // As on web: each row keeps to one line, "+ N more" opens the rest, and only
+  // a cut-short row is reordered (chosen leaders, then you, first).
+  const trimRow = <T extends { user_id: string }>(list: T[], first: (string | null)[]) =>
+    showAllPeople || list.length <= PEOPLE_ROW_LIMIT.phone
+      ? list
+      : prioritizePeople(list, first).slice(0, shownPeopleCount(list.length, PEOPLE_ROW_LIMIT.phone));
+  const moreToggle = (count: number) => {
+    const hidden = count - shownPeopleCount(count, PEOPLE_ROW_LIMIT.phone);
+    if (hidden === 0) return null;
+    return (
+      <TouchableOpacity
+        onPress={() => setShowAllPeople((v) => !v)}
+        className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 mr-1 mb-1"
+      >
+        <Text className="text-xs text-zinc-500">{showAllPeople ? 'Show less' : `+${hidden} more`}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const nameWeight = (userId: string) => (userId === myUserId ? 'font-bold' : 'font-medium');
+
   return (
     <>
       <KeyPicker
@@ -293,78 +399,69 @@ function SongRow({
         onClose={() => setKeyPickerVisible(false)}
         onSelect={onKeyChange}
       />
-      <View className={`px-4 py-3 border-b border-zinc-100 ${isActive ? 'bg-amber-50' : 'bg-white'}`}>
-        <View className="flex-row items-center">
-          {canEdit && drag ? (
+      <View className={`flex-row px-4 py-3 border-b border-zinc-100 ${isActive ? 'bg-amber-50' : song.played ? 'bg-zinc-50' : 'bg-white'}`}>
+        <View className="w-7 items-center mr-2 pt-0.5">
+          <Text className="text-zinc-300 text-xs font-semibold">{displayPosition}</Text>
+          {canManage && drag ? (
             <TouchableOpacity
               onLongPress={drag}
               delayLongPress={150}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              className="mr-3"
+              className="mt-1"
+              accessibilityLabel="Drag to reorder"
             >
               <Ionicons name="reorder-three-outline" size={20} color="#a1a1aa" />
-            </TouchableOpacity>
-          ) : (
-            <View className="w-7 items-center mr-2">
-              <Text className="text-zinc-300 text-sm font-medium">{displayPosition}</Text>
-            </View>
-          )}
-          <View className="flex-1 min-w-0">
-            <Text className="text-zinc-900 font-medium" numberOfLines={1}>{song.songs.title}</Text>
-            {artist ? (
-              <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>{artist}</Text>
-            ) : null}
-          </View>
-          {song.songs.chord_chart_url ? (
-            <TouchableOpacity
-              onPress={() => Linking.openURL(song.songs.chord_chart_url!).catch(() => Alert.alert('Could not open link'))}
-              className="mr-3 flex-row items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 bg-white"
-              accessibilityLabel="Chord chart"
-            >
-              <Text className="text-xs font-medium text-zinc-600">Chords</Text>
-              <Ionicons name="open-outline" size={11} color="#a1a1aa" />
-            </TouchableOpacity>
-          ) : null}
-          {canEdit ? (
-            <TouchableOpacity
-              onPress={onTogglePlayed}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              className="mr-3"
-            >
-              <Ionicons
-                name={song.played ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                size={18}
-                color={song.played ? '#16a34a' : '#a1a1aa'}
-              />
-            </TouchableOpacity>
-          ) : song.played ? (
-            <View className="mr-3">
-              <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-            </View>
-          ) : null}
-          {canEdit ? (
-            <TouchableOpacity
-              onPress={() => setKeyPickerVisible(true)}
-              className={`mr-3 px-2.5 py-1 rounded-lg border ${song.key_note ? 'border-amber-200 bg-amber-50' : 'border-zinc-200 bg-white'}`}
-            >
-              <Text className={`text-xs font-medium ${song.key_note ? 'text-amber-700' : 'text-zinc-400'}`}>
-                {song.key_note ?? 'Key'}
-              </Text>
-            </TouchableOpacity>
-          ) : song.key_note ? (
-            <View className="mr-3 px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50">
-              <Text className="text-xs font-medium text-amber-700">{song.key_note}</Text>
-            </View>
-          ) : null}
-          {canEdit ? (
-            <TouchableOpacity onPress={confirmRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="trash-outline" size={16} color="#a1a1aa" />
             </TouchableOpacity>
           ) : null}
         </View>
 
-        {editingNotes ? (
-          <View className="mt-2 ml-9">
+        <View className="flex-1 min-w-0">
+          <View className="flex-row items-start">
+            <View className="flex-1 min-w-0">
+              <Text className="text-zinc-900 font-medium" numberOfLines={2}>{song.songs.title}</Text>
+              <View className="flex-row items-center mt-0.5">
+                {songSubtitle(productions, artist) && (
+                  <Text className="text-zinc-500 text-sm flex-shrink mr-3" numberOfLines={1}>
+                    <SubtitleText productions={productions} artist={artist} />
+                  </Text>
+                )}
+                {canManage ? (
+                  <TouchableOpacity
+                    onPress={() => setKeyPickerVisible(true)}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    className={`rounded-full px-2 py-0.5 mr-1 ${song.key_note ? KEY_STYLE.chip : KEY_STYLE.emptyChip}`}
+                    // Wide enough for a two-character key, so C and C# chips match.
+                    style={{ minWidth: 34, alignItems: 'center' }}
+                    accessibilityLabel="Key"
+                  >
+                    <Text className={`text-xs font-semibold ${song.key_note ? KEY_STYLE.text : KEY_STYLE.emptyText}`}>
+                      {song.key_note ?? '+ key'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : !isPublicViewer && song.key_note ? (
+                  <View className={`rounded-full px-2 py-0.5 mr-1 items-center ${KEY_STYLE.chip}`} style={{ minWidth: 34 }}>
+                    <Text className={`text-xs font-semibold ${KEY_STYLE.text}`}>{song.key_note}</Text>
+                  </View>
+                ) : null}
+                {!isPublicViewer && song.songs.tonality ? (
+                  <Text className="text-xs text-zinc-500">{song.songs.tonality}</Text>
+                ) : null}
+              </View>
+            </View>
+            {song.songs.chord_chart_url ? (
+              <TouchableOpacity
+                onPress={() => Linking.openURL(song.songs.chord_chart_url!).catch(() => Alert.alert('Could not open link'))}
+                className="ml-2 flex-row items-center gap-1 px-2.5 py-1 rounded-full border border-zinc-200 bg-white"
+                accessibilityLabel="Chord chart"
+              >
+                <Text className="text-xs font-medium text-zinc-600">Chords</Text>
+                <Ionicons name="open-outline" size={11} color="#a1a1aa" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {editingNotes ? (
+          <View className="mt-2">
             <TextInput
               value={notesInput}
               onChangeText={setNotesInput}
@@ -378,7 +475,7 @@ function SongRow({
               className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-900"
             />
             <View className="flex-row items-center gap-3 mt-2">
-              <TouchableOpacity onPress={() => saveNotes()} className="rounded-lg bg-amber-500 px-3 py-1.5">
+              <TouchableOpacity onPress={() => saveNotes()} className="rounded-full bg-amber-500 px-3 py-1.5">
                 <Text className="text-xs font-semibold text-white">Save</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={cancelNotes} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
@@ -393,87 +490,134 @@ function SongRow({
             </View>
           </View>
         ) : !isPublicViewer && song.notes ? (
-          <View className="mt-2 ml-9 flex-row items-start rounded-lg bg-zinc-50 px-2.5 py-1.5">
+          <View className="mt-2 flex-row items-start rounded-lg bg-zinc-50 px-2.5 py-1.5">
             <Ionicons name="document-text-outline" size={14} color="#a1a1aa" style={{ marginTop: 1, marginRight: 6 }} />
             <Text className="flex-1 text-sm text-zinc-700">{song.notes}</Text>
-            {canEdit ? (
+            {canManage ? (
               <TouchableOpacity onPress={startEditingNotes} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} className="ml-2">
                 <Text className="text-xs font-medium text-amber-600">Edit</Text>
               </TouchableOpacity>
             ) : null}
           </View>
-        ) : canEdit ? (
-          <TouchableOpacity
-            onPress={startEditingNotes}
-            className="mt-2 ml-9 self-start rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5"
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          >
-            <Text className="text-xs text-zinc-500">+ Add note</Text>
-          </TouchableOpacity>
-        ) : null}
+          ) : null}
 
-        {showLeaderBlock ? (
-          <View className="mt-2 pl-9 gap-1">
-            {(leadParticipants.length > 0 || (canEdit && participants.length > 0)) ? (
-              <View className="flex-row items-start">
-                <Text className="text-amber-500 text-[10px] font-medium mr-1.5 mt-1">Lead</Text>
-                <View className="flex-row flex-wrap flex-1">
-                  {canEdit && leaderIds.length === 0 && !hasEligible ? (
-                    <View className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 mr-1 mb-1">
-                      <Text className="text-amber-500 text-xs font-medium">No leader</Text>
-                    </View>
-                  ) : null}
-                  {leadParticipants.map((p) => {
-                    const isLeader = leaderIds.includes(p.user_id);
-                    const clickable = canEdit && participantKnowledge.get(p.user_id) === 'lead';
-                    return (
-                      <TouchableOpacity
-                        key={p.user_id}
-                        disabled={!clickable}
-                        onPress={() => {
-                          const next = isLeader
-                            ? leaderIds.filter((uid) => uid !== p.user_id)
-                            : [...leaderIds, p.user_id];
-                          onLeaderToggle(next);
-                        }}
-                        className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${isLeader ? 'bg-amber-400' : 'bg-amber-100'}`}
-                      >
-                        <Text className={`text-xs font-medium ${isLeader ? 'text-white' : 'text-amber-700'}`}>
-                          {participantLabel(p)}
-                          {participantKeys.get(p.user_id) ? ` (${participantKeys.get(p.user_id)})` : null}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+          {!myConfidence ? (
+            <View className="flex-row flex-wrap items-center gap-2 mt-2">
+              <TouchableOpacity onPress={openKnowPicker} className="rounded-full bg-indigo-500 px-3 py-1.5">
+                <Text className="text-white text-xs font-medium">I know this song!</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onSetMyConfidence('learn')} className="rounded-full border border-indigo-200 bg-white px-3 py-1.5">
+                <Text className="text-indigo-600 text-xs font-medium">Want to learn it</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          {showLeaderBlock ? (
+            <View className="mt-2 gap-1">
+              {(leadParticipants.length > 0 || (canManage && participants.length > 0)) ? (
+                <View className="flex-row items-start">
+                  <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.lead.label}`}>Lead</Text>
+                  <View className="flex-row flex-wrap flex-1">
+                    {canManage && leaderIds.length === 0 && !hasEligible ? (
+                      <View className="rounded-full border border-dashed border-amber-300 px-2 py-0.5 mr-1 mb-1">
+                        <Text className="text-amber-500 text-xs font-medium">No leader</Text>
+                      </View>
+                    ) : null}
+                    {trimRow(leadParticipants, [...leaderIds, myUserId]).map((p) => {
+                      const isLeader = leaderIds.includes(p.user_id);
+                      // As on web: anyone who has joined can put themselves forward; choosing
+                      // someone else is for the owner and co-owners.
+                      const clickable = participantKnowledge.get(p.user_id) === 'lead' && (canManage || p.user_id === myUserId);
+                      return (
+                        <TouchableOpacity
+                          key={p.user_id}
+                          disabled={!clickable}
+                          onPress={() => {
+                            const next = isLeader
+                              ? leaderIds.filter((uid) => uid !== p.user_id)
+                              : [...leaderIds, p.user_id];
+                            onLeaderToggle(next);
+                          }}
+                          className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${isLeader ? 'bg-amber-400' : CONFIDENCE_STYLES.lead.pill}`}
+                        >
+                          <Text className={`text-xs ${nameWeight(p.user_id)} ${isLeader ? 'text-white' : CONFIDENCE_STYLES.lead.pillText}`}>
+                            {participantLabel(p)}
+                            {participantKeys.get(p.user_id) ? ` (${participantKeys.get(p.user_id)})` : null}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {moreToggle(leadParticipants.length)}
+                  </View>
                 </View>
-              </View>
-            ) : null}
-            {supportParticipants.length > 0 ? (
-              <View className="flex-row items-start">
-                <Text className="text-sky-500 text-[10px] font-medium mr-1.5 mt-1">Support</Text>
-                <View className="flex-row flex-wrap flex-1">
-                  {supportParticipants.map((p) => (
-                    <View key={p.user_id} className="rounded-full px-2 py-0.5 mr-1 mb-1 bg-sky-100">
-                      <Text className="text-sky-700 text-xs font-medium">{participantLabel(p)}</Text>
-                    </View>
-                  ))}
+              ) : null}
+              {supportParticipants.length > 0 ? (
+                <View className="flex-row items-start">
+                  <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.support.label}`}>Support</Text>
+                  <View className="flex-row flex-wrap flex-1">
+                    {trimRow(supportParticipants, [myUserId]).map((p) => (
+                      <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.support.pill}`}>
+                        <Text className={`text-xs ${CONFIDENCE_STYLES.support.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
+                      </View>
+                    ))}
+                    {moreToggle(supportParticipants.length)}
+                  </View>
                 </View>
-              </View>
-            ) : null}
-            {learnParticipants.length > 0 ? (
-              <View className="flex-row items-start">
-                <Text className="text-zinc-400 text-[10px] font-medium mr-1.5 mt-1">Learning</Text>
-                <View className="flex-row flex-wrap flex-1">
-                  {learnParticipants.map((p) => (
-                    <View key={p.user_id} className="rounded-full px-2 py-0.5 mr-1 mb-1 bg-zinc-100">
-                      <Text className="text-zinc-600 text-xs font-medium">{participantLabel(p)}</Text>
-                    </View>
-                  ))}
+              ) : null}
+              {learnParticipants.length > 0 ? (
+                <View className="flex-row items-start">
+                  <Text className={`text-[10px] font-medium mr-1.5 mt-1 ${CONFIDENCE_STYLES.learn.label}`}>Learning</Text>
+                  <View className="flex-row flex-wrap flex-1">
+                    {trimRow(learnParticipants, [myUserId]).map((p) => (
+                      <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.learn.pill}`}>
+                        <Text className={`text-xs ${CONFIDENCE_STYLES.learn.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
+                      </View>
+                    ))}
+                    {moreToggle(learnParticipants.length)}
+                  </View>
                 </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {showFooter ? (
+            <View className="flex-row items-center mt-2">
+              <View className="flex-1 flex-row flex-wrap items-center gap-2">
+                {myConfidence ? <RolePill level={myConfidence} onPress={openRolePicker} /> : null}
+                {canManage ? (
+                  <TouchableOpacity
+                    onPress={onTogglePlayed}
+                    className={`flex-row items-center rounded-full px-2.5 py-1 ${song.played ? 'bg-green-500' : 'border border-zinc-200 bg-white'}`}
+                  >
+                    {song.played ? <Ionicons name="checkmark" size={12} color="#fff" style={{ marginRight: 3 }} /> : null}
+                    <Text className={`text-xs font-medium ${song.played ? 'text-white' : 'text-zinc-500'}`}>
+                      {song.played ? 'Played' : 'Mark as played'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : song.played ? (
+                  <View className="flex-row items-center rounded-full bg-green-500 px-2.5 py-1">
+                    <Ionicons name="checkmark" size={12} color="#fff" style={{ marginRight: 3 }} />
+                    <Text className="text-xs font-medium text-white">Played</Text>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
-          </View>
-        ) : null}
+              {canManage ? (
+                <TouchableOpacity onPress={openMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="More options">
+                  <Ionicons name="ellipsis-horizontal" size={20} color="#a1a1aa" />
+                </TouchableOpacity>
+              ) : guestRemove ? (
+                wide ? (
+                  <TouchableOpacity onPress={confirmRemove} className="rounded-full border border-zinc-200 px-2 py-1">
+                    <Text className="text-xs text-zinc-400">Remove</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={confirmRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Remove song">
+                    <Ionicons name="trash-outline" size={18} color="#d4d4d8" />
+                  </TouchableOpacity>
+                )
+              ) : null}
+            </View>
+          ) : null}
+        </View>
       </View>
     </>
   );
@@ -687,6 +831,7 @@ function SetSettingsModal({
                     </TouchableOpacity>
                   ))}
                 </View>
+                <Text className="text-xs text-zinc-400 mb-2">{SET_ROLE_DESCRIPTIONS[inviteRole]}</Text>
                 <View className="flex-row items-center bg-zinc-100 rounded-xl px-3 py-2 mb-2">
                   <Ionicons name="search" size={14} color="#a1a1aa" style={{ marginRight: 6 }} />
                   <TextInput
@@ -738,6 +883,7 @@ export default function SetDetailScreen() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [isCoOwner, setIsCoOwner] = useState(false);
+  const [myRole, setMyRole] = useState<string | null>(null);
   const [isCollaborator, setIsCollaborator] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -745,10 +891,17 @@ export default function SetDetailScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  // As on web: order, key, played and leader saves go out one at a time per
+  // song (the order per set), latest tap winning, and live updates for a field
+  // still settling are ignored so they can't flip it back.
+  const syncRef = useRef(createLatestWinsQueue());
   const [songKnowledge, setSongKnowledge] = useState<{ user_id: string; song_id: string; confidence: string; key_note: string | null }[]>([]);
   const [sortBy, setSortBy] = useState<SetSortOrder>('custom');
   const [filterQuery, setFilterQuery] = useState('');
   const [spotifyExporting, setSpotifyExporting] = useState(false);
+  // The viewer's own role per song, which they can change from the row.
+  const [myRepertoire, setMyRepertoire] = useState<Map<string, string>>(new Map());
+  const [singingVoice, setSingingVoice] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) load();
@@ -760,7 +913,7 @@ export default function SetDetailScreen() {
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, chord_chart_url, song_composers(people(name)))';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -786,7 +939,7 @@ export default function SetDetailScreen() {
             sortByPosition(
               prev.map((s) =>
                 s.id === row.id
-                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: row.leader_user_ids }
+                  ? { ...s, ...settledFields(s, row), notes: row.notes }
                   : s
               )
             )
@@ -876,7 +1029,7 @@ export default function SetDetailScreen() {
         .single(),
       supabase
         .from('set_songs')
-        .select('id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, chord_chart_url, song_composers(people(name)))')
+        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)')
         .eq('set_id', id)
         .order('position', { ascending: true }),
       user
@@ -906,6 +1059,7 @@ export default function SetDetailScreen() {
     const coOwner = myRole === 'co-owner';
     setCanEdit(isOwner || myRole === 'editor' || coOwner);
     setIsCoOwner(coOwner);
+    setMyRole(myRole);
     setIsCollaborator(!!collabRes.data);
 
     // Visibility gate, mirroring web set/[id]/page.tsx. RLS on `sets` is
@@ -939,11 +1093,54 @@ export default function SetDetailScreen() {
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not remove song.'); }
   }
 
-  async function handleKeyChange(songId: string, key: string | null) {
-    const previous = songs;
+  function settledFields(local: SetSong, server: { position: number; key_note: string | null; played: boolean; leader_user_ids: string[] | null }) {
+    const q = syncRef.current;
+    return {
+      position: q.isPending('order') ? local.position : server.position,
+      key_note: q.isPending(`key:${local.id}`) ? local.key_note : server.key_note,
+      played: q.isPending(`played:${local.id}`) ? local.played : server.played,
+      leader_user_ids: q.isPending(`leaders:${local.id}`) ? local.leader_user_ids : server.leader_user_ids ?? [],
+    };
+  }
+
+  // After a failed save, show what the server actually has.
+  async function resyncSongs() {
+    const rows = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from('set_songs')
+        .select('id, position, key_note, played, leader_user_ids')
+        .eq('set_id', id)
+        .order('id')
+        .range(from, to)
+    ).catch(() => null);
+    if (!rows) return;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    setSongs((prev) =>
+      prev
+        .map((s) => (byId.has(s.id) ? { ...s, ...settledFields(s, byId.get(s.id)) } : s))
+        .sort((a, b) => a.position - b.position)
+    );
+  }
+
+  function failed(message: string) {
+    Alert.alert('Error', message);
+    resyncSongs();
+  }
+
+  function saveOrder(list: SetSong[]) {
+    const order = list.map((s) => ({ id: s.id, position: s.position }));
+    syncRef.current.run('order', () => setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', { order }), (res) => {
+      if (!res?.ok) failed('Could not reorder the set.');
+    });
+  }
+
+  function handleKeyChange(songId: string, key: string | null) {
+    const entry = songs.find((s) => s.song_id === songId);
+    if (!entry) return;
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, key_note: key } : s));
-    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { key_note: key });
-    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update key.'); }
+    syncRef.current.run(`key:${entry.id}`, () => setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { key_note: key }), (res) => {
+      if (!res?.ok) failed(res?.json?.error ?? 'Could not update key.');
+    });
   }
 
   async function handleNotesChange(songId: string, notes: string | null) {
@@ -953,40 +1150,41 @@ export default function SetDetailScreen() {
     if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not save note.'); }
   }
 
-  async function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
-    const previous = songs;
+  function handleLeaderToggle(songId: string, newLeaderIds: string[]) {
+    const entry = songs.find((s) => s.song_id === songId);
+    if (!entry) return;
     setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, leader_user_ids: newLeaderIds } : s));
-    const { ok, json } = await setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', { leader_user_ids: newLeaderIds });
-    if (!ok) { setSongs(previous); Alert.alert('Error', json?.error ?? 'Could not update leaders.'); return; }
-    // A newly selected leader brings their own key (decided by the API).
-    if (json && 'key_note' in json) {
-      setSongs((prev) => prev.map((s) => s.song_id === songId ? { ...s, key_note: json.key_note } : s));
-    }
+    // Guests can only add or remove themselves; the API merges that into the
+    // current leaders so it can't undo a change someone else just made.
+    const manage = set?.owner_user_id === myUserId || isCoOwner;
+    const body = manage
+      ? { leader_user_ids: newLeaderIds }
+      : { self_leader: !!myUserId && newLeaderIds.includes(myUserId) };
+    syncRef.current.run(`leaders:${entry.id}`, () => setApi(`/api/sets/${id}/songs/${songId}`, 'PATCH', body), (res) => {
+      if (!res?.ok || !Array.isArray(res.json?.leader_user_ids)) { failed(res?.json?.error ?? 'Could not update leaders.'); return; }
+      const keepKey = syncRef.current.isPending(`key:${entry.id}`);
+      setSongs((prev) => prev.map((s) => s.song_id === songId ? {
+        ...s,
+        leader_user_ids: res.json.leader_user_ids,
+        ...(!keepKey && 'key_note' in res.json ? { key_note: res.json.key_note } : {}),
+      } : s));
+    });
   }
 
-  async function handleReorder(data: SetSong[]) {
-    const previous = songs;
+  function handleReorder(data: SetSong[]) {
     const reordered = data.map((s, i) => ({ ...s, position: i + 1 }));
     setSongs(reordered);
-    const { ok } = await setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', {
-      order: reordered.map((s) => ({ id: s.id, position: s.position })),
-    });
-    if (!ok) { setSongs(previous); Alert.alert('Error', 'Could not reorder the set.'); }
+    saveOrder(reordered);
   }
 
-  async function handleTogglePlayed(song: SetSong, played: boolean) {
-    const previous = songs;
+  function handleTogglePlayed(song: SetSong, played: boolean) {
     const reordered = reorderSongsForPlayed(songs, song.id, played)
       .map((s, i) => ({ ...s, position: i + 1 }));
     setSongs(reordered);
-    const [playedRes, reorderRes] = await Promise.all([
-      setApi(`/api/sets/${id}/songs/${song.song_id}`, 'PATCH', { played }),
-      setApi(`/api/sets/${id}/songs/reorder`, 'PATCH', { order: reordered.map((s) => ({ id: s.id, position: s.position })) }),
-    ]);
-    if (!playedRes.ok || !reorderRes.ok) {
-      setSongs(previous);
-      Alert.alert('Error', 'Could not update the set.');
-    }
+    syncRef.current.run(`played:${song.id}`, () => setApi(`/api/sets/${id}/songs/${song.song_id}`, 'PATCH', { played }), (res) => {
+      if (!res?.ok) failed(res?.json?.error ?? 'Could not update the set.');
+    });
+    saveOrder(reordered);
   }
 
   async function handleSpotifyExport() {
@@ -1088,6 +1286,42 @@ export default function SetDetailScreen() {
     return () => { cancelled = true; };
   }, [participantIdsKey, songIdsKey]);
 
+  useEffect(() => {
+    const songIds = songIdsKey ? songIdsKey.split(',') : [];
+    if (!myUserId || !songIds.length) { setMyRepertoire(new Map()); return; }
+    let cancelled = false;
+    Promise.all([
+      supabase.from('user_songs').select('song_id, confidence').eq('user_id', myUserId).in('song_id', songIds),
+      supabase.from('profiles').select('singing_voice').eq('id', myUserId).maybeSingle(),
+    ]).then(([repRes, profileRes]) => {
+      if (cancelled) return;
+      setMyRepertoire(new Map(((repRes.data ?? []) as { song_id: string; confidence: string }[]).map((r) => [r.song_id, r.confidence])));
+      setSingingVoice((profileRes.data as { singing_voice: string | null } | null)?.singing_voice ?? null);
+    });
+    return () => { cancelled = true; };
+  }, [myUserId, songIdsKey]);
+
+  async function handleSetMyConfidence(songId: string, confidence: string) {
+    if (!myUserId) { router.push('/(auth)/sign-in' as any); return; }
+    if (!(await ensureLeadVoice(confidence, singingVoice, myUserId, setSingingVoice))) return;
+    const uid = myUserId;
+    const previous = myRepertoire;
+    const previousKnowledge = songKnowledge;
+    setMyRepertoire((prev) => new Map(prev).set(songId, confidence));
+    setSongKnowledge((prev) => [
+      ...prev.filter((k) => !(k.user_id === uid && k.song_id === songId)),
+      { user_id: uid, song_id: songId, confidence, key_note: prev.find((k) => k.user_id === uid && k.song_id === songId)?.key_note ?? null },
+    ]);
+    const { error } = await supabase
+      .from('user_songs')
+      .upsert({ user_id: uid, song_id: songId, confidence, updated_at: new Date().toISOString() }, { onConflict: 'user_id,song_id' });
+    if (error) {
+      setMyRepertoire(previous);
+      setSongKnowledge(previousKnowledge);
+      Alert.alert('Error', error.message);
+    } else noteMySong(songId, { confidence });
+  }
+
   // Per-song lookup: songId → Map<userId, confidence>.
   const songKnowledgeMap = useMemo(() => {
     const m = new Map<string, Map<string, string>>();
@@ -1113,7 +1347,7 @@ export default function SetDetailScreen() {
     let result = songs;
     if (filterQuery.trim()) {
       const q = filterQuery.trim().toLowerCase();
-      result = result.filter(s => s.songs.title.toLowerCase().includes(q) || (s.songs.display_artist ?? '').toLowerCase().includes(q));
+      result = result.filter(s => s.songs.title.toLowerCase().includes(q) || `${s.songs.byline ?? ''} ${s.songs.display_artist ?? ''}`.toLowerCase().includes(q));
     }
     if (sortBy === 'title_asc') return [...result].sort((a, b) => a.songs.title.localeCompare(b.songs.title));
     if (sortBy === 'title_desc') return [...result].sort((a, b) => b.songs.title.localeCompare(a.songs.title));
@@ -1174,7 +1408,7 @@ export default function SetDetailScreen() {
   const isPublicViewer = !isOwner && !isCollaborator;
   const canManage = isOwner || isCoOwner;
   const existingIds = new Set(songs.map((s) => s.song_id));
-  const canDrag = canEdit && sortBy === 'custom' && !filterQuery.trim();
+  const canDrag = canManage && sortBy === 'custom' && !filterQuery.trim();
 
   // Per-song leader/support inputs, mirroring web SetDetail's row wiring.
   const leaderProps = (song: SetSong) => {
@@ -1184,7 +1418,15 @@ export default function SetDetailScreen() {
       (p) => knowledgeForSong.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id)
     );
     const participantKeys = songKeyMap.get(song.song_id) ?? new Map<string, string>();
-    return { participants: rowParticipants, participantKnowledge: knowledgeForSong, participantKeys, hasEligible, isPublicViewer };
+    return {
+      participants: rowParticipants,
+      participantKnowledge: knowledgeForSong,
+      participantKeys,
+      hasEligible,
+      isPublicViewer,
+      myConfidence: myRepertoire.get(song.song_id) ?? null,
+      onSetMyConfidence: (level: string) => handleSetMyConfidence(song.song_id, level),
+    };
   };
 
   return (
@@ -1213,6 +1455,9 @@ export default function SetDetailScreen() {
       <AddSongModal
         visible={addModalVisible}
         existingIds={existingIds}
+        userId={myUserId}
+        singingVoice={singingVoice}
+        onVoiceUpgraded={setSingingVoice}
         onClose={() => setAddModalVisible(false)}
         onAdded={handleSongAdded}
       />
@@ -1267,7 +1512,7 @@ export default function SetDetailScreen() {
                   className={`px-3 py-1 rounded-full border ${sortBy === key ? 'bg-amber-500 border-amber-500' : 'bg-white border-zinc-200'}`}
                 >
                   <Text className={`text-xs font-medium ${sortBy === key ? 'text-white' : 'text-zinc-600'}`}>
-                    {key === 'custom' ? 'Custom' : key === 'title_asc' ? 'A → Z' : 'Z → A'}
+                    {key === 'custom' ? 'Custom' : key === 'title_asc' ? 'A–Z' : 'Z–A'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1295,7 +1540,9 @@ export default function SetDetailScreen() {
               <ScaleDecorator>
                 <SongRow
                   song={item}
-                  canEdit={canEdit}
+                  canManage={canManage}
+                  canRemove={canRemoveSetSong(isOwner, myRole, item.added_by_user_id, myUserId)}
+                  myUserId={myUserId}
                   displayPosition={(getIndex() ?? 0) + 1}
                   drag={drag}
                   isActive={isActive}
@@ -1323,7 +1570,9 @@ export default function SetDetailScreen() {
             renderItem={({ item, index }) => (
               <SongRow
                 song={item}
-                canEdit={canEdit}
+                canManage={canManage}
+                canRemove={canRemoveSetSong(isOwner, myRole, item.added_by_user_id, myUserId)}
+                myUserId={myUserId}
                 displayPosition={index + 1}
                 {...leaderProps(item)}
                 onRemove={() => handleRemoveSong(item.song_id)}

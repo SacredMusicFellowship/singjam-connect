@@ -33,7 +33,7 @@ export default function UgBackTip({ className = "" }: { className?: string }) {
     <div className={`flex items-start gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 ${className}`}>
       <span className="shrink-0 pt-0.5"><UltimateGuitarIcon /></span>
       <p className="flex-1 text-xs text-zinc-600">
-        Using the Ultimate Guitar app? Tap the back arrow <em>inside UG</em> before you return here, or the next chart will open this song again.
+        Using the Ultimate Guitar app? Tap the back arrow <em>inside UG</em> before you return here, or the next chart will open the same song again.
       </p>
       <button onClick={dismiss} className="shrink-0 text-xs font-medium text-amber-600 hover:text-amber-500">
         Got it
