@@ -1,0 +1,59 @@
+import type { TagType } from "./songTags";
+
+// Addresses of the browse pages (migration 205), shared so web and native link
+// to the same places.
+export const TAG_TYPE_PATH: Record<TagType, string> = {
+  genre: "genres",
+  form: "forms",
+  occasion: "occasions",
+  community: "communities",
+  culture: "cultures",
+  language: "languages",
+  theme: "themes",
+  mode: "modes",
+  rhythm: "rhythms",
+};
+
+export const TAG_PATH_TYPE: Record<string, TagType> = Object.fromEntries(
+  Object.entries(TAG_TYPE_PATH).map(([type, path]) => [path, type as TagType])
+) as Record<string, TagType>;
+
+export type BrowseKind = TagType | "person" | "artist" | "show" | "tune" | "text" | "scripture";
+
+// `traditional` narrows a page to its traditional songs ("Trad. · American"
+// on a song card opens /cultures/American/traditional). A path, not a query:
+// the pages are cached (ISR), and reading the query made them fail to render.
+export function browsePath(kind: BrowseKind, slug: string, opts: { traditional?: boolean } = {}): string {
+  // A passage's key is "book/chapter" (/scripture/psalms/90), so its slash stays.
+  if (kind === "scripture") return `/scripture/${slug.split("/").map(encodeURIComponent).join("/")}`;
+  const base = kind === "person" ? "people" : kind === "artist" ? "artists" : kind === "show" ? "shows"
+    : kind === "tune" ? "tunes" : kind === "text" ? "texts" : TAG_TYPE_PATH[kind];
+  return `/${base}/${encodeURIComponent(slug)}${opts.traditional ? "/traditional" : ""}`;
+}
+
+// What a browse page is, shown above its name.
+export const KIND_LABEL: Record<BrowseKind, string> = {
+  genre: "Genre",
+  form: "Form",
+  occasion: "Occasion",
+  community: "Community",
+  culture: "Culture",
+  language: "Language",
+  theme: "Theme",
+  mode: "Mode",
+  rhythm: "Rhythm",
+  person: "Songwriter",
+  artist: "Recording artist",
+  show: "Show",
+  tune: "Tune",
+  text: "Text",
+  scripture: "Scripture",
+};
+
+export const SHOW_MEDIUM_LABEL: Record<string, string> = {
+  stage: "Stage musical",
+  film: "Film",
+  animated: "Animated film",
+  tv: "TV",
+  game: "Video game",
+};

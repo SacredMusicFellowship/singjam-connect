@@ -3,12 +3,14 @@ import { View, Text, FlatList, TextInput, TouchableOpacity, RefreshControl, Aler
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { mergeSuggestionsById, songMatchesFilters, deriveFilterOptions, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState } from '@singjam/core';
+import { mergeSuggestionsById, songMatchesFilters, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
 import { useAuth } from '@/lib/auth-context';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
+import { useFilterFacets } from '@/lib/useFilterFacets';
+import { noteMySong } from '@/lib/mySongsStore';
 import InlineDropdown from '@/components/InlineDropdown';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RepertoireCard from '@/components/RepertoireCard';
@@ -19,13 +21,21 @@ import AddToSetModal from '@/components/AddToSetModal';
 import BrandHeader from '@/components/BrandHeader';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
+import FiltersButton from '@/components/FiltersButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RichUserSong = UserSong & {
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
+  chord_chart_url?: string | null;
   genres: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   productions: string[];
   vibe: string | null;
   tonality: string | null;
@@ -46,8 +56,8 @@ const CONFIDENCE_LEVELS: { key: Exclude<ConfidenceFilter, 'all'>; label: string 
 ];
 
 const SORT_OPTIONS: { key: SortOrder; label: string }[] = [
-  { key: 'title_asc', label: 'A → Z' },
-  { key: 'title_desc', label: 'Z → A' },
+  { key: 'title_asc', label: 'A–Z' },
+  { key: 'title_desc', label: 'Z–A' },
   { key: 'popularity', label: 'Popular' },
 ];
 
@@ -89,17 +99,24 @@ async function fetchRichUserSongs(): Promise<RichUserSong[]> {
     updated_at: row.updated_at,
     title: row.title ?? '',
     display_artist: row.display_artist ?? null,
+    byline: row.byline ?? null,
+    card_identity: row.card_identity ?? null,
+    recording_artists: row.recording_artists ?? [],
     composers: row.composers ?? [],
     cultures: row.cultures ?? [],
     genres: row.genres ?? [],
     languages: row.languages ?? [],
     themes: row.themes ?? [],
+    forms: row.forms ?? [],
+    occasions: row.occasions ?? [],
+    communities: row.communities ?? [],
     productions: row.productions ?? [],
     vibe: row.vibe ?? null,
     tonality: row.tonality ?? null,
     meter: row.meter ?? null,
     year: row.year ?? null,
     popularity: Number(row.popularity ?? 0),
+    chord_chart_url: row.chord_chart_url ?? null,
   }));
 }
 
@@ -174,14 +191,7 @@ export default function RepertoireScreen() {
     })();
   }, []);
 
-  // Derive each filter dimension's options from songs passing the OTHER active
-  // filters, so choosing one facet narrows the rest (cascading, like web).
-  const options = useMemo(() => deriveFilterOptions(songs, extFilters), [songs, extFilters]);
-
-  const yearBounds = useMemo(() => {
-    const years = songs.map(s => s.year).filter((y): y is number => y != null);
-    return years.length ? { min: Math.min(...years), max: Math.max(...years) } : { min: null, max: null };
-  }, [songs]);
+  const { hierarchy, expanded: expandedFilters, options, facets, yearBounds } = useFilterFacets(songs, extFilters);
 
   // Typing searches the whole catalogue, matching web: results include songs you
   // already own (rendered with their role controls) as well as ones you don't.
@@ -211,12 +221,12 @@ export default function RepertoireScreen() {
       result = result.filter(s => s.confidence === confidenceFilter);
     }
 
-    result = result.filter(s => songMatchesFilters(s, extFilters));
+    result = result.filter(s => songMatchesFilters(s, expandedFilters));
 
     if (sortBy === 'title_desc') return [...result].sort((a, b) => b.title.localeCompare(a.title));
     if (sortBy === 'popularity') return [...result].sort((a, b) => b.popularity - a.popularity || a.title.localeCompare(b.title));
     return result;
-  }, [songs, confidenceFilter, extFilters, sortBy]);
+  }, [songs, confidenceFilter, expandedFilters, sortBy]);
 
   const existingIds = useMemo(() => new Set(songs.map(s => s.song_id)), [songs]);
   const songsById = useMemo(() => new Map(songs.map(s => [s.song_id, s])), [songs]);
@@ -243,13 +253,13 @@ export default function RepertoireScreen() {
     const songId = song.song_id;
     setSongs(prev => prev.map(s => s.song_id === songId ? { ...s, confidence } : s));
     const { error } = await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
-    if (error) { Alert.alert('Error', error.message); latest.current.load(); }
+    if (error) { Alert.alert('Error', error.message); latest.current.load(); } else noteMySong(songId, { confidence });
   }, [userId, singingVoice]);
 
   const handleKeyChange = useCallback(async (songId: string, key_note: string | null) => {
     setSongs(prev => prev.map(s => s.song_id === songId ? { ...s, key_note } : s));
     const { error } = await supabase.from('user_songs').update({ key_note }).eq('user_id', userId).eq('song_id', songId);
-    if (error) { Alert.alert('Error', error.message); latest.current.load(); }
+    if (error) { Alert.alert('Error', error.message); latest.current.load(); } else noteMySong(songId, { key: key_note });
   }, [userId]);
 
   const handleKeyTap = useCallback((song: { song_id: string }) => setKeyPickerSongId(song.song_id), []);
@@ -293,11 +303,17 @@ export default function RepertoireScreen() {
         updated_at: new Date().toISOString(),
         title: s.title,
         display_artist: s.display_artist,
+        byline: s.byline ?? null,
+        card_identity: s.card_identity ?? null,
+        recording_artists: s.recording_artists ?? [],
         composers: s.composers,
         cultures: s.cultures,
         genres: s.genres,
         languages: s.languages,
         themes: [],
+        forms: [],
+        occasions: [],
+        communities: s.communities ?? [],
         productions: s.productions,
         vibe: null,
         tonality: null,
@@ -315,7 +331,7 @@ export default function RepertoireScreen() {
       Alert.alert('Error', error.message);
       setSongs(prevSongs);
       setSuggestions(prevSuggestions);
-    }
+    } else noteMySong(s.song_id, { confidence });
   }, [userId, singingVoice]);
 
   const toggleSelect = useCallback((song: { song_id: string }) => {
@@ -348,7 +364,8 @@ export default function RepertoireScreen() {
       setSongs(prev => prev.map(s => selectedIds.has(s.song_id) ? { ...s, confidence } : s));
       setSelectedIds(new Set());
       for (const songId of ids) {
-        await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
+        const { error } = await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
+        if (!error) noteMySong(songId, { confidence });
       }
     }
     showOptionsSheet({
@@ -371,7 +388,8 @@ export default function RepertoireScreen() {
             setSongs(prev => prev.filter(s => !selectedIds.has(s.song_id)));
             setSelectedIds(new Set());
             for (const songId of ids) {
-              await supabase.from('user_songs').delete().eq('user_id', userId).eq('song_id', songId);
+              const { error } = await supabase.from('user_songs').delete().eq('user_id', userId).eq('song_id', songId);
+              if (!error) noteMySong(songId, null);
             }
           },
         },
@@ -482,17 +500,7 @@ export default function RepertoireScreen() {
             onChange={setSortBy}
             accessibilityLabel="Sort"
           />
-          <TouchableOpacity
-            onPress={() => setFilterModalVisible(true)}
-            className={`h-7 flex-row items-center gap-1.5 rounded-lg border px-3 ${
-              extFilterCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200'
-            }`}
-          >
-            <Ionicons name="filter" size={12} color={extFilterCount > 0 ? '#b45309' : '#71717a'} />
-            <Text className={`text-xs font-medium ${extFilterCount > 0 ? 'text-amber-700' : 'text-zinc-500'}`}>
-              Filters{extFilterCount > 0 ? ` · ${extFilterCount}` : ''}
-            </Text>
-          </TouchableOpacity>
+          <FiltersButton count={extFilterCount} onPress={() => setFilterModalVisible(true)} />
         </View>
       </View>
 
@@ -504,13 +512,13 @@ export default function RepertoireScreen() {
             <Text className="text-xs text-amber-700 underline">Deselect all</Text>
           </TouchableOpacity>
           <View className="flex-row items-center gap-2 ml-auto">
-            <TouchableOpacity onPress={handleBulkAddToSet} className="rounded-xl border border-zinc-300 bg-white px-2 py-1.5">
+            <TouchableOpacity onPress={handleBulkAddToSet} className="rounded-full border border-zinc-300 bg-white px-2 py-1.5">
               <Text className="text-xs text-zinc-700">Add to set…</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleBulkConfidence} className="rounded-xl border border-zinc-300 bg-white px-2 py-1.5">
+            <TouchableOpacity onPress={handleBulkConfidence} className="rounded-full border border-zinc-300 bg-white px-2 py-1.5">
               <Text className="text-xs text-zinc-700">Change role…</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleBulkRemove} className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5">
+            <TouchableOpacity onPress={handleBulkRemove} className="rounded-full border border-zinc-200 bg-white px-3 py-1.5">
               <Text className="text-xs text-zinc-500">Remove</Text>
             </TouchableOpacity>
           </View>
@@ -557,7 +565,7 @@ export default function RepertoireScreen() {
             <Text className="text-sm text-zinc-500">Can't find your song?</Text>
             <TouchableOpacity
               onPress={() => setSubmitOpen(true)}
-              className="mt-3 rounded-xl bg-zinc-800 px-4 py-2.5"
+              className="mt-3 rounded-full bg-zinc-800 px-4 py-2.5"
             >
               <Text className="text-sm font-semibold text-white">Add a missing song</Text>
             </TouchableOpacity>
@@ -622,6 +630,8 @@ export default function RepertoireScreen() {
         visible={filterModalVisible}
         filters={extFilters}
         options={options}
+        facets={facets}
+        hierarchy={hierarchy}
         yearBounds={yearBounds}
         emptyHint={{
           title: 'No filter options available yet.',
