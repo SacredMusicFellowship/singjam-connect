@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
+import { songSubtitleText } from "@singjam/core";
 import PDFBuilderLoader from "./PDFBuilderLoader";
 
 const getSet = cache(async (id: string) => {
@@ -29,7 +30,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     getSet(id),
     supabase
       .from("set_songs")
-      .select("song_id, position, key_note, leader_user_ids, songs(title, display_artist, tonality, song_recording_artists(position, youtube_url), song_composers(people(name)))")
+      .select("song_id, position, key_note, leader_user_ids, songs(title, display_artist, byline, song_productions(productions(name)), tonality, song_recording_artists(position, youtube_url), song_composers(people(name)))")
       .eq("set_id", id)
       .order("position", { ascending: true }),
     user
@@ -65,6 +66,9 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
   }
 
   let rawSongs = (songsRes.data ?? []).map((s: any) => {
+    const productions = (s.songs?.song_productions ?? [])
+      .map((sp: any) => sp.productions?.name)
+      .filter(Boolean) as string[];
     const songwriters = (s.songs?.song_composers ?? [])
       .map((sc: any) => sc.people?.name)
       .filter(Boolean) as string[];
@@ -72,7 +76,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     return {
       song_id: s.song_id as string,
       title: (s.songs?.title ?? "") as string,
-      artist: (s.songs?.display_artist ?? null) as string | null,
+      artist: songSubtitleText(productions, s.songs?.byline),
       key: (s.key_note ?? null) as string | null,
       tonality: (s.songs?.tonality ?? null) as string | null,
       songwriters,
