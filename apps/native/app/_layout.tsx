@@ -108,6 +108,8 @@ function RootNavigator() {
       <Stack.Screen name="set/[id]" options={{ headerTintColor: '#d97706' }} />
       <Stack.Screen name="set/new" options={{ presentation: 'modal', title: 'New Set', headerTintColor: '#d97706' }} />
       <Stack.Screen name="song/[id]" options={{ headerTintColor: '#d97706' }} />
+      <Stack.Screen name="blog/index" options={{ title: 'Inside SingJam', headerTintColor: '#d97706' }} />
+      <Stack.Screen name="blog/[slug]" options={{ title: 'Inside SingJam', headerTintColor: '#d97706' }} />
     </Stack>
   );
 }

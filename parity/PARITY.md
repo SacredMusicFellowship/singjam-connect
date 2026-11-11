@@ -141,6 +141,7 @@ Legend: ✅ at parity · ⚠️ partial / known diff · ❌ missing · 🚫 desk
 | Public profile (`/u/[username]`) | ❓ | Native has `profile/[id]`; verify nothing deep-links to `/u/`. |
 | Tablet/iPad layout | ✅ | `ContentContainer` max-width (PR #242). Visual verify pending iPad build. |
 | PDF / song-editor / admin / about-privacy-terms | 🚫 | Desktop-only / open-in-browser. |
+| Inside SingJam blog (`blog/index`, `blog/[slug]` ↔ web `/blog`, `/blog/[slug]`, inside.singjam.org) | ⚠️ | Added 2026-11-11. Both apps read `blog_posts` (migration 232) and draw Markdown parsed by core `parseBlogMarkdown`. Native entry is a row on Profile, so guests can't reach it yet (web: footer link, open to all). Authoring is web-only at `/admin/blog`. Not yet verified on a device build. |
 
 ## Core-extraction backlog (structural anti-drift)
 Move these rules into `packages/core` (with unit tests) so web + native share one implementation.
