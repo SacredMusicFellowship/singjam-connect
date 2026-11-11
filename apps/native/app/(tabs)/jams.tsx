@@ -350,7 +350,7 @@ export default function JamsScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
-          ) : null}
+          ) : undefined}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <JamCard
