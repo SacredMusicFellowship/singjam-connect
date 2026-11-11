@@ -16,7 +16,7 @@ test("a new member adds a suggested song to their repertoire and removes it", as
 
   // Whichever song was suggested first: read its title back from the repertoire row.
   const select = page.getByRole("checkbox", { name: /^Select (?!all$)/ });
-  const title = ((await select.getAttribute("aria-label")) ?? (await select.evaluate((el) => el.labels?.[0]?.textContent ?? ""))).replace(/^Select /, "");
+  const title = ((await select.getAttribute("aria-label")) ?? (await select.evaluate((el) => (el as HTMLInputElement).labels?.[0]?.textContent ?? ""))).replace(/^Select /, "");
   await expect(page.getByRole("combobox", { name: `Role for ${title}` })).toHaveValue("learn");
 
   await select.check();
