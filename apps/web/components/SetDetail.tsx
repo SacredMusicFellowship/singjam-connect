@@ -51,7 +51,6 @@ export default function SetDetail({
   isOwner,
   canManage = false,
   isAdmin,
-  isSongEditor = false,
   isPublicViewer = false,
   songKnowledge: initialSongKnowledge = [],
   canAccessJam = false,
@@ -67,7 +66,6 @@ export default function SetDetail({
   isOwner: boolean;
   canManage?: boolean;
   isAdmin: boolean;
-  isSongEditor?: boolean;
   isPublicViewer?: boolean;
   songKnowledge?: SongKnowledge[];
   canAccessJam?: boolean;
@@ -201,7 +199,7 @@ export default function SetDetail({
         const { data } = await supabase
           .from("songs")
           .select(
-            "id, title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url)"
+            "id, title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url)"
           )
           .in("id", ids);
         if (!data) return;
@@ -345,7 +343,7 @@ export default function SetDetail({
             supabase
               .from("set_songs")
               .select(
-                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))"
+                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))"
               )
               .eq("id", row.id)
               .single(),
@@ -642,7 +640,6 @@ export default function SetDetail({
         canManage={canManage}
         canRemove={canRemoveSetSong(isOwner, myRole, song.added_by_user_id, currentUserId)}
         isAdmin={isAdmin}
-        isSongEditor={isSongEditor}
         isPublicViewer={isPublicViewer}
         participants={rowParticipants}
         hasEligible={hasEligible}

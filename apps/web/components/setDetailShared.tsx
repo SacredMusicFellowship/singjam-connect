@@ -19,7 +19,6 @@ export type Song = {
     byline?: string | null;
     slug: string | null;
     chord_chart_url: string | null;
-    chord_chart_pending?: boolean;
     youtube_url: string | null;
     tonality: string | null;
     year: number | null;

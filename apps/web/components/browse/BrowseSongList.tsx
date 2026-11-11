@@ -9,6 +9,7 @@ import { SortDropdown } from "@/components/SortDropdown";
 import SongCard from "@/components/SongCard";
 import { useSongCardActions } from "@/hooks/useSongCardActions";
 import FiltersButton from "@/components/FiltersButton";
+import HideMySongsToggle from "@/components/HideMySongsToggle";
 
 const SORT_OPTIONS = [
   { value: "popularity" as const, label: "Most known" },
@@ -27,13 +28,16 @@ export default function BrowseSongList({ songs, roles }: {
   const { matchesFilters, activeFilterCount, sortBy, setSortBy } = filters;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const actions = useSongCardActions();
+  const { currentUser, repertoire } = actions;
+  // The songs you knew when you ticked the box: ones you add after stay in view.
+  const [hidden, setHidden] = useState<Set<string> | null>(null);
 
   const shown = useMemo(() => {
-    const list = activeFilterCount === 0 ? songs : songs.filter((s) => matchesFilters(s));
+    const list = activeFilterCount === 0 && !hidden ? songs : songs.filter((s) => !hidden?.has(s.song_id) && matchesFilters(s));
     if (sortBy === "title_asc") return [...list].sort((a, b) => a.title.localeCompare(b.title));
     if (sortBy === "title_desc") return [...list].sort((a, b) => b.title.localeCompare(a.title));
     return list;
-  }, [songs, activeFilterCount, matchesFilters, sortBy]);
+  }, [songs, activeFilterCount, matchesFilters, sortBy, hidden]);
 
   return (
     <section className="space-y-2">
@@ -42,13 +46,16 @@ export default function BrowseSongList({ songs, roles }: {
         {songs.length > 1 && (
           <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
         )}
-        {activeFilterCount > 0 && <span className="text-xs text-zinc-500">{shown.length} of {songs.length}</span>}
+        {currentUser && repertoire.size > 0 && (
+          <HideMySongsToggle checked={hidden !== null} onChange={(on) => setHidden(on ? new Set(repertoire.keys()) : null)} />
+        )}
+        {(activeFilterCount > 0 || hidden) && <span className="text-xs text-zinc-500">{shown.length} of {songs.length}</span>}
       </div>
       <ActiveFilterChips filters={filters} />
       {filtersOpen && <FilterPanel filters={filters} hierarchy={hierarchy} />}
 
       {shown.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-8 text-center text-sm text-zinc-500">No songs here match these filters.</div>
+        <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-8 text-center text-sm text-zinc-500">{hidden && activeFilterCount === 0 ? "You know every song here." : "No songs here match these filters."}</div>
       ) : (
         <div className="grid gap-2">
           {shown.map((r) => (
