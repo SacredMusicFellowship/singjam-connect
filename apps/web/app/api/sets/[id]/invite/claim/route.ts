@@ -59,7 +59,7 @@ export async function POST(
 
   await admin
     .from("set_collaborators")
-    .update({ user_id: user.id, status: "accepted" })
+    .update({ user_id: user.id, status: "accepted", invitee_email: null })
     .eq("id", (invite as any).id);
 
   return NextResponse.json({ ok: true, setId });

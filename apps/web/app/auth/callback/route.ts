@@ -6,6 +6,7 @@ import { enqueueWelcomeEmail } from "@/lib/emailOutbox";
 import { syncContact } from "@/lib/activecampaign";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { claimGuestTickets } from "@/lib/ticketClaim";
+import { claimEmailInvites } from "@/lib/claimEmailInvites";
 import { jamPathById } from "@/lib/shortRef";
 
 export async function GET(request: Request) {
@@ -66,6 +67,8 @@ export async function GET(request: Request) {
       if (user.email) {
         await claimGuestTickets(supabaseAdmin(), user.id, user.email).catch((err) =>
           console.error("[tickets] claimGuestTickets failed for", user.email, err));
+        await claimEmailInvites(supabaseAdmin(), user.id, user.email).catch((err) =>
+          console.error("[invites] claimEmailInvites failed for", user.email, err));
       }
 
       const isFirstLogin =

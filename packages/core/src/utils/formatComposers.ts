@@ -4,7 +4,7 @@ export function formatComposers(composers: string[], cultures: string[]): string
   const parts: string[] = [];
   if (isTraditional) {
     const uniqueCultures = [...new Set(cultures)];
-    parts.push(uniqueCultures.length ? `Trad. - ${uniqueCultures.join(", ")}` : "Trad.");
+    parts.push(uniqueCultures.length ? `Trad. · ${uniqueCultures.join(", ")}` : "Trad.");
   }
   parts.push(
     ...others.map((name) => {
@@ -23,7 +23,7 @@ export function formatComposersLong(names: string[], cultures: string[]): string
   const parts: string[] = [];
   if (isTraditional) {
     const culture = cultures[0];
-    parts.push(culture ? `Traditional - ${culture}` : "Traditional");
+    parts.push(culture ? `Traditional · ${culture}` : "Traditional");
   }
   parts.push(...others);
   return parts.join(", ");

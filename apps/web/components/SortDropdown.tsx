@@ -5,8 +5,8 @@ import type { SortBy } from "@/hooks/useSongFilters";
 
 const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: "popularity", label: "Popular" },
-  { value: "title_asc", label: "A → Z" },
-  { value: "title_desc", label: "Z → A" },
+  { value: "title_asc", label: "A–Z" },
+  { value: "title_desc", label: "Z–A" },
 ];
 
 export function SortDropdown({
@@ -42,7 +42,7 @@ export function SortDropdown({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="h-7 flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-500 hover:bg-zinc-50 transition-colors"
+        className="h-7 flex items-center gap-1.5 rounded-full border border-zinc-200 px-3 text-xs font-medium text-zinc-500 hover:bg-zinc-50 transition-colors"
       >
         <svg className="h-3 w-3 shrink-0 text-zinc-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <path d="M4 6l4 4 4-4" />
