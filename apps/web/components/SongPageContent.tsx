@@ -1,39 +1,54 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { browsePath, bylineCredits, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
+import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { formatComposersLong, sortByLastName, setsAcceptingSongs } from "@singjam/core";
+import CreditLinks from "@/components/CreditLinks";
+import { sortByLastName, setsAcceptingSongs, sortRecordingsByYear, enrichmentInProgress, songCreditLines, ENRICHMENT_WAIT_MS, knownTuneHint, NO_MELODIES, type SongMelodies as Melodies } from "@singjam/core";
+import SongMelodies from "@/components/SongMelodies";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import RepertoireButton from "@/components/RepertoireButton";
 import MySongNotes from "@/components/MySongNotes";
 import MyKeySelect from "@/components/MyKeySelect";
 import UgBackTip from "@/components/UgBackTip";
 import AddToSetPanel from "@/components/AddToSetPanel";
+import ChordChartSlot from "@/components/ChordChartSlot";
+import ReportChartButton from "@/components/ReportChartButton";
+import { resolveSongId } from "@/lib/resolveSongId";
 
-function TagRow({ label, tags }: { label: string; tags: string[] }) {
+function TagRow({ label, tags }: { label: string; tags: (string | { name: string; href: string | null })[] }) {
   return (
     <div className="flex flex-wrap items-baseline gap-2">
       <span className="text-xs font-medium text-slate-500 w-20 shrink-0">{label}</span>
       <div className="flex flex-wrap gap-1.5">
-        {tags.map((t) => (
-          <span key={t} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600">
-            {t}
-          </span>
-        ))}
+        {tags.map((t) => {
+          const tag = typeof t === "string" ? { name: t, href: null } : t;
+          return tag.href ? (
+            <Link key={tag.name} href={tag.href} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-amber-100 hover:text-amber-800">
+              {tag.name}
+            </Link>
+          ) : (
+            <span key={tag.name} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600">
+              {tag.name}
+            </span>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function JammerRow({ label, jammers }: { label: string; jammers: { name: string; username: string }[] }) {
+function JammerRow({ level, label, jammers }: { level: ConfidenceLevel; label: string; jammers: { name: string; username: string }[] }) {
+  const style = CONFIDENCE_STYLES[level];
   return (
     <div className="flex flex-wrap items-baseline gap-2">
-      <span className="text-xs font-medium text-slate-500 w-16 shrink-0">{label}</span>
+      <span className={`text-xs font-medium w-16 shrink-0 ${style.label}`}>{label}</span>
       <div className="flex flex-wrap gap-1.5">
         {jammers.map((j, i) => (
           <Link key={i} href={`/u/${j.username}`}
-            className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-slate-200">
+            className={`rounded-full px-2.5 py-0.5 text-xs font-medium hover:opacity-80 ${style.pill} ${style.pillText}`}>
             {j.name}
           </Link>
         ))}
@@ -45,6 +60,7 @@ function JammerRow({ label, jammers }: { label: string; jammers: { name: string;
 type SongData = {
   song: any;
   isAdmin: boolean;
+  isSongEditor: boolean;
   isLoggedIn: boolean;
   singingVoice: string | null;
   userSongConfidence: string | null;
@@ -97,6 +113,18 @@ function usePinToTopOnLoad(loaded: boolean) {
   }, [loaded]);
 }
 
+const SONG_SELECT = `
+          id, title, slug, display_artist, byline, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          song_composers(people(name, slug)),
+          song_lyricists(people(name, slug)),
+          song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
+          song_alternate_titles(title),
+          song_tags(context, tags(name, type, slug)),
+          song_productions(productions(name, year, slug)),
+          texts(slug, year, year_precision, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          tunes(name, slug, year, year_precision)
+        `;
+
 export default function SongPageContent() {
   const params = useParams();
   const slug = params.slug as string;
@@ -114,6 +142,8 @@ export default function SongPageContent() {
   const [currentUserEntry, setCurrentUserEntry] = useState<JammerEntry | null>(null);
   const [userSets, setUserSets] = useState<{ id: string; name: string }[] | null>(null);
   const [songInSets, setSongInSets] = useState<Set<string>>(new Set());
+  const [melodies, setMelodies] = useState<Melodies | null>(null);
+  const melodiesFor = useRef<string | null>(null);
   const supabase = supabaseBrowser();
 
   usePinToTopOnLoad(data !== null);
@@ -121,36 +151,30 @@ export default function SongPageContent() {
   useEffect(() => {
     (async () => {
       setData(null);
+      setMelodies(null);
       setSongUsers(null);
       setSongUsersLoading(false);
       setNotFound(false);
 
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
-      const songQuery = supabase.from("songs").select(`
-          id, title, slug, display_artist, first_line, hook, notes, genius_url, chord_chart_url, youtube_url, year, year_written, tonality, meter, vibe,
-          song_composers(people(name)),
-          song_lyricists(people(name)),
-          song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
-          song_alternate_titles(title),
-          song_genres(genres(name)),
-          song_themes(themes(name)),
-          song_cultures(context, cultures(name)),
-          song_languages(languages(name)),
-          song_productions(productions(name))
-        `);
       const [{ data: { user } }, songRes] = await Promise.all([
         supabase.auth.getUser(),
-        (isUuid ? songQuery.eq("id", slug) : songQuery.or(`slug.eq.${slug},former_slug.eq.${slug}`)).single(),
+        resolveSongId(supabase, slug).catch(() => null).then(async (id) =>
+          id ? (await supabase.from("songs").select(SONG_SELECT).eq("id", id).single()) : { data: null }
+        ),
       ]);
 
       if (!songRes.data) { setNotFound(true); return; }
 
-      if (!isUuid && songRes.data.slug !== slug) {
+      if (!isUuid(slug) && songRes.data.slug !== slug) {
         router.replace(`/songs/${songRes.data.slug}`);
       }
 
       const song = songRes.data;
+      melodiesFor.current = song.id;
+      supabase.rpc("song_melodies", { p_song_id: song.id }).then(({ data: m }) => {
+        if (melodiesFor.current === song.id) setMelodies((m as Melodies | null) ?? NO_MELODIES);
+      });
 
       const [profileRes, userSongRes, popularityJson] = await Promise.all([
         user
@@ -164,6 +188,7 @@ export default function SongPageContent() {
 
       const loadedConfidence = (userSongRes.data as any)?.confidence ?? null;
       const isAdmin = (profileRes.data as any)?.role === "admin";
+      const isSongEditor = (profileRes.data as any)?.role === "song_editor";
       const isLoggedIn = user !== null;
       if (profileRes.data) {
         const p = profileRes.data as any;
@@ -178,6 +203,7 @@ export default function SongPageContent() {
       setData({
         song,
         isAdmin,
+        isSongEditor,
         isLoggedIn,
         singingVoice: (profileRes.data as any)?.singing_voice ?? null,
         userSongConfidence: loadedConfidence,
@@ -196,6 +222,31 @@ export default function SongPageContent() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // A just-added song fills itself in over the next 10–30 seconds. Watch its row
+  // and reload the details when the enrichment job finishes (or gives up).
+  const songId = data?.song?.id as string | undefined;
+  const fillingIn = !!data && enrichmentInProgress(data.song);
+  useEffect(() => {
+    if (!songId || !fillingIn) return;
+    const reload = async () => {
+      const { data: fresh } = await supabase.from("songs").select(SONG_SELECT).eq("id", songId).single();
+      if (fresh) setData((prev) => (prev ? { ...prev, song: fresh } : prev));
+    };
+    const channel = supabase
+      .channel(`song-fill-${songId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "songs", filter: `id=eq.${songId}` }, (payload: any) => {
+        if (payload.new?.enrichment_finished_at) reload();
+      })
+      .subscribe();
+    const started = Date.parse(data!.song.enrichment_started_at);
+    const giveUp = setTimeout(reload, Math.max(0, started + ENRICHMENT_WAIT_MS - Date.now()) + 500);
+    return () => {
+      clearTimeout(giveUp);
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songId, fillingIn]);
 
   // Deleting the user_songs row takes the key with it; migration 179's trigger
   // deletes the private notes.
@@ -269,42 +320,68 @@ export default function SongPageContent() {
     );
   }
 
-  const { song, isAdmin, isLoggedIn, singingVoice, userSongConfidence, popularity } = data;
+  const { song, isAdmin, isSongEditor, isLoggedIn, singingVoice, userSongConfidence, popularity } = data;
 
   const composers = sortByLastName((song.song_composers as any[]).map((x: any) => x.people?.name).filter(Boolean));
   const lyricists = sortByLastName((song.song_lyricists as any[]).map((x: any) => x.people?.name).filter(Boolean));
-  const cultureRows = song.song_cultures as any[];
-  const musicSpecificRows = cultureRows.filter((x: any) => x.context === "music");
-  const lyricsSpecificRows = cultureRows.filter((x: any) => x.context === "lyrics");
-  const noContextRows = cultureRows.filter((x: any) => !x.context);
-  const musicCultures = (musicSpecificRows.length ? musicSpecificRows : noContextRows)
-    .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
-  const lyricsCultures = (lyricsSpecificRows.length ? lyricsSpecificRows : noContextRows)
-    .map((x: any) => x.cultures?.name).filter(Boolean) as string[];
-  const recordingArtists = (song.song_recording_artists as any[])
-    .map((x: any) => ({ name: x.artists?.name as string, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
-    .filter((x: any) => x.name)
-    .sort((a: any, b: any) => (a.position ?? 999) - (b.position ?? 999));
+  const tagRows = song.song_tags as SongTagRow[];
+  const personSlugs = new Map<string, string>(
+    [...(song.song_composers as any[]), ...(song.song_lyricists as any[])].filter((x: any) => x.people?.slug).map((x: any) => [x.people.name, x.people.slug])
+  );
+  // Where "Traditional" comes from: the melody's / words' own tradition when set,
+  // otherwise the song's general cultures and communities.
+  const origins = (context: TagContext) => [...songTagNames(tagRows, "culture", context), ...songTagNames(tagRows, "community", context)];
+  const musicCultures = origins("music").length ? origins("music") : origins("general");
+  const lyricsCultures = origins("lyrics").length ? origins("lyrics") : origins("general");
+  const recordingArtists = sortRecordingsByYear(
+    (song.song_recording_artists as any[])
+      .map((x: any) => ({ name: x.artists?.name as string, slug: (x.artists?.slug ?? null) as string | null, year: x.year as number | null, position: x.position as number | null, youtube_url: x.youtube_url as string | null, spotify_url: x.spotify_url as string | null }))
+      .filter((x: any) => x.name)
+  );
   const altTitles = (song.song_alternate_titles as any[]).map((x: any) => x.title as string).filter(Boolean);
-  const genres = (song.song_genres as any[]).map((x: any) => x.genres?.name as string).filter(Boolean).sort();
-  const themes = (song.song_themes as any[]).map((x: any) => x.themes?.name as string).filter(Boolean).sort();
-  const cultures = [...new Set((song.song_cultures as any[]).map((x: any) => x.cultures?.name as string).filter(Boolean))];
-  const languages = (song.song_languages as any[]).map((x: any) => x.languages?.name as string).filter(Boolean);
-  const songProductions = (song.song_productions as any[]).map((x: any) => x.productions?.name as string).filter(Boolean);
+  const people = (rows: any[]) => sortByLastName(rows.map((x: any) => x.people?.name).filter(Boolean))
+    .map((name) => ({ name, slug: personSlugs.get(name) ?? null }));
+  const creditLines = songCreditLines({
+    composers: people(song.song_composers as any[]), lyricists: people(song.song_lyricists as any[]),
+    musicCultures, lyricsCultures, text: (song as any).texts, tune: (song as any).tunes,
+  });
+  const tagLists = (["genre", "form", "occasion", "community", "theme", "language", "culture"] as const)
+    .map((type) => ({
+      label: TAG_TYPE_LABELS[type],
+      tags: songTagRefs(tagRows, type).map((t) => ({ name: t.name, href: t.slug ? browsePath(type, t.slug) : null })),
+    }))
+    .filter((t) => t.tags.length > 0);
+  const songProductions = (song.song_productions as any[])
+    .map((x: any) => x.productions)
+    .filter((p: any): p is { name: string; year: number | null; slug: string | null } => !!p?.name);
   const allYears = [song.year_written, song.year, ...recordingArtists.map((a: any) => a.year)].filter(Boolean) as number[];
   const earliestYear = allYears.length > 0 ? Math.min(...allYears) : null;
   const tonalityPills = song.tonality ? song.tonality.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
   const meterPills = song.meter ? song.meter.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+
+  function handleChartAdded(url: string) {
+    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url, chord_chart_pending: true } } : prev));
+  }
 
   return (
     <div className="space-y-6 pb-16">
       <div>
         <div>
           <div className="flex items-start justify-between gap-4">
-            <h1 className="text-2xl font-bold text-slate-900">{song.title}</h1>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-bold text-slate-900">{song.title}</h1>
+              {(isAdmin || isSongEditor) && (
+                <Link
+                  href={`${isAdmin ? "/admin/songs" : "/song-editor/songs"}/${song.slug ?? song.id}`}
+                  className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Edit
+                </Link>
+              )}
+            </div>
             <div className="flex shrink-0 items-center gap-3">
               {popularity > 0 && (
-                <span className="text-sm text-slate-400">{popularity} {popularity === 1 ? "jammer" : "jammers"}</span>
+                <span className="text-sm text-slate-400">{formatJammers(popularity)}</span>
               )}
               {earliestYear && (
                 <span className="text-sm text-slate-400">{earliestYear}</span>
@@ -312,68 +389,99 @@ export default function SongPageContent() {
             </div>
           </div>
           {songProductions.length > 0 ? (
-            <p className="mt-0.5 text-base text-slate-500">from <em>{songProductions.join(", ")}</em></p>
-          ) : song.display_artist ? (
-            <p className="mt-0.5 text-base text-slate-500">{song.display_artist}</p>
+            <p className="mt-0.5 text-base text-slate-500">
+              from{" "}
+              {songProductions.map((p, i) => (
+                <Fragment key={`${p.name}-${p.year}`}>
+                  {i > 0 && ", "}
+                  {p.slug ? (
+                    <Link href={browsePath("show", p.slug)} className="hover:text-amber-700 hover:underline"><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</Link>
+                  ) : (
+                    <><em>{p.name}</em>{p.year ? ` (${p.year})` : null}</>
+                  )}
+                </Fragment>
+              ))}
+            </p>
+          ) : song.byline ? (
+            <p className="mt-0.5 text-base text-slate-500">
+              <CreditLinks
+                separator=""
+                credits={bylineCredits(song.byline, { people: [...composers, ...lyricists], artists: recordingArtists.map((a: any) => a.name) })}
+              />
+            </p>
           ) : null}
           {altTitles.length > 0 && (
             <p className="mt-1 text-sm text-slate-400">aka: {altTitles.join(" · ")}</p>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
-              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
+            <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange} knownTune={knownTuneHint(melodies, confidence)}>
+              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
               {confidence && (
                 <AddToSetPanel
                   songId={song.id}
                   sets={userSets}
                   inSets={songInSets}
-                  direction="down"
                   onOpen={loadSetData}
                   onAdded={(setId) => setSongInSets((prev) => new Set([...prev, setId]))}
                   onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
                 />
               )}
+              {confidence && (
+                <ChordChartSlot
+                  songId={song.id}
+                  url={song.chord_chart_url}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
+                  canAdd={isLoggedIn}
+                  size="md"
+                  onAdded={handleChartAdded}
+                />
+              )}
             </RepertoireButton>
-            {isAdmin && (
-              <Link href={`/admin/songs/${song.slug ?? song.id}`}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
-                Edit
-              </Link>
+            {!confidence && (
+              <ChordChartSlot
+                songId={song.id}
+                url={song.chord_chart_url}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
+                canAdd={isLoggedIn}
+                size="md"
+                onAdded={handleChartAdded}
+              />
             )}
           </div>
-          {(song.chord_chart_url || song.genius_url) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {song.chord_chart_url && (
-                <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Chords ↗
-                </a>
-              )}
-              {song.genius_url && (
-                <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
-                  Lyrics ↗
-                </a>
-              )}
-            </div>
-          )}
           {confidence && userId && <MySongNotes key={song.id} songId={song.id} userId={userId} className="mt-3" />}
           {song.chord_chart_url && <UgBackTip className="mt-3" />}
+          {song.chord_chart_url && isLoggedIn && (
+            <div className="mt-2">
+              <ReportChartButton
+                songId={song.id}
+                onReported={() => setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_pending: true } } : prev))}
+              />
+            </div>
+          )}
+          {fillingIn && (
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4" aria-live="polite">
+              <p className="text-sm text-zinc-600">Finding the songwriters, key, lyrics and tags…</p>
+              <div className="mt-3 space-y-2">
+                {["w-1/2", "w-1/3", "w-2/3"].map((w) => (
+                  <div key={w} className="flex items-center gap-3">
+                    <div className="h-3 w-20 shrink-0 animate-pulse rounded bg-zinc-200" />
+                    <div className={`h-3 ${w} animate-pulse rounded bg-zinc-100`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {(composers.length > 0 || lyricists.length > 0) && (
+        {creditLines.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Songwriter(s)</p>
-            {composers.length > 0 && (
-              <p className="text-sm text-slate-600">
-                <span className="font-medium">Music:</span> {formatComposersLong(composers, musicCultures)}
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Songwriters</p>
+            {creditLines.map((line) => (
+              <p key={line.label} className="text-sm text-slate-600">
+                <span className="font-medium">{line.label}:</span>{" "}
+                {line.groups.map((g, i) => <Fragment key={i}>{i > 0 && " · "}<CreditLinks credits={g} /></Fragment>)}
               </p>
-            )}
-            {lyricists.length > 0 && (
-              <p className="text-sm text-slate-600">
-                <span className="font-medium">Lyrics:</span> {formatComposersLong(lyricists, lyricsCultures)}
-              </p>
-            )}
+            ))}
           </div>
         )}
       </div>
@@ -390,16 +498,23 @@ export default function SongPageContent() {
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recordings</h2>
               <div className="flex flex-wrap gap-2">
                 {recordingArtists.map((a: any, i: number) => (
-                  <span key={i} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                  <Link
+                    key={i}
+                    href={browsePath("artist", a.slug ?? a.name)}
+                    className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700 hover:bg-amber-100 hover:text-amber-800"
+                  >
                     {a.name}
                     {a.year && <span className="text-slate-400">{a.year}</span>}
-                  </span>
+                  </Link>
                 ))}
               </div>
             </>
           )}
         </section>
       )}
+
+      <SongMelodies title="Other tunes" items={melodies?.other_melodies ?? []} />
+      <SongMelodies title="Also sung to this tune" items={melodies?.same_tune ?? []} />
 
       {(() => {
         type ArtistEmbed = { name: string; year: number | null; videoId: string | null; trackId: string | null };
@@ -434,48 +549,18 @@ export default function SongPageContent() {
                     {e.name}{e.year && <span className="ml-2 font-normal text-slate-400">{e.year}</span>}
                   </p>
                 )}
-                {e.videoId && (
-                  <section className="rounded-xl overflow-hidden border border-slate-200">
-                    <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                      <iframe
-                        className="absolute inset-0 w-full h-full"
-                        src={`https://www.youtube.com/embed/${e.videoId}`}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                  </section>
-                )}
-                {e.trackId && (
-                  <section className="rounded-xl overflow-hidden border border-slate-200">
-                    <iframe
-                      src={`https://open.spotify.com/embed/track/${e.trackId}`}
-                      width="100%"
-                      height="80"
-                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                      loading="lazy"
-                    />
-                  </section>
-                )}
+                {e.videoId && <YouTubeEmbed videoId={e.videoId} title={song.title} />}
+                {e.trackId && <SpotifyEmbed trackId={e.trackId} title={song.title} />}
               </div>
             ))}
             {fallbackVideoId && (
-              <section className="rounded-xl overflow-hidden border border-slate-200">
-                <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                  <iframe
-                    className="absolute inset-0 w-full h-full"
-                    src={`https://www.youtube.com/embed/${fallbackVideoId}`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              </section>
+              <YouTubeEmbed videoId={fallbackVideoId} title={song.title} />
             )}
           </div>
         );
       })()}
 
-      {(song.first_line || song.hook) && (
+      {(song.first_line || song.hook || song.genius_url) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
           {song.first_line && (
@@ -490,6 +575,12 @@ export default function SongPageContent() {
               <em>{song.hook}</em>
             </p>
           )}
+          {song.genius_url && (
+            <a href={song.genius_url} target="_blank" rel="noopener noreferrer"
+              className="inline-block rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+              Full lyrics
+            </a>
+          )}
         </section>
       )}
 
@@ -502,13 +593,10 @@ export default function SongPageContent() {
         </section>
       )}
 
-      {(genres.length > 0 || themes.length > 0 || cultures.length > 0 || languages.length > 0) && (
+      {tagLists.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tags</h2>
-          {genres.length > 0 && <TagRow label="Genres" tags={genres} />}
-          {themes.length > 0 && <TagRow label="Themes" tags={themes} />}
-          {languages.length > 0 && <TagRow label="Languages" tags={languages} />}
-          {cultures.length > 0 && <TagRow label="Cultures" tags={cultures} />}
+          {tagLists.map((t) => <TagRow key={t.label} label={t.label} tags={t.tags} />)}
         </section>
       )}
 
@@ -529,9 +617,9 @@ export default function SongPageContent() {
             </div>
           ) : songUsers && (songUsers.lead.length > 0 || songUsers.support.length > 0 || songUsers.learn.length > 0) ? (
             <div className="space-y-2">
-              {songUsers.lead.length > 0 && <JammerRow label="Lead" jammers={songUsers.lead} />}
-              {songUsers.support.length > 0 && <JammerRow label="Support" jammers={songUsers.support} />}
-              {songUsers.learn.length > 0 && <JammerRow label="Learn" jammers={songUsers.learn} />}
+              {songUsers.lead.length > 0 && <JammerRow level="lead" label="Lead" jammers={songUsers.lead} />}
+              {songUsers.support.length > 0 && <JammerRow level="support" label="Support" jammers={songUsers.support} />}
+              {songUsers.learn.length > 0 && <JammerRow level="learn" label="Learning" jammers={songUsers.learn} />}
             </div>
           ) : (
             <p className="text-sm text-slate-400">No jammers have added this song yet.</p>
@@ -558,25 +646,38 @@ export default function SongPageContent() {
 
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange}>
-            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} />}
+          <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange} knownTune={knownTuneHint(melodies, confidence)}>
+            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
             {confidence && (
               <AddToSetPanel
                 songId={song.id}
                 sets={userSets}
                 inSets={songInSets}
-                direction="up"
                 onOpen={loadSetData}
                 onAdded={(setId) => setSongInSets((prev) => new Set([...prev, setId]))}
                 onSetCreated={(s) => setUserSets((prev) => [s, ...(prev ?? [])])}
               />
             )}
+            {confidence && (
+              <ChordChartSlot
+                songId={song.id}
+                url={song.chord_chart_url}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
+                canAdd={isLoggedIn}
+                size="md"
+                onAdded={handleChartAdded}
+              />
+            )}
           </RepertoireButton>
-          {isAdmin && (
-            <Link href={`/admin/songs/${song.slug ?? song.id}`}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
-              Edit
-            </Link>
+          {!confidence && (
+            <ChordChartSlot
+              songId={song.id}
+              url={song.chord_chart_url}
+                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
+              canAdd={isLoggedIn}
+              size="md"
+              onAdded={handleChartAdded}
+            />
           )}
         </div>
         <Link href={confidence ? "/repertoire" : "/search"}
@@ -596,7 +697,7 @@ export default function SongPageContent() {
                 <button
                   onClick={handleRemoveFromRepertoire}
                   disabled={removing}
-                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
                 >
                   {removing ? "Removing…" : "Remove"}
                 </button>
@@ -608,7 +709,7 @@ export default function SongPageContent() {
           ) : (
             <button
               onClick={() => setConfirmingRemove(true)}
-              className="rounded-xl border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+              className="rounded-full border border-zinc-200 px-2 py-1 text-xs text-zinc-400 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
             >
               Remove from my repertoire
             </button>

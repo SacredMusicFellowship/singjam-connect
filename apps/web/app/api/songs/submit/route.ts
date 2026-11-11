@@ -2,136 +2,101 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as admin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
-import { generateSlug } from "@/lib/generateSlug";
+import { findExistingSong, findOnSpotify } from "@/lib/songLookup";
+import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
+import { idsFor, tagIds } from "@/lib/songEnrichment";
+import { parseTagSpecs, parseWriters } from "@/lib/songAddDetails";
 
-const LANG_CODE_MAP: Record<string, string> = {
-  eng: "English", fra: "French", spa: "Spanish", deu: "German",
-  ita: "Italian", por: "Portuguese", rus: "Russian", jpn: "Japanese",
-  zho: "Chinese", kor: "Korean", nld: "Dutch", pol: "Polish",
-  swe: "Swedish", nor: "Norwegian", fin: "Finnish", heb: "Hebrew",
-  ara: "Arabic", hin: "Hindi", lat: "Latin", cat: "Catalan",
-  tur: "Turkish", vie: "Vietnamese", tha: "Thai", ind: "Indonesian",
-};
-
-function normalizeName(name: string): string {
-  return /^\[traditional\]$/i.test(name) ? "Traditional" : name;
-}
-
-async function findOrCreate(
-  db: ReturnType<typeof admin>,
-  table: "people" | "artists",
-  name: string
-): Promise<string | null> {
-  const canonical = normalizeName(name);
-  const { data: found } = await db.from(table).select("id").ilike("name", canonical).maybeSingle();
+async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): Promise<string | null> {
+  const { data: found } = await db.from("artists").select("id").ilike("name", name).limit(1).maybeSingle();
   if (found) return found.id;
-  const { data: created } = await db.from(table).insert({ name: canonical }).select("id").single();
+  const { data: created } = await db.from("artists").insert({ name }).select("id").single();
   return created?.id ?? null;
 }
 
+// Adds a song the user has confirmed (title, artist and the Spotify/YouTube match
+// from /api/songs/lookup). Everything else — writers, years, key, tags, lyrics —
+// is filled in afterwards by the enrichment job; nobody reviews it by hand.
+// Older clients send only title/artist; those are matched on Spotify here.
+// Admins and song editors (the CSV import) may also send sourced writers and
+// tags and a first line, which enrichment then leaves alone, and no_recording
+// for a traditional song that has no recording to match.
 export async function POST(req: Request) {
   const supabase = await supabaseServer();
   let user = (await supabase.auth.getUser()).data.user ?? null;
   if (!user) {
-    // Native app authenticates with a bearer token instead of cookies
     const bearer = req.headers.get("Authorization")?.replace("Bearer ", "");
     if (bearer) user = (await supabaseFromBearer(bearer).auth.getUser()).data.user ?? null;
   }
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { title, artist, spotify_url: submittedSpotifyUrl } = await req.json();
-  if (!title?.trim()) return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  const body = await req.json();
+  if (!body.title?.trim()) return NextResponse.json({ error: "Title is required" }, { status: 400 });
+
+  let title: string = body.title.trim();
+  const noRecording = body.no_recording === true;
+  let artist: string | null = noRecording ? null : body.artist?.trim() || null;
+  let spotifyUrl: string | null = body.spotify_url ?? null;
+  let releaseYear: number | null = typeof body.release_year === "number" ? body.release_year : null;
+  const youtubeUrl: string | null =
+    body.youtube_official && /^[A-Za-z0-9_-]{11}$/.test(body.youtube_id ?? "") ? `https://www.youtube.com/watch?v=${body.youtube_id}` : null;
+
+  if (!body.confirmed && !noRecording) {
+    const match = await findOnSpotify(title, artist ?? "").catch(() => null);
+    if (match) ({ title, artist, spotify_url: spotifyUrl, release_year: releaseYear } = match);
+    // The CSV import's titles are sourced; Spotify's track name ("Graves Into
+    // Gardens (Live)", "Trust In God (feat. Chris Brown)") only supplies the recording.
+    if (match && body.keep_title === true) title = body.title.trim();
+  }
 
   const db = admin();
-
-  // Enrich first so the duplicate check uses canonical title/artist from MusicBrainz
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const enrichRes = await fetch(
-    `${baseUrl}/api/enrich?title=${encodeURIComponent(title.trim())}&artist=${encodeURIComponent(artist?.trim() ?? "")}&mode=import`
-  );
-  const enrichData = enrichRes.ok ? await enrichRes.json() : {};
-
-  const mb = enrichData.musicbrainz;
-  const genius = enrichData.genius;
-  const spotifyGenres: string[] = enrichData.spotify?.genres ?? [];
-  const lastfmTags: string[] = enrichData.lastfm?.tags ?? [];
-
-  const finalTitle: string = mb?.title ?? title.trim();
-  const composerNames: string[] = mb?.composers ?? [];
-  const lyricistNames: string[] = mb?.lyricists ?? [];
-  const primaryYear: number | null = mb?.year ?? null;
-  const langCodes: string[] = mb?.languages ?? [];
-  const primaryArtistName: string | null = mb?.display_artist ?? artist?.trim() ?? enrichData.spotify?.artist ?? null;
-
-  // Duplicate check using canonical values
-  const normArtist = primaryArtistName ?? "";
-  let dupeQuery = db.from("songs").select("id, slug").ilike("title", finalTitle);
-  dupeQuery = normArtist
-    ? dupeQuery.ilike("display_artist", normArtist)
-    : dupeQuery.is("display_artist", null);
-  const { data: existing } = await dupeQuery.limit(1).maybeSingle();
-
-  if (existing) {
+  const writers = parseWriters(body.writers);
+  const tagSpecs = parseTagSpecs(body.tags);
+  const firstLine = typeof body.first_line === "string" ? body.first_line.trim() || null : null;
+  if (writers.length || tagSpecs.length || firstLine) {
+    const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).single();
+    if (!["admin", "song_editor"].includes(profile?.role)) {
+      return NextResponse.json({ error: "Only song editors can set writers, tags or a first line when adding a song" }, { status: 403 });
+    }
+  }
+  const existing = await findExistingSong(db, [title, body.title.trim()], artist);
+  if (existing && (existing.match === "same" || !body.add_anyway)) {
     return NextResponse.json({ error: "This song is already in our library.", id: existing.id, slug: existing.slug }, { status: 409 });
   }
 
-  // Ensure slug is unique
-  let slug = generateSlug(finalTitle, [...composerNames, ...lyricistNames]);
-  const { data: slugConflict } = await db.from("songs").select("id").eq("slug", slug).maybeSingle();
-  if (slugConflict) slug = `${slug}-${Date.now()}`;
-
-  // Insert song
   const { data: song, error: songErr } = await db
     .from("songs")
-    .insert({
-      title: finalTitle,
-      display_artist: primaryArtistName || null,
-      slug,
-      genius_url: genius?.lyrics_url ?? null,
-      needs_review: true,
-      submitted_by: user.id,
-      updated_at: new Date().toISOString(),
-    })
+    .insert({ title, display_artist: artist, first_line: firstLine, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString() })
     .select("id, slug")
     .single();
-
   if (songErr || !song) {
     return NextResponse.json({ error: songErr?.message ?? "Failed to create song" }, { status: 500 });
   }
 
-  // Recording artist
-  if (primaryArtistName) {
-    const artistId = await findOrCreate(db, "artists", primaryArtistName);
+  if (artist) {
+    const artistId = await findOrCreateArtist(db, artist);
     if (artistId) {
-      await db.from("song_recording_artists").insert({ song_id: song.id, artist_id: artistId, year: primaryYear, position: 0, spotify_url: submittedSpotifyUrl ?? null });
+      await db.from("song_recording_artists").insert({
+        song_id: song.id,
+        artist_id: artistId,
+        position: 0,
+        spotify_url: spotifyUrl,
+        youtube_url: youtubeUrl,
+        ...(youtubeUrl ? { youtube_ok: true } : {}),
+      });
     }
   }
 
-  // Composers & lyricists
-  const composerIds = (await Promise.all(composerNames.map((n) => findOrCreate(db, "people", n)))).filter(Boolean) as string[];
-  const lyricistIds = (await Promise.all(lyricistNames.map((n) => findOrCreate(db, "people", n)))).filter(Boolean) as string[];
-  if (composerIds.length) await db.from("song_composers").insert(composerIds.map((id) => ({ song_id: song.id, person_id: id })));
-  if (lyricistIds.length) await db.from("song_lyricists").insert(lyricistIds.map((id) => ({ song_id: song.id, person_id: id })));
+  if (writers.length) {
+    const people = (await idsFor(db, "people", writers)).map((person_id) => ({ song_id: song.id, person_id }));
+    await db.from("song_composers").insert(people);
+    await db.from("song_lyricists").insert(people);
+  }
+  for (const type of new Set(tagSpecs.map((t) => t.type))) {
+    const ids = await tagIds(db, type, tagSpecs.filter((t) => t.type === type).map((t) => t.name));
+    if (ids.length) await db.from("song_tags").insert(ids.map((tag_id) => ({ song_id: song.id, tag_id, context: "general" })));
+  }
 
-  // Genres & languages
-  const [{ data: allGenres }, { data: allLanguages }] = await Promise.all([
-    db.from("genres").select("id, name"),
-    db.from("languages").select("id, name"),
-  ]);
-
-  const allTagNames = [...new Set([...spotifyGenres, ...lastfmTags].map((g) => g.toLowerCase()))];
-  const matchedGenreIds = (allGenres ?? []).filter((g: any) => allTagNames.includes(g.name.toLowerCase())).map((g: any) => g.id);
-  if (matchedGenreIds.length) await db.from("song_genres").insert(matchedGenreIds.map((id: string) => ({ song_id: song.id, genre_id: id })));
-
-  const langIds = [...new Set(
-    langCodes
-      .map((code) => {
-        const name = LANG_CODE_MAP[code.toLowerCase()];
-        return name ? (allLanguages ?? []).find((l: any) => l.name.toLowerCase() === name.toLowerCase())?.id : null;
-      })
-      .filter((id): id is string => !!id)
-  )];
-  if (langIds.length) await db.from("song_languages").insert(langIds.map((id) => ({ song_id: song.id, language_id: id })));
-
+  await triggerSongEnrichment(song.id, releaseYear);
   return NextResponse.json({ id: song.id, slug: song.slug });
 }

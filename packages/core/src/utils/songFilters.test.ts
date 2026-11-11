@@ -1,8 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   songMatchesFilters,
+  orderFacets,
   deriveFilterOptions,
   countActiveFilters,
+  buildTagHierarchy,
+  rootFacets,
+  deriveFilterFacets,
+  expandFilterState,
   type FilterableSong,
   type SongFilterState,
 } from "./songFilters";
@@ -13,6 +18,9 @@ function song(overrides: Partial<FilterableSong> = {}): FilterableSong {
     languages: [],
     themes: [],
     cultures: [],
+    forms: [],
+    occasions: [],
+    communities: [],
     vibe: null,
     tonality: null,
     meter: null,
@@ -27,6 +35,9 @@ function emptyState(overrides: Partial<SongFilterState> = {}): SongFilterState {
     languages: new Set(),
     themes: new Set(),
     cultures: new Set(),
+    forms: new Set(),
+    occasions: new Set(),
+    communities: new Set(),
     vibe: "",
     tonality: "",
     meter: "",
@@ -37,6 +48,13 @@ function emptyState(overrides: Partial<SongFilterState> = {}): SongFilterState {
 }
 
 describe("songMatchesFilters", () => {
+  it("filters on forms, occasions and communities like the other tag dimensions", () => {
+    const hymn = song({ forms: ["Hymn"], communities: ["Christian"], occasions: ["Funeral and memorial"] });
+    expect(songMatchesFilters(hymn, emptyState({ forms: new Set(["Hymn", "Carol"]) }))).toBe(true);
+    expect(songMatchesFilters(hymn, emptyState({ communities: new Set(["Jewish"]) }))).toBe(false);
+    expect(songMatchesFilters(hymn, emptyState({ occasions: new Set(["Funeral and memorial"]), forms: new Set(["Hymn"]) }))).toBe(true);
+  });
+
   it("passes a song when no filters are active", () => {
     expect(songMatchesFilters(song({ genres: ["Rock"] }), emptyState())).toBe(true);
   });
@@ -68,6 +86,11 @@ describe("songMatchesFilters", () => {
     expect(songMatchesFilters(song({ year: 1970 }), emptyState({ yearMin: "1980" }))).toBe(false);
     expect(songMatchesFilters(song({ year: 2010 }), emptyState({ yearMax: "2000" }))).toBe(false);
     expect(songMatchesFilters(song({ year: null }), emptyState({ yearMin: "1980" }))).toBe(false);
+    // A rough date is a span; it matches any range it overlaps.
+    expect(songMatchesFilters(song({ year: 1501, year_max: 1600 }), emptyState({ yearMin: "1550", yearMax: "1700" }))).toBe(true);
+    expect(songMatchesFilters(song({ year: 1501, year_max: 1600 }), emptyState({ yearMin: "1590" }))).toBe(true);
+    expect(songMatchesFilters(song({ year: 1501, year_max: 1600 }), emptyState({ yearMin: "1601" }))).toBe(false);
+    expect(songMatchesFilters(song({ year: 1501, year_max: 1600 }), emptyState({ yearMax: "1500" }))).toBe(false);
     // no year bound set → a null-year song still passes
     expect(songMatchesFilters(song({ year: null }), emptyState())).toBe(true);
   });
@@ -128,5 +151,79 @@ describe("countActiveFilters", () => {
     expect(countActiveFilters(emptyState({ yearMin: "1980" }))).toBe(1);
     expect(countActiveFilters(emptyState({ yearMin: "1980", yearMax: "2000" }))).toBe(1);
     expect(countActiveFilters(emptyState())).toBe(0);
+  });
+});
+
+describe("tag hierarchy", () => {
+  const tags = [
+    { id: "rock", name: "Rock", type: "genre" },
+    { id: "americana", name: "Americana", type: "genre", is_top_level: true },
+    { id: "rockabilly", name: "Rockabilly", type: "genre", is_top_level: true },
+    { id: "classic", name: "Classic Rock", type: "genre" },
+    { id: "jewish", name: "Jewish", type: "community" },
+  ];
+  const relations = [
+    { tag_id: "rockabilly", related_tag_id: "rock", kind: "parent" },
+    { tag_id: "rockabilly", related_tag_id: "americana", kind: "parent" },
+    { tag_id: "classic", related_tag_id: "rock", kind: "parent" },
+    { tag_id: "rockabilly", related_tag_id: "jewish", kind: "related" },
+  ];
+  const h = buildTagHierarchy(tags, relations);
+  const songs = [
+    song({ genres: ["Rockabilly"] }),
+    song({ genres: ["Classic Rock"] }),
+    song({ genres: ["Rock"], communities: ["Jewish"] }),
+    song({ genres: ["Folk"] }),
+  ];
+
+  it("handles a tag type with no hierarchy", () => {
+    expect(deriveFilterFacets([song({ communities: ["Jewish"] })], emptyState(), h).communities).toEqual([{ value: "Jewish", count: 1 }]);
+  });
+
+  it("links parents and children within a type only, ignoring 'related' links", () => {
+    expect(h.genres?.children.get("Rock")).toEqual(["Rockabilly", "Classic Rock"]);
+    expect(h.genres?.parents.get("Rockabilly")).toEqual(["Rock", "Americana"]);
+    expect(h.communities).toBeUndefined();
+  });
+
+  it("lists top-level tags and parentless ones first, even when they also have a parent", () => {
+    const facets = deriveFilterFacets(songs, emptyState(), h);
+    expect(rootFacets(facets.genres, "genres", h).map((o) => o.value)).toEqual(["Rock", "Americana", "Folk", "Rockabilly"]);
+  });
+
+  it("filters a parent for itself and everything below it", () => {
+    const f = expandFilterState(emptyState({ genres: new Set(["Rock"]) }), h);
+    expect(songs.filter((s) => songMatchesFilters(s, f)).length).toBe(3);
+    const americana = expandFilterState(emptyState({ genres: new Set(["Americana"]) }), h);
+    expect(songs.filter((s) => songMatchesFilters(s, americana)).length).toBe(1);
+  });
+
+  it("counts a parent across its children and offers parents no song carries directly", () => {
+    const facets = deriveFilterFacets(songs, emptyState(), h);
+    expect(facets.genres).toEqual([
+      { value: "Rock", count: 3 },
+      { value: "Americana", count: 1 },
+      { value: "Classic Rock", count: 1 },
+      { value: "Folk", count: 1 },
+      { value: "Rockabilly", count: 1 },
+    ]);
+  });
+
+  it("counts each section against the other active filters and keeps selections listed", () => {
+    const facets = deriveFilterFacets(songs, emptyState({ communities: new Set(["Jewish"]), forms: new Set(["Hymn"]) }), h);
+    // No song is a hymn, so nothing passes: unselected genres drop out, selections stay at 0.
+    expect(facets.genres).toEqual([]);
+    expect(facets.forms).toEqual([{ value: "Hymn", count: 0 }]);
+    expect(facets.communities).toEqual([{ value: "Jewish", count: 0 }]);
+  });
+});
+
+describe("orderFacets", () => {
+  const opts = [{ value: "Rock", count: 2 }, { value: "Folk", count: 9 }, { value: "Blues", count: 2 }];
+  it("puts most songs first, ties A–Z", () => {
+    expect(orderFacets(opts, "count").map((o) => o.value)).toEqual(["Folk", "Blues", "Rock"]);
+  });
+  it("sorts A–Z", () => {
+    expect(orderFacets(opts, "az").map((o) => o.value)).toEqual(["Blues", "Folk", "Rock"]);
   });
 });

@@ -98,16 +98,15 @@ function ownTicketCents(orders: PurchaseRow[], who: { userId: string | null; ema
 // by the name the host typed.
 export async function describeLeaders(admin: SupabaseClient, rows: JamLeaderRow[]): Promise<ManagedJamLeader[]> {
   const ids = rows.map((r) => r.user_id).filter((v): v is string => !!v);
-  const profiles = new Map<string, any>();
-  if (ids.length) {
-    const { data } = await admin
-      .from("profiles")
-      .select("id, display_name, last_name, username, avatar_url")
-      .in("id", ids);
-    for (const p of data ?? []) profiles.set((p as any).id, p);
-  }
   const selfTicketed = rows.filter((r) => !r.order_id);
-  const orders = selfTicketed.length ? await purchasedOrders(admin, selfTicketed[0].jam_id) : [];
+  const [profileRows, orders] = await Promise.all([
+    ids.length
+      ? admin.from("profiles").select("id, display_name, last_name, username, avatar_url").in("id", ids).then((r) => r.data ?? [])
+      : Promise.resolve([]),
+    selfTicketed.length ? purchasedOrders(admin, selfTicketed[0].jam_id) : Promise.resolve([] as PurchaseRow[]),
+  ]);
+  const profiles = new Map<string, any>();
+  for (const p of profileRows) profiles.set((p as any).id, p);
   return rows.map((r) => {
     const p = r.user_id ? profiles.get(r.user_id) : null;
     return {

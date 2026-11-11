@@ -66,7 +66,7 @@ export default function NewSetForm() {
       <button
         type="submit"
         disabled={submitting || !name.trim()}
-        className="rounded-xl bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {submitting ? "Creating…" : "Create set"}
       </button>
