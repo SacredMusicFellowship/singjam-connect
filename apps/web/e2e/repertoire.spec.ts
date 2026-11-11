@@ -9,7 +9,7 @@ test("a new member adds a suggested song to their repertoire and removes it", as
   await openPage(page, "/repertoire");
   await expect(page.getByText("Your repertoire is empty")).toBeVisible();
 
-  const suggestion = page.getByRole("link", { name: "Paper Boats" });
+  const suggestion = page.getByRole("link", { name: "Paper Boats" }).first();
   await expect(suggestion).toBeVisible();
   await page.getByRole("button", { name: "Want to learn it" }).first().click();
   await expect(page.getByText("1 song", { exact: true })).toBeVisible();
