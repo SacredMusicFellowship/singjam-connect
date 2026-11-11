@@ -6,16 +6,41 @@ import {
 import type { GestureResponderEvent, LayoutChangeEvent } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import YouTubePlayer from '@/components/YouTubePlayer';
+import ChordChartControls from '@/components/ChordChartControls';
 import {
-  formatComposersLong,
+  browsePath,
+  songTagRefs,
   sortByLastName,
   fetchSongJammers,
   type SongJammer,
   type SongJammers,
+  CONFIDENCE_STYLES,
+  type ConfidenceLevel,
+  productionCredits,
+  type ProductionCredit,
+  sortRecordingsByYear,
+  knownTuneHint,
+  NO_MELODIES,
+  type SongMelodies as Melodies,
+  enrichmentInProgress,
+  ENRICHMENT_WAIT_MS,
+  songCreditLines,
+  type CreditTextRef,
+  type CreditTune,
+  bylineCredits,
+  formatJammers,
+  songTagNames,
+  TAG_TYPE_LABELS,
+  type SongTagRow,
+  type TagContext,
 } from '@singjam/core';
+import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
+import { nativeBrowseHref } from '@/lib/browseLinks';
+import CreditText from '@/components/CreditText';
 import { ensureLeadVoice } from '@/lib/leadVoice';
+import SongMelodies from '@/components/SongMelodies';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import AddToSetModal from '@/components/AddToSetModal';
 import ContentContainer from '@/components/ContentContainer';
@@ -23,6 +48,8 @@ import PromptCard from '@/components/PromptCard';
 import MySongNotes from '@/components/MySongNotes';
 import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
+import RolePill from '@/components/RolePill';
+import MyKeyChip from '@/components/MyKeyChip';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -30,6 +57,7 @@ const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
 type RecordingArtist = {
   name: string;
+  slug?: string | null;
   year: number | null;
   youtube_url: string | null;
   spotify_url: string | null;
@@ -40,11 +68,15 @@ type SongDetail = {
   slug: string | null;
   title: string;
   display_artist: string | null;
+  byline: string | null;
   first_line: string | null;
   hook: string | null;
   notes: string | null;
   genius_url: string | null;
   chord_chart_url: string | null;
+  chord_chart_pending: boolean;
+  enrichment_started_at?: string | null;
+  enrichment_finished_at?: string | null;
   youtube_url: string | null;
   year: number | null;
   year_written: number | null;
@@ -52,16 +84,19 @@ type SongDetail = {
   meter: string | null;
   vibe: string | null;
   altTitles: string[];
+  // "Words:" and "Tune:" lines, for a song linked to a text or tune.
+  textRef: CreditTextRef;
+  tuneRef: CreditTune;
   composers: string[];
   lyricists: string[];
   musicCultures: string[];
   lyricsCultures: string[];
   recordingArtists: RecordingArtist[];
-  genres: string[];
-  themes: string[];
-  cultures: string[];
-  languages: string[];
+  tagLists: { label: string; tags: { name: string; href: string | null }[] }[];
+  personSlugs: Record<string, string>;
+  productionSlugs: Record<string, string>;
   productions: string[];
+  production_credits?: ProductionCredit[];
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -82,7 +117,14 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function TagPill({ label }: { label: string }) {
+function TagPill({ label, href, onOpen }: { label: string; href?: string | null; onOpen?: (href: string) => void }) {
+  if (href && onOpen) {
+    return (
+      <TouchableOpacity onPress={() => onOpen(href)} className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5">
+        <Text className="text-slate-600 text-sm">{label}</Text>
+      </TouchableOpacity>
+    );
+  }
   return (
     <View className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5">
       <Text className="text-slate-600 text-sm">{label}</Text>
@@ -90,19 +132,22 @@ function TagPill({ label }: { label: string }) {
   );
 }
 
-function TagRow({ label, tags }: { label: string; tags: string[] }) {
+function TagRow({ label, tags, onOpen }: { label: string; tags: (string | { name: string; href: string | null })[]; onOpen?: (href: string) => void }) {
   if (tags.length === 0) return null;
   return (
     <View className="flex-row items-start mb-2">
       <Text className="text-xs font-medium text-slate-500 w-20 shrink-0 mt-1">{label}</Text>
       <View className="flex-1 flex-row flex-wrap">
-        {tags.map(t => <TagPill key={t} label={t} />)}
+        {tags.map(t => typeof t === 'string'
+          ? <TagPill key={t} label={t} />
+          : <TagPill key={t.name} label={t.name} href={t.href} onOpen={onOpen} />)}
       </View>
     </View>
   );
 }
 
-function JammerRow({ label, jammers, onTap }: {
+function JammerRow({ level, label, jammers, onTap }: {
+  level: ConfidenceLevel;
   label: string;
   jammers: SongJammers['lead'];
   onTap: (userId: string) => void;
@@ -110,15 +155,15 @@ function JammerRow({ label, jammers, onTap }: {
   if (jammers.length === 0) return null;
   return (
     <View className="flex-row items-start mb-2">
-      <Text className="text-xs font-medium text-slate-500 w-16 shrink-0 mt-1">{label}</Text>
+      <Text className={`text-xs font-medium w-16 shrink-0 mt-1 ${CONFIDENCE_STYLES[level].label}`}>{label}</Text>
       <View className="flex-1 flex-row flex-wrap">
         {jammers.map(j => (
           <TouchableOpacity
             key={j.userId}
             onPress={() => onTap(j.userId)}
-            className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5"
+            className={`rounded-full px-3 py-1 mr-1.5 mb-1.5 ${CONFIDENCE_STYLES[level].pill}`}
           >
-            <Text className="text-slate-600 text-sm">{j.name}</Text>
+            <Text className={`text-sm font-medium ${CONFIDENCE_STYLES[level].pillText}`}>{j.name}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -144,45 +189,6 @@ function extractYouTubeId(url: string | null | undefined): string | null {
   return null;
 }
 
-// A WebView fed bare `html` loads as about:blank, and YouTube refuses to embed
-// into a page with no resolvable origin ("Error 153"). So the document gets a
-// baseUrl and the embed gets a matching `origin` param. That origin has to be
-// our own site, the way a real embedding page would look — claiming to be
-// youtube.com itself is same-origin with the player and gets refused too.
-function YouTubePlayer({ videoId }: { videoId: string }) {
-  const [playing, setPlaying] = useState(false);
-  const embedSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&origin=${encodeURIComponent(WEB_URL)}`;
-  const embedHtml = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{margin:0;padding:0}html,body{width:100%;height:100%;background:#000}iframe{width:100%;height:100%;display:block}</style></head><body><iframe src="${embedSrc}" frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></body></html>`;
-
-  return (
-    <View className="mb-3 rounded-xl overflow-hidden bg-black" style={{ aspectRatio: 16 / 9 }}>
-      {playing ? (
-        <WebView
-          source={{ html: embedHtml, baseUrl: WEB_URL }}
-          style={{ flex: 1 }}
-          allowsInlineMediaPlayback
-          allowsFullscreenVideo
-          mediaPlaybackRequiresUserAction={false}
-          scrollEnabled={false}
-        />
-      ) : (
-        <TouchableOpacity onPress={() => setPlaying(true)} className="flex-1">
-          <Image
-            source={{ uri: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` }}
-            className="w-full h-full"
-            resizeMode="cover"
-          />
-          <View className="absolute inset-0 items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.25)' }}>
-            <View className="w-14 h-14 rounded-full items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
-              <Ionicons name="play" size={26} color="white" style={{ marginLeft: 3 }} />
-            </View>
-          </View>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
-
 // Web embeds Spotify in an iframe, but on a phone that only ever yields a
 // 30-second preview — the full track needs the Spotify app. So both services get
 // an open-in-app button here, matching the icon treatment on the song library
@@ -193,7 +199,7 @@ function OpenInAppButton({ service, url }: { service: 'youtube' | 'spotify'; url
   return (
     <TouchableOpacity
       onPress={() => openUrl(url)}
-      className="flex-row items-center gap-1.5 border border-slate-200 rounded-xl px-3 py-2"
+      className="flex-row items-center gap-1.5 border border-slate-200 rounded-full px-3 py-2"
       accessibilityLabel={youtube ? 'Watch on YouTube' : 'Play on Spotify'}
     >
       {youtube
@@ -212,16 +218,20 @@ function OpenInAppButton({ service, url }: { service: 'youtube' | 'spotify'; url
 export default function SongDetailScreen() {
   const { id: songId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const openBrowse = (href: string) => router.push(href as any);
 
   const [song, setSong] = useState<SongDetail | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [myConfidence, setMyConfidence] = useState<string | null>(null);
+  const [melodies, setMelodies] = useState<Melodies | null>(null);
+  const melodiesFor = useRef<string | null>(null);
   const [myKey, setMyKey] = useState<string | null>(null);
   const [keyPickerVisible, setKeyPickerVisible] = useState(false);
   const [jammers, setJammers] = useState<SongJammers | null>(null);
   const [popularity, setPopularity] = useState(0);
   const [singingVoice, setSingingVoice] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSongEditor, setIsSongEditor] = useState(false);
   const [myJammerEntry, setMyJammerEntry] = useState<SongJammer | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -248,7 +258,33 @@ export default function SongDetailScreen() {
     load();
   }, [songId]);
 
+  // A just-added song fills itself in over the next 10–30 seconds (mirrors web):
+  // watch its row and reload when the enrichment job finishes or gives up.
+  const fillingIn = !!song && enrichmentInProgress(song);
+  useEffect(() => {
+    if (!song?.id || !fillingIn) return;
+    const channel = supabase
+      .channel(`song-fill-${song.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'songs', filter: `id=eq.${song.id}` }, (payload: any) => {
+        if (payload.new?.enrichment_finished_at) load();
+      })
+      .subscribe();
+    const started = Date.parse(song.enrichment_started_at ?? '');
+    const giveUp = setTimeout(load, Math.max(0, started + ENRICHMENT_WAIT_MS - Date.now()) + 500);
+    return () => {
+      clearTimeout(giveUp);
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song?.id, fillingIn]);
+
   async function load() {
+    // Doesn't wait for getUser's round trip: the client sends the session either way.
+    const forSong = songId;
+    melodiesFor.current = forSong;
+    supabase.rpc('song_melodies', { p_song_id: forSong }).then(({ data: m }) => {
+      if (melodiesFor.current === forSong) setMelodies((m as Melodies | null) ?? NO_MELODIES);
+    });
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
 
@@ -256,18 +292,17 @@ export default function SongDetailScreen() {
       supabase
         .from('songs')
         .select(`
-          id, slug, title, display_artist, first_line, hook, notes,
-          genius_url, chord_chart_url, youtube_url,
-          year, year_written, tonality, meter, vibe,
+          id, slug, title, display_artist, byline, first_line, hook, notes,
+          genius_url, chord_chart_url, chord_chart_pending, youtube_url,
+          year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_alternate_titles(title),
-          song_composers(people(name)),
-          song_lyricists(people(name)),
-          song_cultures(context, cultures(name)),
-          song_recording_artists(year, position, youtube_url, spotify_url, artists(name)),
-          song_genres(genres(name)),
-          song_themes(themes(name)),
-          song_languages(languages(name)),
-          song_productions(productions(name))
+          song_composers(people(name, slug)),
+          song_lyricists(people(name, slug)),
+          song_tags(context, tags(name, type, slug)),
+          song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
+          song_productions(productions(name, year, slug)),
+          texts(slug, year, year_precision, songs(count), text_sources(corpus, book, chapter_start, verse_start, chapter_end, verse_end, citation, relation)),
+          tunes(name, slug, year, year_precision)
         `)
         .eq('id', songId)
         .single(),
@@ -297,21 +332,25 @@ export default function SongDetailScreen() {
     }
 
     const s = songRes.data as any;
-    const cultureRows: any[] = s.song_cultures ?? [];
-    const musicRows = cultureRows.filter((x: any) => x.context === 'music');
-    const lyricsRows = cultureRows.filter((x: any) => x.context === 'lyrics');
-    const noCtx = cultureRows.filter((x: any) => !x.context);
+    const tagRows: SongTagRow[] = s.song_tags ?? [];
+    // Where "Traditional" comes from: the melody's / words' own tradition when
+    // set, otherwise the song's general cultures and communities (as on web).
+    const origins = (context: TagContext) => [...songTagNames(tagRows, 'culture', context), ...songTagNames(tagRows, 'community', context)];
 
     setSong({
       id: s.id,
       slug: s.slug ?? null,
       title: s.title ?? '',
       display_artist: s.display_artist ?? null,
+      byline: s.byline ?? null,
       first_line: s.first_line ?? null,
       hook: s.hook ?? null,
       notes: s.notes ?? null,
       genius_url: s.genius_url ?? null,
       chord_chart_url: s.chord_chart_url ?? null,
+      chord_chart_pending: !!s.chord_chart_pending,
+      enrichment_started_at: s.enrichment_started_at ?? null,
+      enrichment_finished_at: s.enrichment_finished_at ?? null,
       youtube_url: s.youtube_url ?? null,
       year: s.year ?? null,
       year_written: s.year_written ?? null,
@@ -319,19 +358,32 @@ export default function SongDetailScreen() {
       meter: s.meter ?? null,
       vibe: s.vibe ?? null,
       altTitles: (s.song_alternate_titles ?? []).map((x: any) => x.title).filter(Boolean),
+      textRef: s.texts ?? null,
+      tuneRef: s.tunes ?? null,
       composers: sortByLastName((s.song_composers ?? []).map((x: any) => x.people?.name).filter(Boolean)),
       lyricists: sortByLastName((s.song_lyricists ?? []).map((x: any) => x.people?.name).filter(Boolean)),
-      musicCultures: (musicRows.length ? musicRows : noCtx).map((x: any) => x.cultures?.name).filter(Boolean),
-      lyricsCultures: (lyricsRows.length ? lyricsRows : noCtx).map((x: any) => x.cultures?.name).filter(Boolean),
-      recordingArtists: (s.song_recording_artists ?? [])
-        .map((x: any) => ({ name: x.artists?.name, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
-        .filter((x: any) => x.name)
-        .sort((a: any, b: any) => (a.position ?? 999) - (b.position ?? 999)),
-      genres: (s.song_genres ?? []).map((x: any) => x.genres?.name).filter(Boolean).sort(),
-      themes: (s.song_themes ?? []).map((x: any) => x.themes?.name).filter(Boolean).sort(),
-      cultures: [...new Set((cultureRows).map((x: any) => x.cultures?.name).filter(Boolean) as string[])],
-      languages: (s.song_languages ?? []).map((x: any) => x.languages?.name).filter(Boolean),
+      musicCultures: origins('music').length ? origins('music') : origins('general'),
+      lyricsCultures: origins('lyrics').length ? origins('lyrics') : origins('general'),
+      recordingArtists: sortRecordingsByYear(
+        (s.song_recording_artists ?? [])
+          .map((x: any) => ({ name: x.artists?.name, slug: x.artists?.slug ?? null, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
+          .filter((x: any) => x.name)
+      ),
+      tagLists: (['genre', 'form', 'occasion', 'community', 'theme', 'language', 'culture'] as const)
+        .map((type) => ({
+          label: TAG_TYPE_LABELS[type],
+          tags: songTagRefs(tagRows, type).map((t) => ({ name: t.name, href: t.slug ? nativeBrowseHref(browsePath(type, t.slug)) : null })),
+        }))
+        .filter((t) => t.tags.length > 0),
+      personSlugs: Object.fromEntries(
+        [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])].filter((x: any) => x.people?.slug).map((x: any) => [x.people.name, x.people.slug])
+      ),
+      productionSlugs: Object.fromEntries((s.song_productions ?? []).filter((x: any) => x.productions?.slug).map((x: any) => [x.productions.name, x.productions.slug])),
       productions: (s.song_productions ?? []).map((x: any) => x.productions?.name).filter(Boolean),
+      production_credits: (s.song_productions ?? [])
+        .map((x: any) => x.productions)
+        .filter((p: any) => p?.name)
+        .map((p: any) => ({ name: p.name, year: p.year ?? null })),
     });
 
     setMyConfidence((confidenceRes.data as any)?.confidence ?? null);
@@ -339,6 +391,7 @@ export default function SongDetailScreen() {
     const p = profileRes.data as any;
     setSingingVoice(p?.singing_voice ?? null);
     setIsAdmin(p?.role === 'admin');
+    setIsSongEditor(p?.role === 'song_editor');
     if (user && p) {
       setMyJammerEntry({
         userId: user.id,
@@ -376,7 +429,7 @@ export default function SongDetailScreen() {
     if (!next && previousConfidence) setPopularity(n => Math.max(n - 1, 0));
 
     write().then(({ error }) => {
-      if (!error) return;
+      if (!error) { noteMySong(songId, next ? { confidence: next } : null); return; }
       Alert.alert('Error', error.message);
       setMyConfidence(previousConfidence);
       setJammers(previousJammers);
@@ -488,8 +541,6 @@ export default function SongDetailScreen() {
     );
   }
 
-  const CONFIDENCE_LABEL: Record<string, string> = { lead: 'Lead', support: 'Support', learn: 'Learn' };
-  const isLead = myConfidence === 'lead';
 
   const tonalityPills = song.tonality ? song.tonality.split(',').map(s => s.trim()).filter(Boolean) : [];
   const meterPills = song.meter ? song.meter.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -514,8 +565,14 @@ export default function SongDetailScreen() {
     .filter((y): y is number => !!y);
   const earliestYear = allYears.length > 0 ? Math.min(...allYears) : null;
 
+  const creditLines = songCreditLines({
+    composers: song.composers.map((name) => ({ name, slug: song.personSlugs[name] ?? null })),
+    lyricists: song.lyricists.map((name) => ({ name, slug: song.personSlugs[name] ?? null })),
+    musicCultures: song.musicCultures, lyricsCultures: song.lyricsCultures,
+    text: song.textRef, tune: song.tuneRef,
+  });
   const hasMusicalProps = tonalityPills.length > 0 || meterPills.length > 0 || !!song.vibe;
-  const hasTags = song.genres.length > 0 || song.themes.length > 0 || song.cultures.length > 0 || song.languages.length > 0;
+  const hasTags = song.tagLists.length > 0;
   const hasJammers = jammers && (jammers.lead.length > 0 || jammers.support.length > 0 || jammers.learn.length > 0);
 
   // Web repeats this control group at the top and bottom of the page, so a long
@@ -525,7 +582,7 @@ export default function SongDetailScreen() {
     const prev = myKey;
     setMyKey(next);
     const { error } = await supabase.from('user_songs').update({ key_note: next }).eq('user_id', myUserId).eq('song_id', songId);
-    if (error) { setMyKey(prev); Alert.alert('Error', error.message); }
+    if (error) { setMyKey(prev); Alert.alert('Error', error.message); } else noteMySong(songId, { key: next });
   }
 
   function renderRepertoireControls() {
@@ -533,40 +590,11 @@ export default function SongDetailScreen() {
       <View className="flex-row flex-wrap items-center gap-2 mt-4">
         {myConfidence ? (
           <>
-            <TouchableOpacity
-              onPress={handleChangeConfidence}
-              className={`flex-row items-center rounded-xl border px-3 py-2 ${
-                isLead ? 'border-amber-400 bg-amber-100' : 'border-slate-200 bg-white'
-              }`}
-            >
-              <Text className={`text-sm ${isLead ? 'text-amber-800 font-semibold' : 'text-slate-700'}`}>
-                {CONFIDENCE_LABEL[myConfidence]}
-              </Text>
-              <Ionicons
-                name="chevron-down"
-                size={12}
-                color={isLead ? '#92400e' : '#64748b'}
-                style={{ marginLeft: 4 }}
-              />
-            </TouchableOpacity>
-            <View className="flex-row items-center gap-1.5">
-              <Text className="text-sm text-slate-700">My key</Text>
-              <TouchableOpacity
-                onPress={() => setKeyPickerVisible(true)}
-                className={`flex-row items-center rounded-xl border px-3 py-2 ${
-                  myKey ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'
-                }`}
-                accessibilityLabel="My key"
-              >
-                <Text className={`text-sm ${myKey ? 'text-amber-800' : 'text-slate-700'}`}>
-                  {myKey ?? '—'}
-                </Text>
-                <Ionicons name="chevron-down" size={12} color={myKey ? '#92400e' : '#64748b'} style={{ marginLeft: 4 }} />
-              </TouchableOpacity>
-            </View>
+            <RolePill level={myConfidence} onPress={handleChangeConfidence} size="md" />
+            <MyKeyChip value={myKey} onPress={() => setKeyPickerVisible(true)} size="md" />
             <TouchableOpacity
               onPress={() => setAddToSetVisible(true)}
-              className="flex-row items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
+              className="flex-row items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5"
             >
               <Ionicons name="list-outline" size={14} color="#64748b" />
               <Text className="text-slate-600 text-sm">Add to set</Text>
@@ -574,22 +602,38 @@ export default function SongDetailScreen() {
           </>
         ) : (
           <>
+            {(() => {
+              const known = knownTuneHint(melodies, myConfidence);
+              return known ? (
+                <View className="w-full flex-row flex-wrap items-center gap-2 mb-1">
+                  <Text className="text-sm text-slate-600">
+                    You know the tune from <Text className="font-medium">{known.title}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => myUserId ? addToRepertoire('lead') : router.push('/(auth)/sign-in' as any)}
+                    className="rounded-full bg-amber-100 px-3 py-1"
+                  >
+                    <Text className="text-sm font-medium text-amber-800">Add as Lead</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null;
+            })()}
             <TouchableOpacity
               onPress={handleAddToRepertoire}
-              className="rounded-xl border border-indigo-500 bg-indigo-500 px-4 py-2"
+              className="rounded-full border border-indigo-500 bg-indigo-500 px-4 py-1.5"
             >
               <Text className="text-white text-sm font-medium">I know this song!</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleWantToLearn} className="rounded-xl border border-indigo-200 bg-white px-4 py-2">
+            <TouchableOpacity onPress={handleWantToLearn} className="rounded-full border border-indigo-200 bg-white px-4 py-1.5">
               <Text className="text-indigo-600 text-sm font-medium">Want to learn it</Text>
             </TouchableOpacity>
           </>
         )}
-        {isAdmin ? (
-          // The song editor is web-only, so admins hand off to the browser.
+        {isAdmin || isSongEditor ? (
+          // The song editor is web-only, so editors hand off to the browser.
           <TouchableOpacity
-            onPress={() => openUrl(`${WEB_URL}/admin/songs/${song!.slug ?? song!.id}`)}
-            className="flex-row items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2"
+            onPress={() => openUrl(`${WEB_URL}/${isAdmin ? 'admin' : 'song-editor'}/songs/${song!.slug ?? song!.id}`)}
+            className="flex-row items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5"
           >
             <Text className="text-slate-600 text-sm">Edit</Text>
             <Ionicons name="open-outline" size={13} color="#94a3b8" />
@@ -644,7 +688,7 @@ export default function SongDetailScreen() {
             <View className="shrink-0 flex-row items-center gap-3 mt-1">
               {popularity > 0 ? (
                 <Text className="text-sm text-slate-400">
-                  {popularity} {popularity === 1 ? 'jammer' : 'jammers'}
+                  {formatJammers(popularity)}
                 </Text>
               ) : null}
               {earliestYear ? (
@@ -655,16 +699,31 @@ export default function SongDetailScreen() {
 
           {song.productions.length > 0 ? (
             <Text className="text-base text-slate-500 mt-0.5">
-              from <Text className="italic">{song.productions.join(', ')}</Text>
+              from{' '}
+              {productionCredits(song.production_credits, song.productions).map((p, i) => (
+                <Text key={`${p.name}-${p.year}`}>
+                  {i > 0 ? ', ' : null}
+                  <Text onPress={song.productionSlugs[p.name] ? () => openBrowse(nativeBrowseHref(browsePath('show', song.productionSlugs[p.name]))) : undefined}>
+                    <Text className="italic">{p.name}</Text>
+                    {p.year ? ` (${p.year})` : null}
+                  </Text>
+                </Text>
+              ))}
             </Text>
-          ) : song.display_artist ? (
-            <Text className="text-base text-slate-500 mt-0.5">{song.display_artist}</Text>
+          ) : song.byline ? (
+            <Text className="text-base text-slate-500 mt-0.5">
+              <CreditText
+                separator=""
+                credits={bylineCredits(song.byline, { people: [...song.composers, ...song.lyricists], artists: song.recordingArtists.map((a) => a.name) })}
+                onOpen={(path) => openBrowse(nativeBrowseHref(path))}
+                linkClassName="text-amber-700"
+              />
+            </Text>
           ) : null}
 
           {song.altTitles.length > 0 ? (
             <Text className="text-sm text-slate-400 mt-1">aka: {song.altTitles.join(' · ')}</Text>
           ) : null}
-
           {renderRepertoireControls()}
 
           {song.chord_chart_url || song.genius_url ? (
@@ -672,7 +731,7 @@ export default function SongDetailScreen() {
               {song.chord_chart_url ? (
                 <TouchableOpacity
                   onPress={() => openUrl(song.chord_chart_url!)}
-                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-full px-4 py-2"
                 >
                   <Text className="text-slate-600 text-sm font-medium">Chords</Text>
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
@@ -681,7 +740,7 @@ export default function SongDetailScreen() {
               {song.genius_url ? (
                 <TouchableOpacity
                   onPress={() => openUrl(song.genius_url!)}
-                  className="flex-row items-center gap-1 border border-slate-200 rounded-xl px-4 py-2"
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-full px-4 py-2"
                 >
                   <Text className="text-slate-600 text-sm font-medium">Lyrics</Text>
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
@@ -689,26 +748,43 @@ export default function SongDetailScreen() {
               ) : null}
             </View>
           ) : null}
+          {fillingIn ? (
+            <View className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <Text className="text-sm text-zinc-600">Finding the songwriters, key, lyrics and tags…</Text>
+              {['w-1/2', 'w-1/3', 'w-2/3'].map(w => (
+                <View key={w} className="mt-2 flex-row items-center gap-3">
+                  <View className="h-3 w-20 rounded bg-zinc-200" />
+                  <View className={`h-3 ${w} rounded bg-zinc-100`} />
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <ChordChartControls
+            songId={song.id}
+            url={song.chord_chart_url}
+            pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
+            signedIn={!!myUserId}
+            onChanged={({ url, pending }) => setSong((prev) => (prev ? { ...prev, chord_chart_url: url, chord_chart_pending: pending } : prev))}
+          />
           {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} className="mt-3" /> : null}
           {song.chord_chart_url ? <UgBackTip className="mt-3" /> : null}
         </View>
 
         {/* Songwriters */}
-        {(song.composers.length > 0 || song.lyricists.length > 0) ? (
+        {creditLines.length > 0 ? (
           <View className="px-4 py-4 border-b border-slate-100">
-            <SectionHeader title="Songwriter(s)" />
-            {song.composers.length > 0 ? (
-              <Text className="text-sm text-slate-700 mb-1">
-                <Text className="font-medium">Music: </Text>
-                {formatComposersLong(song.composers, song.musicCultures)}
+            <SectionHeader title="Songwriters" />
+            {creditLines.map((line) => (
+              <Text key={line.label} className="text-sm text-slate-700 mb-1">
+                <Text className="font-medium">{line.label}: </Text>
+                {line.groups.map((g, i) => (
+                  <Text key={i}>
+                    {i > 0 ? ' · ' : null}
+                    <CreditText credits={g} onOpen={(path) => openBrowse(nativeBrowseHref(path))} linkClassName="text-amber-700" />
+                  </Text>
+                ))}
               </Text>
-            ) : null}
-            {song.lyricists.length > 0 ? (
-              <Text className="text-sm text-slate-700">
-                <Text className="font-medium">Lyrics: </Text>
-                {formatComposersLong(song.lyricists, song.lyricsCultures)}
-              </Text>
-            ) : null}
+            ))}
           </View>
         ) : null}
 
@@ -734,16 +810,23 @@ export default function SongDetailScreen() {
                 <SectionHeader title="Recordings" />
                 <View className="flex-row flex-wrap">
                   {song.recordingArtists.map((ra, i) => (
-                    <View key={i} className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5">
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => openBrowse(nativeBrowseHref(browsePath('artist', ra.slug ?? ra.name)))}
+                      className="bg-slate-100 rounded-full px-3 py-1 mr-1.5 mb-1.5 flex-row items-center gap-1.5"
+                    >
                       <Text className="text-slate-700 text-sm">{ra.name}</Text>
                       {ra.year ? <Text className="text-slate-400 text-sm">{ra.year}</Text> : null}
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
               </>
             ) : null}
           </View>
         ) : null}
+
+        <SongMelodies title="Other tunes" items={melodies?.other_melodies ?? []} onOpen={(id) => router.push(`/song/${id}` as any)} />
+        <SongMelodies title="Also sung to this tune" items={melodies?.same_tune ?? []} onOpen={(id) => router.push(`/song/${id}` as any)} />
 
         {/* Media — inline YouTube player plus hand-off buttons for both apps */}
         {hasMedia ? (
@@ -804,10 +887,7 @@ export default function SongDetailScreen() {
         {hasTags ? (
           <View className="px-4 py-4 border-b border-slate-100">
             <SectionHeader title="Tags" />
-            <TagRow label="Genres" tags={song.genres} />
-            <TagRow label="Themes" tags={song.themes} />
-            <TagRow label="Languages" tags={song.languages} />
-            <TagRow label="Cultures" tags={song.cultures} />
+            {song.tagLists.map((t) => <TagRow key={t.label} label={t.label} tags={t.tags} onOpen={openBrowse} />)}
           </View>
         ) : null}
 
@@ -828,17 +908,20 @@ export default function SongDetailScreen() {
             ) : hasJammers ? (
               <>
                 <JammerRow
+                  level="lead"
                   label="Lead"
                   jammers={jammers.lead}
                   onTap={(userId) => router.push(`/profile/${userId}` as any)}
                 />
                 <JammerRow
+                  level="support"
                   label="Support"
                   jammers={jammers.support}
                   onTap={(userId) => router.push(`/profile/${userId}` as any)}
                 />
                 <JammerRow
-                  label="Learn"
+                  level="learn"
+                  label="Learning"
                   jammers={jammers.learn}
                   onTap={(userId) => router.push(`/profile/${userId}` as any)}
                 />
@@ -878,7 +961,7 @@ export default function SongDetailScreen() {
             <View className="mt-6 pt-4 pb-6 border-t border-slate-100">
               <TouchableOpacity
                 onPress={handleRemoveFromRepertoire}
-                className="self-start rounded-xl border border-slate-200 bg-white px-2.5 py-1.5"
+                className="self-start rounded-full border border-slate-200 bg-white px-2.5 py-1.5"
               >
                 <Text className="text-xs text-slate-400">Remove from my repertoire</Text>
               </TouchableOpacity>

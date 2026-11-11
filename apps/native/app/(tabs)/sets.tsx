@@ -201,7 +201,7 @@ function SetCard({ set, onPress, onMenu, onCopy, onOwnerPress, busy }: {
             ) : (
               <TouchableOpacity
                 onPress={onCopy}
-                className="rounded-lg border border-zinc-200 px-3 py-1.5"
+                className="rounded-full border border-zinc-200 px-3 py-1.5"
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
                 <Text className="text-xs font-medium text-zinc-600">Copy</Text>

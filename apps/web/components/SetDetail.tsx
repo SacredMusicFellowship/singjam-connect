@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { jamPath, reorderSongsForPlayed, setPath } from "@singjam/core";
+import { canRemoveSetSong, createLatestWinsQueue, fetchAllRows, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -76,11 +76,16 @@ export default function SetDetail({
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = supabaseBrowser();
+  // Order, key, played and leader saves go out one at a time per song (the order
+  // per set), latest tap winning. While one is settling, live updates for that
+  // field are ignored: they describe an earlier tap and used to flip it back.
+  const syncRef = useRef(createLatestWinsQueue());
 
   const [songs, setSongs] = useState(initialSongs);
   const [songKnowledge, setSongKnowledge] = useState(initialSongKnowledge);
   const [userSingingVoice, setUserSingingVoice] = useState(currentUserSingingVoice ?? null);
   const [collaborators, setCollaborators] = useState(initialCollaborators);
+  const myRole = collaborators.find((c: any) => c.user_id === currentUserId && c.status === "accepted")?.role;
   const [accessRequests, setAccessRequests] = useState(initialAccessRequests);
   const [editingName, setEditingName] = useState(false);
   const editingNameRef = useRef(editingName);
@@ -114,6 +119,8 @@ export default function SetDetail({
   });
   const [playlistError, setPlaylistError] = useState<"youtube" | "spotify" | "spotify_auth_expired" | null>(null);
   const [ugPlaylistUrl, setUgPlaylistUrl] = useState<string | null>(set.ultimate_guitar_playlist_url ?? null);
+  // Typed in by the set's owner and shown to everyone, so only a web address becomes a link.
+  const safeUgPlaylistUrl = webUrl(ugPlaylistUrl);
   const [editingUgPlaylist, setEditingUgPlaylist] = useState(false);
   const [ugPlaylistInput, setUgPlaylistInput] = useState("");
   const [showCsvOptions, setShowCsvOptions] = useState(false);
@@ -157,7 +164,7 @@ export default function SetDetail({
   }, [currentUserId]);
 
   useEffect(() => {
-    if (!canManage) return;
+    if (!setMenuOpen) return;
     function onClickOutside(e: MouseEvent) {
       if (setMenuRef.current && !setMenuRef.current.contains(e.target as Node)) {
         setSetMenuOpen(false);
@@ -165,7 +172,7 @@ export default function SetDetail({
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [canManage]);
+  }, [setMenuOpen]);
 
   useEffect(() => {
     participantIdsRef.current = new Set([
@@ -194,7 +201,7 @@ export default function SetDetail({
         const { data } = await supabase
           .from("songs")
           .select(
-            "id, title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url)"
+            "id, title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url)"
           )
           .in("id", ids);
         if (!data) return;
@@ -338,7 +345,7 @@ export default function SetDetail({
             supabase
               .from("set_songs")
               .select(
-                "id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))"
+                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))"
               )
               .eq("id", row.id)
               .single(),
@@ -375,7 +382,11 @@ export default function SetDetail({
             prev
               .map((s) =>
                 s.id === row.id
-                  ? { ...s, position: row.position, key_note: row.key_note, notes: row.notes, played: row.played, leader_user_ids: row.leader_user_ids }
+                  ? {
+                      ...s,
+                      ...settledFields(s, row),
+                      notes: row.notes,
+                    }
                   : s
               )
               .sort((a, b) => a.position - b.position)
@@ -432,9 +443,7 @@ export default function SetDetail({
     for (const joinTable of [
       "song_composers",
       "song_lyricists",
-      "song_cultures",
-      "song_genres",
-      "song_themes",
+      "song_tags",
       "song_recording_artists",
     ]) {
       channel.on(
@@ -503,14 +512,63 @@ export default function SetDetail({
     );
   }
 
-  async function handleKeyChanged(id: string, key: string | null) {
-    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, key_note: key } : s));
-    const entry = songs.find((s) => s.id === id);
-    if (!entry) return;
-    fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
+  function settledFields(local: Song, server: { position: number; key_note: string | null; played: boolean; leader_user_ids: string[] | null }) {
+    const q = syncRef.current;
+    return {
+      position: q.isPending("order") ? local.position : server.position,
+      key_note: q.isPending(`key:${local.id}`) ? local.key_note : server.key_note,
+      played: q.isPending(`played:${local.id}`) ? local.played : server.played,
+      leader_user_ids: q.isPending(`leaders:${local.id}`) ? local.leader_user_ids : server.leader_user_ids ?? [],
+    };
+  }
+
+  // After a failed save, show what the server actually has.
+  async function resyncSongs() {
+    const rows = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from("set_songs")
+        .select("id, position, key_note, played, leader_user_ids")
+        .eq("set_id", set.id)
+        .order("id")
+        .range(from, to)
+    ).catch(() => null);
+    if (!rows) return;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    setSongs((prev) =>
+      prev
+        .map((s) => (byId.has(s.id) ? { ...s, ...settledFields(s, byId.get(s.id)) } : s))
+        .sort((a, b) => a.position - b.position)
+    );
+  }
+
+  function patchSong(songId: string, body: Record<string, unknown>) {
+    return fetch(`/api/sets/${set.id}/songs/${songId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key_note: key }),
+      body: JSON.stringify(body),
+    }).then((res) => (res.ok ? res.json() : null));
+  }
+
+  function saveOrder(list: Song[]) {
+    const order = list.map((s) => ({ id: s.id, position: s.position }));
+    syncRef.current.run(
+      "order",
+      () =>
+        fetch(`/api/sets/${set.id}/songs/reorder`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order }),
+        }).then((res) => res.ok),
+      (ok) => { if (!ok) resyncSongs(); }
+    );
+  }
+
+  function handleKeyChanged(id: string, key: string | null) {
+    const entry = songs.find((s) => s.id === id);
+    if (!entry) return;
+    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, key_note: key } : s));
+    syncRef.current.run(`key:${id}`, () => patchSong(entry.song_id, { key_note: key }), (json) => {
+      if (!json) resyncSongs();
     });
   }
 
@@ -526,46 +584,38 @@ export default function SetDetail({
     if (!res.ok) setSongs((prev) => prev.map((s) => s.id === id ? { ...s, notes: entry.notes } : s));
   }
 
-  async function handleTogglePlayed(id: string, played: boolean) {
+  function handleTogglePlayed(id: string, played: boolean) {
     const entry = songs.find((s) => s.id === id);
     if (!entry) return;
-    const previous = songs;
     const reordered = reorderSongsForPlayed(songs, id, played).map((s, i) => ({ ...s, position: i }));
-
     setSongs(reordered);
-    const [playedRes, reorderRes] = await Promise.all([
-      fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ played }),
-      }),
-      fetch(`/api/sets/${set.id}/songs/reorder`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: reordered.map((s) => ({ id: s.id, position: s.position })) }),
-      }),
-    ]);
-    if (!playedRes.ok || !reorderRes.ok) setSongs(previous);
+    syncRef.current.run(`played:${id}`, () => patchSong(entry.song_id, { played }), (json) => {
+      if (!json) resyncSongs();
+    });
+    saveOrder(reordered);
   }
 
   function handleLeadersChanged(id: string, leaderUserIds: string[]) {
-    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: leaderUserIds } : s));
     const entry = songs.find((s) => s.id === id);
     if (!entry) return;
+    setSongs((prev) => prev.map((s) => s.id === id ? { ...s, leader_user_ids: leaderUserIds } : s));
     if (currentUserId && leaderUserIds.includes(currentUserId) && !userRepertoire.has(entry.song_id)) {
       setUserRepertoire((prev) => new Map(prev).set(entry.song_id, "lead"));
     }
-    fetch(`/api/sets/${set.id}/songs/${entry.song_id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ leader_user_ids: leaderUserIds }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (json && "key_note" in json) {
-          setSongs((prev) => prev.map((s) => s.id === id ? { ...s, key_note: json.key_note } : s));
-        }
-      });
+    // Guests can only add or remove themselves; the server merges that into the
+    // current leaders so it can't undo a change someone else just made.
+    const body = canManage
+      ? { leader_user_ids: leaderUserIds }
+      : { self_leader: !!currentUserId && leaderUserIds.includes(currentUserId) };
+    syncRef.current.run(`leaders:${id}`, () => patchSong(entry.song_id, body), (json) => {
+      if (!json || !Array.isArray(json.leader_user_ids)) { resyncSongs(); return; }
+      const keepKey = syncRef.current.isPending(`key:${id}`);
+      setSongs((prev) => prev.map((s) => s.id === id ? {
+        ...s,
+        leader_user_ids: json.leader_user_ids,
+        ...(!keepKey && "key_note" in json ? { key_note: json.key_note } : {}),
+      } : s));
+    });
   }
 
   const participants: Participant[] = [
@@ -578,6 +628,41 @@ export default function SetDetail({
       avatar_url: c.profiles?.avatar_url ?? null,
     })),
   ];
+
+  function renderSongRow(song: Song, index: number) {
+    const knowledgeForSong = songKnowledgeMap.get(song.song_id) ?? new Map<string, string>();
+    const hasEligible = [...knowledgeForSong.values()].some((c) => c === "lead");
+    const rowParticipants = isPublicViewer
+      ? []
+      : participants.filter((p) => knowledgeForSong.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id));
+    return (
+      <SetSongRow
+        song={song}
+        index={index}
+        canManage={canManage}
+        canRemove={canRemoveSetSong(isOwner, myRole, song.added_by_user_id, currentUserId)}
+        isAdmin={isAdmin}
+        isSongEditor={isSongEditor}
+        isPublicViewer={isPublicViewer}
+        participants={rowParticipants}
+        hasEligible={hasEligible}
+        participantKnowledge={knowledgeForSong}
+        participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
+        currentUserId={currentUserId}
+        currentUserSingingVoice={userSingingVoice}
+        myConfidence={userRepertoire.get(song.song_id) ?? null}
+        onMediaAdded={handleMediaAdded}
+        onKeyChanged={handleKeyChanged}
+        onNotesChanged={handleNotesChanged}
+        onLeadersChanged={handleLeadersChanged}
+        onAddToRepertoire={handleAddToRepertoire}
+        onVoiceUpdated={setUserSingingVoice}
+        onTogglePlayed={handleTogglePlayed}
+        onRemove={handleRemoveSong}
+        signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
+      />
+    );
+  }
 
   const sortedSongs = useMemo(() => {
     if (songSort === "custom") return songs;
@@ -603,7 +688,7 @@ export default function SetDetail({
         const q = songListFilter.toLowerCase();
         return (
           s.songs.title.toLowerCase().includes(q) ||
-          (s.songs.display_artist ?? "").toLowerCase().includes(q)
+          ((s.songs.byline ?? "") + " " + (s.songs.display_artist ?? "")).toLowerCase().includes(q)
         );
       })
     : sortedSongs;
@@ -627,11 +712,7 @@ export default function SetDetail({
     const reordered = next.map((s, i) => ({ ...s, position: i }));
 
     setSongs(reordered);
-    fetch(`/api/sets/${set.id}/songs/reorder`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order: reordered.map((s) => ({ id: s.id, position: s.position })) }),
-    });
+    saveOrder(reordered);
   }
 
   async function handleSaveName() {
@@ -750,19 +831,19 @@ export default function SetDetail({
       if (csvColumns.songwriters) {
         const composerNames = (s.songs.song_composers ?? []).map((c) => c.people?.name).filter(Boolean) as string[];
         const lyricistNames = (s.songs.song_lyricists ?? []).map((l) => l.people?.name).filter(Boolean) as string[];
-        const musicCultures = (s.songs.song_cultures ?? []).filter((c) => c.context === "music").map((c) => c.cultures?.name).filter(Boolean) as string[];
-        const lyricCultures = (s.songs.song_cultures ?? []).filter((c) => c.context === "lyrics").map((c) => c.cultures?.name).filter(Boolean) as string[];
+        const musicCultures = songTagNames(s.songs.song_tags, "culture", "music");
+        const lyricCultures = songTagNames(s.songs.song_tags, "culture", "lyrics");
         const composerStr = formatComposers(composerNames, musicCultures);
         const lyricistStr = formatComposers(lyricistNames, lyricCultures);
         cols.push(`"${composerStr.replace(/"/g, '""')}"`);
         cols.push(`"${lyricistStr.replace(/"/g, '""')}"`);
       }
       if (csvColumns.genres) {
-        const names = (s.songs.song_genres ?? []).map((g) => g.genres?.name).filter(Boolean).join("; ");
+        const names = songTagNames(s.songs.song_tags, "genre").join("; ");
         cols.push(`"${names.replace(/"/g, '""')}"`);
       }
       if (csvColumns.themes) {
-        const names = (s.songs.song_themes ?? []).map((t) => t.themes?.name).filter(Boolean).join("; ");
+        const names = songTagNames(s.songs.song_tags, "theme").join("; ");
         cols.push(`"${names.replace(/"/g, '""')}"`);
       }
       if (csvColumns.singjam) cols.push(s.songs.slug ? `https://singjam.org/songs/${s.songs.slug}` : "");
@@ -806,16 +887,17 @@ export default function SetDetail({
     setCreatingPlaylist(null);
   }
 
+  // Shows the link the server checked and saved, not the text box's contents.
   async function handleSaveUgPlaylist() {
-    const url = ugPlaylistInput.trim() || null;
-    setUgPlaylistUrl(url);
     setEditingUgPlaylist(false);
-    setUgPlaylistInput("");
-    fetch(`/api/sets/${set.id}`, {
+    const res = await fetch(`/api/sets/${set.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ultimate_guitar_playlist_url: url }),
-    });
+      body: JSON.stringify({ ultimate_guitar_playlist_url: ugPlaylistInput }),
+    }).catch(() => null);
+    const json = res?.ok ? await res.json() : null;
+    if (json && "ultimate_guitar_playlist_url" in json) setUgPlaylistUrl(json.ultimate_guitar_playlist_url);
+    setUgPlaylistInput("");
   }
 
   async function handleDeleteSet() {
@@ -860,7 +942,7 @@ export default function SetDetail({
                   ? `YouTube playlist synced — ${playlistLinks.youtube.added} of ${playlistLinks.youtube.total} songs added (${(playlistLinks.youtube.total ?? 0) - playlistLinks.youtube.added} have no YouTube link).`
                   : `YouTube playlist synced — all ${playlistLinks.youtube.total} songs added.`}
               </p>
-              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-green-700 underline">Open →</a>
+              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-green-700 underline">Open</a>
             </div>
           )}
           {playlistLinks.spotify?.added !== undefined && (
@@ -870,7 +952,7 @@ export default function SetDetail({
                   ? `Spotify playlist synced — ${playlistLinks.spotify.added} of ${playlistLinks.spotify.total} songs added (${(playlistLinks.spotify.total ?? 0) - playlistLinks.spotify.added} have no Spotify link).`
                   : `Spotify playlist synced — all ${playlistLinks.spotify.total} songs added.`}
               </p>
-              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-green-700 underline">Open →</a>
+              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-green-700 underline">Open</a>
             </div>
           )}
           {playlistError && (
@@ -904,7 +986,7 @@ export default function SetDetail({
                 type="text"
                 value={nameValue}
                 onChange={(e) => setNameValue(e.target.value)}
-                className="w-full text-xl font-semibold rounded-lg border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="w-full text-xl font-semibold rounded-xl border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 autoFocus
               />
               <textarea
@@ -912,19 +994,19 @@ export default function SetDetail({
                 onChange={(e) => setDescValue(e.target.value)}
                 placeholder="Description (optional)"
                 rows={2}
-                className="w-full text-sm rounded-lg border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
+                className="w-full text-sm rounded-xl border border-zinc-300 px-2 py-1 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleSaveName}
                   disabled={savingName || !nameValue.trim()}
-                  className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
                 >
                   {savingName ? "Saving…" : "Save"}
                 </button>
                 <button
                   onClick={() => { setEditingName(false); setNameValue(set.name); setDescValue(set.description ?? ""); }}
-                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -951,36 +1033,20 @@ export default function SetDetail({
           )}
         </div>
 
-        {!canManage && (
-          currentUserId ? (
-            <button
-              onClick={handleCopySet}
-              disabled={copying}
-              className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
-            >
-              {copying ? "Copying…" : "Copy to my sets"}
-            </button>
-          ) : (
-            <a
-              href={`/auth?next=${setPath(set)}`}
-              className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
-            >
-              Sign in to copy
-            </a>
-          )
-        )}
-
-        {canManage && !editingName && (
+        {/* Signed-out visitors get no copy button: SetGuestPrompt at the foot of the page makes that pitch. */}
+        {(canManage ? !editingName : !!currentUserId) && (
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => setEditingName(true)}
-              className="text-zinc-400 hover:text-zinc-600 transition-colors"
-              aria-label="Edit set name"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-              </svg>
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setEditingName(true)}
+                className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                aria-label="Edit set name"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                </svg>
+              </button>
+            )}
             <div className="relative" ref={setMenuRef}>
               <button
                 onClick={() => setSetMenuOpen((o) => !o)}
@@ -1006,7 +1072,7 @@ export default function SetDetail({
                     onClick={handleCopySet}
                     className="w-full text-left flex items-center px-4 py-2.5 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
                   >
-                    Copy set
+                    {canManage ? "Copy set" : "Copy to my sets"}
                   </button>
                 </div>
               )}
@@ -1111,7 +1177,7 @@ export default function SetDetail({
 
         {/* Collaborator cards */}
         {(showAllCollaborators ? collaborators : collaborators.slice(0, 3)).map((c) => (
-          <li key={c.id} className="flex items-center gap-2 rounded-xl border border-zinc-100 bg-white px-3 py-2">
+          <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-zinc-100 bg-white px-3 py-2">
             <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-200 text-xs font-medium text-zinc-600">
               {c.profiles?.avatar_url
                 ? <Image src={c.profiles.avatar_url} alt="" fill sizes="28px" className="object-cover" />
@@ -1128,7 +1194,9 @@ export default function SetDetail({
               </span>
             )}
             {canManage && (isOwner || c.role !== "co-owner") ? (
-              <div className="flex items-center gap-2 shrink-0">
+              // On a phone the role switcher takes its own line under the name,
+              // so the name isn't squeezed down to a couple of letters.
+              <div className="flex w-full shrink-0 items-center justify-between gap-2 pl-9 sm:w-auto sm:justify-start sm:pl-0">
                 <div className="flex rounded-lg border border-zinc-200 overflow-hidden">
                   {(isOwner ? (["editor", "viewer", "co-owner"] as const) : (["editor", "viewer"] as const)).map((r) => (
                     <button
@@ -1175,21 +1243,20 @@ export default function SetDetail({
         )}
       </ul>}
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        {canEdit && (
-          <>
+      {/* Invite belongs with the collaborators above, not the song tools below. */}
+      {canEdit && (
+        <div className="space-y-2">
             <button
               onClick={() => setShowInvitePanel((v) => !v)}
-              className="flex items-center gap-1.5 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+              className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${showInvitePanel ? "border-zinc-400 bg-zinc-50 text-zinc-900" : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"}`}
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
               </svg>
-              Invite
+              Invite collaborators
             </button>
             {showInvitePanel && (
-              <div className="basis-full">
+              <div>
                 <SetInvitePanel
                   setId={set.id}
                   canAssignCoOwner={isOwner}
@@ -1205,44 +1272,46 @@ export default function SetDetail({
                 />
               </div>
             )}
-          </>
-        )}
+        </div>
+      )}
 
+      {/* Song tools: playlists, chords, export */}
+      <div className="flex flex-wrap gap-2">
         {isAdmin ? (
           !playlistLinks.youtube ? (
             <button
               onClick={() => handleCreatePlaylist("youtube")}
               disabled={!!creatingPlaylist}
-              className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
-              <YoutubeIcon />
+              <span className="flex text-red-600"><YoutubeIcon /></span>
               {creatingPlaylist === "youtube" ? "Creating…" : "YouTube playlist"}
             </button>
           ) : youtubeOutdated ? (
-            <div className="flex items-center rounded-xl border border-red-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
               <button
                 onClick={() => handleCreatePlaylist("youtube")}
                 disabled={!!creatingPlaylist}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
-                <YoutubeIcon />
+                <span className="flex text-red-600"><YoutubeIcon /></span>
                 <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
-                {creatingPlaylist === "youtube" ? "Updating…" : "Update playlist"}
+                {creatingPlaylist === "youtube" ? "Updating…" : "Update"}
               </button>
-              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors border-l border-red-200">
-                Open →
+              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 transition-colors border-l border-zinc-300">
+                Open
               </a>
             </div>
           ) : (
-            <div className="flex items-center rounded-xl border border-red-200 overflow-hidden">
-              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
-                <YoutubeIcon />
+            <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
+              <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+                <span className="flex text-red-600"><YoutubeIcon /></span>
                 Open playlist
               </a>
               <button
                 onClick={() => handleCreatePlaylist("youtube")}
                 disabled={!!creatingPlaylist}
-                className="px-3 py-2 text-sm text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors border-l border-red-200"
+                className="px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 disabled:opacity-50 transition-colors border-l border-zinc-300"
                 title="Re-sync playlist"
               >
                 {creatingPlaylist === "youtube" ? "…" : "↺"}
@@ -1250,9 +1319,9 @@ export default function SetDetail({
             </div>
           )
         ) : playlistLinks.youtube ? (
-          <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
-            <YoutubeIcon />
-            YouTube playlist →
+          <a href={playlistLinks.youtube.url} target="_blank" rel="noopener noreferrer" aria-label="YouTube playlist" className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+            <span className="flex text-red-600"><YoutubeIcon /></span>
+            YouTube
           </a>
         ) : null}
 
@@ -1261,36 +1330,36 @@ export default function SetDetail({
             <button
               onClick={() => handleCreatePlaylist("spotify")}
               disabled={!!creatingPlaylist}
-              className="flex items-center gap-1.5 rounded-xl border border-green-200 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
-              <SpotifyIcon />
+              <span className="flex text-green-600"><SpotifyIcon /></span>
               {creatingPlaylist === "spotify" ? "Creating…" : "Spotify playlist"}
             </button>
           ) : spotifyOutdated ? (
-            <div className="flex items-center rounded-xl border border-green-200 overflow-hidden">
+            <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
               <button
                 onClick={() => handleCreatePlaylist("spotify")}
                 disabled={!!creatingPlaylist}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
-                <SpotifyIcon />
+                <span className="flex text-green-600"><SpotifyIcon /></span>
                 <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
-                {creatingPlaylist === "spotify" ? "Updating…" : "Update playlist"}
+                {creatingPlaylist === "spotify" ? "Updating…" : "Update"}
               </button>
-              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-green-500 hover:bg-green-50 transition-colors border-l border-green-200">
-                Open →
+              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 transition-colors border-l border-zinc-300">
+                Open
               </a>
             </div>
           ) : (
-            <div className="flex items-center rounded-xl border border-green-200 overflow-hidden">
-              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors">
-                <SpotifyIcon />
+            <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
+              <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+                <span className="flex text-green-600"><SpotifyIcon /></span>
                 Open playlist
               </a>
               <button
                 onClick={() => handleCreatePlaylist("spotify")}
                 disabled={!!creatingPlaylist}
-                className="px-3 py-2 text-sm text-green-400 hover:bg-green-50 hover:text-green-600 disabled:opacity-50 transition-colors border-l border-green-200"
+                className="px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 disabled:opacity-50 transition-colors border-l border-zinc-300"
                 title="Re-sync playlist"
               >
                 {creatingPlaylist === "spotify" ? "…" : "↺"}
@@ -1298,23 +1367,23 @@ export default function SetDetail({
             </div>
           )
         ) : playlistLinks.spotify ? (
-          <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-xl border border-green-200 px-4 py-2 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors">
-            <SpotifyIcon />
-            Spotify playlist →
+          <a href={playlistLinks.spotify.url} target="_blank" rel="noopener noreferrer" aria-label="Spotify playlist" className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+            <span className="flex text-green-600"><SpotifyIcon /></span>
+            Spotify
           </a>
         ) : null}
 
         {canManage ? (
-          ugPlaylistUrl ? (
+          safeUgPlaylistUrl ? (
             <>
-              <div className="flex items-center rounded-xl border border-amber-200 overflow-hidden">
-                <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
+              <div className="flex items-center rounded-full border border-zinc-300 overflow-hidden">
+                <a href={safeUgPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
                   <UltimateGuitarIcon />
                   UG playlist
                 </a>
                 <button
-                  onClick={() => { setUgPlaylistInput(ugPlaylistUrl); setEditingUgPlaylist(true); }}
-                  className="px-3 py-2 text-sm text-amber-400 hover:bg-amber-50 hover:text-amber-700 transition-colors border-l border-amber-200"
+                  onClick={() => { setUgPlaylistInput(safeUgPlaylistUrl); setEditingUgPlaylist(true); }}
+                  className="px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 transition-colors border-l border-zinc-300"
                   title="Edit URL"
                 >
                   ✎
@@ -1332,13 +1401,13 @@ export default function SetDetail({
                   <button
                     onClick={handleSaveUgPlaylist}
                     disabled={!ugPlaylistInput.trim()}
-                    className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                    className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
                   >
                     Save
                   </button>
                   <button
                     onClick={() => { setEditingUgPlaylist(false); setUgPlaylistInput(""); }}
-                    className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                    className="shrink-0 rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                   >
                     Cancel
                   </button>
@@ -1356,14 +1425,14 @@ export default function SetDetail({
               />
               <button
                 onClick={handleSaveUgPlaylist}
-                disabled={!ugPlaylistInput.trim()}
-                className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                disabled={!webUrl(ugPlaylistInput)}
+                className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
               >
                 Save
               </button>
               <button
                 onClick={() => { setEditingUgPlaylist(false); setUgPlaylistInput(""); }}
-                className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                className="shrink-0 rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
               >
                 Cancel
               </button>
@@ -1371,22 +1440,22 @@ export default function SetDetail({
           ) : (
             <button
               onClick={() => setEditingUgPlaylist(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
             >
               <UltimateGuitarIcon />
               UG playlist
             </button>
           )
-        ) : ugPlaylistUrl ? (
-          <a href={ugPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-xl border border-amber-200 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
+        ) : safeUgPlaylistUrl ? (
+          <a href={safeUgPlaylistUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
             <UltimateGuitarIcon />
-            UG playlist →
+            UG playlist
           </a>
         ) : null}
 
         <button
           onClick={() => setShowCsvOptions((v) => !v)}
-          className={`hidden md:flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${showCsvOptions ? "border-zinc-400 bg-zinc-50 text-zinc-900" : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"}`}
+          className={`hidden md:flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${showCsvOptions ? "border-zinc-400 bg-zinc-50 text-zinc-900" : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"}`}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1412,13 +1481,13 @@ export default function SetDetail({
             <div className="flex gap-2">
               <button
                 onClick={handleCSVDownload}
-                className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
+                className="rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 transition-colors"
               >
                 Download
               </button>
               <button
                 onClick={() => setShowCsvOptions(false)}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
               >
                 Cancel
               </button>
@@ -1429,7 +1498,7 @@ export default function SetDetail({
           href={`/set/${set.id}/pdf${songSort !== "custom" ? `?order=${sortedSongs.map((s) => s.song_id).join(",")}` : ""}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="hidden md:flex items-center gap-1.5 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+          className="hidden md:flex items-center gap-1.5 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
@@ -1459,8 +1528,8 @@ export default function SetDetail({
           <div className="flex gap-0.5 rounded-lg bg-zinc-100 p-0.5">
             {([
               { value: "custom", label: "Custom" },
-              { value: "az",     label: "A → Z" },
-              { value: "za",     label: "Z → A" },
+              { value: "az",     label: "A–Z" },
+              { value: "za",     label: "Z–A" },
               { value: "popularity", label: "Popular" },
             ] as const).map(({ value, label }) => (
               <button
@@ -1483,86 +1552,21 @@ export default function SetDetail({
         )}
 
         {songs.length > 0 && (
-          canEdit && !songListFilter && songSort === "custom" ? (
+          canManage && !songListFilter && songSort === "custom" ? (
             <SetSortableSongList
               contextId={set.id}
               items={songs}
               onMove={handleMoveSong}
-              renderRow={(i) => {
-                const song = songs[i];
-                const knowledgeForSong = songKnowledgeMap.get(song.song_id) ?? new Map<string, string>();
-                const knowledgeUserIds = new Set(knowledgeForSong.keys());
-                const hasEligible = [...knowledgeForSong.values()].some((c) => c === "lead");
-                const rowParticipants = participants.filter((p) =>
-                  knowledgeUserIds.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id)
-                );
-                return (
-                  <SetSongRow
-                    song={song}
-                    index={i}
-                    canEdit={canEdit}
-                    isAdmin={isAdmin}
-                    isSongEditor={isSongEditor}
-                    isPublicViewer={isPublicViewer}
-                    participants={rowParticipants}
-                    hasEligible={hasEligible}
-                    participantKnowledge={knowledgeForSong}
-                    participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
-                    currentUserId={currentUserId}
-                    currentUserSingingVoice={userSingingVoice}
-                    myConfidence={userRepertoire.get(song.song_id) ?? null}
-                    onRemove={handleRemoveSong}
-                    onTogglePlayed={handleTogglePlayed}
-                    onMediaAdded={handleMediaAdded}
-                    onKeyChanged={handleKeyChanged}
-                    onNotesChanged={handleNotesChanged}
-                    onLeadersChanged={handleLeadersChanged}
-                    onAddToRepertoire={handleAddToRepertoire}
-                    onVoiceUpdated={setUserSingingVoice}
-                    signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
-                  />
-                );
-              }}
+              renderRow={(i) => renderSongRow(songs[i], i)}
             />
           ) : (
             visibleSongs.map((song, i) => {
               const originalIndex = songs.indexOf(song);
               const displayNumber = songSort === "custom" ? originalIndex + 1 : i + 1;
-              const knowledgeForSong = songKnowledgeMap.get(song.song_id) ?? new Map<string, string>();
-              const knowledgeUserIds = new Set(knowledgeForSong.keys());
-              const hasEligible = [...knowledgeForSong.values()].some((c) => c === "lead");
-              const rowParticipants = isPublicViewer
-                ? []
-                : participants.filter((p) =>
-                    knowledgeUserIds.has(p.user_id) || (song.leader_user_ids ?? []).includes(p.user_id)
-                  );
               return (
-                <div key={song.id} className="flex items-start gap-2 sm:gap-3 rounded-xl border border-zinc-200 bg-white px-2 sm:px-4 py-2.5 sm:py-3">
+                <div key={song.id} className={`flex items-start gap-2 sm:gap-3 rounded-xl border border-zinc-200 px-2 sm:px-4 py-2.5 sm:py-3 ${song.played ? "bg-zinc-50" : "bg-white"}`}>
                   <span className="shrink-0 mt-0.5 w-6 sm:w-8 text-center text-[10px] sm:text-xs font-semibold text-zinc-300">{displayNumber}</span>
-                  <SetSongRow
-                    song={song}
-                    index={originalIndex}
-                    canEdit={canEdit}
-                    isAdmin={isAdmin}
-                    isSongEditor={isSongEditor}
-                    isPublicViewer={isPublicViewer}
-                    participants={rowParticipants}
-                    hasEligible={hasEligible}
-                    participantKnowledge={knowledgeForSong}
-                    participantKeys={songKeyMap.get(song.song_id) ?? EMPTY_KEYS}
-                    currentUserId={currentUserId}
-                    currentUserSingingVoice={userSingingVoice}
-                    myConfidence={userRepertoire.get(song.song_id) ?? null}
-                    onMediaAdded={handleMediaAdded}
-                    onKeyChanged={handleKeyChanged}
-                    onNotesChanged={handleNotesChanged}
-                    onLeadersChanged={handleLeadersChanged}
-                    onAddToRepertoire={handleAddToRepertoire}
-                    onVoiceUpdated={setUserSingingVoice}
-                    onTogglePlayed={handleTogglePlayed}
-                    onRemove={handleRemoveSong}
-                    signInUrl={currentUserId ? undefined : `/auth?next=${setPath(set)}`}
-                  />
+                  {renderSongRow(song, originalIndex)}
                 </div>
               );
             })
@@ -1572,6 +1576,7 @@ export default function SetDetail({
         {currentUserId && (
           <SetSongPanel
             setId={set.id}
+            jamId={set.jam_id ?? null}
             canEdit={canEdit}
             isSolo={isSolo}
             currentSongIds={songs.map((s) => s.song_id)}
@@ -1599,13 +1604,13 @@ export default function SetDetail({
                 <button
                   onClick={handleDeleteSet}
                   disabled={deleting}
-                  className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-50 transition-colors"
                 >
                   {deleting ? "Deleting…" : "Yes, delete"}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -1625,3 +1630,4 @@ export default function SetDetail({
     </div>
   );
 }
+
