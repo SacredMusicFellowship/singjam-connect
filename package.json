@@ -2,7 +2,7 @@
   "name": "singjam",
   "private": true,
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "e2e:setup": "node scripts/e2e-setup.mjs",
