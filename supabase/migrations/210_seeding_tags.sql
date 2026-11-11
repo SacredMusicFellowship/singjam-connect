@@ -1,6 +1,10 @@
 -- Tags the wave-1 song seeding needs: barbershop, gospel styles, cowboy songs,
 -- children's forms, sea songs, two sacraments and New Zealand.
 
+-- A fresh replay (local, e2e) runs every migration in one session; start without the pg_temp
+-- helpers earlier migrations defined under the same names.
+discard temp;
+
 create function pg_temp.t(p_type text, p_name text, p_top boolean default false)
 returns uuid language plpgsql as $$
 declare v uuid;
