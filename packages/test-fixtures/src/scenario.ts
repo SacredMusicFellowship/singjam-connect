@@ -104,7 +104,8 @@ export function buildScenario(options: ScenarioOptions = {}): { scenario: Scenar
     buildInvite(ctx, privateUpcoming.jam, crowdIds[10], "declined"),
   ];
   const jamCohosts = [
-    { id: ctx.id("cohost", officialNext.jam.id), jam_id: officialNext.jam.id, user_id: admin.profile.id, added_by: host.profile.id },
+    // Official events can't have co-hosts, so the admin co-hosts the member's community jam.
+    { id: ctx.id("cohost", communityUpcoming.jam.id), jam_id: communityUpcoming.jam.id, user_id: admin.profile.id, added_by: member.profile.id },
   ];
 
   // Tickets: paid orders from members and guests, with check-ins for the past event.
@@ -162,7 +163,7 @@ export function buildScenario(options: ScenarioOptions = {}): { scenario: Scenar
     buildNotification(ctx, { key: "member-collab", userId: member.profile.id, type: "set_collaborator_added", title: `You can now edit ${memberShared.set.name}`, link: setLink(memberShared.set), hoursAgo: 26, read: true }),
     buildNotification(ctx, { key: "member-updated", userId: member.profile.id, type: "jam_updated", title: `${communityFull.jam.name} has a new start time`, link: jamLink(communityFull.jam), hoursAgo: 50, read: true }),
     buildNotification(ctx, { key: "host-request", userId: host.profile.id, type: "set_access_request", title: `${crowd[6].profile.display_name} asked to edit ${officialNextSet.set.name}`, link: setLink(officialNextSet.set), hoursAgo: 5 }),
-    buildNotification(ctx, { key: "admin-cohost", userId: admin.profile.id, type: "jam_cohost_added", title: `${host.profile.display_name} added you as a co-host of ${officialNext.jam.name}`, link: jamLink(officialNext.jam), hoursAgo: 72, read: true }),
+    buildNotification(ctx, { key: "admin-cohost", userId: admin.profile.id, type: "jam_cohost_added", title: `${member.profile.display_name} added you as a co-host of ${communityUpcoming.jam.name}`, link: jamLink(communityUpcoming.jam), hoursAgo: 72, read: true }),
   ];
 
   const scenario: Scenario = {
