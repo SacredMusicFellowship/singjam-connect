@@ -64,6 +64,9 @@ declare
   uid uuid;
   sid uuid;
 begin
+  -- Production content that builds on rows only production has; a fresh database (local, e2e)
+  -- has no songs yet and skips it.
+  if not exists (select 1 from public.songs) then return; end if;
   -- Love Divine, All Loves Excelling
   insert into public.texts (title, kind, first_line, notes) values ('Love Divine, All Loves Excelling', 'hymn', 'Love divine, all loves excelling, joy of heaven, to earth come down', null) returning id into tid;
   insert into public.text_credits (text_id, person_id, role) values (tid, (select id from public.people where name = 'Charles Wesley'), 'author') on conflict do nothing;

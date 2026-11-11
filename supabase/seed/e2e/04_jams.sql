@@ -16,28 +16,28 @@ Doors 6:30pm, singing at 7pm.', 120, 6, false, null, now() - interval '3628800 s
   ('074f4573-ee1d-4bb7-afa5-3bdf06f7651b', '9mfz4rxe', 'Leaders'' Rehearsal', '5edf8dbe-520e-4fda-9f3a-431a13eb317e', 'private', now() + interval '543600 seconds', now() + interval '550800 seconds', 'America/Los_Angeles', 'Fox Glen', '9 Starling Place, Fox Glen, CA 90006', 'Run-through of next week''s set with song leaders.', 10, null, false, null, now() - interval '1814400 seconds'),
   ('ce8e7927-0993-4ba4-b3b7-e62e34aa44ad', 'zy4yvmcf', 'Kitchen Table Sing', '18dec606-cf56-457a-99f9-2ba1ce71a8dd', 'community', now() - interval '846000 seconds', now() - interval '838800 seconds', 'America/Los_Angeles', 'Cedar Flats', '18 Fern Court, Maple Hollow, CA 90004', 'Easy songs, all levels.', null, null, false, null, now() - interval '2678400 seconds');
 
-insert into public.jam_genres (jam_id, genre_id) values
-  ('26b1777d-ccaa-421f-a642-64a20c5901c0', (select id from public.genres where name = 'Folk')),
-  ('26b1777d-ccaa-421f-a642-64a20c5901c0', (select id from public.genres where name = 'Rock')),
-  ('26b1777d-ccaa-421f-a642-64a20c5901c0', (select id from public.genres where name = 'Soul')),
-  ('26b1777d-ccaa-421f-a642-64a20c5901c0', (select id from public.genres where name = 'Country')),
-  ('56d2d082-2244-48ed-a76c-1550d3faad3f', (select id from public.genres where name = 'Folk')),
-  ('56d2d082-2244-48ed-a76c-1550d3faad3f', (select id from public.genres where name = 'Rock')),
-  ('56d2d082-2244-48ed-a76c-1550d3faad3f', (select id from public.genres where name = 'Soul')),
-  ('56d2d082-2244-48ed-a76c-1550d3faad3f', (select id from public.genres where name = 'Country')),
-  ('cf7a417f-d4c2-4646-9d8c-98eec6349fd7', (select id from public.genres where name = 'Folk')),
-  ('cf7a417f-d4c2-4646-9d8c-98eec6349fd7', (select id from public.genres where name = 'Rock')),
-  ('cf7a417f-d4c2-4646-9d8c-98eec6349fd7', (select id from public.genres where name = 'Soul')),
-  ('cf7a417f-d4c2-4646-9d8c-98eec6349fd7', (select id from public.genres where name = 'Country')),
-  ('4bc0a358-49b9-43a0-af01-a827ad7838df', (select id from public.genres where name = 'Folk')),
-  ('4bc0a358-49b9-43a0-af01-a827ad7838df', (select id from public.genres where name = 'Americana')),
-  ('6e0ed521-13e4-484a-bd41-185300aba538', (select id from public.genres where name = 'Shanties')),
-  ('6e0ed521-13e4-484a-bd41-185300aba538', (select id from public.genres where name = 'Celtic')),
-  ('ce8e7927-0993-4ba4-b3b7-e62e34aa44ad', (select id from public.genres where name = 'Gospel')),
-  ('ce8e7927-0993-4ba4-b3b7-e62e34aa44ad', (select id from public.genres where name = 'Folk'));
+insert into public.jam_tags (jam_id, tag_id) values
+  ('26b1777d-ccaa-421f-a642-64a20c5901c0', (select id from public.tags where type = 'genre' and name = 'Folk')),
+  ('26b1777d-ccaa-421f-a642-64a20c5901c0', (select id from public.tags where type = 'genre' and name = 'Rock')),
+  ('26b1777d-ccaa-421f-a642-64a20c5901c0', (select id from public.tags where type = 'genre' and name = 'Soul')),
+  ('26b1777d-ccaa-421f-a642-64a20c5901c0', (select id from public.tags where type = 'genre' and name = 'Country')),
+  ('56d2d082-2244-48ed-a76c-1550d3faad3f', (select id from public.tags where type = 'genre' and name = 'Folk')),
+  ('56d2d082-2244-48ed-a76c-1550d3faad3f', (select id from public.tags where type = 'genre' and name = 'Rock')),
+  ('56d2d082-2244-48ed-a76c-1550d3faad3f', (select id from public.tags where type = 'genre' and name = 'Soul')),
+  ('56d2d082-2244-48ed-a76c-1550d3faad3f', (select id from public.tags where type = 'genre' and name = 'Country')),
+  ('cf7a417f-d4c2-4646-9d8c-98eec6349fd7', (select id from public.tags where type = 'genre' and name = 'Folk')),
+  ('cf7a417f-d4c2-4646-9d8c-98eec6349fd7', (select id from public.tags where type = 'genre' and name = 'Rock')),
+  ('cf7a417f-d4c2-4646-9d8c-98eec6349fd7', (select id from public.tags where type = 'genre' and name = 'Soul')),
+  ('cf7a417f-d4c2-4646-9d8c-98eec6349fd7', (select id from public.tags where type = 'genre' and name = 'Country')),
+  ('4bc0a358-49b9-43a0-af01-a827ad7838df', (select id from public.tags where type = 'genre' and name = 'Folk')),
+  ('4bc0a358-49b9-43a0-af01-a827ad7838df', (select id from public.tags where type = 'genre' and name = 'Americana')),
+  ('6e0ed521-13e4-484a-bd41-185300aba538', (select id from public.tags where type = 'form' and name = 'Shanty')),
+  ('6e0ed521-13e4-484a-bd41-185300aba538', (select id from public.tags where type = 'genre' and name = 'Celtic')),
+  ('ce8e7927-0993-4ba4-b3b7-e62e34aa44ad', (select id from public.tags where type = 'genre' and name = 'Gospel')),
+  ('ce8e7927-0993-4ba4-b3b7-e62e34aa44ad', (select id from public.tags where type = 'genre' and name = 'Folk'));
 
 insert into public.jam_cohosts (id, jam_id, user_id, added_by) values
-  ('dfc210fa-e5de-4210-8122-3ae83b3e7802', '26b1777d-ccaa-421f-a642-64a20c5901c0', 'e339269c-4359-463b-9271-cb60f2117bc7', '5edf8dbe-520e-4fda-9f3a-431a13eb317e');
+  ('eaf60fae-bf62-489b-86e3-5bb213772c87', '4bc0a358-49b9-43a0-af01-a827ad7838df', 'e339269c-4359-463b-9271-cb60f2117bc7', '920d8ba2-35d8-4a72-89e0-0cb56e35ad65');
 
 insert into public.jam_rsvps (id, jam_id, user_id, status, waitlist_position, created_at) values
   ('038393c7-e3f5-4351-87d7-6ed0a7a1ee46', '26b1777d-ccaa-421f-a642-64a20c5901c0', '920d8ba2-35d8-4a72-89e0-0cb56e35ad65', 'attending', null, now() - interval '1810800 seconds'),

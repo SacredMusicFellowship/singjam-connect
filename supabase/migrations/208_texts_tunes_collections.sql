@@ -25,6 +25,10 @@
 -- (song_titles, song_first_lines, song_credits, recordings) are dropped.
 
 -- 1. Tag types --------------------------------------------------------------------
+-- A fresh replay (local, e2e) runs every migration in one session; start without the pg_temp
+-- helpers earlier migrations defined under the same names.
+discard temp;
+
 alter table public.tags drop constraint if exists tags_type_check;
 alter table public.tags add constraint tags_type_check
   check (type in ('genre', 'theme', 'culture', 'language', 'form', 'occasion', 'community', 'mode', 'rhythm'));
