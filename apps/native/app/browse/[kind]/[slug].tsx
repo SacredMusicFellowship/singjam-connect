@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import {
   browsePath, KIND_LABEL, loadBrowseEntity, loadBrowseRelated, loadBrowseSongs, traditionalCultureChips,
   songMatchesFilters, type BrowseEntity, type BrowseKind, type BrowseRelatedGroup, type BrowseSongRow, type LinkedTag, type SongFilterState,
@@ -78,16 +79,18 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
   const viewSong = useCallback((song: { song_id: string }) => router.push(`/song/${song.song_id}` as any), [router]);
   const { myConfidence, addSong } = useMySongs();
   const { tools, modals: mySongModals } = useMySongTools();
+  // The songs you knew when you ticked the box: ones you add after stay in view.
+  const [hidden, setHidden] = useState<Set<string> | null>(null);
   // The Song Library's filters, scoped to this page's songs (each row carries its own filter fields).
   const { hierarchy, expanded, options, facets, yearBounds, activeCount } = useFilterFacets(songs, filters);
   // Card props built once per load, so memoised cards keep the same song object.
   const cards = useMemo(() => songs.map(s => ({ row: s, song: { ...s, first_line: null, year: null, recording_artists: s.recording_artists ?? null } as Suggestion })), [songs]);
   const shownCards = useMemo(() => {
-    const list = activeCount === 0 ? cards : cards.filter(c => songMatchesFilters(c.row, expanded));
+    const list = activeCount === 0 && !hidden ? cards : cards.filter(c => !hidden?.has(c.row.song_id) && songMatchesFilters(c.row, expanded));
     if (sortBy === 'title_asc') return [...list].sort((a, b) => a.row.title.localeCompare(b.row.title));
     if (sortBy === 'title_desc') return [...list].sort((a, b) => b.row.title.localeCompare(a.row.title));
     return list;
-  }, [cards, activeCount, expanded, sortBy]);
+  }, [cards, activeCount, expanded, sortBy, hidden]);
   const roles = entity?.roles;
   const renderItem = useCallback(({ item }: { item: { song: Suggestion } }) => (
     <SuggestionCard
@@ -173,12 +176,21 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
         </View>
       )}
 
-      <View className="flex-row items-center mt-4" style={{ gap: 8 }}>
+      <View className="flex-row flex-wrap items-center mt-4" style={{ gap: 8 }}>
         {songs.length > 1 && (
           <InlineDropdown value={sortBy} options={SORT_OPTIONS} onChange={setSortBy} accessibilityLabel="Sort" />
         )}
         {songs.length > 1 && <FiltersButton count={activeCount} onPress={() => setSheetOpen(true)} />}
-        {activeCount > 0 ? <Text className="text-xs text-zinc-500">{shownCards.length} of {songs.length}</Text> : null}
+        {myConfidence.size > 0 && (
+          <TouchableOpacity
+            onPress={() => setHidden(h => (h ? null : new Set(myConfidence.keys())))}
+            className="h-7 flex-row items-center gap-1.5 rounded-full border border-zinc-200 px-3"
+          >
+            <Ionicons name={hidden ? 'checkbox' : 'square-outline'} size={13} color={hidden ? '#d97706' : '#d4d4d8'} />
+            <Text className="text-xs font-medium text-zinc-500">Hide my songs</Text>
+          </TouchableOpacity>
+        )}
+        {activeCount > 0 || hidden ? <Text className="text-xs text-zinc-500">{shownCards.length} of {songs.length}</Text> : null}
       </View>
       <View className="h-2" />
     </View>
@@ -215,7 +227,7 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
         ListHeaderComponent={header}
         ListFooterComponent={footer}
         ListEmptyComponent={
-          <Text className="text-sm text-zinc-500 text-center py-8">{songs.length === 0 ? 'No songs here yet.' : 'No songs here match these filters.'}</Text>
+          <Text className="text-sm text-zinc-500 text-center py-8">{songs.length === 0 ? 'No songs here yet.' : hidden && activeCount === 0 ? 'You know every song here.' : 'No songs here match these filters.'}</Text>
         }
       />
       </ContentContainer>

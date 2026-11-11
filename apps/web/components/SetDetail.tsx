@@ -51,7 +51,6 @@ export default function SetDetail({
   isOwner,
   canManage = false,
   isAdmin,
-  isSongEditor = false,
   isPublicViewer = false,
   songKnowledge: initialSongKnowledge = [],
   canAccessJam = false,
@@ -67,7 +66,6 @@ export default function SetDetail({
   isOwner: boolean;
   canManage?: boolean;
   isAdmin: boolean;
-  isSongEditor?: boolean;
   isPublicViewer?: boolean;
   songKnowledge?: SongKnowledge[];
   canAccessJam?: boolean;
@@ -642,7 +640,6 @@ export default function SetDetail({
         canManage={canManage}
         canRemove={canRemoveSetSong(isOwner, myRole, song.added_by_user_id, currentUserId)}
         isAdmin={isAdmin}
-        isSongEditor={isSongEditor}
         isPublicViewer={isPublicViewer}
         participants={rowParticipants}
         hasEligible={hasEligible}

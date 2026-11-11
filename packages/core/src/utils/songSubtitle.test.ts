@@ -66,6 +66,34 @@ describe("songCardCredits", () => {
     expect(c.writers).toEqual([{ text: "Trad. · English", link: { kind: "culture", key: "English", traditional: true } }]);
     expect(c.line).toEqual([{ text: "“Oh, say were you ever in Rio Grande…”", link: null }]);
   });
+  describe("a chosen card line", () => {
+    const base = {
+      title: "This Land Is Your Land", byline: "Woody Guthrie", displayArtist: "Woody Guthrie", composers: ["Woody Guthrie", "Traditional"], cultures: ["American"],
+      recordingArtists: [{ name: "Woody Guthrie", year: 1944 }],
+      identity: { tune: "Old Hymn", tune_slug: "old-hymn", source: null, first_line: "As I was walking that ribbon of highway" },
+    };
+    it("shows the recordings, overriding the byline", () => {
+      expect(songCardCredits({ ...base, cardLine: "recordings" }).line.map((c) => c.text)).toEqual(["Woody Guthrie"]);
+    });
+    it("moves the writers in full under the title, Traditional with its culture", () => {
+      const c = songCardCredits({ ...base, cardLine: "writers" });
+      expect(c.writers).toEqual([]);
+      expect(c.line).toEqual([
+        { text: "Traditional · American", link: { kind: "culture", key: "American", traditional: true } },
+        { text: "Woody Guthrie", link: { kind: "person", key: "Woody Guthrie" } },
+      ]);
+    });
+    it("shows only the chosen one of tune, scripture and first line, or nothing", () => {
+      expect(songCardCredits({ ...base, cardLine: "tune" }).line[0].text).toBe("Old Hymn");
+      expect(songCardCredits({ ...base, cardLine: "first_line" }).line[0].text).toBe("“As I was walking that ribbon of highway…”");
+      expect(songCardCredits({ ...base, cardLine: "scripture" }).line).toEqual([]);
+      expect(songCardCredits({ ...base, cardLine: "none" }).line).toEqual([]);
+    });
+    it("reads the saved choice from the card identity, and an explicit null means automatic", () => {
+      expect(songCardCredits({ ...base, identity: { ...base.identity, line: "first_line" } }).line[0].text).toBe("“As I was walking that ribbon of highway…”");
+      expect(songCardCredits({ ...base, identity: { ...base.identity, line: "first_line" }, cardLine: null, knownByRecording: true }).line[0].text).toBe("Woody Guthrie");
+    });
+  });
 });
 
 describe("bylineCredits", () => {

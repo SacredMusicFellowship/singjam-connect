@@ -172,25 +172,20 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
         if ((e.target as HTMLElement).closest('a[href^="/songs/"]')) saveScrollPosition();
       }}
     >
-      {/* Search box */}
-      <div className="rounded-2xl border border-zinc-200 p-5 shadow-sm space-y-3">
-        <div>
-          <SearchInput
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onClear={() => setQ("")}
-            placeholder="Search by title, first line, recording artist, or composer"
-          />
-        </div>
-        <div className="text-xs text-zinc-500">
+      <SearchInput
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onClear={() => setQ("")}
+        placeholder="Search by title, first line, recording artist, or composer"
+      />
+      {(loading || q.trim()) && (
+        <div className="px-1 text-xs text-zinc-500">
           {loading
             ? "Searching…"
-            : q.trim()
-              ? `${sortedSearch.length} song${sortedSearch.length === 1 ? "" : "s"}${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`
-              : null}
+            : `${sortedSearch.length} song${sortedSearch.length === 1 ? "" : "s"}${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`}
         </div>
-        {(searchError ?? browseError ?? status ?? actions.status) ? <div className="text-sm text-zinc-700">{searchError ?? browseError ?? status ?? actions.status}</div> : null}
-      </div>
+      )}
+      {(searchError ?? browseError ?? status ?? actions.status) ? <div className="px-1 text-sm text-zinc-700">{searchError ?? browseError ?? status ?? actions.status}</div> : null}
 
       {/* Filter bar */}
       <div className="space-y-2">

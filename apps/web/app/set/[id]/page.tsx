@@ -235,7 +235,6 @@ export default async function SetPage({
         isOwner={isOwner}
         canManage={canManage}
         isAdmin={isAdmin}
-        isSongEditor={isSongEditor}
         isPublicViewer={isPublicViewer}
         songKnowledge={songKnowledge}
         canAccessJam={canAccessJam}
