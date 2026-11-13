@@ -284,6 +284,12 @@ export default function ProfileScreen() {
         <Text className="text-sm text-zinc-600">Account settings</Text>
       </TouchableOpacity>
       <TouchableOpacity
+        onPress={() => router.push('/blog' as any)}
+        className="mx-4 mt-2 items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
+      >
+        <Text className="text-sm text-zinc-600">Inside SingJam blog</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
         onPress={() => router.push('/feedback' as any)}
         className="mx-4 mt-2 items-center rounded-full border border-zinc-200 bg-white px-4 py-2.5"
       >
