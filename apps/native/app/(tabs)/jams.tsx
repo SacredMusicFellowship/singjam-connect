@@ -350,7 +350,7 @@ export default function JamsScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
-          ) : null}
+          ) : undefined}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <JamCard
@@ -419,7 +419,7 @@ export default function JamsScreen() {
                   No jams yet. Be the first to post one!
                 </Text>
               </View>
-            ) : null
+            ) : undefined
           }
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: 24 }}
