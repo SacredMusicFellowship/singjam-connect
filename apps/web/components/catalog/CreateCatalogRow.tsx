@@ -17,8 +17,12 @@ export default function CreateCatalogRow({ table, label, placeholder }: { table:
     if (table === "texts" && !v) return;
     setBusy(true);
     setError(null);
-    const row = table === "texts" ? { title: v, slug: "x" } : { name: v || null, slug: "x" };
-    const { data, error } = await supabaseBrowser().from(table).insert(row).select("slug").single();
+    const supabase = supabaseBrowser();
+    const insert =
+      table === "texts"
+        ? supabase.from("texts").insert({ title: v, slug: "x" })
+        : supabase.from("tunes").insert({ name: v || null, slug: "x" });
+    const { data, error } = await insert.select("slug").single();
     setBusy(false);
     if (error || !data) { setError(error?.message ?? "Couldn't create it."); return; }
     router.push(`/song-editor/${table}/${data.slug}`);
