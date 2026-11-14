@@ -32,7 +32,7 @@ const getSetSongs = cache(async (id: string) => {
   const supabase = await getServerSupabase();
   const { data } = await supabase
     .from("set_songs")
-    .select("id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))")
+    .select("id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))")
     .eq("set_id", id)
     .order("position", { ascending: true });
   return (data ?? []) as any[];
@@ -235,7 +235,6 @@ export default async function SetPage({
         isOwner={isOwner}
         canManage={canManage}
         isAdmin={isAdmin}
-        isSongEditor={isSongEditor}
         isPublicViewer={isPublicViewer}
         songKnowledge={songKnowledge}
         canAccessJam={canAccessJam}

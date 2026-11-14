@@ -26,6 +26,12 @@ describe("songSavePayload", () => {
     expect(build({}).fields).not.toHaveProperty("text_id");
   });
 
+  it("sends the card line, null for automatic, and leaves it alone when absent", () => {
+    expect(build({ cardLine: "first_line" }).fields).toMatchObject({ card_line: "first_line" });
+    expect(build({ cardLine: null }).fields).toMatchObject({ card_line: null });
+    expect(build({}).fields).not.toHaveProperty("card_line");
+  });
+
   it("sends every tag type as one tags object", () => {
     expect(build({ genres: ["Folk"], forms: ["Hymn"], communities: ["Jewish"] }).tags).toEqual({
       genre: ["Folk"], theme: [], language: [], culture: [], form: ["Hymn"], occasion: [], community: ["Jewish"],

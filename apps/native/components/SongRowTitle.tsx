@@ -17,7 +17,7 @@ export default function SongRowTitle({ title, displayArtist, productions, card }
   productions?: string[] | null;
   card: SongRowCard;
 }) {
-  const { writers, line: second } = songRowText({
+  const { writers, shows, credits } = songRowText({
     title,
     byline: card.byline,
     displayArtist,
@@ -33,7 +33,18 @@ export default function SongRowTitle({ title, displayArtist, productions, card }
         <Text className="text-zinc-900 font-medium">{title}</Text>
         {writers ? <Text className="text-zinc-400">{` (${writers})`}</Text> : null}
       </Text>
-      {second ? <Text className="text-zinc-400 text-sm mt-0.5" numberOfLines={1}>{second}</Text> : null}
+      <SongRowLine shows={shows} credits={credits} className="text-zinc-400 text-sm mt-0.5" />
     </View>
+  );
+}
+
+// A row's second line with its show titles in italics.
+export function SongRowLine({ shows, credits, className, empty }: { shows: string[]; credits: string; className: string; empty?: string }) {
+  if (!shows.length && !credits) return empty ? <Text className={className} numberOfLines={1}>{empty}</Text> : null;
+  return (
+    <Text className={className} numberOfLines={1}>
+      {shows.length > 0 ? <>from <Text className="italic">{shows.join(', ')}</Text>{credits ? ' · ' : ''}</> : null}
+      {credits}
+    </Text>
   );
 }

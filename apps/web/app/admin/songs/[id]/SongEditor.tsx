@@ -6,7 +6,7 @@ import CatalogLinkField from "@/components/catalog/CatalogLinkField";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
-import { MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
+import { MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type CardLine, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -80,6 +80,7 @@ type Song = {
   meter: string | null;
   vibe: "Banger" | "Ballad" | null;
   known_by_recording?: boolean | null;
+  card_line?: CardLine | null;
   text_id?: string | null;
   tune_id?: string | null;
   byline?: string | null;
@@ -163,7 +164,9 @@ export default function SongEditor({
     song?.meter ? song.meter.split(",").map((s) => s.trim()).filter(Boolean) : []
   );
   const [vibe, setVibe] = useState<"Banger" | "Ballad" | null>(song?.vibe ?? null);
-  const [knownByRecording, setKnownByRecording] = useState<boolean | null>(song?.known_by_recording ?? null);
+  const [cardLine, setCardLine] = useState<CardLine | null>(song?.card_line ?? null);
+  // The song page's byline follows the card: its recordings, or its writers.
+  const knownByRecording = cardLine === null ? null : cardLine === "recordings";
   // Which text this song sings, to which tune (migration 208).
   const [textId, setTextId] = useState<string>(song?.text_id ?? "");
   const [tuneId, setTuneId] = useState<string>(song?.tune_id ?? "");
@@ -295,11 +298,33 @@ export default function SongEditor({
     return { existingIds, pendingNames };
   }
 
+  const cardInput = {
+    title,
+    byline: song?.byline,
+    displayArtist: displayArtist || null,
+    composers: [...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
+    cultures,
+    recordingArtists: recordingArtists.map((r, i) => ({ name: allArtists.find((a) => a.id === r.id)?.name ?? "", year: r.year, position: i })).filter((r) => r.name),
+    identity: {
+      tune: allTunes.find((t) => t.id === tuneId)?.tune_label ?? null,
+      source: textSource,
+      first_line: firstLine || null,
+    },
+  };
+  // Each choice with the line it would show; Automatic follows the saved song until you save.
+  const cardLineOptions = ([
+    ["auto", "Automatic"], ["recordings", "Recording artists"], ["writers", "Writers"], ["tune", "Tune"],
+    ["scripture", "Scripture"], ["first_line", "First line"], ["none", "Nothing"],
+  ] as const).map(([value, label]) => {
+    const line = songCardCredits({ ...cardInput, cardLine: value === "auto" ? null : value }).line;
+    return { value, label, preview: creditText(line), empty: value !== "none" && line.length === 0 };
+  });
+
   const formSnapshot = JSON.stringify([
     title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
     [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
     isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
-    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, knownByRecording, textId, tuneId,
+    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, cardLine, textId, tuneId,
   ]);
   const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
 
@@ -538,7 +563,7 @@ export default function SongEditor({
         p_song_id: song!.id,
         p: songSavePayload(
           {
-            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, textId, tuneId,
+            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, cardLine, textId, tuneId,
             genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
             composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
             productions, pendingProductionNames, productionYears,
@@ -709,41 +734,25 @@ export default function SongEditor({
             <p className="py-2 font-mono text-xs text-slate-500 break-all">/songs/{slug || "…"}</p>
             <p className="text-xs text-slate-400">Set automatically from the title, first three writers and music culture. Old addresses keep working.</p>
           </Field>
-          <Field label="Known by">
+          <Field label="Under the title on cards">
             <select
-              value={knownByRecording === null ? "auto" : knownByRecording ? "recording" : "writers"}
-              onChange={(e) => setKnownByRecording(e.target.value === "auto" ? null : e.target.value === "recording")}
+              value={cardLine ?? "auto"}
+              onChange={(e) => setCardLine(e.target.value === "auto" ? null : e.target.value as CardLine)}
               className="input"
             >
-              <option value="auto">Automatic</option>
-              <option value="recording">Its recording: recording artists under the title</option>
-              <option value="writers">Its writers: writers or tradition on its page; tune, scripture or first line on cards</option>
+              {cardLineOptions.map((o) => (
+                <option key={o.value} value={o.value} disabled={o.empty && o.value !== (cardLine ?? "auto")}>
+                  {o.label}{o.preview ? ` — ${o.preview}` : o.empty ? " — nothing to show" : ""}
+                </option>
+              ))}
             </select>
             <p className="text-xs text-slate-400">
-              Automatic shows the writers, or &ldquo;Traditional · culture&rdquo;, for traditional songs and hymns, nigunim and other traditional forms, and the recording artists for everything else.
-              {song?.byline ? <> Now: <span className="text-slate-600">{song.byline}</span></> : null}
+              Automatic shows the tune, scripture or first line for traditional songs, hymns, nigunim and other traditional forms, and the recording artists for everything else. The song page names its recording artists when Recording artists is chosen, and its writers otherwise.
             </p>
           </Field>
           <div className="sm:col-span-2 space-y-1">
             <p className="text-sm font-medium text-slate-700">Card preview</p>
-            <CardPreview
-              title={title}
-              credits={songCardCredits({
-                title,
-                // The override decides at once; Automatic follows the saved song's line until you save.
-                knownByRecording,
-                byline: song?.byline,
-                displayArtist: displayArtist || null,
-                composers: [...composers].map((id) => allPeople.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
-                cultures,
-                recordingArtists: recordingArtists.map((r, i) => ({ name: allArtists.find((a) => a.id === r.id)?.name ?? "", year: r.year, position: i })).filter((r) => r.name),
-                identity: {
-                  tune: allTunes.find((t) => t.id === tuneId)?.tune_label ?? null,
-                  source: textSource,
-                  first_line: firstLine || null,
-                },
-              })}
-            />
+            <CardPreview title={title} credits={songCardCredits({ ...cardInput, cardLine })} />
           </div>
         </div>
 

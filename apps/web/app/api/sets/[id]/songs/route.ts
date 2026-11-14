@@ -107,7 +107,7 @@ export async function POST(
     added_by_user_id: user.id,
   }));
   const columns =
-    "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, chord_chart_pending, youtube_url, tonality, song_recording_artists(position, youtube_url, spotify_url))";
+    "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, song_recording_artists(position, youtube_url, spotify_url))";
 
   // Single-song adds keep reporting a duplicate as 409 — web surfaces it as
   // "Already in that set". A batch can't: one song the caller already has would
