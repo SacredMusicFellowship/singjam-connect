@@ -7,10 +7,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const auth = await requireRole("admin", "song_editor");
   if (!auth.ok) return auth.response;
   const { id } = await params;
-  const { action, url } = await req.json().catch(() => ({}));
+  const { action, url, reason } = await req.json().catch(() => ({}));
   if (!["approve", "reject", "replace"].includes(action)) return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   try {
-    await reviewChart(supabaseAdmin(), id, { id: auth.user.id, role: auth.role ?? null }, action, url);
+    await reviewChart(supabaseAdmin(), id, { id: auth.user.id, role: auth.role ?? null }, action, url, typeof reason === "string" ? reason : undefined);
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof ChartError) return NextResponse.json({ error: e.message }, { status: e.status });

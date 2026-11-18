@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, RefreshControl, Alert, Platform, ActivityIndicator } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { mergeSuggestionsById, songMatchesFilters, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
+import { createRefetchGate, mergeSuggestionsById, songMatchesFilters, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
@@ -146,6 +146,22 @@ export default function RepertoireScreen() {
   const [suggestionsLoadingMore, setSuggestionsLoadingMore] = useState(false);
   const loadingMoreRef = useRef(false);
 
+
+  // Coming back to the tab (from a song, a set, another app) re-reads your
+  // songs, so a part or key changed elsewhere shows here, as on the set screen
+  // and the other tabs. Suggestions are left as they are, so their scroll stays.
+  const refetchGateRef = useRef(createRefetchGate());
+  const focusedOnceRef = useRef(false);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+  useFocusEffect(useCallback(() => {
+    if (focusedOnceRef.current && refetchGateRef.current()) {
+      fetchRichUserSongs()
+        .then((data) => { setSongs(data); if (userIdRef.current) writeCache('/repertoire', userIdRef.current, data); })
+        .catch(() => {});
+    }
+    focusedOnceRef.current = true;
+  }, []));
 
   async function load(showRefresh = false) {
     if (showRefresh) setRefreshing(true);
