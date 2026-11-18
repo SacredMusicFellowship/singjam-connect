@@ -1,7 +1,19 @@
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
+
+// inside.singjam.org serves the blog at its root: /<slug> is /blog/<slug>.
+// Every other top-level app route (read from app/ so new ones are covered)
+// is sent to singjam.org, where the visitor's session cookies live. api/
+// stays on this host because pages call it same-origin.
+const blogHost = [{ type: "host", value: "inside\\.(singjam\\.org|localhost)" }];
+const appRoutes = fs
+  .readdirSync(path.join(__dirname, "app"))
+  .map((name) => name.replace(/\.[^.]+$/, ""))
+  .filter((name) => /^[a-z0-9-]+$/.test(name) && name !== "api");
+const blogSlug = `(?!(?:${appRoutes.join("|")})$)[a-z0-9]+(?:-[a-z0-9]+)*`;
 
 const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
@@ -18,6 +30,26 @@ const nextConfig = {
       // Google OAuth avatars
       { protocol: "https", hostname: "*.googleusercontent.com" },
     ],
+  },
+  async redirects() {
+    return [
+      { source: "/blog", has: blogHost, destination: "/", permanent: true },
+      { source: "/blog/:slug", has: blogHost, destination: "/:slug", permanent: true },
+      {
+        source: `/:route(${appRoutes.filter((r) => r !== "blog").join("|")})/:rest*`,
+        has: blogHost,
+        destination: "https://singjam.org/:route/:rest*",
+        permanent: false,
+      },
+    ];
+  },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: "/", has: blogHost, destination: "/blog" },
+        { source: `/:slug(${blogSlug})`, has: blogHost, destination: "/blog/:slug" },
+      ],
+    };
   },
   async headers() {
     return [
