@@ -310,6 +310,7 @@ export default function SongEditor({
       tune: allTunes.find((t) => t.id === tuneId)?.tune_label ?? null,
       source: textSource,
       first_line: firstLine || null,
+      hook: hook || null,
       // Where a traditional song comes from, as last saved (song_origins, migration 233).
       origin: song?.byline_origin?.text ?? null,
       origin_kind: song?.byline_origin?.kind ?? null,
@@ -319,7 +320,7 @@ export default function SongEditor({
   // Each choice with the line it would show; Automatic follows the saved song until you save.
   const cardLineOptions = ([
     ["auto", "Automatic"], ["recordings", "Recording artists"], ["writers", "Writers"], ["tune", "Tune"],
-    ["scripture", "Scripture"], ["first_line", "First line"], ["none", "Nothing"],
+    ["scripture", "Scripture"], ["first_line", "First line"], ["hook", "Chorus/hook"], ["none", "Nothing"],
   ] as const).map(([value, label]) => {
     const line = songCardCredits({ ...cardInput, cardLine: value === "auto" ? null : value }).line;
     return { value, label, preview: creditText(line), empty: value !== "none" && line.length === 0 };

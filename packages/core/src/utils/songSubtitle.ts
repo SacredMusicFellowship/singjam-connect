@@ -40,6 +40,7 @@ export type CardIdentity = {
   text_slug?: string | null;
   source?: SourceRef | null;
   first_line?: string | null;
+  hook?: string | null;
   line?: CardLine | null;
   origin?: string | null;
   origin_kind?: string | null;
@@ -60,7 +61,7 @@ function cultureOrigin(culture: string | undefined): SongOrigin | null {
 }
 
 // What a card shows under its title when a song editor has chosen (songs.card_line, migration 232).
-export const CARD_LINES = ["recordings", "writers", "tune", "scripture", "first_line", "none"] as const;
+export const CARD_LINES = ["recordings", "writers", "tune", "scripture", "first_line", "hook", "none"] as const;
 export type CardLine = (typeof CARD_LINES)[number];
 
 const plain = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
@@ -90,6 +91,12 @@ function firstLineCredit(identity: CardIdentity, title: string, chosen = false):
   const line = trimTrailingPunctuation(identity?.first_line ?? "");
   if (!line || (!chosen && plain(title).includes(plain(line)))) return null;
   return { text: `“${line}…”`, link: null };
+}
+
+// Its chorus or hook, when a song editor chose it (migration 234).
+function hookCredit(identity: CardIdentity): CardCredit | null {
+  const hook = trimTrailingPunctuation(identity?.hook ?? "");
+  return hook ? { text: `“${hook}…”`, link: null } : null;
 }
 
 // Its tune's name, else the scripture it sets, else its first line.
@@ -143,6 +150,7 @@ export function songCardCredits(o: {
     case "tune": return { writers, line: one(tuneCredit(o.identity)) };
     case "scripture": return { writers, line: one(scriptureCredit(o.identity)) };
     case "first_line": return { writers, line: one(firstLineCredit(o.identity, o.title, true)) };
+    case "hook": return { writers, line: one(hookCredit(o.identity)) };
     case "none": return { writers, line: [] };
   }
   if (!(o.knownByRecording ?? knownByRecording(o.byline, o.displayArtist))) {

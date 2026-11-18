@@ -94,6 +94,13 @@ describe("songCardCredits", () => {
       expect(songCardCredits({ ...base, cardLine: "scripture" }).line).toEqual([]);
       expect(songCardCredits({ ...base, cardLine: "none" }).line).toEqual([]);
     });
+    it("shows the chorus/hook when chosen, trimmed like a first line, and nothing when the song has none", () => {
+      const hooked = { ...base, identity: { ...base.identity, hook: "This land was made for you and me." } };
+      expect(songCardCredits({ ...hooked, cardLine: "hook" }).line).toEqual([{ text: "“This land was made for you and me…”", link: null }]);
+      expect(songCardCredits({ ...hooked, identity: { ...hooked.identity, line: "hook" } }).line[0].text).toBe("“This land was made for you and me…”");
+      expect(songCardCredits({ ...base, cardLine: "hook" }).line).toEqual([]);
+      expect(songCardCredits({ ...hooked, cardLine: null, knownByRecording: false }).line[0].text).toBe("Old Hymn");
+    });
     it("reads the saved choice from the card identity, and an explicit null means automatic", () => {
       expect(songCardCredits({ ...base, identity: { ...base.identity, line: "first_line" } }).line[0].text).toBe("“As I was walking that ribbon of highway…”");
       expect(songCardCredits({ ...base, identity: { ...base.identity, line: "first_line" }, cardLine: null, knownByRecording: true }).line[0].text).toBe("Woody Guthrie");
