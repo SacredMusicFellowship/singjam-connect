@@ -78,4 +78,26 @@ export const musicHandlers = [
     await recordCall("wikidata", request);
     return HttpResponse.json({ head: { vars: [] }, results: { bindings: [] } });
   }),
+
+  // LRCLIB (lyrics)
+  http.get("https://lrclib.net/api/search", async ({ request }) => {
+    await recordCall("lrclib", request);
+    return HttpResponse.json([]);
+  }),
+
+  // Wikipedia
+  http.get("https://en.wikipedia.org/w/api.php", async ({ request }) => {
+    await recordCall("wikipedia", request);
+    return HttpResponse.json({ query: { search: [] } });
+  }),
+  http.get("https://en.wikipedia.org/api/rest_v1/page/summary/:title", async ({ request }) => {
+    await recordCall("wikipedia", request);
+    return HttpResponse.json({ type: "not_found" }, { status: 404 });
+  }),
+
+  // Hymnary.org (CSV search export)
+  http.get("https://hymnary.org/search", async ({ request }) => {
+    await recordCall("hymnary", request);
+    return new HttpResponse("", { headers: { "content-type": "text/csv" } });
+  }),
 ];
