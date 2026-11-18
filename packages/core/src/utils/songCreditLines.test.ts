@@ -65,4 +65,12 @@ describe("songCreditLines", () => {
     expect(songCreditLines({ composers: [p("Shlomo Carlebach")], lyricists: [], musicCultures: [], lyricsCultures: [], tune: { name: null, slug: "tune-1" } }))
       .toEqual([{ label: "Music", groups: [[{ text: "Shlomo Carlebach", link: { kind: "person", key: "Shlomo Carlebach" } }]] }]);
   });
+
+  it("names a community origin on both words and music, and a culture per part otherwise", () => {
+    const sephardi = { text: "Jewish (Sephardi)", kind: "community" as const, key: "Sephardi" };
+    const lines = songCreditLines({ composers: [p("Traditional")], lyricists: [p("Traditional")], musicCultures: ["Israeli"], lyricsCultures: ["Israeli"], origin: sephardi });
+    expect(lines).toEqual([{ label: "Words & music", groups: [[{ text: "Traditional · Jewish (Sephardi)", link: { kind: "community", key: "Sephardi", traditional: true } }]] }]);
+    const irish = songCreditLines({ composers: [p("Traditional")], lyricists: [p("Traditional")], musicCultures: ["Irish"], lyricsCultures: ["Irish"], origin: { text: "Irish", kind: "culture", key: "Irish" } });
+    expect(irish[0].groups[0][0].link).toEqual({ kind: "culture", key: "Irish", traditional: true });
+  });
 });

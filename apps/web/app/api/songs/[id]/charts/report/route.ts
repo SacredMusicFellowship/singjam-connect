@@ -9,7 +9,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const { note } = await req.json().catch(() => ({}));
   try {
-    await reportChart(supabaseAdmin(), id, String(note ?? ""));
+    await reportChart(supabaseAdmin(), id, String(note ?? ""), user.id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof ChartError) return NextResponse.json({ error: e.message }, { status: e.status });

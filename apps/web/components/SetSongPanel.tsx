@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FILTER_DIM_TAG_TYPE, fetchAllRows, loadSongFilterMeta, songCardPills, type FilterableSong, type MultiFilterDim } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useSongSearch } from "@/hooks/useSongSearch";
@@ -8,6 +8,7 @@ import ConfidencePicker from "@/components/ConfidencePicker";
 import { type SharedSong, type SortMode, displayedSongs } from "@/lib/setDisplayedSongs";
 import SearchInput from "@/components/SearchInput";
 import SongRowTitle from "@/components/SongRowTitle";
+import SubmitSongForm from "@/components/SubmitSongForm";
 import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
@@ -117,10 +118,6 @@ export default function SetSongPanel({
   const [pendingSong, setPendingSong] = useState<any | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
   const [showMissingSong, setShowMissingSong] = useState(false);
-  const [missingSongTitle, setMissingSongTitle] = useState("");
-  const [missingSongArtist, setMissingSongArtist] = useState("");
-  const [missingSongBusy, setMissingSongBusy] = useState(false);
-  const [missingSongError, setMissingSongError] = useState<string | null>(null);
 
   const { results: searchResults, loading: searching } = useSongSearch(searchQuery, { limit: 20 });
   const supabase = supabaseBrowser();
@@ -165,6 +162,16 @@ export default function SetSongPanel({
     return () => { supabase.removeChannel(channel); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setId, isSolo]);
+
+  // "You" is bold when you lead a song: ask again when your confidence changes
+  // (from a set row, from here, or reloaded after coming back to the page).
+  const repertoireSeenRef = useRef(userRepertoire);
+  useEffect(() => {
+    if (repertoireSeenRef.current === userRepertoire) return;
+    repertoireSeenRef.current = userRepertoire;
+    fetchSharedSongs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRepertoire]);
 
   useEffect(() => {
     setSortMode("popular");
@@ -313,31 +320,6 @@ export default function SetSongPanel({
     }
   }
 
-  async function submitMissingSong() {
-    if (!missingSongTitle.trim()) return;
-    setMissingSongBusy(true);
-    setMissingSongError(null);
-    try {
-      const res = await fetch("/api/songs/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: missingSongTitle.trim(), artist: missingSongArtist.trim() }),
-      });
-      if (!res.ok) {
-        setMissingSongError("Couldn't add song. Please try again.");
-        setMissingSongBusy(false);
-        return;
-      }
-      const json = await res.json();
-      setShowMissingSong(false);
-      setMissingSongBusy(false);
-      handleSearchSongSelect({ song_id: json.id, title: missingSongTitle.trim(), display_artist: missingSongArtist.trim() || null });
-    } catch {
-      setMissingSongError("Something went wrong. Please try again.");
-      setMissingSongBusy(false);
-    }
-  }
-
   const hasSharedSongs = sharedSongs !== null && sharedSongs.length > 0;
 
   if (!canEdit && !hasSharedSongs) return null;
@@ -389,13 +371,11 @@ export default function SetSongPanel({
           onChange={(e) => {
             setSearchQuery(e.target.value);
             setShowMissingSong(false);
-            setMissingSongError(null);
             setAddError(null);
           }}
           onClear={() => {
             setSearchQuery("");
             setShowMissingSong(false);
-            setMissingSongError(null);
             setAddError(null);
           }}
           placeholder="Search songs…"
@@ -474,44 +454,19 @@ export default function SetSongPanel({
           )}
           {searchQuery.trim() && !searching && (
             showMissingSong ? (
-              <div className="space-y-2 rounded-xl border border-zinc-200 p-3">
-                <p className="text-sm font-medium text-zinc-700">Add a missing song</p>
-                <input
-                  value={missingSongTitle}
-                  onChange={(e) => setMissingSongTitle(e.target.value)}
-                  placeholder="Song title"
-                  className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                />
-                <input
-                  value={missingSongArtist}
-                  onChange={(e) => setMissingSongArtist(e.target.value)}
-                  placeholder="Recording artist (optional)"
-                  className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                />
-                {missingSongError && <p className="text-xs text-red-500">{missingSongError}</p>}
-                {missingSongBusy && <p className="text-xs text-zinc-400">Looking up song info — this may take a moment…</p>}
-                <div className="flex gap-2">
-                  <button
-                    onClick={submitMissingSong}
-                    disabled={missingSongBusy || !missingSongTitle.trim()}
-                    className="rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
-                  >
-                    {missingSongBusy ? "Adding…" : "Add song"}
-                  </button>
-                  <button
-                    onClick={() => setShowMissingSong(false)}
-                    disabled={missingSongBusy}
-                    className="rounded-full border border-zinc-200 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              <SubmitSongForm
+                defaultTitle={searchQuery.trim()}
+                onAdded={(song) => {
+                  setShowMissingSong(false);
+                  handleSearchSongSelect({ song_id: song.id, title: song.title, display_artist: song.display_artist });
+                }}
+                onCancel={() => setShowMissingSong(false)}
+              />
             ) : (
               <div className="space-y-1">
                 {searchResults.length === 0 && <p className="text-xs text-zinc-400">No songs found.</p>}
                 <button
-                  onClick={() => { setShowMissingSong(true); setMissingSongTitle(searchQuery.trim()); setMissingSongArtist(""); }}
+                  onClick={() => setShowMissingSong(true)}
                   className="text-xs text-amber-600 hover:text-amber-700 transition-colors"
                 >
                   Add a missing song →
