@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bylineCredits, songCardCredits, songCardIdentity, songRowText, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
+import { bylineCredits, songCardCredits, songCardIdentity, songOrigin, songRowText, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
 
 describe("songSubtitle", () => {
   it("names the show when the song is from one", () => {
@@ -96,6 +96,35 @@ describe("songCardCredits", () => {
   });
 });
 
+describe("a traditional song's origin (song_origins, migration 233)", () => {
+  const sephardi = { origin: "Jewish (Sephardi)", origin_kind: "community", origin_key: "Sephardi" };
+  const sevivon = { title: "Sevivon Sov, Sov, Sov", byline: "Traditional · Jewish", displayArtist: null, composers: ["Traditional"], cultures: ["Israeli"], recordingArtists: [] };
+
+  it("uses the database's origin over the first culture, so cards match the song page", () => {
+    const c = songCardCredits({ ...sevivon, identity: { origin: "Jewish", origin_kind: "community", origin_key: "Jewish" } });
+    expect(c.writers).toEqual([{ text: "Trad. · Jewish", link: { kind: "community", key: "Jewish", traditional: true } }]);
+  });
+
+  it("names a sub-community with its faith and links to the sub-community's traditional songs", () => {
+    const c = songCardCredits({ ...sevivon, title: "Tzur Mishelo", cultures: [], identity: { ...sephardi, line: "writers" } });
+    expect(c.line).toEqual([{ text: "Traditional · Jewish (Sephardi)", link: { kind: "community", key: "Sephardi", traditional: true } }]);
+  });
+
+  it("falls back to the first culture for rows from before the origin existed", () => {
+    expect(songCardCredits({ ...sevivon, identity: {} }).writers)
+      .toEqual([{ text: "Trad. · Israeli", link: { kind: "culture", key: "Israeli", traditional: true } }]);
+  });
+
+  it("links a song page's Traditional byline to the origin's page", () => {
+    expect(bylineCredits("Traditional · Jewish (Sephardi)", { people: ["Traditional"], artists: [] }, songOrigin({ text: "Jewish (Sephardi)", kind: "community", key: "Sephardi" })))
+      .toEqual([{ text: "Traditional · Jewish (Sephardi)", link: { kind: "community", key: "Sephardi", traditional: true } }]);
+  });
+
+  it("ignores an incomplete origin", () => {
+    expect(songOrigin({ text: "Jewish", kind: null, key: "Jewish" })).toBeNull();
+  });
+});
+
 describe("bylineCredits", () => {
   it("links each writer or artist named in the line, keeping names with commas whole", () => {
     expect(bylineCredits("Peter, Paul and Mary", { people: [], artists: ["Peter, Paul and Mary"] }))
@@ -112,7 +141,7 @@ describe("bylineCredits", () => {
   it("links a traditional line to that culture's traditional songs, or to all of them", () => {
     expect(bylineCredits("Traditional · Irish", { people: ["Traditional"], artists: [] }))
       .toEqual([{ text: "Traditional · Irish", link: { kind: "culture", key: "Irish", traditional: true } }]);
-    expect(traditionalCredit("Traditional")).toEqual({ text: "Traditional", link: { kind: "person", key: "Traditional" } });
+    expect(traditionalCredit("Traditional", null)).toEqual({ text: "Traditional", link: { kind: "person", key: "Traditional" } });
   });
 });
 
