@@ -18,12 +18,15 @@ type Match = {
 // Mirrors web's SubmitSongForm: look the song up, show the YouTube match so the
 // user can confirm it's the one they mean, then add it. The server fills in the
 // rest (writers, years, key, tags, lyrics) in the background.
+// `forSet` (a set's Add songs) words it for adding the song to that set.
 export default function SubmitMissingSong({
   defaultTitle = '',
+  forSet = false,
   onCreated,
 }: {
   defaultTitle?: string;
-  onCreated: (songId: string) => void;
+  forSet?: boolean;
+  onCreated: (songId: string, title: string) => void;
 }) {
   const [title, setTitle] = useState(defaultTitle);
   const [artist, setArtist] = useState('');
@@ -72,7 +75,7 @@ export default function SubmitMissingSong({
       const json = await res.json().catch(() => ({}));
       // 409 means it already exists — still hand back the id so we open it.
       if (res.ok || (res.status === 409 && json.id)) {
-        onCreated(json.id);
+        onCreated(json.id, (res.ok ? null : chosen.existing?.title) ?? chosen.title);
         return;
       }
       setError(json.error ?? 'Something went wrong. Please try again.');
@@ -93,7 +96,9 @@ export default function SubmitMissingSong({
     <View className="mx-4 mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
       <Text className="font-semibold text-zinc-900">Add a missing song</Text>
       <Text className="mt-0.5 text-xs text-zinc-500">
-        We'll look it up and add it to the library so you can add it to your repertoire.
+        {forSet
+          ? "We'll look it up, add it to the library and put it in this set."
+          : "We'll look it up and add it to the library so you can add it to your repertoire."}
       </Text>
 
       <View className="mt-3">
@@ -147,8 +152,8 @@ export default function SubmitMissingSong({
 
       {match?.existing ? (
         <>
-          <TouchableOpacity onPress={() => onCreated(match.existing!.id)} className="mt-3 rounded-xl py-3 items-center bg-amber-500">
-            <Text className="font-semibold text-white">Open it</Text>
+          <TouchableOpacity onPress={() => onCreated(match.existing!.id, match.existing!.title)} className="mt-3 rounded-xl py-3 items-center bg-amber-500">
+            <Text className="font-semibold text-white">{forSet ? 'Add it to the set' : 'Open it'}</Text>
           </TouchableOpacity>
           {match.existing.match === 'possible' ? (
             <TouchableOpacity onPress={() => submit(match, true)} disabled={!!busy} className="mt-2 rounded-xl py-3 items-center border border-zinc-200">

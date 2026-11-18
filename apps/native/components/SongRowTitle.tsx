@@ -1,13 +1,7 @@
 import { Text, View } from 'react-native';
-import { songRowText, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
+import { cardRowText, type SongCardData } from '@singjam/core';
 
-export type SongRowCard = {
-  byline?: string | null;
-  composers?: string[] | null;
-  cultures?: string[] | null;
-  recording_artists?: RecordingArtistCredit[] | null;
-  card_identity?: CardIdentity;
-};
+export type SongRowCard = SongCardData;
 
 // A compact song row's title and second line, by the same rules as song cards
 // (web's SongRowTitle): writers in brackets; recordings, or what identifies the song, underneath.
@@ -17,16 +11,7 @@ export default function SongRowTitle({ title, displayArtist, productions, card }
   productions?: string[] | null;
   card: SongRowCard;
 }) {
-  const { writers, shows, credits } = songRowText({
-    title,
-    byline: card.byline,
-    displayArtist,
-    composers: card.composers ?? [],
-    cultures: card.cultures ?? [],
-    recordingArtists: card.recording_artists,
-    identity: card.card_identity,
-    productions,
-  });
+  const { writers, shows, credits } = cardRowText({ title, displayArtist, productions, card });
   return (
     <View>
       <Text numberOfLines={2}>

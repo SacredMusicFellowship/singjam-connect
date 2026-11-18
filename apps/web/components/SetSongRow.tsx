@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
-import { CONFIDENCE_STYLES, hasLeadVoice, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_SONG_NOTE_MAX, shownPeopleCount } from "@singjam/core";
+import { CONFIDENCE_STYLES, hasLeadVoice, cardRowText, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_SONG_NOTE_MAX, shownPeopleCount } from "@singjam/core";
 import RoleSelect from "@/components/RoleSelect";
 import PillSelect, { StackedLabels } from "@/components/PillSelect";
 import ChordsLink from "@/components/ChordsLink";
 import SongSubtitle from "@/components/SongSubtitle";
+import { SongRowLine } from "@/components/SongRowTitle";
 import {
   MUSICAL_KEYS,
   YoutubeIcon,
@@ -96,6 +97,9 @@ export default function SetSongRow({
   const productions = (song.songs.song_productions ?? [])
     .map((sp) => sp.productions?.name)
     .filter(Boolean) as string[];
+  const card = song.songs.card;
+  // Writers in brackets and the line under the title, by the same rules as every other song list.
+  const row = card ? cardRowText({ title: song.songs.title, displayArtist: song.songs.display_artist, productions, card }) : null;
 
   const fieldMap: Record<NonNullable<AddingField>, "youtube_url" | "spotify_url" | "chord_chart_url"> = {
     youtube: "youtube_url",
@@ -271,18 +275,23 @@ export default function SetSongRow({
     <div className="flex-1 min-w-0 space-y-2">
       <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-2 min-w-0">
+          <p className="line-clamp-2">
             {song.songs.slug ? (
-              <Link href={`/songs/${song.songs.slug}`} className="font-medium text-zinc-900 hover:text-amber-600 line-clamp-2">
+              <Link href={`/songs/${song.songs.slug}`} className="font-medium text-zinc-900 hover:text-amber-600">
                 {song.songs.title}
               </Link>
             ) : (
-              <p className="font-medium text-zinc-900 line-clamp-2">{song.songs.title}</p>
+              <span className="font-medium text-zinc-900">{song.songs.title}</span>
             )}
-          </div>
+            {row?.writers && <span className="ml-1 text-sm text-zinc-400">({row.writers})</span>}
+          </p>
           <div className="flex items-center gap-3 min-w-0 mt-0.5">
-            {/* A row added a moment ago has no byline until the server answers. */}
-            <SongSubtitle productions={productions} artist={song.songs.byline ?? song.songs.display_artist} className="block min-w-0 truncate text-xs text-zinc-500" />
+            {/* A row added a moment ago has no card until the server answers. */}
+            {row ? (
+              <SongRowLine shows={row.shows} credits={row.credits} className="block min-w-0 truncate text-xs text-zinc-500" />
+            ) : (
+              <SongSubtitle productions={productions} artist={song.songs.byline ?? song.songs.display_artist} className="block min-w-0 truncate text-xs text-zinc-500" />
+            )}
             {showKeyLine && (
             <span className="flex shrink-0 items-center gap-1">
             {canManage ? (

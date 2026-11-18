@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bylineCredits, songCardCredits, songCardIdentity, songOrigin, songRowText, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
+import { bylineCredits, cardRowText, songCardCredits, songCardIdentity, songOrigin, songRowText, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
 
 describe("songSubtitle", () => {
   it("names the show when the song is from one", () => {
@@ -94,6 +94,13 @@ describe("songCardCredits", () => {
       expect(songCardCredits({ ...base, cardLine: "scripture" }).line).toEqual([]);
       expect(songCardCredits({ ...base, cardLine: "none" }).line).toEqual([]);
     });
+    it("shows the chorus/hook when chosen, trimmed like a first line, and nothing when the song has none", () => {
+      const hooked = { ...base, identity: { ...base.identity, hook: "This land was made for you and me." } };
+      expect(songCardCredits({ ...hooked, cardLine: "hook" }).line).toEqual([{ text: "“This land was made for you and me…”", link: null }]);
+      expect(songCardCredits({ ...hooked, identity: { ...hooked.identity, line: "hook" } }).line[0].text).toBe("“This land was made for you and me…”");
+      expect(songCardCredits({ ...base, cardLine: "hook" }).line).toEqual([]);
+      expect(songCardCredits({ ...hooked, cardLine: null, knownByRecording: false }).line[0].text).toBe("Old Hymn");
+    });
     it("reads the saved choice from the card identity, and an explicit null means automatic", () => {
       expect(songCardCredits({ ...base, identity: { ...base.identity, line: "first_line" } }).line[0].text).toBe("“As I was walking that ribbon of highway…”");
       expect(songCardCredits({ ...base, identity: { ...base.identity, line: "first_line" }, cardLine: null, knownByRecording: true }).line[0].text).toBe("Woody Guthrie");
@@ -165,5 +172,17 @@ describe("songRowText", () => {
     expect(r.shows).toEqual(["Hamilton"]);
     expect(r.credits).toBe("Original Broadway Cast");
     expect(r.line).toBe("from Hamilton · Original Broadway Cast");
+  });
+});
+
+describe("cardRowText", () => {
+  it("reads song_cards' card data the way every list and set row shows it", () => {
+    const card = { byline: "Traditional · English", composers: ["Traditional"], cultures: ["English"], recording_artists: [], card_identity: { tune: "New Britain", tune_slug: "new-britain" } };
+    expect(cardRowText({ title: "Amazing Grace", displayArtist: null, card })).toMatchObject({ writers: "", line: "Tune: New Britain" });
+    expect(cardRowText({ title: "My Favorite Things", displayArtist: "Julie Andrews", productions: ["The Sound of Music"], card: { composers: ["Richard Rodgers"], recording_artists: [{ name: "Julie Andrews", year: 1965 }] } }))
+      .toMatchObject({ writers: "R. Rodgers", line: "from The Sound of Music · Julie Andrews", shows: ["The Sound of Music"] });
+  });
+  it("copes with missing fields", () => {
+    expect(cardRowText({ title: "x", displayArtist: "Someone", card: {} })).toMatchObject({ writers: "", line: "Someone" });
   });
 });

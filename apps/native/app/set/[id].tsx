@@ -13,15 +13,16 @@ import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, cardRowText, songSubtitle, attachSongCards } from '@singjam/core';
 import SubtitleText from '@/components/SubtitleText';
+import SubmitMissingSong from '@/components/SubmitMissingSong';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import RolePill from '@/components/RolePill';
-import SongRowTitle, { type SongRowCard } from '@/components/SongRowTitle';
+import SongRowTitle, { SongRowLine, type SongRowCard } from '@/components/SongRowTitle';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -64,6 +65,8 @@ type SetSong = {
     title: string;
     display_artist: string | null;
     byline?: string | null;
+    // The same card data as every other song list (songs.card, migration 234); absent on a row just added.
+    card?: SongRowCard | null;
     chord_chart_url: string | null;
     tonality?: string | null;
     song_productions?: { productions: { name: string } | null }[];
@@ -98,6 +101,7 @@ function AddSongModal({
   const [results, setResults] = useState<SongSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [submitOpen, setSubmitOpen] = useState(false);
 
   const { id: setId } = useLocalSearchParams<{ id: string }>();
 
@@ -106,6 +110,7 @@ function AddSongModal({
   }, [visible]);
 
   useEffect(() => {
+    setSubmitOpen(false);
     if (!query.trim()) { setResults([]); return; }
     const timer = setTimeout(() => search(query.trim()), 300);
     return () => clearTimeout(timer);
@@ -130,7 +135,7 @@ function AddSongModal({
     });
   }
 
-  async function addSong(song: SongSearchResult) {
+  async function addSong(song: Pick<SongSearchResult, 'song_id' | 'title'>) {
     setPendingId(song.song_id);
     const { data: mine } = userId
       ? await supabase.from('user_songs').select('confidence').eq('user_id', userId).eq('song_id', song.song_id).maybeSingle()
@@ -218,6 +223,25 @@ function AddSongModal({
                 <Text className="text-center text-zinc-400 mt-12">No songs found</Text>
               ) : undefined
             }
+            // As on web: look up a song that isn't in the library, confirm it, and add it to the set.
+            ListFooterComponent={
+              query.trim() ? (
+                submitOpen ? (
+                  <SubmitMissingSong
+                    defaultTitle={query.trim()}
+                    forSet
+                    onCreated={(songId, title) => { setSubmitOpen(false); addSong({ song_id: songId, title }); }}
+                  />
+                ) : (
+                  <View className="items-center mx-4 mt-4 mb-8 rounded-2xl border border-dashed border-zinc-300 px-4 py-5">
+                    <Text className="text-sm text-zinc-500">Can't find your song?</Text>
+                    <TouchableOpacity onPress={() => setSubmitOpen(true)} className="mt-3 rounded-full bg-zinc-800 px-4 py-2.5">
+                      <Text className="text-sm font-semibold text-white">Add a missing song</Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              ) : undefined
+            }
           />
         )}
       </KeyboardAvoidingView>
@@ -276,6 +300,9 @@ function SongRow({
   const productions = (song.songs.song_productions ?? [])
     .map((sp) => sp.productions?.name)
     .filter(Boolean) as string[];
+  const card = song.songs.card;
+  // Writers in brackets and the line under the title, by the same rules as every other song list (web's SetSongRow).
+  const row = card ? cardRowText({ title: song.songs.title, displayArtist: song.songs.display_artist, productions, card }) : null;
 
   // Leader/support assignments are only shown to collaborators; public viewers
   // see none. Mirrors web SetSongRow.
@@ -418,9 +445,18 @@ function SongRow({
         <View className="flex-1 min-w-0">
           <View className="flex-row items-start">
             <View className="flex-1 min-w-0">
-              <Text className="text-zinc-900 font-medium" numberOfLines={2}>{song.songs.title}</Text>
+              <Text numberOfLines={2}>
+                <Text className="text-zinc-900 font-medium">{song.songs.title}</Text>
+                {row?.writers ? <Text className="text-zinc-400 text-sm">{` (${row.writers})`}</Text> : null}
+              </Text>
               <View className="flex-row items-center mt-0.5">
-                {songSubtitle(productions, artist) && (
+                {row ? (
+                  (row.shows.length > 0 || row.credits) ? (
+                    <View className="flex-shrink mr-3">
+                      <SongRowLine shows={row.shows} credits={row.credits} className="text-zinc-500 text-sm" />
+                    </View>
+                  ) : null
+                ) : songSubtitle(productions, artist) && (
                   <Text className="text-zinc-500 text-sm flex-shrink mr-3" numberOfLines={1}>
                     <SubtitleText productions={productions} artist={artist} />
                   </Text>
@@ -934,7 +970,7 @@ export default function SetDetailScreen() {
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, card, song_productions(productions(name)), chord_chart_url, tonality)';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -1048,7 +1084,7 @@ export default function SetDetailScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
 
-    const [setRes, songsRes, collabRes, allCollabRes] = await Promise.all([
+    const [setRes, songsRes, collabRes, allCollabRes, cardsRes] = await Promise.all([
       supabase
         .from('sets')
         .select('id, name, description, owner_user_id, link_sharing, spotify_playlist_id, profiles(display_name, last_name, username)')
@@ -1073,13 +1109,15 @@ export default function SetDetailScreen() {
         .select('id, user_id, role, profiles(display_name, last_name, username)')
         .eq('set_id', id)
         .eq('status', 'accepted'),
+      // Cards come alongside the rows, not after them (one round trip; migration 235).
+      supabase.rpc('set_song_cards', { p_set_id: id }),
     ]);
 
     if (!setRes.data) { setNotFound(true); setLoading(false); return; }
 
     const s = setRes.data as any;
     setSet(s);
-    const rows = (songsRes.data ?? []) as any as SetSong[];
+    const rows = attachSongCards((songsRes.data ?? []) as any as SetSong[], cardsRes.data as { song_id: string; card: SongRowCard }[] | null);
     setSongs((prev) => (refresh ? mergeRefetchedSetSongs(prev, rows, syncRef.current.isPending) : rows));
 
     const isOwner = !!user && s.owner_user_id === user.id;
