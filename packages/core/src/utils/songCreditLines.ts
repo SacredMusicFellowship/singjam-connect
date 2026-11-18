@@ -1,5 +1,5 @@
 import { formatSourceRef, scriptureKey, sortSources, type SourceRef } from "./scripture";
-import { traditionalCredit, type CardCredit } from "./songSubtitle";
+import { traditionalCredit, type CardCredit, type SongOrigin } from "./songSubtitle";
 import { formatYear } from "./yearDisplay";
 
 export type CreditPerson = { name: string; slug?: string | null };
@@ -11,10 +11,13 @@ export type CreditTune = { name: string | null; slug: string; year?: number | nu
 // comma-separated).
 export type SongCreditLine = { label: "Words & music" | "Words" | "Music"; groups: CardCredit[][] };
 
-function writers(people: CreditPerson[], cultures: string[]): CardCredit[] {
+// A community origin ("Jewish (Sephardi)") names the whole song; otherwise the
+// words and the music each name their own culture.
+function writers(people: CreditPerson[], cultures: string[], origin: SongOrigin | null): CardCredit[] {
   const traditional = people.some((p) => p.name.toLowerCase() === "traditional");
+  const from: SongOrigin | null = origin?.kind === "community" ? origin : cultures[0] ? { text: cultures[0], kind: "culture", key: cultures[0] } : null;
   return [
-    ...(traditional ? [traditionalCredit(cultures[0] ? `Traditional · ${cultures[0]}` : "Traditional")] : []),
+    ...(traditional ? [traditionalCredit("Traditional", from)] : []),
     ...people.filter((p) => p.name.toLowerCase() !== "traditional").map((p): CardCredit => ({ text: p.name, link: { kind: "person", key: p.slug ?? p.name } })),
   ];
 }
@@ -29,6 +32,7 @@ export function songCreditLines(o: {
   lyricists: CreditPerson[];
   musicCultures: string[];
   lyricsCultures: string[];
+  origin?: SongOrigin | null;
   text?: CreditTextRef;
   tune?: CreditTune;
 }): SongCreditLine[] {
@@ -41,17 +45,17 @@ export function songCreditLines(o: {
   const others = Math.max(0, (text?.songs?.[0]?.count ?? 1) - 1);
   const key = (p: CreditPerson[]) => p.map((x) => x.name.toLowerCase()).sort().join("|");
   if (o.composers.length && key(o.composers) === key(o.lyricists) && !tune && !source && !others && text?.year == null) {
-    return [{ label: "Words & music", groups: [writers(o.composers, o.musicCultures)] }];
+    return [{ label: "Words & music", groups: [writers(o.composers, o.musicCultures, o.origin ?? null)] }];
   }
   const words: CardCredit[][] = [
-    writers(o.lyricists, o.lyricsCultures),
+    writers(o.lyricists, o.lyricsCultures, o.origin ?? null),
     yearCredit(text?.year, text?.year_precision),
     source && text ? [{ text: source, link: sourceKey ? { kind: "scripture" as const, key: sourceKey } : { kind: "text" as const, key: text.slug } }] : [],
     others && text ? [{ text: `also sung to ${others} other tune${others === 1 ? "" : "s"}`, link: { kind: "text" as const, key: text.slug } }] : [],
   ].filter((g) => g.length);
   const music: CardCredit[][] = [
     tune ? [{ text: tune.name!, link: { kind: "tune" as const, key: tune.slug } }] : [],
-    writers(o.composers, o.musicCultures),
+    writers(o.composers, o.musicCultures, o.origin ?? null),
     yearCredit(o.tune?.year, o.tune?.year_precision),
   ].filter((g) => g.length);
   return [
