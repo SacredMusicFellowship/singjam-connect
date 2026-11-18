@@ -1342,13 +1342,18 @@ export default function SetDetailScreen() {
     const songIds = songIdsKey ? songIdsKey.split(',') : [];
     if (!participantIds.length || !songIds.length) { setSongKnowledge([]); return; }
     let cancelled = false;
-    supabase
-      .from('user_songs')
-      .select('user_id, song_id, confidence, key_note')
-      .in('user_id', participantIds)
-      .in('song_id', songIds)
-      .in('confidence', ['lead', 'support', 'learn'])
-      .then(({ data }) => { if (!cancelled) setSongKnowledge((data ?? []) as any); });
+    // Paged, as on web: participants × songs can pass 1,000 rows on a big set.
+    fetchAllRows((from, to) =>
+      supabase
+        .from('user_songs')
+        .select('user_id, song_id, confidence, key_note')
+        .in('user_id', participantIds)
+        .in('song_id', songIds)
+        .in('confidence', ['lead', 'support', 'learn'])
+        .order('user_id')
+        .order('song_id')
+        .range(from, to)
+    ).then((rows) => { if (!cancelled) setSongKnowledge(rows as any); }, () => {});
     return () => { cancelled = true; };
   }, [participantIdsKey, songIdsKey, reloadToken]);
 
