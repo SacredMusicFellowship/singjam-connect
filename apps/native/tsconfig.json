@@ -9,7 +9,11 @@
       "@singjam/core": [
         "../../packages/core/src/index.ts"
       ]
-    }
+    },
+    "types": [
+      "jest",
+      "node"
+    ]
   },
   "include": [
     "**/*.ts",
