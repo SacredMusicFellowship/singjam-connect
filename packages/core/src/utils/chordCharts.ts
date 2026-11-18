@@ -26,3 +26,43 @@ export function canReviewChart(reviewer: ChartReviewer, submittedBy: string | nu
 export function newChartGoesLive(song: { chord_chart_url: string | null; chord_chart_pending: boolean }): boolean {
   return !song.chord_chart_url || song.chord_chart_pending;
 }
+
+export type ChartQueueSort = "added" | "song" | "adder" | "reported";
+
+export type ChartQueueRow = {
+  id: string;
+  createdAt: string;
+  songTitle: string;
+  adder: string | null;
+  reportedAt: string | null;
+};
+
+// Where each sort starts: the oldest chart first (the queue's own order), names A–Z,
+// and the most recently reported first.
+export const CHART_QUEUE_DEFAULT_DIR: Record<ChartQueueSort, "asc" | "desc"> = {
+  added: "asc",
+  song: "asc",
+  adder: "asc",
+  reported: "desc",
+};
+
+const byName = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base" });
+
+// Charts to review, sorted for the queue. Ties fall back to the oldest first, then id,
+// so the order never shuffles. A chart with no recorded adder sorts last by adder either way.
+export function sortChartQueue<T extends ChartQueueRow>(rows: T[], sort: ChartQueueSort, dir: "asc" | "desc"): T[] {
+  const mul = dir === "asc" ? 1 : -1;
+  const oldestFirst = (a: T, b: T) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+  return [...rows].sort((a, b) => {
+    let cmp = 0;
+    if (sort === "added") cmp = a.createdAt.localeCompare(b.createdAt) * mul;
+    else if (sort === "song") cmp = byName(a.songTitle, b.songTitle) * mul;
+    else if (sort === "adder") {
+      if (!a.adder || !b.adder) cmp = (a.adder ? 0 : 1) - (b.adder ? 0 : 1);
+      else cmp = byName(a.adder, b.adder) * mul;
+    } else {
+      cmp = ((a.reportedAt ? 1 : 0) - (b.reportedAt ? 1 : 0) || (a.reportedAt ?? "").localeCompare(b.reportedAt ?? "")) * mul;
+    }
+    return cmp || oldestFirst(a, b);
+  });
+}

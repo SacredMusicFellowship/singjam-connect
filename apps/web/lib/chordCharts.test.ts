@@ -1,4 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const { mockNotify } = vi.hoisted(() => ({ mockNotify: vi.fn() }));
+vi.mock("@/lib/notifications", () => ({ createNotification: mockNotify }));
+beforeEach(() => mockNotify.mockReset());
 import { commentOnChart, pendingChartCount, reportChart, reviewChart, setChartAsEditor, submitChart, ChartError } from "./chordCharts";
 
 // A tiny in-memory stand-in for the few PostgREST calls chordCharts makes.
@@ -243,5 +247,44 @@ describe("pendingChartCount", () => {
   });
   it("throws rather than showing zero when the count fails", async () => {
     await expect(pendingChartCount(db({ count: null, error: { message: "boom" } }))).rejects.toBeInstanceOf(ChartError);
+  });
+});
+
+describe("telling the person who added a chart", () => {
+  const seed = (submittedBy: string | null = "u1") => fakeDb({
+    songs: [{ id: "s1", title: "Jolene", slug: "jolene", chord_chart_url: UG2, chord_chart_pending: true }],
+    subs: [{ id: "new", song_id: "s1", url: UG2, submitted_by: submittedBy, status: "pending", created_at: "2026-11-01" }],
+  });
+
+  it("says it's approved, linking to the song", async () => {
+    await reviewChart(seed(), "new", { id: "ed", role: "song_editor" }, "approve");
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "u1", type: "chart_review", title: 'Your chord chart for "Jolene" is approved', link: "/songs/s1",
+    }));
+  });
+
+  it("passes on the reviewer's reason when rejecting or replacing", async () => {
+    await reviewChart(seed(), "new", { id: "ed", role: "song_editor" }, "reject", undefined, "wrong key");
+    expect(mockNotify).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Your chord chart for "Jolene" wasn\'t approved', body: "wrong key" }));
+    await reviewChart(seed(), "new", { id: "ed", role: "song_editor" }, "replace", "https://tabs.ultimate-guitar.com/tab/x/z-1");
+    expect(mockNotify).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Your chord chart for "Jolene" was replaced', body: "A song editor found a chart that fits this song better." }));
+  });
+
+  it("stays quiet for an admin's own chart and for charts nobody is recorded as adding", async () => {
+    await reviewChart(seed(), "new", { id: "u1", role: "admin" }, "approve");
+    await reviewChart(seed(null), "new", { id: "ed", role: "song_editor" }, "reject");
+    expect(mockNotify).not.toHaveBeenCalled();
+  });
+
+  it("keeps the review when the notification fails", async () => {
+    mockNotify.mockRejectedValueOnce(new Error("push down"));
+    const db = seed();
+    await reviewChart(db, "new", { id: "ed", role: "song_editor" }, "approve");
+    expect(db.tables.chord_chart_submissions[0].status).toBe("approved");
+  });
+
+  it("sends nothing for a report", async () => {
+    await reportChart(seed(), "s1", "wrong key", "r1");
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createNotification } from "@/lib/notifications";
 import { canReviewChart, isUltimateGuitarChartUrl, newChartGoesLive, type ChartReviewer } from "@singjam/core";
 
 export class ChartError extends Error {
@@ -15,9 +16,9 @@ async function must<T extends { error: { message: string } | null }>(query: Prom
 }
 
 async function loadSong(db: SupabaseClient, songId: string) {
-  const { data } = await must(db.from("songs").select("id, chord_chart_url, chord_chart_pending").eq("id", songId).maybeSingle());
+  const { data } = await must(db.from("songs").select("id, title, chord_chart_url, chord_chart_pending").eq("id", songId).maybeSingle());
   if (!data) throw new ChartError("Song not found", 404);
-  return data as { id: string; chord_chart_url: string | null; chord_chart_pending: boolean };
+  return data as { id: string; title: string; chord_chart_url: string | null; chord_chart_pending: boolean };
 }
 
 export type ChartCommentKind = "comment" | "report" | "approve" | "reject" | "replace";
@@ -128,20 +129,49 @@ export async function reviewChart(
   if (action === "approve") {
     await must(db.from("chord_chart_submissions").update({ status: "approved", reviewed_by: reviewer.id, reviewed_at: reviewedAt }).eq("id", sub.id));
     await setLive(db, sub.song_id, sub.url, false);
-    return;
+  } else {
+    await must(db.from("chord_chart_submissions").update({ status: "rejected", reviewed_by: reviewer.id, reviewed_at: reviewedAt }).eq("id", sub.id));
+    if (action === "replace") {
+      // A reviewer's replacement is itself unreviewed, so someone else checks it.
+      const url = replacementUrl!.trim();
+      await must(db.from("chord_chart_submissions").insert({ song_id: sub.song_id, url, submitted_by: reviewer.id }));
+      await setLive(db, sub.song_id, url, true);
+    } else if (song.chord_chart_url === sub.url) {
+      await fallBack(db, sub.song_id, sub.id);
+    }
   }
 
-  await must(db.from("chord_chart_submissions").update({ status: "rejected", reviewed_by: reviewer.id, reviewed_at: reviewedAt }).eq("id", sub.id));
-
-  // A reviewer's replacement is itself unreviewed, so someone else checks it.
-  if (action === "replace") {
-    const url = replacementUrl!.trim();
-    await must(db.from("chord_chart_submissions").insert({ song_id: sub.song_id, url, submitted_by: reviewer.id }));
-    await setLive(db, sub.song_id, url, true);
-    return;
+  if (sub.submitted_by && sub.submitted_by !== reviewer.id) {
+    await notifyChartOutcome(sub.submitted_by, song, action, reason?.trim() || null);
   }
+}
 
-  if (song.chord_chart_url === sub.url) await fallBack(db, sub.song_id, sub.id);
+const OUTCOME: Record<"approve" | "reject" | "replace", { title: (song: string) => string; body: string }> = {
+  approve: { title: (s) => `Your chord chart for "${s}" is approved`, body: "Thanks — it's on the song page now." },
+  reject: { title: (s) => `Your chord chart for "${s}" wasn't approved`, body: "A song editor checked it and it didn't fit this song." },
+  replace: { title: (s) => `Your chord chart for "${s}" was replaced`, body: "A song editor found a chart that fits this song better." },
+};
+
+// Tells the person who added a chart what happened to it. Best-effort: the review
+// itself is already saved, so a failed notification mustn't undo or fail it.
+async function notifyChartOutcome(
+  userId: string,
+  song: { id: string; title: string },
+  action: "approve" | "reject" | "replace",
+  reason: string | null,
+) {
+  const outcome = OUTCOME[action];
+  try {
+    await createNotification({
+      userId,
+      type: "chart_review",
+      title: outcome.title(song.title),
+      body: reason ?? outcome.body,
+      link: `/songs/${song.id}`,
+    });
+  } catch {
+    // see note above
+  }
 }
 
 // Anyone signed in: puts the live chart back in the review queue, with their note as a report.

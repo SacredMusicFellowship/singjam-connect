@@ -1,12 +1,17 @@
-import Link from "next/link";
 import { canReviewChart, fetchAllRows } from "@singjam/core";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getServerUserRole } from "@/lib/supabase/cached";
-import { FormattedDate } from "@/components/FormattedTime";
-import ChartReviewActions from "@/components/ChartReviewActions";
-import { pendingChartCount } from "@/lib/chordCharts";
+import ChartReviewQueue, { type QueueComment, type QueueRow } from "@/components/ChartReviewQueue";
 
 type Person = { display_name: string | null; last_name: string | null; username: string | null } | null;
+type Submission = {
+  id: string;
+  url: string;
+  created_at: string;
+  submitted_by: string | null;
+  songs: { id: string; title: string; slug: string | null; display_artist: string | null; chord_chart_url: string | null } | null;
+  profiles: Person;
+};
 type Comment = {
   id: string;
   kind: string;
@@ -19,34 +24,26 @@ type Comment = {
 
 const personName = (p: Person) => (p ? [p.display_name, p.last_name].filter(Boolean).join(" ") || p.username : null);
 
-const KIND_LABEL: Record<string, string> = {
-  report: "Reported",
-  approve: "Approved",
-  reject: "Rejected",
-  replace: "Replaced",
-};
-
-// Charts anyone added (or reported) that a song editor hasn't checked yet.
-// Bounded: the queue is worked from the oldest end; anything past the first 100
-// shows up once those are done.
+// Every chart anyone added (or reported) that a song editor hasn't checked yet.
 export default async function ChartsToReview({ basePath }: { basePath: string }) {
   const supabase = await supabaseServer();
-  const [{ data: { user } }, role, total, { data: rows }] = await Promise.all([
+  const [{ data: { user } }, role, submissions] = await Promise.all([
     supabase.auth.getUser(),
     getServerUserRole(),
-    pendingChartCount(supabase),
-    supabase
-      .from("chord_chart_submissions")
-      .select("id, url, created_at, submitted_by, songs(id, title, slug, display_artist, chord_chart_url), profiles!submitted_by(display_name, last_name, username)")
-      .eq("status", "pending")
-      .order("created_at")
-      .order("id")
-      .limit(100),
+    fetchAllRows<Submission>((from, to) =>
+      supabase
+        .from("chord_chart_submissions")
+        .select("id, url, created_at, submitted_by, songs(id, title, slug, display_artist, chord_chart_url), profiles!submitted_by(display_name, last_name, username)")
+        .eq("status", "pending")
+        .order("created_at")
+        .order("id")
+        .range(from, to) as any,
+    ),
   ]);
 
   // The whole discussion for each song in the queue, across all its charts, so
   // earlier rejections and their reasons are in view.
-  const songIds = [...new Set((rows ?? []).map((r: any) => r.songs?.id).filter(Boolean))];
+  const songIds = [...new Set(submissions.map((r) => r.songs?.id).filter((id): id is string => !!id))];
   const comments = songIds.length
     ? await fetchAllRows<Comment>((from, to) =>
         supabase
@@ -65,89 +62,49 @@ export default async function ChartsToReview({ basePath }: { basePath: string })
     bySong.set(c.chord_chart_submissions.song_id, list);
   }
 
+  const rows: QueueRow[] = submissions.map((r) => {
+    const song = r.songs;
+    const thread = song ? bySong.get(song.id) ?? [] : [];
+    const report = thread.filter((c) => c.submission_id === r.id && c.kind === "report").at(-1);
+    return {
+      id: r.id,
+      url: r.url,
+      createdAt: r.created_at,
+      songTitle: song?.title ?? "Unknown song",
+      songHref: `${basePath}/${song?.slug ?? song?.id}`,
+      artist: song?.display_artist ?? null,
+      currentChartUrl: song?.chord_chart_url ?? null,
+      adder: personName(r.profiles),
+      reportedAt: report?.created_at ?? null,
+      reportedBy: report ? personName(report.profiles) : null,
+      canReview: !!user && canReviewChart({ id: user.id, role }, r.submitted_by),
+      thread: thread.map(
+        (c): QueueComment => ({
+          id: c.id,
+          kind: c.kind,
+          body: c.body,
+          createdAt: c.created_at,
+          author: personName(c.profiles),
+          otherChartUrl: c.submission_id === r.id ? null : c.chord_chart_submissions.url,
+        }),
+      ),
+    };
+  });
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">
-          Charts to review{total > 0 && <span className="text-slate-400"> · {total.toLocaleString()}</span>}
+          Charts to review{rows.length > 0 && <span className="text-slate-400"> · {rows.length.toLocaleString()}</span>}
         </h1>
         <p className="text-sm text-slate-500">
           Open each chart and check it&apos;s the right song and a usable arrangement. Song editors can&apos;t review a chart they added; admins can.
         </p>
-        {rows && total > rows.length && (
-          <p className="mt-1 text-xs text-slate-400">Showing the oldest {rows.length}; the rest appear as these are done.</p>
-        )}
       </div>
-      {!rows?.length ? (
+      {rows.length === 0 ? (
         <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-8 text-center text-sm text-zinc-400">Nothing to review.</div>
       ) : (
-        <div className="divide-y divide-zinc-100 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-          {(rows as any[]).map((r) => {
-            const adder = personName(r.profiles);
-            const song = r.songs;
-            const isLive = song?.chord_chart_url === r.url;
-            const thread = bySong.get(song?.id) ?? [];
-            const report = thread.filter((c) => c.submission_id === r.id && c.kind === "report").at(-1);
-            return (
-              <div key={r.id} className="space-y-3 px-5 py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0 space-y-1">
-                    <Link href={`${basePath}/${song?.slug ?? song?.id}`} className="block w-fit max-w-full truncate text-sm font-medium text-zinc-900 hover:underline">
-                      {song?.title ?? "Unknown song"}
-                    </Link>
-                    {song?.display_artist && <p className="truncate text-xs text-zinc-500">{song.display_artist}</p>}
-                    <p className="flex flex-wrap gap-x-3 text-xs">
-                      <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">
-                        Open chart ↗
-                      </a>
-                      {!isLive && song?.chord_chart_url && (
-                        <a href={song.chord_chart_url} target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:underline">
-                          Current chart ↗
-                        </a>
-                      )}
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      {adder ? `Added by ${adder}` : "Existing chart"} · <FormattedDate iso={r.created_at} options={{ month: "short", day: "numeric", year: "numeric" }} />
-                      {isLive ? " · showing on the song now" : " · waiting to replace the current chart"}
-                    </p>
-                    {report && (
-                      <p className="text-xs font-medium text-red-600">
-                        Reported{personName(report.profiles) ? ` by ${personName(report.profiles)}` : ""} · <FormattedDate iso={report.created_at} options={{ month: "short", day: "numeric", year: "numeric" }} />
-                      </p>
-                    )}
-                  </div>
-                  <ChartReviewActions submissionId={r.id} canReview={!!user && canReviewChart({ id: user.id, role }, r.submitted_by)} />
-                </div>
-                {thread.length > 0 && (
-                  <ul className="space-y-2 rounded-xl bg-zinc-50 px-3 py-2.5">
-                    {thread.map((c) => {
-                      const who = personName(c.profiles);
-                      const label = KIND_LABEL[c.kind];
-                      return (
-                        <li key={c.id} className="text-xs">
-                          <p className="text-zinc-400">
-                            {[who, label].filter(Boolean).join(" · ")}
-                            {(who || label) && " · "}
-                            <FormattedDate iso={c.created_at} options={{ month: "short", day: "numeric", year: "numeric" }} />
-                            {c.submission_id !== r.id && (
-                              <>
-                                {" · "}
-                                <a href={c.chord_chart_submissions.url} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:underline">
-                                  another chart ↗
-                                </a>
-                              </>
-                            )}
-                          </p>
-                          <p className="whitespace-pre-wrap text-zinc-700">{c.body}</p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <ChartReviewQueue rows={rows} />
       )}
     </div>
   );
