@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createNotification } from "@/lib/notifications";
 import { canReviewChart, isUltimateGuitarChartUrl, newChartGoesLive, type ChartReviewer } from "@singjam/core";
 
 export class ChartError extends Error {
@@ -15,9 +16,25 @@ async function must<T extends { error: { message: string } | null }>(query: Prom
 }
 
 async function loadSong(db: SupabaseClient, songId: string) {
-  const { data } = await must(db.from("songs").select("id, chord_chart_url, chord_chart_pending").eq("id", songId).maybeSingle());
+  const { data } = await must(db.from("songs").select("id, title, chord_chart_url, chord_chart_pending").eq("id", songId).maybeSingle());
   if (!data) throw new ChartError("Song not found", 404);
-  return data as { id: string; chord_chart_url: string | null; chord_chart_pending: boolean };
+  return data as { id: string; title: string; chord_chart_url: string | null; chord_chart_pending: boolean };
+}
+
+export type ChartCommentKind = "comment" | "report" | "approve" | "reject" | "replace";
+
+// Comments are for the people who review charts; reports arrive here too.
+export async function addChartComment(db: SupabaseClient, submissionId: string, authorId: string | null, kind: ChartCommentKind, rawBody: string) {
+  const body = rawBody.trim();
+  if (!body) throw new ChartError("Write a comment first.", 400);
+  if (body.length > 1000) throw new ChartError("Comments can be up to 1,000 characters.", 400);
+  await must(db.from("chord_chart_comments").insert({ submission_id: submissionId, author_id: authorId, kind, body }));
+}
+
+export async function commentOnChart(db: SupabaseClient, submissionId: string, authorId: string, body: string) {
+  const { data: sub } = await must(db.from("chord_chart_submissions").select("id").eq("id", submissionId).maybeSingle());
+  if (!sub) throw new ChartError("Submission not found", 404);
+  await addChartComment(db, submissionId, authorId, "comment", body);
 }
 
 function setLive(db: SupabaseClient, songId: string, url: string | null, pending: boolean) {
@@ -55,7 +72,7 @@ export async function setChartAsEditor(db: SupabaseClient, songId: string, rawUr
   if (waiting) {
     await must(db.from("chord_chart_submissions").update(reviewed).eq("id", waiting.id));
   } else {
-    await must(db.from("chord_chart_submissions").insert({ song_id: songId, url, submitted_by: editorId, note: "Set in the song editor", ...reviewed }));
+    await must(db.from("chord_chart_submissions").insert({ song_id: songId, url, submitted_by: editorId, ...reviewed }));
   }
   await setLive(db, songId, url, false);
 }
@@ -95,6 +112,7 @@ export async function reviewChart(
   reviewer: ChartReviewer,
   action: "approve" | "reject" | "replace",
   replacementUrl?: string,
+  reason?: string,
 ) {
   const { data: sub } = await must(
     db.from("chord_chart_submissions").select("id, song_id, url, submitted_by, status").eq("id", submissionId).maybeSingle(),
@@ -106,31 +124,61 @@ export async function reviewChart(
   }
   const reviewedAt = new Date().toISOString();
   const song = await loadSong(db, sub.song_id);
+  if (reason?.trim()) await addChartComment(db, sub.id, reviewer.id, action, reason);
 
   if (action === "approve") {
     await must(db.from("chord_chart_submissions").update({ status: "approved", reviewed_by: reviewer.id, reviewed_at: reviewedAt }).eq("id", sub.id));
     await setLive(db, sub.song_id, sub.url, false);
-    return;
+  } else {
+    await must(db.from("chord_chart_submissions").update({ status: "rejected", reviewed_by: reviewer.id, reviewed_at: reviewedAt }).eq("id", sub.id));
+    if (action === "replace") {
+      // A reviewer's replacement is itself unreviewed, so someone else checks it.
+      const url = replacementUrl!.trim();
+      await must(db.from("chord_chart_submissions").insert({ song_id: sub.song_id, url, submitted_by: reviewer.id }));
+      await setLive(db, sub.song_id, url, true);
+    } else if (song.chord_chart_url === sub.url) {
+      await fallBack(db, sub.song_id, sub.id);
+    }
   }
 
-  await must(db.from("chord_chart_submissions").update({ status: "rejected", reviewed_by: reviewer.id, reviewed_at: reviewedAt }).eq("id", sub.id));
-
-  // A reviewer's replacement is itself unreviewed, so someone else checks it.
-  if (action === "replace") {
-    const url = replacementUrl!.trim();
-    await must(db.from("chord_chart_submissions").insert({ song_id: sub.song_id, url, submitted_by: reviewer.id }));
-    await setLive(db, sub.song_id, url, true);
-    return;
+  if (sub.submitted_by && sub.submitted_by !== reviewer.id) {
+    await notifyChartOutcome(sub.submitted_by, song, action, reason?.trim() || null);
   }
-
-  if (song.chord_chart_url === sub.url) await fallBack(db, sub.song_id, sub.id);
 }
 
-// Anyone signed in: puts the live chart back in the review queue with their note.
-export async function reportChart(db: SupabaseClient, songId: string, note: string) {
+const OUTCOME: Record<"approve" | "reject" | "replace", { title: (song: string) => string; body: string }> = {
+  approve: { title: (s) => `Your chord chart for "${s}" is approved`, body: "Thanks — it's on the song page now." },
+  reject: { title: (s) => `Your chord chart for "${s}" wasn't approved`, body: "A song editor checked it and it didn't fit this song." },
+  replace: { title: (s) => `Your chord chart for "${s}" was replaced`, body: "A song editor found a chart that fits this song better." },
+};
+
+// Tells the person who added a chart what happened to it. Best-effort: the review
+// itself is already saved, so a failed notification mustn't undo or fail it.
+async function notifyChartOutcome(
+  userId: string,
+  song: { id: string; title: string },
+  action: "approve" | "reject" | "replace",
+  reason: string | null,
+) {
+  const outcome = OUTCOME[action];
+  try {
+    await createNotification({
+      userId,
+      type: "chart_review",
+      title: outcome.title(song.title),
+      body: reason ?? outcome.body,
+      link: `/songs/${song.id}`,
+    });
+  } catch {
+    // see note above
+  }
+}
+
+// Anyone signed in: puts the live chart back in the review queue, with their note as a report.
+export async function reportChart(db: SupabaseClient, songId: string, note: string, reporterId: string) {
   const song = await loadSong(db, songId);
   if (!song.chord_chart_url) throw new ChartError("This song has no chord chart.", 400);
-  const reason = `Reported: ${note.trim() || "something's wrong with this chart"}`.slice(0, 500);
+  const reason = (note.trim() || "Something's wrong with this chart").slice(0, 1000);
   const { data: current } = await must(
     db.from("chord_chart_submissions")
       .select("id")
@@ -141,10 +189,19 @@ export async function reportChart(db: SupabaseClient, songId: string, note: stri
       .limit(1)
       .maybeSingle(),
   );
-  if (current) {
-    await must(db.from("chord_chart_submissions").update({ status: "pending", reviewed_by: null, reviewed_at: null, note: reason }).eq("id", current.id));
+  let submissionId = current?.id as string | undefined;
+  if (submissionId) {
+    await must(db.from("chord_chart_submissions").update({ status: "pending", reviewed_by: null, reviewed_at: null }).eq("id", submissionId));
   } else {
-    await must(db.from("chord_chart_submissions").insert({ song_id: songId, url: song.chord_chart_url, note: reason }));
+    const { data: created } = await must(db.from("chord_chart_submissions").insert({ song_id: songId, url: song.chord_chart_url }).select("id").single());
+    submissionId = (created as { id: string }).id;
   }
+  await addChartComment(db, submissionId!, reporterId, "report", reason);
   await must(db.from("songs").update({ chord_chart_pending: true }).eq("id", songId));
+}
+
+// How many charts are waiting for review, counted directly rather than from the capped queue.
+export async function pendingChartCount(db: SupabaseClient) {
+  const { count } = await must(db.from("chord_chart_submissions").select("id", { count: "exact", head: true }).eq("status", "pending"));
+  return count ?? 0;
 }
