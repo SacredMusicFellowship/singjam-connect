@@ -84,6 +84,7 @@ type Song = {
   text_id?: string | null;
   tune_id?: string | null;
   byline?: string | null;
+  byline_origin?: { text?: string | null; kind?: string | null; key?: string | null } | null;
   song_tags: SongTagRow[];
   song_composers: { person_id: string }[];
   song_lyricists: { person_id: string }[];
@@ -309,12 +310,17 @@ export default function SongEditor({
       tune: allTunes.find((t) => t.id === tuneId)?.tune_label ?? null,
       source: textSource,
       first_line: firstLine || null,
+      hook: hook || null,
+      // Where a traditional song comes from, as last saved (song_origins, migration 233).
+      origin: song?.byline_origin?.text ?? null,
+      origin_kind: song?.byline_origin?.kind ?? null,
+      origin_key: song?.byline_origin?.key ?? null,
     },
   };
   // Each choice with the line it would show; Automatic follows the saved song until you save.
   const cardLineOptions = ([
     ["auto", "Automatic"], ["recordings", "Recording artists"], ["writers", "Writers"], ["tune", "Tune"],
-    ["scripture", "Scripture"], ["first_line", "First line"], ["none", "Nothing"],
+    ["scripture", "Scripture"], ["first_line", "First line"], ["hook", "Chorus/hook"], ["none", "Nothing"],
   ] as const).map(([value, label]) => {
     const line = songCardCredits({ ...cardInput, cardLine: value === "auto" ? null : value }).line;
     return { value, label, preview: creditText(line), empty: value !== "none" && line.length === 0 };
@@ -557,6 +563,15 @@ export default function SongEditor({
     setError(null);
 
     try {
+      // The chart has its own review records, so it's set through the chart API first.
+      if (chordChartUrl.trim() !== (song?.chord_chart_url ?? "")) {
+        const res = await fetch(`/api/songs/${song!.id}/charts`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: chordChartUrl }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't save the chord chart.");
+      }
       // One call, one transaction (migration 200): either all of this is saved
       // or none of it, and the database returns the slug it settles on.
       const { data: newSlug, error: saveError } = await supabase.rpc("save_song", {
@@ -573,6 +588,7 @@ export default function SongEditor({
         ),
       });
       if (saveError) throw saveError;
+      await fetch("/api/songs/revalidate", { method: "POST" }).catch(() => {});
 
       setSlug(newSlug ?? slug);
       setSavedSnapshot(formSnapshot);
@@ -930,7 +946,7 @@ export default function SongEditor({
         <Field label="Chord Chart URL">
           <div className="flex gap-2">
             <input value={chordChartUrl} onChange={(e) => setChordChartUrl(e.target.value)}
-              className="input flex-1" placeholder="https://…" />
+              className="input flex-1" placeholder="https://tabs.ultimate-guitar.com/…" />
             {chordChartUrl && (
               <a href={chordChartUrl} target="_blank" rel="noopener noreferrer"
                 className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">

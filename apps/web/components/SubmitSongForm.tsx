@@ -25,10 +25,18 @@ function spotifyTrackId(url: string | null): string | null {
   return url.match(/\/track\/([a-zA-Z0-9]+)/)?.[1] ?? null;
 }
 
-export default function SubmitSongForm() {
+// With `onAdded` (a set's Add songs), the form starts open and hands back the
+// song it added, or the one already in the library, instead of opening it.
+export type AddedSong = { id: string; title: string; display_artist: string | null };
+
+export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel }: {
+  defaultTitle?: string;
+  onAdded?: (song: AddedSong) => void;
+  onCancel?: () => void;
+} = {}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
+  const [open, setOpen] = useState(!!onAdded);
+  const [title, setTitle] = useState(defaultTitle);
   const [artist, setArtist] = useState("");
   const [step, setStep] = useState<Step>({ type: "input" });
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +73,11 @@ export default function SubmitSongForm() {
       body: JSON.stringify({ ...match, confirmed: true, add_anyway: addAnyway }),
     });
     const json = await res.json();
+    if (onAdded && (res.ok || (res.status === 409 && json.id))) {
+      const existing = res.ok ? null : match.existing;
+      onAdded({ id: json.id, title: existing?.title ?? match.title, display_artist: existing ? existing.display_artist : match.artist });
+      return;
+    }
     if (res.status === 409) {
       setError("This song is already in our library.");
       setStep({ type: "preview", match });
@@ -100,11 +113,14 @@ export default function SubmitSongForm() {
   const busy = isLookingUp || isSubmitting;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
+    // In a set's Add songs it sits inside that panel, so it draws no box of its own.
+    <div className={onAdded ? "space-y-4 pt-2" : "rounded-2xl border border-zinc-200 bg-white p-5 space-y-4"}>
       <div>
         <h2 className="text-base font-semibold">Add a missing song</h2>
         <p className="mt-0.5 text-xs text-zinc-500">
-          We'll look it up and add it to the library. It'll be available for you to add to your repertoire straight away.
+          {onAdded
+            ? "We'll look it up, add it to the library and put it in this set."
+            : "We'll look it up and add it to the library. It'll be available for you to add to your repertoire straight away."}
         </p>
       </div>
 
@@ -154,6 +170,15 @@ export default function SubmitSongForm() {
               </button>
             )}
 
+            {step.type === "preview" && step.match.existing && onAdded && (
+              <button
+                onClick={() => { const e = step.match.existing!; onAdded({ id: e.id, title: e.title, display_artist: e.display_artist }); }}
+                className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+              >
+                Add it to the set
+              </button>
+            )}
+
             {step.type === "preview" && step.match.existing?.match === "possible" && (
               <button
                 onClick={() => submit(step.match, true)}
@@ -183,7 +208,7 @@ export default function SubmitSongForm() {
             )}
 
             <button
-              onClick={() => { setOpen(false); setTitle(""); setArtist(""); reset(); }}
+              onClick={() => { setOpen(false); setTitle(""); setArtist(""); reset(); onCancel?.(); }}
               className="rounded-full border border-zinc-200 px-5 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
             >
               Cancel
