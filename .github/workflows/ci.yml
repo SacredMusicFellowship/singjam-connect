@@ -56,6 +56,9 @@ jobs:
       - name: Expo doctor
         run: npx expo-doctor
         working-directory: apps/native
+        env:
+          # Expo ships SDK patch releases every few days; a patch lag shouldn't fail unrelated PRs.
+          EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK: "1"
 
   e2e:
     name: Local Supabase, RLS and Playwright
