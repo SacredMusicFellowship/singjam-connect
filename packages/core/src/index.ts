@@ -4,6 +4,7 @@ export * from './utils/copyEventTickets';
 export * from './utils/deriveNeighborhood';
 export * from './utils/fetchAllRows';
 export * from './utils/attachSongCards';
+export * from './utils/ownSetKnowledge';
 export * from './utils/formatComposers';
 export * from './utils/formatRecordingArtists';
 export * from './utils/productionCredits';

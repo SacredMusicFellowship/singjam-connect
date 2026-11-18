@@ -558,6 +558,7 @@ export default function SetSongRow({
                               className={`rounded-full px-2 py-0.5 text-xs ${pillVisibility(i, supportShown.length)} ${CONFIDENCE_STYLES.support.pill} ${CONFIDENCE_STYLES.support.pillText} ${ownWeight(p.user_id)}`}
                             >
                               {label}
+                              {participantKeys.get(p.user_id) && ` (${participantKeys.get(p.user_id)})`}
                             </span>
                           );
                         })}

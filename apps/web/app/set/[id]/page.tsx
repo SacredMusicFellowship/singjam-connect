@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { attachSongCards } from "@singjam/core";
+import { attachSongCards, fetchAllRows } from "@singjam/core";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
 import SetDetail from "@/components/SetDetail";
 import type { SongKnowledge } from "@/components/setDetailShared";
@@ -214,13 +214,17 @@ export default async function SetPage({
   // Fetch all knowledge levels for every participant × song combination
   const [songKnowledge, linkedJam] = await Promise.all([
     songIds.length > 0 && participantIds.length > 0
-      ? supabase
-          .from("user_songs")
-          .select("user_id, song_id, confidence, key_note")
-          .in("user_id", participantIds)
-          .in("song_id", songIds)
-          .in("confidence", ["lead", "support", "learn"])
-          .then((r) => (r.data ?? []) as SongKnowledge[])
+      ? fetchAllRows<SongKnowledge>((from, to) =>
+          supabase
+            .from("user_songs")
+            .select("user_id, song_id, confidence, key_note")
+            .in("user_id", participantIds)
+            .in("song_id", songIds)
+            .in("confidence", ["lead", "support", "learn"])
+            .order("user_id")
+            .order("song_id")
+            .range(from, to)
+        )
       : Promise.resolve([] as SongKnowledge[]),
     linkedJamPromise,
   ]);

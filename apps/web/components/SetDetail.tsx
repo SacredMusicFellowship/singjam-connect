@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { canRemoveSetSong, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
+import { canRemoveSetSong, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeOwnKnowledge, mergeRefetchedSetSongs, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -155,15 +155,18 @@ export default function SetDetail({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function loadUserRepertoire() {
+  // The viewer's songs, paged (a full repertoire passes 1,000 rows). Their own
+  // part and key on this set come from the same read, so a key set on a song
+  // page shows as soon as you're back, before the full refresh lands.
+  async function loadUserRepertoire() {
     if (!currentUserId) return;
-    supabase
-      .from("user_songs")
-      .select("song_id, confidence")
-      .eq("user_id", currentUserId)
-      .then(({ data }) => {
-        setUserRepertoire(new Map((data ?? []).map((r: any) => [r.song_id, r.confidence])));
-      });
+    const userId = currentUserId;
+    const mine = await fetchAllRows<{ song_id: string; confidence: string; key_note: string | null }>((from, to) =>
+      supabase.from("user_songs").select("song_id, confidence, key_note").eq("user_id", userId).order("song_id").range(from, to)
+    ).catch(() => null);
+    if (!mine) return;
+    setUserRepertoire(new Map(mine.map((r) => [r.song_id, r.confidence])));
+    setSongKnowledge((prev) => mergeOwnKnowledge(prev, userId, mine, songIdsRef.current, participantIdsRef.current.has(userId)) as SongKnowledge[]);
   }
 
   useEffect(() => {
