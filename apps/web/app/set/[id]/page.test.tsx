@@ -15,7 +15,7 @@ function client() {
     const filters: string[] = [];
     let head = false;
     const c: any = {};
-    for (const m of ["order", "in", "is", "limit"]) c[m] = () => c;
+    for (const m of ["order", "in", "is", "limit", "range"]) c[m] = () => c;
     c.select = (_cols: string, opts?: { head?: boolean }) => ((head = !!opts?.head), c);
     c.eq = (col: string, val: string) => (filters.push(`${col}=${val}`), c);
     c.neq = (col: string, val: string) => (filters.push(`${col}!=${val}`), c);

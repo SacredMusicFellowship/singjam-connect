@@ -79,18 +79,18 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
   const viewSong = useCallback((song: { song_id: string }) => router.push(`/song/${song.song_id}` as any), [router]);
   const { myConfidence, addSong } = useMySongs();
   const { tools, modals: mySongModals } = useMySongTools();
-  // The songs you knew when you ticked the box: ones you add after stay in view.
-  const [hidden, setHidden] = useState<Set<string> | null>(null);
+  // Hides every song you know, including one you add while it's ticked (as on web).
+  const [hideMine, setHideMine] = useState(false);
   // The Song Library's filters, scoped to this page's songs (each row carries its own filter fields).
   const { hierarchy, expanded, options, facets, yearBounds, activeCount } = useFilterFacets(songs, filters);
   // Card props built once per load, so memoised cards keep the same song object.
   const cards = useMemo(() => songs.map(s => ({ row: s, song: { ...s, first_line: null, year: null, recording_artists: s.recording_artists ?? null } as Suggestion })), [songs]);
   const shownCards = useMemo(() => {
-    const list = activeCount === 0 && !hidden ? cards : cards.filter(c => !hidden?.has(c.row.song_id) && songMatchesFilters(c.row, expanded));
+    const list = activeCount === 0 && !hideMine ? cards : cards.filter(c => !(hideMine && myConfidence.has(c.row.song_id)) && songMatchesFilters(c.row, expanded));
     if (sortBy === 'title_asc') return [...list].sort((a, b) => a.row.title.localeCompare(b.row.title));
     if (sortBy === 'title_desc') return [...list].sort((a, b) => b.row.title.localeCompare(a.row.title));
     return list;
-  }, [cards, activeCount, expanded, sortBy, hidden]);
+  }, [cards, activeCount, expanded, sortBy, hideMine, myConfidence]);
   const roles = entity?.roles;
   const renderItem = useCallback(({ item }: { item: { song: Suggestion } }) => (
     <SuggestionCard
@@ -182,9 +182,9 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
         )}
         {songs.length > 1 && <FiltersButton count={activeCount} onPress={() => setSheetOpen(true)} />}
         {myConfidence.size > 0 && (
-          <HideMySongsToggle checked={hidden !== null} onPress={() => setHidden(h => (h ? null : new Set(myConfidence.keys())))} />
+          <HideMySongsToggle checked={hideMine} onPress={() => setHideMine(h => !h)} />
         )}
-        {activeCount > 0 || hidden ? <Text className="text-xs text-zinc-500">{shownCards.length} of {songs.length}</Text> : null}
+        {activeCount > 0 || hideMine ? <Text className="text-xs text-zinc-500">{shownCards.length} of {songs.length}</Text> : null}
       </View>
       <View className="h-2" />
     </View>
@@ -221,7 +221,7 @@ export function BrowseScreen({ kind, slug, traditional = false }: { kind: Browse
         ListHeaderComponent={header}
         ListFooterComponent={footer}
         ListEmptyComponent={
-          <Text className="text-sm text-zinc-500 text-center py-8">{songs.length === 0 ? 'No songs here yet.' : hidden && activeCount === 0 ? 'You know every song here.' : 'No songs here match these filters.'}</Text>
+          <Text className="text-sm text-zinc-500 text-center py-8">{songs.length === 0 ? 'No songs here yet.' : hideMine && activeCount === 0 ? 'You know every song here.' : 'No songs here match these filters.'}</Text>
         }
       />
       </ContentContainer>

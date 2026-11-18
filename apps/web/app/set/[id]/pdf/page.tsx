@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
-import { songSubtitleText } from "@singjam/core";
+import { attachSongCards, cardRowText, songSubtitleText } from "@singjam/core";
 import PDFBuilderLoader from "./PDFBuilderLoader";
 
 const getSet = cache(async (id: string) => {
@@ -26,7 +26,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
   const supabase = await getServerSupabase();
   const user = await getServerUser();
 
-  const [set, songsRes, authCollabRes, allCollabsRes] = await Promise.all([
+  const [set, songsRes, authCollabRes, allCollabsRes, cardsRes] = await Promise.all([
     getSet(id),
     supabase
       .from("set_songs")
@@ -41,6 +41,8 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
       .select("user_id, profiles!user_id(display_name, username)")
       .eq("set_id", id)
       .eq("status", "accepted"),
+    // The line under each title, by the same card rule as the set page (migration 235).
+    supabase.rpc("set_song_cards", { p_set_id: id }),
   ]);
 
   if (!set) redirect(`/set/${id}`);
@@ -65,7 +67,7 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     if (name && collab.user_id) participantMap.set(collab.user_id as string, name);
   }
 
-  let rawSongs = (songsRes.data ?? []).map((s: any) => {
+  let rawSongs = attachSongCards((songsRes.data ?? []) as any[], cardsRes.data).map((s: any) => {
     const productions = (s.songs?.song_productions ?? [])
       .map((sp: any) => sp.productions?.name)
       .filter(Boolean) as string[];
@@ -76,7 +78,9 @@ export default async function SetPDFPage({ params, searchParams }: { params: Pro
     return {
       song_id: s.song_id as string,
       title: (s.songs?.title ?? "") as string,
-      artist: songSubtitleText(productions, s.songs?.byline),
+      artist: s.songs?.card
+        ? cardRowText({ title: s.songs.title ?? "", displayArtist: s.songs.display_artist ?? null, productions, card: s.songs.card }).line || null
+        : songSubtitleText(productions, s.songs?.byline),
       key: (s.key_note ?? null) as string | null,
       tonality: (s.songs?.tonality ?? null) as string | null,
       songwriters,
