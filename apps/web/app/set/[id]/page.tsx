@@ -239,6 +239,7 @@ export default async function SetPage({
         songKnowledge={songKnowledge}
         canAccessJam={canAccessJam}
         jamShortCode={(linkedJam as any)?.short_code ?? null}
+        renderId={crypto.randomUUID()}
       />
       {!user && <SetGuestPrompt setId={set.id} shortCode={set.short_code} forEvent={!!set.jam_id} />}
     </Suspense>

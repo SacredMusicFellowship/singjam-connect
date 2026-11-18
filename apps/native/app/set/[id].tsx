@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, Modal, FlatList, TextInput,
-  KeyboardAvoidingView, Platform, Linking, useWindowDimensions,
+  KeyboardAvoidingView, Platform, Linking, useWindowDimensions, AppState,
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WIDE_BREAKPOINT } from '@/components/BrandHeader';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
@@ -13,7 +13,7 @@ import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
 import SubtitleText from '@/components/SubtitleText';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
@@ -907,6 +907,27 @@ export default function SetDetailScreen() {
     if (id) load();
   }, [id]);
 
+  // Changes made while this screen wasn't showing (the song screen, another
+  // app, a dropped connection) don't arrive live, so coming back asks again,
+  // as the web set page does. The current list stays up until the new one arrives.
+  const [reloadToken, setReloadToken] = useState(0);
+  const refetchGateRef = useRef(createRefetchGate());
+  const refreshRef = useRef(() => {});
+  refreshRef.current = () => {
+    if (!id || !refetchGateRef.current()) return;
+    load({ refresh: true });
+    setReloadToken((n) => n + 1);
+  };
+  const focusedOnceRef = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (focusedOnceRef.current) refreshRef.current();
+    focusedOnceRef.current = true;
+  }, []));
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => { if (state === 'active') refreshRef.current(); });
+    return () => sub.remove();
+  }, []);
+
   // Live-sync the set the same way the web SetDetail does. Supabase can't
   // filter DELETE events (the old row is primary-key-only under RLS), so the
   // set_songs/set_collaborators DELETE handlers subscribe unfiltered and match
@@ -1013,11 +1034,17 @@ export default function SetDetailScreen() {
         }
       );
 
-    channel.subscribe();
+    // Rejoining after a dropped connection: anything sent meanwhile was missed.
+    let joined = false;
+    channel.subscribe((status) => {
+      if (status !== 'SUBSCRIBED') return;
+      if (joined) refreshRef.current();
+      joined = true;
+    });
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
-  async function load() {
+  async function load({ refresh = false }: { refresh?: boolean } = {}) {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
 
@@ -1052,7 +1079,8 @@ export default function SetDetailScreen() {
 
     const s = setRes.data as any;
     setSet(s);
-    setSongs((songsRes.data ?? []) as any as SetSong[]);
+    const rows = (songsRes.data ?? []) as any as SetSong[];
+    setSongs((prev) => (refresh ? mergeRefetchedSetSongs(prev, rows, syncRef.current.isPending) : rows));
 
     const isOwner = !!user && s.owner_user_id === user.id;
     const myRole = (collabRes.data as { role?: string } | null)?.role ?? null;
@@ -1284,7 +1312,7 @@ export default function SetDetailScreen() {
       .in('confidence', ['lead', 'support', 'learn'])
       .then(({ data }) => { if (!cancelled) setSongKnowledge((data ?? []) as any); });
     return () => { cancelled = true; };
-  }, [participantIdsKey, songIdsKey]);
+  }, [participantIdsKey, songIdsKey, reloadToken]);
 
   useEffect(() => {
     const songIds = songIdsKey ? songIdsKey.split(',') : [];
@@ -1299,7 +1327,7 @@ export default function SetDetailScreen() {
       setSingingVoice((profileRes.data as { singing_voice: string | null } | null)?.singing_voice ?? null);
     });
     return () => { cancelled = true; };
-  }, [myUserId, songIdsKey]);
+  }, [myUserId, songIdsKey, reloadToken]);
 
   async function handleSetMyConfidence(songId: string, confidence: string) {
     if (!myUserId) { router.push('/(auth)/sign-in' as any); return; }
