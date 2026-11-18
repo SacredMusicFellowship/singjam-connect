@@ -16,20 +16,17 @@ async function post(path: string, body: unknown) {
 }
 
 // Mirrors web's ChordChartSlot + ReportChartButton: anyone signed in can add an
-// Ultimate Guitar chart (admins and song editors see "not yet reviewed" until a song editor checks it)
-// or report a problem with the current one.
+// Ultimate Guitar chart or report a problem with the current one.
 export default function ChordChartControls({
   songId,
   url,
-  pending,
   signedIn,
   onChanged,
 }: {
   songId: string;
   url: string | null;
-  pending: boolean;
   signedIn: boolean;
-  onChanged: (next: { url: string | null; pending: boolean }) => void;
+  onChanged: (url: string) => void;
 }) {
   const [mode, setMode] = useState<'idle' | 'add' | 'report'>('idle');
   const [input, setInput] = useState('');
@@ -45,8 +42,7 @@ export default function ChordChartControls({
       : await post(`/api/songs/${songId}/charts/report`, { note: input.trim() });
     setBusy(false);
     if (!ok) { setError(json.error ?? 'Something went wrong. Please try again.'); return; }
-    if (mode === 'add' && json.live) onChanged({ url: input.trim(), pending: true });
-    if (mode === 'report') onChanged({ url, pending: true });
+    if (mode === 'add' && json.live) onChanged(input.trim());
     setMessage(mode === 'add' ? 'Thanks — a song editor will check it.' : 'Thanks — a song editor will take a look.');
     setMode('idle');
     setInput('');
@@ -56,9 +52,6 @@ export default function ChordChartControls({
 
   return (
     <View className="mt-2">
-      {url && pending ? (
-        <Text className="text-xs text-zinc-500">Chart added recently — not yet reviewed</Text>
-      ) : null}
       {message ? <Text className="text-xs text-zinc-500 mt-1">{message}</Text> : null}
       {mode === 'idle' && signedIn ? (
         <TouchableOpacity onPress={() => { setMode(url ? 'report' : 'add'); setMessage(null); }} className="mt-1 self-start">
