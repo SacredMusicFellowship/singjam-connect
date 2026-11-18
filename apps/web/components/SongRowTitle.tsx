@@ -19,7 +19,7 @@ export default function SongRowTitle({ title, href, displayArtist, productions, 
   productions?: string[] | null;
   card: SongRowCard;
 }) {
-  const { writers, line: second } = songRowText({
+  const { writers, shows, credits } = songRowText({
     title,
     byline: card.byline,
     displayArtist,
@@ -39,7 +39,18 @@ export default function SongRowTitle({ title, href, displayArtist, productions, 
         )}
         {writers && <span className="ml-1 text-zinc-400">({writers})</span>}
       </div>
-      {second && <div className="truncate text-xs text-zinc-500">{second}</div>}
+      <SongRowLine shows={shows} credits={credits} className="truncate text-xs text-zinc-500" />
+    </div>
+  );
+}
+
+// A row's second line with its show titles in italics.
+export function SongRowLine({ shows, credits, className, empty }: { shows: string[]; credits: string; className: string; empty?: string }) {
+  if (!shows.length && !credits) return empty ? <div className={className}>{empty}</div> : null;
+  return (
+    <div className={className}>
+      {shows.length > 0 && <>from <i>{shows.join(", ")}</i>{credits && " · "}</>}
+      {credits}
     </div>
   );
 }

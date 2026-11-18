@@ -27,7 +27,6 @@ export default function SetSongRow({
   canManage,
   canRemove,
   isAdmin,
-  isSongEditor = false,
   isPublicViewer,
   participants,
   hasEligible,
@@ -53,7 +52,6 @@ export default function SetSongRow({
   /** Managers, or an editor removing a song they added. */
   canRemove: boolean;
   isAdmin: boolean;
-  isSongEditor?: boolean;
   isPublicViewer: boolean;
   participants: Participant[];
   hasEligible: boolean;
@@ -378,12 +376,7 @@ export default function SetSongRow({
         <div className="shrink-0 flex items-center gap-0.5">
           {/* Ultimate Guitar chord chart */}
           {chord_chart_url ? (
-            <>
-              <ChordsLink href={chord_chart_url} />
-              {(isAdmin || isSongEditor) && song.songs.chord_chart_pending && (
-                <span title="Added recently — not yet checked by a song editor" className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">unreviewed</span>
-              )}
-            </>
+            <ChordsLink href={chord_chart_url} />
           ) : (
             <>
               <button

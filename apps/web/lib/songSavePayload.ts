@@ -1,3 +1,4 @@
+import type { CardLine } from "@singjam/core";
 type Named = { id: string; name: string };
 type Recording = { id: string; year: number | null; youtube_url: string | null; spotify_url?: string | null };
 type PendingRecording = { name: string; year: number | null; spotify_url: string | null };
@@ -16,6 +17,7 @@ export type SongForm = {
   meters: string[];
   vibe: "Banger" | "Ballad" | null;
   knownByRecording: boolean | null;
+  cardLine?: CardLine | null;
   textId?: string;
   tuneId?: string;
   genres: string[];
@@ -77,6 +79,7 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       meter: form.meters.join(", "),
       vibe: form.vibe,
       known_by_recording: form.knownByRecording,
+      ...(form.cardLine !== undefined ? { card_line: form.cardLine } : {}),
       ...(form.textId !== undefined ? { text_id: form.textId || null } : {}),
       ...(form.tuneId !== undefined ? { tune_id: form.tuneId || null } : {}),
     },
