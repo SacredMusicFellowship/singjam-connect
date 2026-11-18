@@ -6,6 +6,7 @@ import { formatJammers, songRowText, type CardIdentity, type RecordingArtistCred
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RolePill from '@/components/RolePill';
 import MyKeyChip from '@/components/MyKeyChip';
+import { SongRowLine } from '@/components/SongRowTitle';
 
 export type RepertoireCardSong = {
   song_id: string;
@@ -93,9 +94,7 @@ function RepertoireCard({
               {row.writers ? <Text className="text-zinc-400"> ({row.writers})</Text> : null}
             </Text>
           </TouchableOpacity>
-          <Text className="text-sm text-zinc-500 mt-0.5" numberOfLines={1}>
-            {row.line || '—'}
-          </Text>
+          <SongRowLine shows={row.shows} credits={row.credits} className="text-sm text-zinc-500 mt-0.5" empty="—" />
           {song.popularity > 0 && (
             <Text className="text-xs text-zinc-400 mt-0.5">
               {formatJammers(song.popularity)}
