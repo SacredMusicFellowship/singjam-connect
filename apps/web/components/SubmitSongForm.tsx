@@ -113,7 +113,8 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel }:
   const busy = isLookingUp || isSubmitting;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
+    // In a set's Add songs it sits inside that panel, so it draws no box of its own.
+    <div className={onAdded ? "space-y-4 pt-2" : "rounded-2xl border border-zinc-200 bg-white p-5 space-y-4"}>
       <div>
         <h2 className="text-base font-semibold">Add a missing song</h2>
         <p className="mt-0.5 text-xs text-zinc-500">

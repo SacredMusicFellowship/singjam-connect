@@ -13,7 +13,7 @@ import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songRowText, songSubtitle, attachSongCards } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, cardRowText, songSubtitle, attachSongCards } from '@singjam/core';
 import SubtitleText from '@/components/SubtitleText';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
 import ContentContainer from '@/components/ContentContainer';
@@ -302,18 +302,7 @@ function SongRow({
     .filter(Boolean) as string[];
   const card = song.songs.card;
   // Writers in brackets and the line under the title, by the same rules as every other song list (web's SetSongRow).
-  const row = card
-    ? songRowText({
-        title: song.songs.title,
-        byline: card.byline,
-        displayArtist: song.songs.display_artist,
-        composers: card.composers ?? [],
-        cultures: card.cultures ?? [],
-        recordingArtists: card.recording_artists,
-        identity: card.card_identity,
-        productions,
-      })
-    : null;
+  const row = card ? cardRowText({ title: song.songs.title, displayArtist: song.songs.display_artist, productions, card }) : null;
 
   // Leader/support assignments are only shown to collaborators; public viewers
   // see none. Mirrors web SetSongRow.

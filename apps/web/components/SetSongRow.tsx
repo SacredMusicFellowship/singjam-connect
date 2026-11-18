@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ConfidencePicker from "@/components/ConfidencePicker";
-import { CONFIDENCE_STYLES, hasLeadVoice, songRowText, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_SONG_NOTE_MAX, shownPeopleCount } from "@singjam/core";
+import { CONFIDENCE_STYLES, hasLeadVoice, cardRowText, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_SONG_NOTE_MAX, shownPeopleCount } from "@singjam/core";
 import RoleSelect from "@/components/RoleSelect";
 import PillSelect, { StackedLabels } from "@/components/PillSelect";
 import ChordsLink from "@/components/ChordsLink";
@@ -99,18 +99,7 @@ export default function SetSongRow({
     .filter(Boolean) as string[];
   const card = song.songs.card;
   // Writers in brackets and the line under the title, by the same rules as every other song list.
-  const row = card
-    ? songRowText({
-        title: song.songs.title,
-        byline: card.byline,
-        displayArtist: song.songs.display_artist,
-        composers: card.composers ?? [],
-        cultures: card.cultures ?? [],
-        recordingArtists: card.recording_artists,
-        identity: card.card_identity,
-        productions,
-      })
-    : null;
+  const row = card ? cardRowText({ title: song.songs.title, displayArtist: song.songs.display_artist, productions, card }) : null;
 
   const fieldMap: Record<NonNullable<AddingField>, "youtube_url" | "spotify_url" | "chord_chart_url"> = {
     youtube: "youtube_url",

@@ -24,7 +24,7 @@ type Field = "artist" | "key" | "tonality" | "songwriters" | "leader";
 type Layout = "list" | "twoColumn";
 
 const FIELD_LABELS: Record<Field, string> = {
-  artist: "Artist",
+  artist: "Subtitle",
   key: "Key",
   tonality: "Tonality",
   songwriters: "Songwriters",
@@ -147,7 +147,7 @@ function ListColHeaders({ fields, includeNumber, showKey, keyColLabel, p }: {
     <div className="flex gap-2 font-semibold uppercase text-zinc-400 border-b border-zinc-200 pb-1.5 mb-1" style={{ fontSize: p.label }}>
       {includeNumber && <span className="w-5 shrink-0">#</span>}
       <span className="flex-1">Title</span>
-      {fields.has("artist") && <span className="w-36 shrink-0">Artist</span>}
+      {fields.has("artist") && <span className="w-36 shrink-0">Subtitle</span>}
       {showKey && <span className="w-24 shrink-0">{keyColLabel}</span>}
     </div>
   );
@@ -354,7 +354,7 @@ function SetListDoc({
             <View style={s.colRow}>
               {includeNumber && <Text style={{ ...s.colLabel, width: 16 }}>#</Text>}
               <Text style={{ ...s.colLabel, flex: 1 }}>Title</Text>
-              {showArtist && <Text style={{ ...s.colLabel, width: 110 }}>Artist</Text>}
+              {showArtist && <Text style={{ ...s.colLabel, width: 110 }}>Subtitle</Text>}
               {showKey && <Text style={{ ...s.colLabel, width: 72 }}>{keyLabel}</Text>}
             </View>
             {songs.map((song) => (

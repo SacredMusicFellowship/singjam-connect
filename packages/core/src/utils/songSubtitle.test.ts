@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bylineCredits, songCardCredits, songCardIdentity, songOrigin, songRowText, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
+import { bylineCredits, cardRowText, songCardCredits, songCardIdentity, songOrigin, songRowText, traditionalCredit, songSubtitle, songSubtitleText } from "./songSubtitle";
 
 describe("songSubtitle", () => {
   it("names the show when the song is from one", () => {
@@ -172,5 +172,17 @@ describe("songRowText", () => {
     expect(r.shows).toEqual(["Hamilton"]);
     expect(r.credits).toBe("Original Broadway Cast");
     expect(r.line).toBe("from Hamilton · Original Broadway Cast");
+  });
+});
+
+describe("cardRowText", () => {
+  it("reads song_cards' card data the way every list and set row shows it", () => {
+    const card = { byline: "Traditional · English", composers: ["Traditional"], cultures: ["English"], recording_artists: [], card_identity: { tune: "New Britain", tune_slug: "new-britain" } };
+    expect(cardRowText({ title: "Amazing Grace", displayArtist: null, card })).toMatchObject({ writers: "", line: "Tune: New Britain" });
+    expect(cardRowText({ title: "My Favorite Things", displayArtist: "Julie Andrews", productions: ["The Sound of Music"], card: { composers: ["Richard Rodgers"], recording_artists: [{ name: "Julie Andrews", year: 1965 }] } }))
+      .toMatchObject({ writers: "R. Rodgers", line: "from The Sound of Music · Julie Andrews", shows: ["The Sound of Music"] });
+  });
+  it("copes with missing fields", () => {
+    expect(cardRowText({ title: "x", displayArtist: "Someone", card: {} })).toMatchObject({ writers: "", line: "Someone" });
   });
 });
