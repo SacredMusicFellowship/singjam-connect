@@ -6,7 +6,7 @@
  *
  * Steps:
  *   1. Visit the printed URL in your browser and approve.
- *   2. You'll be redirected to https://localhost:8888/callback?code=...
+ *   2. You'll be redirected to http://127.0.0.1:8888/callback?code=...
  *      The page won't load — that's fine. Copy the full URL from the address bar.
  *   3. Paste it here when prompted.
  *   4. Add the printed SPOTIFY_REFRESH_TOKEN to .env.local
@@ -33,7 +33,7 @@ try {
 
 const CLIENT_ID = envVars.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = envVars.SPOTIFY_CLIENT_SECRET;
-const REDIRECT_URI = "https://localhost:8888/callback";
+const REDIRECT_URI = "http://127.0.0.1:8888/callback";
 const SCOPES = "playlist-modify-private playlist-modify-public user-read-private";
 
 if (!CLIENT_ID || !CLIENT_SECRET) {

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerUser, getServerUserRole } from "@/lib/supabase/cached";
 import Link from "next/link";
 import AdminPageSkeleton from "@/components/AdminPageSkeleton";
+import ChartsToReviewCount from "@/components/ChartsToReviewCount";
 
 // The nav renders at once; the role check streams in behind a skeleton so
 // opening the panel never waits on the auth round trip.
@@ -33,6 +34,9 @@ export default function SongEditorLayout({ children }: { children: React.ReactNo
           </Link>
           <Link href="/song-editor/charts" className="text-slate-600 hover:text-slate-900">
             Charts to review
+            <Suspense fallback={null}>
+              <ChartsToReviewCount />
+            </Suspense>
           </Link>
           <Link href="/song-editor/history" className="text-slate-600 hover:text-slate-900">
             Song History
