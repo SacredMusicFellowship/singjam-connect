@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { reportChart, reviewChart, submitChart, ChartError } from "./chordCharts";
+import { reportChart, reviewChart, setChartAsEditor, submitChart, ChartError } from "./chordCharts";
 
 // A tiny in-memory stand-in for the few PostgREST calls chordCharts makes.
 function fakeDb(seed: { songs: any[]; subs?: any[] }) {
@@ -94,6 +94,35 @@ describe("reviewChart", () => {
     expect(db.tables.chord_chart_submissions.at(-1)).toMatchObject({ url: UG3, submitted_by: "ed", status: "pending" });
   });
 
+  it("rejecting the live chart with nothing approved puts the newest waiting chart up, unreviewed", async () => {
+    const UG3 = "https://tabs.ultimate-guitar.com/tab/x/y-chords-3";
+    const db = fakeDb({
+      songs: [{ id: "s1", chord_chart_url: UG, chord_chart_pending: true }],
+      subs: [
+        { id: "live", song_id: "s1", url: UG, submitted_by: "u1", status: "pending", created_at: "2026-11-01" },
+        { id: "waiting", song_id: "s1", url: UG3, submitted_by: "u2", status: "pending", created_at: "2026-11-02" },
+      ],
+    });
+    await reviewChart(db, "live", { id: "ed", role: "song_editor" }, "reject");
+    expect(db.tables.songs[0]).toMatchObject({ chord_chart_url: UG3, chord_chart_pending: true });
+  });
+
+  it("rejecting the only chart takes it down", async () => {
+    const db = fakeDb({
+      songs: [{ id: "s1", chord_chart_url: UG, chord_chart_pending: true }],
+      subs: [{ id: "live", song_id: "s1", url: UG, submitted_by: "u1", status: "pending", created_at: "2026-11-01" }],
+    });
+    await reviewChart(db, "live", { id: "ed", role: "song_editor" }, "reject");
+    expect(db.tables.songs[0]).toMatchObject({ chord_chart_url: null, chord_chart_pending: false });
+  });
+
+  it("reports a failed write instead of succeeding", async () => {
+    const db = seed();
+    const from = db.from;
+    db.from = (t: string) => (t === "songs" ? { ...from(t), update: () => ({ eq: async () => ({ error: { message: "boom" } }) }) } : from(t));
+    await expect(reviewChart(db, "new", { id: "ed", role: "admin" }, "approve")).rejects.toMatchObject({ status: 500 });
+  });
+
   it("won't let anyone review their own chart, or a member review at all", async () => {
     const db = seed();
     await expect(reviewChart(db, "new", { id: "u1", role: "song_editor" }, "approve")).rejects.toMatchObject({ status: 403 });
@@ -110,5 +139,42 @@ describe("reportChart", () => {
     await reportChart(db, "s1", "wrong key");
     expect(db.tables.songs[0].chord_chart_pending).toBe(true);
     expect(db.tables.chord_chart_submissions[0]).toMatchObject({ status: "pending", note: "Reported: wrong key" });
+  });
+});
+
+describe("setChartAsEditor", () => {
+  it("records an editor's new chart as approved by them and puts it live", async () => {
+    const db = fakeDb({ songs: [{ id: "s1", chord_chart_url: UG, chord_chart_pending: false }] });
+    await setChartAsEditor(db, "s1", ` ${UG2} `, "ed");
+    expect(db.tables.songs[0]).toMatchObject({ chord_chart_url: UG2, chord_chart_pending: false });
+    expect(db.tables.chord_chart_submissions[0]).toMatchObject({ url: UG2, submitted_by: "ed", status: "approved", reviewed_by: "ed" });
+  });
+
+  it("approves a waiting submission of the same link instead of adding another", async () => {
+    const db = fakeDb({
+      songs: [{ id: "s1", chord_chart_url: UG, chord_chart_pending: true }],
+      subs: [{ id: "w", song_id: "s1", url: UG, submitted_by: "u1", status: "pending", created_at: "2026-11-01" }],
+    });
+    await setChartAsEditor(db, "s1", UG, "ed");
+    expect(db.tables.chord_chart_submissions).toHaveLength(1);
+    expect(db.tables.chord_chart_submissions[0]).toMatchObject({ status: "approved", reviewed_by: "ed" });
+    expect(db.tables.songs[0].chord_chart_pending).toBe(false);
+  });
+
+  it("does nothing when the approved chart is unchanged", async () => {
+    const db = fakeDb({ songs: [{ id: "s1", chord_chart_url: UG, chord_chart_pending: false }] });
+    await setChartAsEditor(db, "s1", UG, "ed");
+    expect(db.tables.chord_chart_submissions).toHaveLength(0);
+  });
+
+  it("takes the chart down when cleared", async () => {
+    const db = fakeDb({ songs: [{ id: "s1", chord_chart_url: UG, chord_chart_pending: true }] });
+    await setChartAsEditor(db, "s1", "", "ed");
+    expect(db.tables.songs[0]).toMatchObject({ chord_chart_url: null, chord_chart_pending: false });
+  });
+
+  it("refuses anything that isn't an Ultimate Guitar tab", async () => {
+    const db = fakeDb({ songs: [{ id: "s1", chord_chart_url: null, chord_chart_pending: false }] });
+    await expect(setChartAsEditor(db, "s1", "https://example.com/x", "ed")).rejects.toMatchObject({ status: 400 });
   });
 });
