@@ -563,6 +563,15 @@ export default function SongEditor({
     setError(null);
 
     try {
+      // The chart has its own review records, so it's set through the chart API first.
+      if (chordChartUrl.trim() !== (song?.chord_chart_url ?? "")) {
+        const res = await fetch(`/api/songs/${song!.id}/charts`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: chordChartUrl }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't save the chord chart.");
+      }
       // One call, one transaction (migration 200): either all of this is saved
       // or none of it, and the database returns the slug it settles on.
       const { data: newSlug, error: saveError } = await supabase.rpc("save_song", {
@@ -937,7 +946,7 @@ export default function SongEditor({
         <Field label="Chord Chart URL">
           <div className="flex gap-2">
             <input value={chordChartUrl} onChange={(e) => setChordChartUrl(e.target.value)}
-              className="input flex-1" placeholder="https://…" />
+              className="input flex-1" placeholder="https://tabs.ultimate-guitar.com/…" />
             {chordChartUrl && (
               <a href={chordChartUrl} target="_blank" rel="noopener noreferrer"
                 className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
