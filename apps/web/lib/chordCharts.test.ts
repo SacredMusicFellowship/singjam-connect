@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { commentOnChart, reportChart, reviewChart, setChartAsEditor, submitChart, ChartError } from "./chordCharts";
+import { commentOnChart, pendingChartCount, reportChart, reviewChart, setChartAsEditor, submitChart, ChartError } from "./chordCharts";
 
 // A tiny in-memory stand-in for the few PostgREST calls chordCharts makes.
 function fakeDb(seed: { songs: any[]; subs?: any[] }) {
@@ -233,5 +233,15 @@ describe("setChartAsEditor", () => {
   it("refuses anything that isn't an Ultimate Guitar tab", async () => {
     const db = fakeDb({ songs: [{ id: "s1", chord_chart_url: null, chord_chart_pending: false }] });
     await expect(setChartAsEditor(db, "s1", "https://example.com/x", "ed")).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("pendingChartCount", () => {
+  const db = (result: any) => ({ from: () => ({ select: () => ({ eq: async () => result }) }) }) as any;
+  it("counts waiting charts directly", async () => {
+    expect(await pendingChartCount(db({ count: 137, error: null }))).toBe(137);
+  });
+  it("throws rather than showing zero when the count fails", async () => {
+    await expect(pendingChartCount(db({ count: null, error: { message: "boom" } }))).rejects.toBeInstanceOf(ChartError);
   });
 });

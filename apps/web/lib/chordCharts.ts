@@ -169,3 +169,9 @@ export async function reportChart(db: SupabaseClient, songId: string, note: stri
   await addChartComment(db, submissionId!, reporterId, "report", reason);
   await must(db.from("songs").update({ chord_chart_pending: true }).eq("id", songId));
 }
+
+// How many charts are waiting for review, counted directly rather than from the capped queue.
+export async function pendingChartCount(db: SupabaseClient) {
+  const { count } = await must(db.from("chord_chart_submissions").select("id", { count: "exact", head: true }).eq("status", "pending"));
+  return count ?? 0;
+}
