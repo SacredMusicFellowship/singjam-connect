@@ -14,9 +14,10 @@ export function isUltimateGuitarChartUrl(raw: string): boolean {
 
 export type ChartReviewer = { id: string; role: string | null };
 
-// Song editors and admins review charts — never their own.
+// Admins review any chart, including their own; song editors review everyone else's.
 export function canReviewChart(reviewer: ChartReviewer, submittedBy: string | null): boolean {
-  if (reviewer.role !== "admin" && reviewer.role !== "song_editor") return false;
+  if (reviewer.role === "admin") return true;
+  if (reviewer.role !== "song_editor") return false;
   return !submittedBy || submittedBy !== reviewer.id;
 }
 

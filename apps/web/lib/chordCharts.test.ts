@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { reportChart, reviewChart, setChartAsEditor, submitChart, ChartError } from "./chordCharts";
+import { commentOnChart, reportChart, reviewChart, setChartAsEditor, submitChart, ChartError } from "./chordCharts";
 
 // A tiny in-memory stand-in for the few PostgREST calls chordCharts makes.
 function fakeDb(seed: { songs: any[]; subs?: any[] }) {
-  const tables: Record<string, any[]> = { songs: seed.songs, chord_chart_submissions: seed.subs ?? [] };
+  const tables: Record<string, any[]> = { songs: seed.songs, chord_chart_submissions: seed.subs ?? [], chord_chart_comments: [] };
   let nextId = 1;
   const query = (table: string) => {
     const filters: ((r: any) => boolean)[] = [];
@@ -27,9 +27,12 @@ function fakeDb(seed: { songs: any[]; subs?: any[] }) {
     tables,
     from: (table: string) => ({
       select: () => query(table).select(),
-      insert: async (row: any) => {
-        tables[table].push({ id: `sub-${nextId++}`, status: "pending", created_at: new Date(Date.now() + nextId).toISOString(), reviewed_at: null, ...row });
-        return { error: null };
+      insert: (row: any) => {
+        const defaults = table === "chord_chart_submissions" ? { status: "pending", reviewed_at: null } : {};
+        const stored = { id: `${table}-${nextId++}`, created_at: new Date(Date.now() + nextId).toISOString(), ...defaults, ...row };
+        tables[table].push(stored);
+        const done = Promise.resolve({ error: null });
+        return { then: done.then.bind(done), select: () => ({ single: async () => ({ data: stored, error: null }) }) };
       },
       update: (vals: any) => ({
         eq: async (c: string, v: any) => {
@@ -123,7 +126,13 @@ describe("reviewChart", () => {
     await expect(reviewChart(db, "new", { id: "ed", role: "admin" }, "approve")).rejects.toMatchObject({ status: 500 });
   });
 
-  it("won't let anyone review their own chart, or a member review at all", async () => {
+  it("lets an admin approve a chart they added", async () => {
+    const db = seed();
+    await reviewChart(db, "new", { id: "u1", role: "admin" }, "approve");
+    expect(db.tables.chord_chart_submissions[1]).toMatchObject({ status: "approved", reviewed_by: "u1" });
+  });
+
+  it("won't let a song editor review their own chart, or a member review at all", async () => {
     const db = seed();
     await expect(reviewChart(db, "new", { id: "u1", role: "song_editor" }, "approve")).rejects.toMatchObject({ status: 403 });
     await expect(reviewChart(db, "new", { id: "m", role: "member" }, "approve")).rejects.toMatchObject({ status: 403 });
@@ -131,14 +140,62 @@ describe("reviewChart", () => {
 });
 
 describe("reportChart", () => {
-  it("sends the live chart back to review with the note", async () => {
+  it("sends the live chart back to review, with the note as a report comment", async () => {
     const db = fakeDb({
       songs: [{ id: "s1", chord_chart_url: UG, chord_chart_pending: false }],
       subs: [{ id: "a", song_id: "s1", url: UG, submitted_by: null, status: "approved", created_at: "2026-01-01" }],
     });
-    await reportChart(db, "s1", "wrong key");
+    await reportChart(db, "s1", "wrong key", "r1");
     expect(db.tables.songs[0].chord_chart_pending).toBe(true);
-    expect(db.tables.chord_chart_submissions[0]).toMatchObject({ status: "pending", note: "Reported: wrong key" });
+    expect(db.tables.chord_chart_submissions[0]).toMatchObject({ status: "pending" });
+    expect(db.tables.chord_chart_submissions[0].note).toBeUndefined();
+    expect(db.tables.chord_chart_comments[0]).toMatchObject({ submission_id: "a", author_id: "r1", kind: "report", body: "wrong key" });
+  });
+
+  it("records a chart with no record before reporting it, and fills in a blank note", async () => {
+    const db = fakeDb({ songs: [{ id: "s1", chord_chart_url: UG, chord_chart_pending: false }] });
+    await reportChart(db, "s1", "  ", "r1");
+    const sub = db.tables.chord_chart_submissions[0];
+    expect(sub).toMatchObject({ url: UG, status: "pending" });
+    expect(db.tables.chord_chart_comments[0]).toMatchObject({ submission_id: sub.id, kind: "report", body: "Something's wrong with this chart" });
+  });
+});
+
+describe("comments", () => {
+  const seed = () => fakeDb({
+    songs: [{ id: "s1", chord_chart_url: UG2, chord_chart_pending: true }],
+    subs: [{ id: "new", song_id: "s1", url: UG2, submitted_by: "u1", status: "pending", created_at: "2026-11-01" }],
+  });
+
+  it("a reviewer can comment, even on a chart they added", async () => {
+    const db = seed();
+    await commentOnChart(db, "new", "u1", " check the bridge ");
+    expect(db.tables.chord_chart_comments[0]).toMatchObject({ submission_id: "new", author_id: "u1", kind: "comment", body: "check the bridge" });
+  });
+
+  it("refuses an empty or overlong comment, or one on a missing chart", async () => {
+    const db = seed();
+    await expect(commentOnChart(db, "new", "ed", "   ")).rejects.toMatchObject({ status: 400 });
+    await expect(commentOnChart(db, "new", "ed", "x".repeat(1001))).rejects.toMatchObject({ status: 400 });
+    await expect(commentOnChart(db, "nope", "ed", "hi")).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("keeps a reject or replace reason as a comment", async () => {
+    const db = seed();
+    await reviewChart(db, "new", { id: "ed", role: "song_editor" }, "reject", undefined, "wrong key");
+    expect(db.tables.chord_chart_comments[0]).toMatchObject({ submission_id: "new", author_id: "ed", kind: "reject", body: "wrong key" });
+  });
+
+  it("adds no comment when no reason is given", async () => {
+    const db = seed();
+    await reviewChart(db, "new", { id: "ed", role: "song_editor" }, "reject", undefined, "  ");
+    expect(db.tables.chord_chart_comments).toHaveLength(0);
+  });
+
+  it("a reason can't sneak past the own-chart rule", async () => {
+    const db = seed();
+    await expect(reviewChart(db, "new", { id: "u1", role: "song_editor" }, "reject", undefined, "mine")).rejects.toMatchObject({ status: 403 });
+    expect(db.tables.chord_chart_comments).toHaveLength(0);
   });
 });
 

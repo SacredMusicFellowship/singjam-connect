@@ -16,12 +16,15 @@ describe("isUltimateGuitarChartUrl", () => {
 });
 
 describe("canReviewChart", () => {
+  it("lets admins review their own charts", () => {
+    expect(canReviewChart({ id: "a", role: "admin" }, "a")).toBe(true);
+  });
   it("lets song editors and admins review other people's charts", () => {
     expect(canReviewChart({ id: "a", role: "song_editor" }, "b")).toBe(true);
     expect(canReviewChart({ id: "a", role: "admin" }, null)).toBe(true);
   });
   it("never their own, and never members", () => {
-    expect(canReviewChart({ id: "a", role: "admin" }, "a")).toBe(false);
+    expect(canReviewChart({ id: "a", role: "song_editor" }, "a")).toBe(false);
     expect(canReviewChart({ id: "a", role: "member" }, "b")).toBe(false);
   });
 });
