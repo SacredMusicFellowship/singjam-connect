@@ -592,7 +592,10 @@ function SongRow({
                   <View className="flex-row flex-wrap flex-1">
                     {trimRow(supportParticipants, [myUserId]).map((p) => (
                       <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.support.pill}`}>
-                        <Text className={`text-xs ${CONFIDENCE_STYLES.support.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
+                        <Text className={`text-xs ${CONFIDENCE_STYLES.support.pillText} ${nameWeight(p.user_id)}`}>
+                          {participantLabel(p)}
+                          {participantKeys.get(p.user_id) ? ` (${participantKeys.get(p.user_id)})` : null}
+                        </Text>
                       </View>
                     ))}
                     {moreToggle(supportParticipants.length)}
