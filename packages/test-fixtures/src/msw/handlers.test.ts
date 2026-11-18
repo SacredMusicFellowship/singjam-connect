@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
-import { installMockServer, isLocalRequest, mockCalls, mockServer } from "./node";
+import { installMockServer, isLocalRequest, mockCalls, mockServer, takeUnmocked } from "./node";
 
 installMockServer({ afterEach, afterAll });
 
@@ -71,6 +71,10 @@ describe("music sources", () => {
     expect((await json("https://secondhandsongs.com/search/work?title=x&performer=y")).resultPage).toEqual([]);
     expect((await json("https://query.wikidata.org/sparql?query=x&format=json")).results.bindings).toEqual([]);
     expect((await json("https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&format=json")).toptags.tag[0].name).toBe("folk");
+    expect(await json("https://lrclib.net/api/search?track_name=x&artist_name=y")).toEqual([]);
+    expect((await json("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srsearch=x")).query.search).toEqual([]);
+    expect((await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/X")).status).toBe(404);
+    expect(await (await fetch("https://hymnary.org/search?qu=x&export=csv")).text()).toBe("");
   });
 });
 
@@ -98,13 +102,22 @@ describe("OpenAI", () => {
   });
 });
 
+describe("Anthropic", () => {
+  it("answers messages with an empty JSON object", async () => {
+    const res = await json("https://api.anthropic.com/v1/messages?beta=true", post({ model: "claude-opus-5-5", messages: [] }));
+    expect(res.content[0]).toEqual({ type: "text", text: "{}" });
+    expect(mockCalls("anthropic")).toHaveLength(1);
+  });
+});
+
 describe("safety net", () => {
-  it("blocks any outside request without a handler", async () => {
-    // MSW turns the thrown error into a 500 and prints it, so the test's code sees a failure and
-    // the request never leaves the machine.
+  it("blocks any outside request without a handler and records it so the test fails", async () => {
+    // MSW turns the thrown error into a 500, so the request never leaves the machine, and the
+    // afterEach hook fails the test. This test takes the record itself so it can pass.
     const res = await fetch("https://api.example.org/anything");
     expect(res.status).toBe(500);
     expect(await res.text()).toContain("Unmocked outside request: GET https://api.example.org/anything");
+    expect(takeUnmocked()).toEqual(["GET https://api.example.org/anything"]);
   });
 
   it("lets local services through", () => {
