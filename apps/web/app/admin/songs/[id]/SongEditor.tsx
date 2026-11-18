@@ -573,6 +573,7 @@ export default function SongEditor({
         ),
       });
       if (saveError) throw saveError;
+      await fetch("/api/songs/revalidate", { method: "POST" }).catch(() => {});
 
       setSlug(newSlug ?? slug);
       setSavedSnapshot(formSnapshot);
