@@ -15,7 +15,11 @@ export type MockService =
   | "secondhandsongs"
   | "wikidata"
   | "activecampaign"
-  | "expo-push";
+  | "expo-push"
+  | "anthropic"
+  | "lrclib"
+  | "wikipedia"
+  | "hymnary";
 
 export type MockCall = { service: MockService; method: string; url: string; body: string };
 
@@ -33,4 +37,16 @@ export function mockCalls(service?: MockService): MockCall[] {
 
 export function resetMockCalls(): void {
   calls.length = 0;
+}
+
+// Outside requests that had no handler. MSW answers them with a 500 so they never leave the
+// machine; the test runner hook then fails the test that made them.
+const unmocked: string[] = [];
+
+export function recordUnmocked(request: Request): void {
+  unmocked.push(`${request.method} ${request.url}`);
+}
+
+export function takeUnmocked(): string[] {
+  return unmocked.splice(0);
 }
