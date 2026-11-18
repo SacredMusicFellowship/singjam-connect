@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FILTER_DIM_TAG_TYPE, fetchAllRows, loadSongFilterMeta, songCardPills, type FilterableSong, type MultiFilterDim } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useSongSearch } from "@/hooks/useSongSearch";
@@ -165,6 +165,16 @@ export default function SetSongPanel({
     return () => { supabase.removeChannel(channel); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setId, isSolo]);
+
+  // "You" is bold when you lead a song: ask again when your confidence changes
+  // (from a set row, from here, or reloaded after coming back to the page).
+  const repertoireSeenRef = useRef(userRepertoire);
+  useEffect(() => {
+    if (repertoireSeenRef.current === userRepertoire) return;
+    repertoireSeenRef.current = userRepertoire;
+    fetchSharedSongs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRepertoire]);
 
   useEffect(() => {
     setSortMode("popular");
