@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { canRemoveSetSong, createLatestWinsQueue, fetchAllRows, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
+import { canRemoveSetSong, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -40,6 +40,10 @@ const SetSongPanel = dynamic(() => import("@/components/SetSongPanel"), {
 
 const EMPTY_KEYS = new Map<string, string>();
 
+// Server renders this tab has already shown. The back button replays a cached
+// render, so a render seen before means the page may be out of date.
+const seenRenders = new Set<string>();
+
 export default function SetDetail({
   set,
   initialSongs,
@@ -55,6 +59,7 @@ export default function SetDetail({
   songKnowledge: initialSongKnowledge = [],
   canAccessJam = false,
   jamShortCode = null,
+  renderId,
 }: {
   set: SetData;
   initialSongs: Song[];
@@ -70,6 +75,7 @@ export default function SetDetail({
   songKnowledge?: SongKnowledge[];
   canAccessJam?: boolean;
   jamShortCode?: string | null;
+  renderId?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -149,7 +155,7 @@ export default function SetDetail({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
+  function loadUserRepertoire() {
     if (!currentUserId) return;
     supabase
       .from("user_songs")
@@ -158,8 +164,51 @@ export default function SetDetail({
       .then(({ data }) => {
         setUserRepertoire(new Map((data ?? []).map((r: any) => [r.song_id, r.confidence])));
       });
+  }
+
+  useEffect(() => {
+    loadUserRepertoire();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
+
+  // Changes made while this page wasn't showing (another tab, the song page,
+  // a dropped connection) don't arrive live, so coming back asks the server
+  // again. The current list stays on screen until the new one arrives.
+  const refetchGateRef = useRef(createRefetchGate());
+  function refreshFromServer() {
+    if (!refetchGateRef.current()) return;
+    router.refresh();
+    loadUserRepertoire();
+  }
+
+  useEffect(() => {
+    if (renderId) {
+      if (seenRenders.has(renderId)) refreshFromServer();
+      seenRenders.add(renderId);
+    }
+    const onVisible = () => { if (document.visibilityState === "visible") refreshFromServer(); };
+    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) refreshFromServer(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A refresh brings new server props: take them, keeping any field whose save
+  // is still settling.
+  const propsSongsRef = useRef(initialSongs);
+  useEffect(() => {
+    if (propsSongsRef.current === initialSongs) return;
+    propsSongsRef.current = initialSongs;
+    setSongs((prev) => mergeRefetchedSetSongs(prev, initialSongs, syncRef.current.isPending));
+    setSongKnowledge(initialSongKnowledge);
+    setCollaborators(initialCollaborators);
+    setAccessRequests(initialAccessRequests);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSongs]);
 
   useEffect(() => {
     if (!setMenuOpen) return;
@@ -454,7 +503,13 @@ export default function SetDetail({
       );
     }
 
-    channel.subscribe();
+    // Rejoining after a dropped connection: anything sent meanwhile was missed.
+    let joined = false;
+    channel.subscribe((status) => {
+      if (status !== "SUBSCRIBED") return;
+      if (joined) refreshFromServer();
+      joined = true;
+    });
 
     return () => { supabase.removeChannel(channel); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
