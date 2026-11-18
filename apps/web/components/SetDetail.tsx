@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { canRemoveSetSong, createLatestWinsQueue, fetchAllRows, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
+import { canRemoveSetSong, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeOwnKnowledge, mergeRefetchedSetSongs, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import SearchInput from "@/components/SearchInput";
@@ -40,6 +40,10 @@ const SetSongPanel = dynamic(() => import("@/components/SetSongPanel"), {
 
 const EMPTY_KEYS = new Map<string, string>();
 
+// Server renders this tab has already shown. The back button replays a cached
+// render, so a render seen before means the page may be out of date.
+const seenRenders = new Set<string>();
+
 export default function SetDetail({
   set,
   initialSongs,
@@ -55,6 +59,7 @@ export default function SetDetail({
   songKnowledge: initialSongKnowledge = [],
   canAccessJam = false,
   jamShortCode = null,
+  renderId,
 }: {
   set: SetData;
   initialSongs: Song[];
@@ -70,6 +75,7 @@ export default function SetDetail({
   songKnowledge?: SongKnowledge[];
   canAccessJam?: boolean;
   jamShortCode?: string | null;
+  renderId?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -149,17 +155,63 @@ export default function SetDetail({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
+  // The viewer's songs, paged (a full repertoire passes 1,000 rows). Their own
+  // part and key on this set come from the same read, so a key set on a song
+  // page shows as soon as you're back, before the full refresh lands.
+  async function loadUserRepertoire() {
     if (!currentUserId) return;
-    supabase
-      .from("user_songs")
-      .select("song_id, confidence")
-      .eq("user_id", currentUserId)
-      .then(({ data }) => {
-        setUserRepertoire(new Map((data ?? []).map((r: any) => [r.song_id, r.confidence])));
-      });
+    const userId = currentUserId;
+    const mine = await fetchAllRows<{ song_id: string; confidence: string; key_note: string | null }>((from, to) =>
+      supabase.from("user_songs").select("song_id, confidence, key_note").eq("user_id", userId).order("song_id").range(from, to)
+    ).catch(() => null);
+    if (!mine) return;
+    setUserRepertoire(new Map(mine.map((r) => [r.song_id, r.confidence])));
+    setSongKnowledge((prev) => mergeOwnKnowledge(prev, userId, mine, songIdsRef.current, participantIdsRef.current.has(userId)) as SongKnowledge[]);
+  }
+
+  useEffect(() => {
+    loadUserRepertoire();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
+
+  // Changes made while this page wasn't showing (another tab, the song page,
+  // a dropped connection) don't arrive live, so coming back asks the server
+  // again. The current list stays on screen until the new one arrives.
+  const refetchGateRef = useRef(createRefetchGate());
+  function refreshFromServer() {
+    if (!refetchGateRef.current()) return;
+    router.refresh();
+    loadUserRepertoire();
+  }
+
+  useEffect(() => {
+    if (renderId) {
+      if (seenRenders.has(renderId)) refreshFromServer();
+      seenRenders.add(renderId);
+    }
+    const onVisible = () => { if (document.visibilityState === "visible") refreshFromServer(); };
+    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) refreshFromServer(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A refresh brings new server props: take them, keeping any field whose save
+  // is still settling.
+  const propsSongsRef = useRef(initialSongs);
+  useEffect(() => {
+    if (propsSongsRef.current === initialSongs) return;
+    propsSongsRef.current = initialSongs;
+    setSongs((prev) => mergeRefetchedSetSongs(prev, initialSongs, syncRef.current.isPending));
+    setSongKnowledge(initialSongKnowledge);
+    setCollaborators(initialCollaborators);
+    setAccessRequests(initialAccessRequests);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSongs]);
 
   useEffect(() => {
     if (!setMenuOpen) return;
@@ -199,7 +251,7 @@ export default function SetDetail({
         const { data } = await supabase
           .from("songs")
           .select(
-            "id, title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url)"
+            "id, title, display_artist, byline, card, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url)"
           )
           .in("id", ids);
         if (!data) return;
@@ -343,7 +395,7 @@ export default function SetDetail({
             supabase
               .from("set_songs")
               .select(
-                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))"
+                "id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, card, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))"
               )
               .eq("id", row.id)
               .single(),
@@ -454,7 +506,13 @@ export default function SetDetail({
       );
     }
 
-    channel.subscribe();
+    // Rejoining after a dropped connection: anything sent meanwhile was missed.
+    let joined = false;
+    channel.subscribe((status) => {
+      if (status !== "SUBSCRIBED") return;
+      if (joined) refreshFromServer();
+      joined = true;
+    });
 
     return () => { supabase.removeChannel(channel); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
