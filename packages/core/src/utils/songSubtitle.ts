@@ -84,10 +84,11 @@ function trimTrailingPunctuation(text: string): string {
   return text.slice(0, end).trim();
 }
 
-// Its first line, when that says more than the title.
-function firstLineCredit(identity: CardIdentity, title: string): CardCredit | null {
+// Its first line, when that says more than the title, or whenever a song
+// editor chose it.
+function firstLineCredit(identity: CardIdentity, title: string, chosen = false): CardCredit | null {
   const line = trimTrailingPunctuation(identity?.first_line ?? "");
-  if (!line || plain(title).includes(plain(line))) return null;
+  if (!line || (!chosen && plain(title).includes(plain(line)))) return null;
   return { text: `“${line}…”`, link: null };
 }
 
@@ -141,7 +142,7 @@ export function songCardCredits(o: {
     };
     case "tune": return { writers, line: one(tuneCredit(o.identity)) };
     case "scripture": return { writers, line: one(scriptureCredit(o.identity)) };
-    case "first_line": return { writers, line: one(firstLineCredit(o.identity, o.title)) };
+    case "first_line": return { writers, line: one(firstLineCredit(o.identity, o.title, true)) };
     case "none": return { writers, line: [] };
   }
   if (!(o.knownByRecording ?? knownByRecording(o.byline, o.displayArtist))) {

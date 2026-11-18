@@ -83,6 +83,11 @@ describe("songCardCredits", () => {
         { text: "Woody Guthrie", link: { kind: "person", key: "Woody Guthrie" } },
       ]);
     });
+    it("shows a chosen first line even when it repeats the title", () => {
+      const sevivon = { title: "Sevivon Sov, Sov, Sov", byline: "Traditional · Jewish", displayArtist: null, composers: ["Traditional"], cultures: [], recordingArtists: [], identity: { first_line: "Sevivon sov sov sov" } };
+      expect(songCardCredits({ ...sevivon, cardLine: "first_line" }).line).toEqual([{ text: "“Sevivon sov sov sov…”", link: null }]);
+      expect(songCardCredits({ ...sevivon, cardLine: null, knownByRecording: false }).line).toEqual([]);
+    });
     it("shows only the chosen one of tune, scripture and first line, or nothing", () => {
       expect(songCardCredits({ ...base, cardLine: "tune" }).line[0].text).toBe("Old Hymn");
       expect(songCardCredits({ ...base, cardLine: "first_line" }).line[0].text).toBe("“As I was walking that ribbon of highway…”");
