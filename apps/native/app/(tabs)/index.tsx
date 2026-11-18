@@ -551,7 +551,7 @@ export default function RepertoireScreen() {
   // every sort or filter change is the main reason Repertoire felt heavier
   // than Search for the same interaction.
   const listFooter = useMemo(() => searching ? (
-    searchLoading ? null : (
+    searchLoading ? undefined : (
       <View className="mx-4 mt-4">
         {/* Collapsed behind a button like web's SubmitSongForm — the expanded
             form is a lot of vertical space for a rare action. */}
@@ -592,7 +592,7 @@ export default function RepertoireScreen() {
         </View>
       )}
     </View>
-  ) : null, [
+  ) : undefined, [
     searching, searchLoading, submitOpen, query, router,
     showSuggestions, suggestions, addFromSuggestion, viewSong,
     suggestionsLoadingMore,
@@ -672,7 +672,7 @@ export default function RepertoireScreen() {
           ListEmptyComponent={
             // While searching, the result count and the "add a missing song" panel
             // already cover the no-results case, as they do on web.
-            searching ? null : (
+            searching ? undefined : (
               <View className="mx-4 mt-4 rounded-2xl border border-zinc-200 bg-white p-6 items-center">
                 {confidenceFilter !== 'all' || extFilterCount > 0 ? (
                   <>

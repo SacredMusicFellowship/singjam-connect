@@ -434,7 +434,7 @@ export default function SetsScreen() {
                   onAction={() => router.push('/songs' as any)}
                 />
               </View>
-            ) : null
+            ) : undefined
           }
           ListFooterComponent={
             !authenticated ? (
@@ -447,7 +447,7 @@ export default function SetsScreen() {
                   onAction={() => router.push('/(auth)/sign-in?mode=signup' as any)}
                 />
               </View>
-            ) : null
+            ) : undefined
           }
           stickySectionHeadersEnabled={false}
         />

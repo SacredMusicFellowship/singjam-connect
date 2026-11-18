@@ -216,7 +216,7 @@ function AddSongModal({
             ListEmptyComponent={
               query.length > 0 ? (
                 <Text className="text-center text-zinc-400 mt-12">No songs found</Text>
-              ) : null
+              ) : undefined
             }
           />
         )}

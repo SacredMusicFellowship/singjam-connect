@@ -328,7 +328,7 @@ export default function SongLibraryScreen() {
         </View>
       )}
     </View>
-  ) : null;
+  ) : undefined;
 
   return (
     <>
@@ -370,7 +370,7 @@ export default function SongLibraryScreen() {
             ListFooterComponent={listFooter}
             contentContainerStyle={{ paddingBottom: 32 }}
             ListEmptyComponent={
-              searchLoading ? null : (
+              searchLoading ? undefined : (
                 <View className="mx-4 rounded-2xl border border-zinc-200 bg-white p-5">
                   <Text className="text-sm text-zinc-600">
                     {!searching

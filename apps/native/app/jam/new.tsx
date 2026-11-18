@@ -131,7 +131,7 @@ function LocationModal({
                 <View className="items-center pt-12">
                   <Text className="text-zinc-400">No results</Text>
                 </View>
-              ) : null
+              ) : undefined
             }
           />
         )}
