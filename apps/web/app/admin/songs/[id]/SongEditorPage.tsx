@@ -14,6 +14,7 @@ export const getSong = cache(async (id: string) => {
     .select(`
       *,
       byline,
+      byline_origin,
       song_tags(context, tags(id, name, type)),
       song_composers(person_id),
       song_lyricists(person_id),

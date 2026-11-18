@@ -84,6 +84,7 @@ type Song = {
   text_id?: string | null;
   tune_id?: string | null;
   byline?: string | null;
+  byline_origin?: { text?: string | null; kind?: string | null; key?: string | null } | null;
   song_tags: SongTagRow[];
   song_composers: { person_id: string }[];
   song_lyricists: { person_id: string }[];
@@ -309,6 +310,10 @@ export default function SongEditor({
       tune: allTunes.find((t) => t.id === tuneId)?.tune_label ?? null,
       source: textSource,
       first_line: firstLine || null,
+      // Where a traditional song comes from, as last saved (song_origins, migration 233).
+      origin: song?.byline_origin?.text ?? null,
+      origin_kind: song?.byline_origin?.kind ?? null,
+      origin_key: song?.byline_origin?.key ?? null,
     },
   };
   // Each choice with the line it would show; Automatic follows the saved song until you save.
@@ -573,6 +578,7 @@ export default function SongEditor({
         ),
       });
       if (saveError) throw saveError;
+      await fetch("/api/songs/revalidate", { method: "POST" }).catch(() => {});
 
       setSlug(newSlug ?? slug);
       setSavedSnapshot(formSnapshot);
