@@ -66,6 +66,34 @@ describe("songCardCredits", () => {
     expect(c.writers).toEqual([{ text: "Trad. · English", link: { kind: "culture", key: "English", traditional: true } }]);
     expect(c.line).toEqual([{ text: "“Oh, say were you ever in Rio Grande…”", link: null }]);
   });
+  describe("a chosen card line", () => {
+    const base = {
+      title: "This Land Is Your Land", byline: "Woody Guthrie", displayArtist: "Woody Guthrie", composers: ["Woody Guthrie", "Traditional"], cultures: ["American"],
+      recordingArtists: [{ name: "Woody Guthrie", year: 1944 }],
+      identity: { tune: "Old Hymn", tune_slug: "old-hymn", source: null, first_line: "As I was walking that ribbon of highway" },
+    };
+    it("shows the recordings, overriding the byline", () => {
+      expect(songCardCredits({ ...base, cardLine: "recordings" }).line.map((c) => c.text)).toEqual(["Woody Guthrie"]);
+    });
+    it("moves the writers in full under the title, Traditional with its culture", () => {
+      const c = songCardCredits({ ...base, cardLine: "writers" });
+      expect(c.writers).toEqual([]);
+      expect(c.line).toEqual([
+        { text: "Traditional · American", link: { kind: "culture", key: "American", traditional: true } },
+        { text: "Woody Guthrie", link: { kind: "person", key: "Woody Guthrie" } },
+      ]);
+    });
+    it("shows only the chosen one of tune, scripture and first line, or nothing", () => {
+      expect(songCardCredits({ ...base, cardLine: "tune" }).line[0].text).toBe("Old Hymn");
+      expect(songCardCredits({ ...base, cardLine: "first_line" }).line[0].text).toBe("“As I was walking that ribbon of highway…”");
+      expect(songCardCredits({ ...base, cardLine: "scripture" }).line).toEqual([]);
+      expect(songCardCredits({ ...base, cardLine: "none" }).line).toEqual([]);
+    });
+    it("reads the saved choice from the card identity, and an explicit null means automatic", () => {
+      expect(songCardCredits({ ...base, identity: { ...base.identity, line: "first_line" } }).line[0].text).toBe("“As I was walking that ribbon of highway…”");
+      expect(songCardCredits({ ...base, identity: { ...base.identity, line: "first_line" }, cardLine: null, knownByRecording: true }).line[0].text).toBe("Woody Guthrie");
+    });
+  });
 });
 
 describe("bylineCredits", () => {
@@ -91,11 +119,17 @@ describe("bylineCredits", () => {
 describe("songRowText", () => {
   it("drops recording years, which only cards show", () => {
     const t = songRowText({ title: "Moondance", byline: "Van Morrison", displayArtist: "Van Morrison", composers: ["Van Morrison"], cultures: [], recordingArtists: [{ name: "Van Morrison", year: 1970 }, { name: "Michael Bublé", year: 2003 }] });
-    expect(t).toEqual({ writers: "V. Morrison", line: "Van Morrison, Michael Bublé" });
+    expect(t).toMatchObject({ writers: "V. Morrison", line: "Van Morrison, Michael Bublé" });
   });
   it("leads with the show and keeps the identity line for songs not known by a recording", () => {
     expect(songRowText({ title: "x", displayArtist: "Julie Andrews", byline: "Julie Andrews", composers: [], cultures: [], recordingArtists: [], productions: ["The Sound of Music"] }).line).toBe("from The Sound of Music · Julie Andrews");
     expect(songRowText({ title: "Rio Grande", byline: "Traditional · English", displayArtist: null, composers: ["Traditional"], cultures: ["English"], recordingArtists: [], identity: { first_line: "Oh, say were you ever in Rio Grande?" } }))
-      .toEqual({ writers: "Trad. · English", line: "“Oh, say were you ever in Rio Grande…”" });
+      .toMatchObject({ writers: "Trad. · English", line: "“Oh, say were you ever in Rio Grande…”" });
+  });
+  it("hands the show titles and the credits over separately for italics", () => {
+    const r = songRowText({ title: "My Shot", displayArtist: "Original Broadway Cast", composers: ["Lin-Manuel Miranda"], cultures: [], recordingArtists: [{ name: "Original Broadway Cast", year: 2015 }], byline: "Original Broadway Cast", productions: ["Hamilton"] });
+    expect(r.shows).toEqual(["Hamilton"]);
+    expect(r.credits).toBe("Original Broadway Cast");
+    expect(r.line).toBe("from Hamilton · Original Broadway Cast");
   });
 });
