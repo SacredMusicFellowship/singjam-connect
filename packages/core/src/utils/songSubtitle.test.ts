@@ -75,9 +75,9 @@ describe("songCardCredits", () => {
     it("shows the recordings, overriding the byline", () => {
       expect(songCardCredits({ ...base, cardLine: "recordings" }).line.map((c) => c.text)).toEqual(["Woody Guthrie"]);
     });
-    it("moves the writers in full under the title, Traditional with its culture", () => {
+    it("puts the writers in full under the title and keeps them in brackets", () => {
       const c = songCardCredits({ ...base, cardLine: "writers" });
-      expect(c.writers).toEqual([]);
+      expect(c.writers.map((w) => w.text)).toEqual(["W. Guthrie"]); // its tune carries "Traditional"
       expect(c.line).toEqual([
         { text: "Traditional · American", link: { kind: "culture", key: "American", traditional: true } },
         { text: "Woody Guthrie", link: { kind: "person", key: "Woody Guthrie" } },

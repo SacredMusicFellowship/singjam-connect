@@ -134,7 +134,7 @@ export function songCardCredits(o: {
   switch (chosen) {
     case "recordings": return { writers, line: recordings() };
     case "writers": return {
-      writers: [],
+      writers,
       line: [
         ...(named.length < o.composers.length ? [traditionalCredit("Traditional", origin)] : []),
         ...named.map((name): CardCredit => ({ text: name, link: { kind: "person", key: name } })),
