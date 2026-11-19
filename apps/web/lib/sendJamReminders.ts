@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Resend } from "resend";
 import { jamReminderHtml } from "../emails/jam-reminder";
-import { jamPath } from "@singjam/core";
+import { jamPath, setAccessFor, setPath } from "@singjam/core";
 
 // Sent from the events inbox like other event logistics (see lib/resend.ts). The
 // Netlify function passes a plain Resend client, so the shared reply-to is not
@@ -110,6 +110,23 @@ export async function sendJamReminders(admin: SupabaseClient, resend: Resend): P
       for (const r of rsvps ?? []) if (r.user_id) userIdSet.add(r.user_id);
       for (const i of pendingInvites ?? []) if (i.invited_user_id) userIdSet.add(i.invited_user_id);
 
+      // The jam's set list (one per jam). Each person sees it only if they can
+      // open it, and is asked to add songs only if they're allowed to.
+      const { data: set } = await admin
+        .from("sets")
+        .select("id, short_code, owner_user_id, link_sharing")
+        .eq("jam_id", jam.id)
+        .maybeSingle();
+      const roles = new Map<string, string>();
+      if (set) {
+        const { data: collaborators } = await admin
+          .from("set_collaborators")
+          .select("user_id, role")
+          .eq("set_id", set.id)
+          .eq("status", "accepted");
+        for (const c of collaborators ?? []) roles.set(c.user_id, c.role);
+      }
+
       const profilesAndEmails = await Promise.all(
         [...userIdSet].map(async (user_id) => {
           const [{ data: profile }, { data: authData }] = await Promise.all([
@@ -119,11 +136,13 @@ export async function sendJamReminders(admin: SupabaseClient, resend: Resend): P
           return {
             email: authData?.user?.email ?? null,
             name: (profile as any)?.display_name ?? (profile as any)?.username ?? null,
+            setAccess: set ? setAccessFor(set, user_id, roles.get(user_id) ?? null) : null,
           };
         })
       );
 
-      const recipients = profilesAndEmails.filter((r) => r.email !== null) as { email: string; name: string | null }[];
+      const recipients = profilesAndEmails.filter((r) => r.email !== null) as (typeof profilesAndEmails[number] & { email: string })[];
+      const setUrl = set ? `https://singjam.org${setPath(set)}` : null;
 
       if (recipients.length === 0) {
         // Nothing to send; record so we don't reprocess this jam every hour.
@@ -142,6 +161,8 @@ export async function sendJamReminders(admin: SupabaseClient, resend: Resend): P
           startsAt: jam.starts_at,
           timezone: jam.timezone,
           address,
+          setUrl: r.setAccess?.canView ? setUrl : null,
+          canAddSongs: r.setAccess?.canAdd ?? false,
         }),
       }));
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canContributeToSet, canManageSet, canRemoveSetSong, SET_ROLE_DESCRIPTIONS, setsAcceptingSongs } from "./setRoles";
+import { canContributeToSet, canManageSet, canRemoveSetSong, SET_ROLE_DESCRIPTIONS, setAccessFor, setsAcceptingSongs } from "./setRoles";
 
 describe("canContributeToSet", () => {
   it("allows editors and co-owners", () => {
@@ -78,5 +78,21 @@ describe("canRemoveSetSong", () => {
 describe("SET_ROLE_DESCRIPTIONS", () => {
   it("doesn't promise editors the owner-only song controls", () => {
     expect(SET_ROLE_DESCRIPTIONS.editor).not.toMatch(/reorder|key|played|notes|mark leaders/i);
+  });
+});
+
+describe("setAccessFor", () => {
+  const set = { owner_user_id: "owner", link_sharing: "private" };
+  it("lets the owner open and add", () => {
+    expect(setAccessFor(set, "owner", null)).toEqual({ canView: true, canAdd: true });
+  });
+  it("lets editors and co-owners add, and viewers only open", () => {
+    expect(setAccessFor(set, "u", "editor")).toEqual({ canView: true, canAdd: true });
+    expect(setAccessFor(set, "u", "co-owner")).toEqual({ canView: true, canAdd: true });
+    expect(setAccessFor(set, "u", "viewer")).toEqual({ canView: true, canAdd: false });
+  });
+  it("lets someone who isn't a collaborator open only a public set, and never add", () => {
+    expect(setAccessFor(set, "u", null)).toEqual({ canView: false, canAdd: false });
+    expect(setAccessFor({ ...set, link_sharing: "public" }, "u", null)).toEqual({ canView: true, canAdd: false });
   });
 });

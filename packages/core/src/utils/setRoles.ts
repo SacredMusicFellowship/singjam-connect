@@ -16,6 +16,20 @@ export function setsAcceptingSongs<T extends { role?: string | null }>(sets: T[]
   return sets.filter((s) => canContributeToSet(s.role));
 }
 
+// What one person can do with a set: open it (its owner, an accepted
+// collaborator, or anyone when link sharing is public) and add songs to it (its
+// owner, editors and co-owners). Pass the person's accepted collaborator role,
+// or null when they aren't one.
+export function setAccessFor(
+  set: { owner_user_id: string | null; link_sharing?: string | null },
+  userId: string,
+  collaboratorRole: string | null,
+): { canView: boolean; canAdd: boolean } {
+  const isOwner = set.owner_user_id === userId;
+  const canAdd = isOwner || (collaboratorRole != null && canContributeToSet(collaboratorRole));
+  return { canView: isOwner || collaboratorRole != null || set.link_sharing === "public", canAdd };
+}
+
 // Reordering, removing, keys, played, notes and choosing other people as leader
 // are for the owner and co-owners. Event ticket holders join as editors, so an
 // editor is usually a guest in the crowd, not someone running the set.
