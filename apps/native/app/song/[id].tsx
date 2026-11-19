@@ -29,6 +29,8 @@ import {
   type CreditTextRef,
   type CreditTune,
   bylineCredits,
+  songOrigin,
+  type SongOrigin,
   formatJammers,
   songTagNames,
   TAG_TYPE_LABELS,
@@ -69,12 +71,12 @@ type SongDetail = {
   title: string;
   display_artist: string | null;
   byline: string | null;
+  origin: SongOrigin | null;
   first_line: string | null;
   hook: string | null;
   notes: string | null;
   genius_url: string | null;
   chord_chart_url: string | null;
-  chord_chart_pending: boolean;
   enrichment_started_at?: string | null;
   enrichment_finished_at?: string | null;
   youtube_url: string | null;
@@ -292,8 +294,8 @@ export default function SongDetailScreen() {
       supabase
         .from('songs')
         .select(`
-          id, slug, title, display_artist, byline, first_line, hook, notes,
-          genius_url, chord_chart_url, chord_chart_pending, youtube_url,
+          id, slug, title, display_artist, byline, byline_origin, first_line, hook, notes,
+          genius_url, chord_chart_url, youtube_url,
           year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_alternate_titles(title),
           song_composers(people(name, slug)),
@@ -343,12 +345,12 @@ export default function SongDetailScreen() {
       title: s.title ?? '',
       display_artist: s.display_artist ?? null,
       byline: s.byline ?? null,
+      origin: songOrigin(s.byline_origin),
       first_line: s.first_line ?? null,
       hook: s.hook ?? null,
       notes: s.notes ?? null,
       genius_url: s.genius_url ?? null,
       chord_chart_url: s.chord_chart_url ?? null,
-      chord_chart_pending: !!s.chord_chart_pending,
       enrichment_started_at: s.enrichment_started_at ?? null,
       enrichment_finished_at: s.enrichment_finished_at ?? null,
       youtube_url: s.youtube_url ?? null,
@@ -568,7 +570,7 @@ export default function SongDetailScreen() {
   const creditLines = songCreditLines({
     composers: song.composers.map((name) => ({ name, slug: song.personSlugs[name] ?? null })),
     lyricists: song.lyricists.map((name) => ({ name, slug: song.personSlugs[name] ?? null })),
-    musicCultures: song.musicCultures, lyricsCultures: song.lyricsCultures,
+    musicCultures: song.musicCultures, lyricsCultures: song.lyricsCultures, origin: song.origin,
     text: song.textRef, tune: song.tuneRef,
   });
   const hasMusicalProps = tonalityPills.length > 0 || meterPills.length > 0 || !!song.vibe;
@@ -714,7 +716,7 @@ export default function SongDetailScreen() {
             <Text className="text-base text-slate-500 mt-0.5">
               <CreditText
                 separator=""
-                credits={bylineCredits(song.byline, { people: [...song.composers, ...song.lyricists], artists: song.recordingArtists.map((a) => a.name) })}
+                credits={bylineCredits(song.byline, { people: [...song.composers, ...song.lyricists], artists: song.recordingArtists.map((a) => a.name) }, song.origin)}
                 onOpen={(path) => openBrowse(nativeBrowseHref(path))}
                 linkClassName="text-amber-700"
               />
@@ -762,9 +764,8 @@ export default function SongDetailScreen() {
           <ChordChartControls
             songId={song.id}
             url={song.chord_chart_url}
-            pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
             signedIn={!!myUserId}
-            onChanged={({ url, pending }) => setSong((prev) => (prev ? { ...prev, chord_chart_url: url, chord_chart_pending: pending } : prev))}
+            onChanged={(url) => setSong((prev) => (prev ? { ...prev, chord_chart_url: url } : prev))}
           />
           {myConfidence && myUserId ? <MySongNotes songId={song.id} userId={myUserId} className="mt-3" /> : null}
           {song.chord_chart_url ? <UgBackTip className="mt-3" /> : null}

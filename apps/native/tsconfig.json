@@ -9,7 +9,11 @@
       "@singjam/core": [
         "../../packages/core/src/index.ts"
       ]
-    }
+    },
+    "types": [
+      "jest",
+      "node"
+    ]
   },
   "include": [
     "**/*.ts",
@@ -18,5 +22,9 @@
     "expo-env.d.ts",
     ".expo/types/**/*.ts",
     "nativewind-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "e2e"
   ]
 }

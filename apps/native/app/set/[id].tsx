@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, Modal, FlatList, TextInput,
-  KeyboardAvoidingView, Platform, Linking, useWindowDimensions,
+  KeyboardAvoidingView, Platform, Linking, useWindowDimensions, AppState,
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WIDE_BREAKPOINT } from '@/components/BrandHeader';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
@@ -13,15 +13,16 @@ import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, fetchAllRows, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, songSubtitle } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, cardRowText, songSubtitle, attachSongCards } from '@singjam/core';
 import SubtitleText from '@/components/SubtitleText';
+import SubmitMissingSong from '@/components/SubmitMissingSong';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
 import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import RolePill from '@/components/RolePill';
-import SongRowTitle, { type SongRowCard } from '@/components/SongRowTitle';
+import SongRowTitle, { SongRowLine, type SongRowCard } from '@/components/SongRowTitle';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -64,6 +65,8 @@ type SetSong = {
     title: string;
     display_artist: string | null;
     byline?: string | null;
+    // The same card data as every other song list (songs.card, migration 234); absent on a row just added.
+    card?: SongRowCard | null;
     chord_chart_url: string | null;
     tonality?: string | null;
     song_productions?: { productions: { name: string } | null }[];
@@ -98,6 +101,7 @@ function AddSongModal({
   const [results, setResults] = useState<SongSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [submitOpen, setSubmitOpen] = useState(false);
 
   const { id: setId } = useLocalSearchParams<{ id: string }>();
 
@@ -106,6 +110,7 @@ function AddSongModal({
   }, [visible]);
 
   useEffect(() => {
+    setSubmitOpen(false);
     if (!query.trim()) { setResults([]); return; }
     const timer = setTimeout(() => search(query.trim()), 300);
     return () => clearTimeout(timer);
@@ -130,7 +135,7 @@ function AddSongModal({
     });
   }
 
-  async function addSong(song: SongSearchResult) {
+  async function addSong(song: Pick<SongSearchResult, 'song_id' | 'title'>) {
     setPendingId(song.song_id);
     const { data: mine } = userId
       ? await supabase.from('user_songs').select('confidence').eq('user_id', userId).eq('song_id', song.song_id).maybeSingle()
@@ -216,7 +221,26 @@ function AddSongModal({
             ListEmptyComponent={
               query.length > 0 ? (
                 <Text className="text-center text-zinc-400 mt-12">No songs found</Text>
-              ) : null
+              ) : undefined
+            }
+            // As on web: look up a song that isn't in the library, confirm it, and add it to the set.
+            ListFooterComponent={
+              query.trim() ? (
+                submitOpen ? (
+                  <SubmitMissingSong
+                    defaultTitle={query.trim()}
+                    forSet
+                    onCreated={(songId, title) => { setSubmitOpen(false); addSong({ song_id: songId, title }); }}
+                  />
+                ) : (
+                  <View className="items-center mx-4 mt-4 mb-8 rounded-2xl border border-dashed border-zinc-300 px-4 py-5">
+                    <Text className="text-sm text-zinc-500">Can't find your song?</Text>
+                    <TouchableOpacity onPress={() => setSubmitOpen(true)} className="mt-3 rounded-full bg-zinc-800 px-4 py-2.5">
+                      <Text className="text-sm font-semibold text-white">Add a missing song</Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              ) : undefined
             }
           />
         )}
@@ -276,6 +300,9 @@ function SongRow({
   const productions = (song.songs.song_productions ?? [])
     .map((sp) => sp.productions?.name)
     .filter(Boolean) as string[];
+  const card = song.songs.card;
+  // Writers in brackets and the line under the title, by the same rules as every other song list (web's SetSongRow).
+  const row = card ? cardRowText({ title: song.songs.title, displayArtist: song.songs.display_artist, productions, card }) : null;
 
   // Leader/support assignments are only shown to collaborators; public viewers
   // see none. Mirrors web SetSongRow.
@@ -418,9 +445,18 @@ function SongRow({
         <View className="flex-1 min-w-0">
           <View className="flex-row items-start">
             <View className="flex-1 min-w-0">
-              <Text className="text-zinc-900 font-medium" numberOfLines={2}>{song.songs.title}</Text>
+              <Text numberOfLines={2}>
+                <Text className="text-zinc-900 font-medium">{song.songs.title}</Text>
+                {row?.writers ? <Text className="text-zinc-400 text-sm">{` (${row.writers})`}</Text> : null}
+              </Text>
               <View className="flex-row items-center mt-0.5">
-                {songSubtitle(productions, artist) && (
+                {row ? (
+                  (row.shows.length > 0 || row.credits) ? (
+                    <View className="flex-shrink mr-3">
+                      <SongRowLine shows={row.shows} credits={row.credits} className="text-zinc-500 text-sm" />
+                    </View>
+                  ) : null
+                ) : songSubtitle(productions, artist) && (
                   <Text className="text-zinc-500 text-sm flex-shrink mr-3" numberOfLines={1}>
                     <SubtitleText productions={productions} artist={artist} />
                   </Text>
@@ -556,7 +592,10 @@ function SongRow({
                   <View className="flex-row flex-wrap flex-1">
                     {trimRow(supportParticipants, [myUserId]).map((p) => (
                       <View key={p.user_id} className={`rounded-full px-2 py-0.5 mr-1 mb-1 ${CONFIDENCE_STYLES.support.pill}`}>
-                        <Text className={`text-xs ${CONFIDENCE_STYLES.support.pillText} ${nameWeight(p.user_id)}`}>{participantLabel(p)}</Text>
+                        <Text className={`text-xs ${CONFIDENCE_STYLES.support.pillText} ${nameWeight(p.user_id)}`}>
+                          {participantLabel(p)}
+                          {participantKeys.get(p.user_id) ? ` (${participantKeys.get(p.user_id)})` : null}
+                        </Text>
                       </View>
                     ))}
                     {moreToggle(supportParticipants.length)}
@@ -907,13 +946,34 @@ export default function SetDetailScreen() {
     if (id) load();
   }, [id]);
 
+  // Changes made while this screen wasn't showing (the song screen, another
+  // app, a dropped connection) don't arrive live, so coming back asks again,
+  // as the web set page does. The current list stays up until the new one arrives.
+  const [reloadToken, setReloadToken] = useState(0);
+  const refetchGateRef = useRef(createRefetchGate());
+  const refreshRef = useRef(() => {});
+  refreshRef.current = () => {
+    if (!id || !refetchGateRef.current()) return;
+    load({ refresh: true });
+    setReloadToken((n) => n + 1);
+  };
+  const focusedOnceRef = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (focusedOnceRef.current) refreshRef.current();
+    focusedOnceRef.current = true;
+  }, []));
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => { if (state === 'active') refreshRef.current(); });
+    return () => sub.remove();
+  }, []);
+
   // Live-sync the set the same way the web SetDetail does. Supabase can't
   // filter DELETE events (the old row is primary-key-only under RLS), so the
   // set_songs/set_collaborators DELETE handlers subscribe unfiltered and match
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, card, song_productions(productions(name)), chord_chart_url, tonality)';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -1013,15 +1073,21 @@ export default function SetDetailScreen() {
         }
       );
 
-    channel.subscribe();
+    // Rejoining after a dropped connection: anything sent meanwhile was missed.
+    let joined = false;
+    channel.subscribe((status) => {
+      if (status !== 'SUBSCRIBED') return;
+      if (joined) refreshRef.current();
+      joined = true;
+    });
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
-  async function load() {
+  async function load({ refresh = false }: { refresh?: boolean } = {}) {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
 
-    const [setRes, songsRes, collabRes, allCollabRes] = await Promise.all([
+    const [setRes, songsRes, collabRes, allCollabRes, cardsRes] = await Promise.all([
       supabase
         .from('sets')
         .select('id, name, description, owner_user_id, link_sharing, spotify_playlist_id, profiles(display_name, last_name, username)')
@@ -1046,13 +1112,16 @@ export default function SetDetailScreen() {
         .select('id, user_id, role, profiles(display_name, last_name, username)')
         .eq('set_id', id)
         .eq('status', 'accepted'),
+      // Cards come alongside the rows, not after them (one round trip; migration 235).
+      supabase.rpc('set_song_cards', { p_set_id: id }),
     ]);
 
     if (!setRes.data) { setNotFound(true); setLoading(false); return; }
 
     const s = setRes.data as any;
     setSet(s);
-    setSongs((songsRes.data ?? []) as any as SetSong[]);
+    const rows = attachSongCards((songsRes.data ?? []) as any as SetSong[], cardsRes.data as { song_id: string; card: SongRowCard }[] | null);
+    setSongs((prev) => (refresh ? mergeRefetchedSetSongs(prev, rows, syncRef.current.isPending) : rows));
 
     const isOwner = !!user && s.owner_user_id === user.id;
     const myRole = (collabRes.data as { role?: string } | null)?.role ?? null;
@@ -1276,15 +1345,20 @@ export default function SetDetailScreen() {
     const songIds = songIdsKey ? songIdsKey.split(',') : [];
     if (!participantIds.length || !songIds.length) { setSongKnowledge([]); return; }
     let cancelled = false;
-    supabase
-      .from('user_songs')
-      .select('user_id, song_id, confidence, key_note')
-      .in('user_id', participantIds)
-      .in('song_id', songIds)
-      .in('confidence', ['lead', 'support', 'learn'])
-      .then(({ data }) => { if (!cancelled) setSongKnowledge((data ?? []) as any); });
+    // Paged, as on web: participants × songs can pass 1,000 rows on a big set.
+    fetchAllRows((from, to) =>
+      supabase
+        .from('user_songs')
+        .select('user_id, song_id, confidence, key_note')
+        .in('user_id', participantIds)
+        .in('song_id', songIds)
+        .in('confidence', ['lead', 'support', 'learn'])
+        .order('user_id')
+        .order('song_id')
+        .range(from, to)
+    ).then((rows) => { if (!cancelled) setSongKnowledge(rows as any); }, () => {});
     return () => { cancelled = true; };
-  }, [participantIdsKey, songIdsKey]);
+  }, [participantIdsKey, songIdsKey, reloadToken]);
 
   useEffect(() => {
     const songIds = songIdsKey ? songIdsKey.split(',') : [];
@@ -1299,7 +1373,7 @@ export default function SetDetailScreen() {
       setSingingVoice((profileRes.data as { singing_voice: string | null } | null)?.singing_voice ?? null);
     });
     return () => { cancelled = true; };
-  }, [myUserId, songIdsKey]);
+  }, [myUserId, songIdsKey, reloadToken]);
 
   async function handleSetMyConfidence(songId: string, confidence: string) {
     if (!myUserId) { router.push('/(auth)/sign-in' as any); return; }

@@ -1,4 +1,5 @@
 import type { SongTagRow } from "@singjam/core";
+import type { SongRowCard } from "@/components/SongRowTitle";
 export { MUSICAL_KEYS } from "@singjam/core";
 
 // A participant's role for a set song, plus the key they play it in.
@@ -17,9 +18,10 @@ export type Song = {
     title: string;
     display_artist: string | null;
     byline?: string | null;
+    // The same card data as every other song list (songs.card, migration 234); absent on a row just added.
+    card?: SongRowCard | null;
     slug: string | null;
     chord_chart_url: string | null;
-    chord_chart_pending?: boolean;
     youtube_url: string | null;
     tonality: string | null;
     year: number | null;

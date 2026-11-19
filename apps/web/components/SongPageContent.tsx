@@ -1,6 +1,6 @@
 "use client";
 
-import { browsePath, bylineCredits, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
+import { browsePath, bylineCredits, songOrigin, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
 import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
@@ -114,7 +114,7 @@ function usePinToTopOnLoad(loaded: boolean) {
 }
 
 const SONG_SELECT = `
-          id, title, slug, display_artist, byline, first_line, hook, notes, genius_url, chord_chart_url, chord_chart_pending, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          id, title, slug, display_artist, byline, byline_origin, first_line, hook, notes, genius_url, chord_chart_url, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_composers(people(name, slug)),
           song_lyricists(people(name, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
@@ -341,9 +341,10 @@ export default function SongPageContent() {
   const altTitles = (song.song_alternate_titles as any[]).map((x: any) => x.title as string).filter(Boolean);
   const people = (rows: any[]) => sortByLastName(rows.map((x: any) => x.people?.name).filter(Boolean))
     .map((name) => ({ name, slug: personSlugs.get(name) ?? null }));
+  const origin = songOrigin((song as any).byline_origin);
   const creditLines = songCreditLines({
     composers: people(song.song_composers as any[]), lyricists: people(song.song_lyricists as any[]),
-    musicCultures, lyricsCultures, text: (song as any).texts, tune: (song as any).tunes,
+    musicCultures, lyricsCultures, origin, text: (song as any).texts, tune: (song as any).tunes,
   });
   const tagLists = (["genre", "form", "occasion", "community", "theme", "language", "culture"] as const)
     .map((type) => ({
@@ -360,7 +361,7 @@ export default function SongPageContent() {
   const meterPills = song.meter ? song.meter.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
 
   function handleChartAdded(url: string) {
-    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url, chord_chart_pending: true } } : prev));
+    setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_url: url } } : prev));
   }
 
   return (
@@ -406,7 +407,7 @@ export default function SongPageContent() {
             <p className="mt-0.5 text-base text-slate-500">
               <CreditLinks
                 separator=""
-                credits={bylineCredits(song.byline, { people: [...composers, ...lyricists], artists: recordingArtists.map((a: any) => a.name) })}
+                credits={bylineCredits(song.byline, { people: [...composers, ...lyricists], artists: recordingArtists.map((a: any) => a.name) }, origin)}
               />
             </p>
           ) : null}
@@ -430,7 +431,6 @@ export default function SongPageContent() {
                 <ChordChartSlot
                   songId={song.id}
                   url={song.chord_chart_url}
-                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                   canAdd={isLoggedIn}
                   size="md"
                   onAdded={handleChartAdded}
@@ -441,7 +441,6 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -452,10 +451,7 @@ export default function SongPageContent() {
           {song.chord_chart_url && <UgBackTip className="mt-3" />}
           {song.chord_chart_url && isLoggedIn && (
             <div className="mt-2">
-              <ReportChartButton
-                songId={song.id}
-                onReported={() => setData((prev) => (prev ? { ...prev, song: { ...prev.song, chord_chart_pending: true } } : prev))}
-              />
+              <ReportChartButton songId={song.id} />
             </div>
           )}
           {fillingIn && (
@@ -662,7 +658,6 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
-                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -673,7 +668,6 @@ export default function SongPageContent() {
             <ChordChartSlot
               songId={song.id}
               url={song.chord_chart_url}
-                pending={(isAdmin || isSongEditor) && song.chord_chart_pending}
               canAdd={isLoggedIn}
               size="md"
               onAdded={handleChartAdded}

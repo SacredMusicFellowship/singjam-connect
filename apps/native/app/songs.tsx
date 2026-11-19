@@ -18,6 +18,7 @@ import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterS
 import { nativeBrowseHref } from '@/lib/browseLinks';
 import InlineDropdown from '@/components/InlineDropdown';
 import FiltersButton from '@/components/FiltersButton';
+import HideMySongsToggle from '@/components/HideMySongsToggle';
 
 // A superset of SuggestionCard's `Suggestion`, so catalog rows render in the
 // same card web uses while still carrying the fields the filters need.
@@ -294,17 +295,7 @@ export default function SongLibraryScreen() {
         />
         <FiltersButton count={activeFilterCount} onPress={() => setFilterModalVisible(true)} />
         {userId && myConfidence.size > 0 && (
-          <TouchableOpacity
-            onPress={() => setHideMySongs(v => !v)}
-            className="h-7 flex-row items-center gap-1.5 rounded-full border border-zinc-200 px-3"
-          >
-            <Ionicons
-              name={hideMySongs ? 'checkbox' : 'square-outline'}
-              size={13}
-              color={hideMySongs ? '#d97706' : '#d4d4d8'}
-            />
-            <Text className="text-xs font-medium text-zinc-500">Hide my songs</Text>
-          </TouchableOpacity>
+          <HideMySongsToggle checked={hideMySongs} onPress={() => setHideMySongs(v => !v)} />
         )}
       </View>
       {!searching && (
@@ -337,7 +328,7 @@ export default function SongLibraryScreen() {
         </View>
       )}
     </View>
-  ) : null;
+  ) : undefined;
 
   return (
     <>
@@ -379,7 +370,7 @@ export default function SongLibraryScreen() {
             ListFooterComponent={listFooter}
             contentContainerStyle={{ paddingBottom: 32 }}
             ListEmptyComponent={
-              searchLoading ? null : (
+              searchLoading ? undefined : (
                 <View className="mx-4 rounded-2xl border border-zinc-200 bg-white p-5">
                   <Text className="text-sm text-zinc-600">
                     {!searching

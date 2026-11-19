@@ -4033,9 +4033,11 @@ insert into public.productions (name, year) values ('Oklahoma!', 1943), ('Fiddle
 on conflict on constraint productions_name_year_key do nothing;
 insert into public.song_productions (song_id, production_id)
 select '86c5f07d-f1dc-4492-8d09-8efc1d453435', id from public.productions where name = 'Oklahoma!' and year = 1943
+  and exists (select 1 from public.songs where id = '86c5f07d-f1dc-4492-8d09-8efc1d453435')
 on conflict do nothing;
 insert into public.song_productions (song_id, production_id)
 select '023c22f2-afdc-4fa5-817a-04b7b5abac45', id from public.productions where name = 'Fiddler on the Roof' and year = 1964
+  and exists (select 1 from public.songs where id = '023c22f2-afdc-4fa5-817a-04b7b5abac45')
 on conflict do nothing;
 delete from public.song_recording_artists sra using public.artists a
 where sra.artist_id = a.id and a.name in ('Oklahoma', 'Fiddler on the Roof')
