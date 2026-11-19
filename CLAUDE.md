@@ -24,6 +24,13 @@ Use a hybrid of conventional and descriptive style:
 - Keep solutions simple — do not add features, abstractions, or refactors beyond what was asked
 - Do not add comments unless the logic is genuinely non-obvious
 
+## Lists: separate cards or joined rows
+
+Same rule on web and native:
+- **Songs are separate cards** (gap between them): Song Library, browse pages, set songs, search results
+- **Joined rows** (one bordered box with dividers) only for: My Repertoire, where songs are managed in bulk; compact pickers inside a panel or sheet ("Add songs", "Add to set"); and lists that aren't songs (navigation rows, notifications, settings, editor and admin tools)
+- **A loading skeleton has the shape of the list it replaces.** For song cards on web use `SongCardSkeleton`
+
 ## Punctuation in UI text
 
 Same rules on web, native and in emails:
