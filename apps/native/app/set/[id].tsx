@@ -13,7 +13,7 @@ import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
 import { setApi } from '@/lib/setApi';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, cardRowText, songSubtitle, attachSongCards } from '@singjam/core';
+import { canRemoveSetSong, CONFIDENCE_STYLES, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeRefetchedSetSongs, KEY_STYLE, PEOPLE_ROW_LIMIT, prioritizePeople, SET_ROLE_DESCRIPTIONS, reorderSongsForPlayed, SET_SONG_NOTE_MAX, shownPeopleCount, cardRowText, songSubtitle, attachSongCards, matchesSearch } from '@singjam/core';
 import SubtitleText from '@/components/SubtitleText';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
 import ContentContainer from '@/components/ContentContainer';
@@ -1420,8 +1420,7 @@ export default function SetDetailScreen() {
   const displayedSongs = useMemo(() => {
     let result = songs;
     if (filterQuery.trim()) {
-      const q = filterQuery.trim().toLowerCase();
-      result = result.filter(s => s.songs.title.toLowerCase().includes(q) || `${s.songs.byline ?? ''} ${s.songs.display_artist ?? ''}`.toLowerCase().includes(q));
+      result = result.filter(s => matchesSearch(`${s.songs.title} ${s.songs.byline ?? ''} ${s.songs.display_artist ?? ''}`, filterQuery));
     }
     if (sortBy === 'title_asc') return [...result].sort((a, b) => a.songs.title.localeCompare(b.songs.title));
     if (sortBy === 'title_desc') return [...result].sort((a, b) => b.songs.title.localeCompare(a.songs.title));

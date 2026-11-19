@@ -45,4 +45,9 @@ describe("matchesSearch", () => {
   it("matches accented text from an unaccented query", () => {
     expect(matchesSearch("Ave María", "maria")).toBe(true);
   });
+
+  it("ignores punctuation on either side", () => {
+    expect(matchesSearch("Don't Stop Believin' · Journey", "dont stop")).toBe(true);
+    expect(matchesSearch("Jolene · Dolly Parton", "jolene, dolly")).toBe(true);
+  });
 });

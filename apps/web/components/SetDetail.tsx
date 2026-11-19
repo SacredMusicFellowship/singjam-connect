@@ -8,6 +8,7 @@ import Link from "next/link";
 import { canRemoveSetSong, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeOwnKnowledge, mergeRefetchedSetSongs, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
+import { matchesSearch } from "@/lib/normalizeSearch";
 import SearchInput from "@/components/SearchInput";
 import SetSongRow from "@/components/SetSongRow";
 import UgBackTip from "@/components/UgBackTip";
@@ -739,13 +740,9 @@ export default function SetDetail({
   }, [songs, songSort, isSolo, globalSongPopularity, songKnowledge]);
 
   const visibleSongs = songListFilter
-    ? sortedSongs.filter((s) => {
-        const q = songListFilter.toLowerCase();
-        return (
-          s.songs.title.toLowerCase().includes(q) ||
-          ((s.songs.byline ?? "") + " " + (s.songs.display_artist ?? "")).toLowerCase().includes(q)
-        );
-      })
+    ? sortedSongs.filter((s) =>
+        matchesSearch(`${s.songs.title} ${s.songs.byline ?? ""} ${s.songs.display_artist ?? ""}`, songListFilter)
+      )
     : sortedSongs;
 
   // Build a per-song lookup: songId → Map<userId, confidence>
