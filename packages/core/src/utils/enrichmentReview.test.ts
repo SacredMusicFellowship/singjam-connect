@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideListedFacts, reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
+import { decideListedFacts, decideNotes, reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const base = (over: Partial<EnrichmentSources> = {}): EnrichmentSources => ({
   gpt: null, claude: null, musicbrainz: null, spotifyReleaseYear: null, lyrics: null, ...over,
@@ -106,5 +106,18 @@ describe("decideListedFacts", () => {
   });
   it("ignores low-confidence answers", () => {
     expect(decideListedFacts({ gpt: { productions: low(["Pitch Perfect"]) }, claude: null }, wiki)).toEqual({});
+  });
+});
+
+describe("decideNotes", () => {
+  const wiki = (notes: string | null) => ({ notes, productions: [], alternate_titles: [] });
+  it("takes Wikipedia's notes first", () => {
+    expect(decideNotes({ gpt: { notes: hi("From memory.") }, claude: null }, wiki("From the article."))).toEqual({ notes: "From the article.", source: "wikipedia" });
+  });
+  it("falls back to one model's sure answer, marked as AI", () => {
+    expect(decideNotes({ gpt: null, claude: { notes: hi("From memory.") } }, wiki(null))).toEqual({ notes: "From memory.", source: "ai" });
+  });
+  it("leaves notes empty when no source is sure", () => {
+    expect(decideNotes({ gpt: { notes: low("A guess.") }, claude: null }, null)).toBeNull();
   });
 });

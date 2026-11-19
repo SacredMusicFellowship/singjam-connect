@@ -290,6 +290,20 @@ export type EnrichmentReview = {
 // Facts a model pulled out of the song's Wikipedia article (not from memory).
 export type WikipediaFacts = { notes: string | null; productions: string[]; alternate_titles: string[] };
 
+export type NotesSource = "wikipedia" | "ai";
+
+// Notes come from the song's Wikipedia article when it has any, else from one
+// model's sure answer. Both the automatic fill and the editor's review use this.
+export function decideNotes(
+  src: Pick<EnrichmentSources, "gpt" | "claude">,
+  wiki: WikipediaFacts | null,
+): { notes: string; source: NotesSource } | null {
+  if (wiki?.notes) return { notes: wiki.notes, source: "wikipedia" };
+  const sure: Confidence[] = ["high", "medium"];
+  const notes = value(src.gpt?.notes, sure) ?? value(src.claude?.notes, sure);
+  return notes ? { notes, source: "ai" } : null;
+}
+
 // What a song editor reviews: every value the auto-fill rules accept is marked
 // agreed (and pre-ticked), and where they don't, one model's answer is still
 // offered, unticked, for a person to judge.
@@ -345,7 +359,7 @@ export function reviewEnrichment(
     languages: pick("languages", d.languages, (one<string[]>("languages") ?? []).slice(0, MAX_TAGS)) ?? [],
     music_culture: culture("music_culture"),
     lyric_culture: culture("lyric_culture"),
-    notes: wiki?.notes ?? one<string>("notes"),
+    notes: decideNotes(src, wiki)?.notes ?? null,
     productions: bothLists("productions", "productions"),
     alternate_titles: bothLists("alternate_titles", "alternate_titles"),
     additional_recordings: landmarks,

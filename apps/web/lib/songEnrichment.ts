@@ -4,6 +4,7 @@ import {
   withoutMisfitForms,
   decideEnrichment,
   decideListedFacts,
+  decideNotes,
   SONG_COMMUNITIES,
   SONG_CULTURES,
   SONG_FORMS,
@@ -158,7 +159,7 @@ export type GatheredSources = {
 // and the editor's review go through here.
 export async function gatherSources(
   song: SongContext,
-  opts: { spotifyReleaseYear?: number | null; links?: boolean } = {},
+  opts: { spotifyReleaseYear?: number | null; links?: boolean; geniusWriters?: string[] } = {},
 ): Promise<GatheredSources> {
   const { title, artist, wanted } = song;
   const usage: ModelUsage[] = [];
@@ -176,7 +177,10 @@ export async function gatherSources(
           return page && facts ? { ...facts, title: page.title, url: page.url } : null;
         })
       : null,
-    opts.links ? timed("Genius", 20_000, checks, () => lookUpGenius(title, song.artists ?? (artist ? [artist] : []))) : null,
+    opts.links
+      ? timed("Genius", 20_000, checks, () =>
+          lookUpGenius({ title, alternateTitles: song.alternateTitles, artists: song.artists ?? (artist ? [artist] : []), writers: opts.geniusWriters ?? song.writers ?? [] }))
+      : null,
     wants("first_line", "composers") ? timed("Hymnary", 60_000, checks, () => lookUpHymnary(title)) : null,
   ]);
   const order = ["GPT", "Claude", "MusicBrainz", "LRCLIB", "Hymnary", "Wikipedia", "Genius"];
@@ -201,7 +205,7 @@ export async function enrichSong(
   const { data: song, error } = await admin
     .from("songs")
     .select(
-      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(count), song_recording_artists(artist_id, year, position, artists(name))"
+      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, notes, genius_url, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(title), song_recording_artists(artist_id, year, position, artists(name))"
     )
     .eq("id", songId)
     .single();
@@ -210,7 +214,6 @@ export async function enrichSong(
   const s = song as any;
   const primary = [...(s.song_recording_artists ?? [])].sort((a: any, b: any) => (a.position ?? 99) - (b.position ?? 99))[0];
   const artist: string | null = primary?.artists?.name ?? s.display_artist ?? null;
-  const empty = (n: { count: number }[]) => !n?.[0]?.count;
   const writers = [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])]
     .map((r: any) => r.people?.name as string | undefined)
     .filter((n, i, all): n is string => !!n && all.indexOf(n) === i);
@@ -231,8 +234,9 @@ export async function enrichSong(
   if (!hasTag("community")) wanted.push("communities");
   if (!s.first_line) wanted.push("first_line");
   if (!s.hook) wanted.push("hook");
+  if (!s.notes) wanted.push("notes");
   if (!(s.song_productions ?? []).length) wanted.push("productions");
-  if (empty(s.song_alternate_titles)) wanted.push("alternate_titles");
+  if (!(s.song_alternate_titles ?? []).length) wanted.push("alternate_titles");
   if (!wanted.length) return { songId, decision: {} as EnrichmentDecision, usage: [] as ModelUsage[] };
 
   if (!opts.dryRun) await admin.from("songs").update({ enrichment_started_at: new Date().toISOString() }).eq("id", songId);
@@ -272,11 +276,17 @@ async function fillSong(
     artist,
     production: (s.song_productions ?? []).map((p: any) => p.productions?.name).filter(Boolean).join(", ") || null,
     wanted,
+    artists: [...(s.song_recording_artists ?? [])]
+      .sort((a: any, b: any) => (a.position ?? 99) - (b.position ?? 99))
+      .map((r: any) => r.artists?.name)
+      .filter(Boolean),
     writers,
+    alternateTitles: (s.song_alternate_titles ?? []).map((t: any) => t.title),
     firstLine: s.first_line ?? null,
   };
-  const { sources, wikipedia, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear });
+  const { sources, wikipedia, geniusUrl, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear, links: !s.genius_url });
   const decision = { ...decideEnrichment(sources), ...decideListedFacts(sources, wikipedia) };
+  const notes = wanted.includes("notes") ? decideNotes(sources, wikipedia) : null;
   let firstLineSource: string | null = null;
   if (opts.searchFirstLine && wanted.includes("first_line") && !decision.first_line) {
     const found = await timed("Web search", 180_000, checks, () => searchFirstLine(context, usage));
@@ -290,11 +300,13 @@ async function fillSong(
       ...(s.song_tags ?? []).filter((t: any) => t.tags?.type === "genre").map((t: any) => t.tags.name as string),
       ...(wanted.includes("genres") ? decision.genres ?? [] : []),
     ]);
-  if (opts.dryRun) return { songId, decision, usage, checks, firstLineSource };
+  if (opts.dryRun) return { songId, decision, notes, geniusUrl, usage, checks, firstLineSource };
 
   const scalar: Record<string, unknown> = {};
   for (const f of ["year_written", "tonality", "meter", "vibe", "first_line", "hook"] as const)
     if (decision[f] !== undefined && wanted.includes(f)) scalar[f] = decision[f];
+  if (notes) Object.assign(scalar, { notes: notes.notes, notes_source: notes.source });
+  if (geniusUrl && !s.genius_url) scalar.genius_url = geniusUrl;
   if (Object.keys(scalar).length) await admin.from("songs").update({ ...scalar, updated_at: new Date().toISOString() }).eq("id", songId);
 
   if (decision.recording_year && primary && !primary.year)
@@ -333,7 +345,7 @@ async function fillSong(
     const titles = decision.alternate_titles.filter((t, i, all) => norm(t) !== norm(s.title) && all.findIndex((x) => norm(x) === norm(t)) === i);
     if (titles.length) await admin.from("song_alternate_titles").insert(titles.map((title) => ({ song_id: songId, title })));
   }
-  return { songId, decision, usage, firstLineSource };
+  return { songId, decision, notes, geniusUrl, usage, firstLineSource };
 }
 
 // Review mode for the song editor: asks every source about every field, saves
@@ -341,7 +353,7 @@ async function fillSong(
 export async function proposeEnrichment(admin: SupabaseClient, songId: string) {
   const { data: song, error } = await admin
     .from("songs")
-    .select("title, display_artist, song_alternate_titles(title), song_productions(productions(name)), song_recording_artists(position, artists(name))")
+    .select("title, display_artist, song_alternate_titles(title), song_productions(productions(name)), song_recording_artists(position, artists(name)), song_composers(people(name)), song_lyricists(people(name))")
     .eq("id", songId)
     .single();
   if (error || !song) throw error ?? new Error(`song ${songId} not found`);
@@ -357,9 +369,13 @@ export async function proposeEnrichment(admin: SupabaseClient, songId: string) {
       .filter(Boolean),
     production: (s.song_productions ?? []).map((p: any) => p.productions?.name).filter(Boolean).join(", ") || null,
     wanted: ALL_FIELDS,
+    alternateTitles: (s.song_alternate_titles ?? []).map((t: any) => t.title),
   };
+  // The review asks the models about the credits afresh, so the song's current
+  // writers only go to the Genius lookup, never into the prompt.
+  const geniusWriters = [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])].map((r: any) => r.people?.name).filter(Boolean);
   const [gathered, landmarks] = await Promise.all([
-    gatherSources(context, { links: true }),
+    gatherSources(context, { links: true, geniusWriters }),
     addLandmarkRecordings(admin, songId, { dryRun: true }).catch(() => ({ added: [] as LandmarkResult[], usage: [] as ModelUsage[] })),
   ]);
   const review = reviewEnrichment(gathered.sources, landmarks.added, { wikipedia: gathered.wikipedia, geniusUrl: gathered.geniusUrl });

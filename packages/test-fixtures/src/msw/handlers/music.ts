@@ -49,6 +49,10 @@ export const musicHandlers = [
     await recordCall("genius", request);
     return HttpResponse.json({ meta: { status: 200 }, response: { hits: [] } });
   }),
+  http.get("https://api.genius.com/songs/:id", async ({ request, params }) => {
+    await recordCall("genius", request);
+    return HttpResponse.json({ meta: { status: 200 }, response: { song: { id: Number(params.id), writer_artists: [], song_relationships: [] } } });
+  }),
 
   // MusicBrainz: searches return nothing, lookups return a bare entity.
   http.get("https://musicbrainz.org/ws/2/:entity/:id?", async ({ request, params }) => {
