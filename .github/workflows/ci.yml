@@ -41,12 +41,7 @@ jobs:
           npx tsc --noEmit
         working-directory: apps/native
 
-      - name: Web unit tests
-        run: npx vitest run
-        working-directory: apps/web
-      - name: Core unit tests
-        run: npx vitest run
-        working-directory: packages/core
+      # Web and core unit tests run in checks.yml; this job adds what that one doesn't cover.
       - name: Test fixtures unit tests
         run: npx vitest run
         working-directory: packages/test-fixtures
@@ -60,8 +55,34 @@ jobs:
           # Expo ships SDK patch releases every few days; a patch lag shouldn't fail unrelated PRs.
           EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK: "1"
 
+  changes:
+    name: Decide whether the e2e job is needed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # A PR that only changes docs skips the e2e job. A skipped job still counts as passing, so this
+      # works with required checks, unlike a workflow-level paths-ignore.
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          changed=$(git diff --name-only "$BASE" "$HEAD")
+          code=$(printf '%s\n' "$changed" | grep -vE '(\.md$|^docs/|^LICENSE$)' | grep -c . || true)
+          echo "Changed files:"; printf '%s\n' "$changed"
+          if [ -z "$changed" ] || [ "$code" -gt 0 ]; then echo "code=true" >> "$GITHUB_OUTPUT"; else echo "code=false" >> "$GITHUB_OUTPUT"; fi
+
   e2e:
     name: Local Supabase, RLS and Playwright
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
