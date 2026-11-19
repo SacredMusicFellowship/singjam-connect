@@ -68,6 +68,7 @@ describe("music sources", () => {
     expect((await json("https://musicbrainz.org/ws/2/work/?query=x&fmt=json")).works).toEqual([]);
     expect((await json("https://musicbrainz.org/ws/2/recording/abc?inc=artist-credits&fmt=json")).id).toBe("abc");
     expect((await json("https://api.genius.com/search?q=x")).response.hits).toEqual([]);
+    expect((await json("https://api.genius.com/songs/7")).response.song).toMatchObject({ id: 7, writer_artists: [] });
     expect((await json("https://secondhandsongs.com/search/work?title=x&performer=y")).resultPage).toEqual([]);
     expect((await json("https://query.wikidata.org/sparql?query=x&format=json")).results.bindings).toEqual([]);
     expect((await json("https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&format=json")).toptags.tag[0].name).toBe("folk");

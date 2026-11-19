@@ -30,13 +30,14 @@ const hi = (v: unknown) => ({ v, c: "high" });
 // A song with everything filled in except its production and alternate titles.
 const allTags = ["genre", "theme", "language", "culture", "form", "occasion", "community"].map((type) => ({ context: "general", tags: { type } }));
 
-function fakeDb(songTags: Row[] = allTags) {
+function fakeDb(songTags: Row[] = allTags, over: Row = {}) {
   const writes: { table: string; row: Row | Row[] }[] = [];
   const song = {
     id: "song-1", title: "Cups (When I'm Gone)", display_artist: "Anna Kendrick", year_written: 1931, tonality: "Major", meter: "4", vibe: "Ballad",
     first_line: "x", hook: "y", song_composers: [{ count: 1 }], song_lyricists: [{ count: 1 }], song_tags: songTags,
-    song_productions: [], song_alternate_titles: [{ count: 0 }],
+    notes: null, genius_url: null, song_productions: [], song_alternate_titles: [],
     song_recording_artists: [{ artist_id: "a1", year: 2012, position: 0, artists: { name: "Anna Kendrick" } }],
+    ...over,
   };
   const db = {
     from(table: string) {
@@ -50,7 +51,7 @@ function fakeDb(songTags: Row[] = allTags) {
         limit: () => q,
         single: async () => ({ data: table === "songs" ? song : null }),
         maybeSingle: async () => ({ data: null }),
-        update: () => q,
+        update: (row: Row) => { writes.push({ table, row }); return q; },
         then: (resolve: (v: unknown) => void) =>
           resolve({ error: null, data: table === "tags" ? names.map((name) => ({ id: `tag:${name}`, name })) : null }),
         insert: (row: Row | Row[]) => {
@@ -109,5 +110,30 @@ describe("enrichSong — forms, occasions and communities", () => {
 
     const tagged = writes.filter((w) => w.table === "song_tags").flatMap((w) => w.row as Row[]).map((r) => r.tag_id);
     expect(tagged).toEqual(["tag:Hymn", "tag:Christian"]);
+  });
+});
+
+describe("enrichSong — notes", () => {
+  const notesWrite = (writes: { table: string; row: Row | Row[] }[]) =>
+    writes.find((w) => w.table === "songs" && "notes" in (w.row as Row))?.row as Row | undefined;
+
+  it("fills empty notes from a model and marks them AI-written", async () => {
+    answers.gpt = { notes: hi("Written for the film.") };
+    answers.claude = {};
+    const { db, writes } = fakeDb();
+
+    await enrichSong(db, "song-1");
+
+    expect(notesWrite(writes)).toMatchObject({ notes: "Written for the film.", notes_source: "ai" });
+  });
+
+  it("never replaces notes the song already has", async () => {
+    answers.gpt = { notes: hi("Written for the film.") };
+    answers.claude = {};
+    const { db, writes } = fakeDb(allTags, { notes: "A person wrote this." });
+
+    await enrichSong(db, "song-1");
+
+    expect(notesWrite(writes)).toBeUndefined();
   });
 });

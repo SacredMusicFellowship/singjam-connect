@@ -71,6 +71,7 @@ type Song = {
   first_line: string | null;
   hook: string | null;
   notes: string | null;
+  notes_source: "wikipedia" | "ai" | null;
   genius_url: string | null;
   chord_chart_url: string | null;
   youtube_url: string | null;
@@ -1041,7 +1042,14 @@ export default function SongEditor({
 
       {/* Additional notes */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-slate-700">Additional notes</h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <h2 className="text-sm font-semibold text-slate-700">Additional notes</h2>
+          {song?.notes_source && notes === (song.notes ?? "") && (
+            <span className="text-xs text-slate-500">
+              {song.notes_source === "wikipedia" ? "Written from Wikipedia" : "AI-written · not checked"}
+            </span>
+          )}
+        </div>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
           className="input min-h-[80px] resize-y" placeholder="Any extra context, performance notes, etc." />
       </section>

@@ -20,10 +20,52 @@ export function matchesWikipediaArticle(song: { title: string; artist: string | 
   return SONG_WORDS.test(page.description ?? "") && titles.includes(baseTitle(page.title));
 }
 
-// A Genius search hit is only used when it is the same song by the same act.
-export function matchesGeniusHit(song: { title: string; artist: string | null }, hit: { title: string; artist: string }): boolean {
-  if (!song.artist) return false;
-  return baseTitle(hit.title) === baseTitle(song.title) && sameArtist(leadArtist(hit.artist), leadArtist(song.artist));
+// Genius titles drift in small ways: "The Jug of Punch" for "A Jug of Punch",
+// "Wabash Cannon Ball (1947)", "Drinking Gourd" for "Drinkin' Gourd".
+const geniusTitleKey = (t: string) =>
+  norm(t.replace(/\s*[([][^)\]]*[)\]]/g, "").replace(/in['’‘](?=\s|$)/g, "ing")).replace(/^(the|a|an) /, "").replace(/ /g, "");
+const compact = (s: string) => norm(s).replace(/ /g, "");
+
+// The song's own title, the words in its brackets ("Hold On (Keep Your Hand on
+// the Plow)") and its alternate titles.
+function geniusTitles(song: GeniusSong): Set<string> {
+  const inBrackets = [...song.title.matchAll(/\(([^)]+)\)/g)].map((m) => m[1]).filter((t) => t.trim().split(/\s+/).length >= 2);
+  return new Set([song.title, ...inBrackets, ...(song.alternateTitles ?? [])].map(geniusTitleKey).filter(Boolean));
+}
+
+const sameAct = (a: string, b: string) => {
+  const x = leadArtist(a), y = leadArtist(b);
+  return sameArtist(x, y) || (compact(x).length >= 4 && compact(x) === compact(y));
+};
+
+export type GeniusSong = { title: string; alternateTitles?: string[]; artists: string[]; writers: string[] };
+export type GeniusHit = { title: string; artist: string };
+export type GeniusSongDetails = GeniusHit & { writers: string[]; coverOf: string[] };
+
+const TRADITIONAL = /^traditional\b/i;
+const isTraditional = (song: GeniusSong) => song.writers.some((w) => TRADITIONAL.test(w));
+const namedWriters = (song: GeniusSong) => song.writers.filter((w) => !TRADITIONAL.test(w));
+
+export function sameGeniusTitle(song: GeniusSong, hit: GeniusHit): boolean {
+  return geniusTitles(song).has(geniusTitleKey(hit.title));
+}
+
+// A Genius search hit is used straight away when it has the song's title and is
+// by one of its recording artists or writers.
+export function matchesGeniusHit(song: GeniusSong, hit: GeniusHit): boolean {
+  if (!sameGeniusTitle(song, hit)) return false;
+  return [...song.artists, ...namedWriters(song)].some((a) => sameAct(a, hit.artist));
+}
+
+// Any other act's version with the song's title needs Genius's own song page
+// to confirm it: the same writers, or a cover of the traditional song when
+// the song is traditional. "Over My Head" by Fleetwood Mac never stands in
+// for the spiritual.
+export function confirmsGeniusSong(song: GeniusSong, hit: GeniusSongDetails): boolean {
+  if (!sameGeniusTitle(song, hit)) return false;
+  if (matchesGeniusHit(song, hit)) return true;
+  if (hit.writers.some((w) => namedWriters(song).some((x) => sameAct(w, x)))) return true;
+  return isTraditional(song) && [hit.artist, ...hit.writers, ...hit.coverOf].some((a) => TRADITIONAL.test(a));
 }
 
 // Same people, allowing for fuller or shorter forms of a name ("Bert Berns" and

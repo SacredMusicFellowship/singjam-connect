@@ -1,8 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import {
+  confirmsGeniusSong,
   hymnaryTextsFor,
   hymnaryTunes,
   matchesGeniusHit,
+  sameGeniusTitle,
+  type GeniusSong,
   matchesWikipediaArticle,
   parseCsvRecords,
   verifiedFirstLine,
@@ -28,6 +31,7 @@ export type SongContext = {
   wanted: Field[];
   artists?: string[];
   writers?: string[];
+  alternateTitles?: string[];
   firstLine?: string | null;
 };
 
@@ -93,7 +97,7 @@ export async function lookUpLyrics(title: string, artist: string): Promise<strin
   }
 }
 
-// ---- Wikipedia and Genius (review only) ----
+// ---- Wikipedia and Genius ----
 
 const WIKI = "https://en.wikipedia.org";
 
@@ -142,18 +146,42 @@ export async function extractWikipediaFacts(title: string, extract: string, usag
   }, WIKI_FACTS_SCHEMA, null, 4000, "wikipedia facts", usage);
 }
 
-// Genius search does badly with bracketed subtitles, so it gets the bare title,
-// once per recording artist until one matches.
-export async function lookUpGenius(title: string, artists: string[]): Promise<string | null> {
+async function genius(path: string, token: string): Promise<any | null> {
+  const res = await fetch(`https://api.genius.com/${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  return res.ok ? (await res.json()).response ?? null : null;
+}
+
+// Genius search does badly with bracketed subtitles, so it gets the bare title:
+// once with each recording artist, then alone. A title-only hit by another act
+// is checked against its Genius song page (writers, "cover of") before use.
+export async function lookUpGenius(song: GeniusSong): Promise<string | null> {
   const token = process.env.GENIUS_ACCESS_TOKEN;
   if (!token) return null;
-  const bare = title.replace(/\s*\([^)]*\)/g, "").trim() || title;
-  for (const artist of artists.slice(0, 4)) {
-    const res = await fetch(`https://api.genius.com/search?q=${encodeURIComponent(`${bare} ${artist}`)}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) continue;
-    const hits: any[] = (await res.json()).response?.hits ?? [];
-    const hit = hits.map((h) => h.result).find((r) => r && matchesGeniusHit({ title, artist }, { title: r.title ?? "", artist: r.primary_artist?.name ?? "" }));
+  const bare = song.title.replace(/\s*\([^)]*\)/g, "").trim() || song.title;
+  const hitsFor = async (q: string): Promise<any[]> =>
+    ((await genius(`search?q=${encodeURIComponent(q)}`, token))?.hits ?? []).map((h: any) => h.result).filter(Boolean);
+  const asHit = (r: any) => ({ title: r.title ?? "", artist: r.primary_artist?.name ?? "" });
+
+  for (const artist of song.artists.slice(0, 4)) {
+    const hit = (await hitsFor(`${bare} ${artist}`)).find((r) => matchesGeniusHit(song, asHit(r)));
     if (hit?.url) return hit.url;
+  }
+  if (!song.artists.length && !song.writers.length) return null;
+
+  const titled = (await hitsFor(bare)).filter((r) => r.url && sameGeniusTitle(song, asHit(r)));
+  const direct = titled.find((r) => matchesGeniusHit(song, asHit(r)));
+  if (direct) return direct.url;
+  for (const r of titled.slice(0, 3)) {
+    const page = (await genius(`songs/${r.id}`, token))?.song;
+    if (!page) continue;
+    const details = {
+      ...asHit(r),
+      writers: (page.writer_artists ?? []).map((w: any) => w.name ?? ""),
+      coverOf: (page.song_relationships ?? [])
+        .filter((rel: any) => rel.relationship_type === "cover_of")
+        .flatMap((rel: any) => (rel.songs ?? []).map((s: any) => s.primary_artist?.name ?? "")),
+    };
+    if (confirmsGeniusSong(song, details)) return r.url;
   }
   return null;
 }
