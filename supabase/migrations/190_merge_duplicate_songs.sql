@@ -83,4 +83,5 @@ delete from public.song_alternate_titles
 where song_id = '547db00f-2eb8-4415-954c-6c15268223b6' and lower(title) = 'the sound of silence';
 insert into public.song_alternate_titles (song_id, title)
 select '547db00f-2eb8-4415-954c-6c15268223b6', 'The Sounds of Silence'
-where not exists (select 1 from public.song_alternate_titles where song_id = '547db00f-2eb8-4415-954c-6c15268223b6' and lower(title) = 'the sounds of silence');
+where exists (select 1 from public.songs where id = '547db00f-2eb8-4415-954c-6c15268223b6')
+  and not exists (select 1 from public.song_alternate_titles where song_id = '547db00f-2eb8-4415-954c-6c15268223b6' and lower(title) = 'the sounds of silence');
