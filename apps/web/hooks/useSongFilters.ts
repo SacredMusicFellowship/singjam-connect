@@ -12,7 +12,8 @@ import {
   type TagHierarchy,
 } from "@singjam/core";
 
-export type SortBy = "popularity" | "title_asc" | "title_desc";
+export type { SongSortBy as SortBy } from "@singjam/core";
+import type { SongSortBy as SortBy } from "@singjam/core";
 export type SelectedTags = Record<MultiFilterDim, Set<string>>;
 
 // The URL parameter for each tag dimension (kept from before, so shared links still work).

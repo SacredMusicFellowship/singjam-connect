@@ -11,11 +11,6 @@ import { useSongCardActions } from "@/hooks/useSongCardActions";
 import FiltersButton from "@/components/FiltersButton";
 import HideMySongsToggle from "@/components/HideMySongsToggle";
 
-const SORT_OPTIONS = [
-  { value: "popularity" as const, label: "Most known" },
-  { value: "title_asc" as const, label: "A–Z" },
-  { value: "title_desc" as const, label: "Z–A" },
-];
 
 // A browse page's songs with the Song Library's filters, scoped to this page
 // (each row carries its own filter fields).
@@ -42,7 +37,7 @@ export default function BrowseSongList({ songs, roles }: {
   return (
     <section className="space-y-2">
       <div className="flex flex-wrap items-center gap-2 px-1">
-        <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} align="left" />
+        <SortDropdown value={sortBy} onChange={setSortBy} align="left" />
         {songs.length > 1 && (
           <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
         )}

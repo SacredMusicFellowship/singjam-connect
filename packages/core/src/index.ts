@@ -17,6 +17,7 @@ export * from './utils/browsePaths';
 export * from './utils/browseEntity';
 export * from './utils/browseHub';
 export * from './utils/browseEntitySearch';
+export * from './utils/songSort';
 export * from './utils/officialYouTube';
 export * from './utils/songEnrichmentRules';
 export * from './utils/hymnary';

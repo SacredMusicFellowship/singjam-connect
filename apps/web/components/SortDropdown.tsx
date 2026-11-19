@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { songSortOptions } from "@singjam/core";
 import type { SortBy } from "@/hooks/useSongFilters";
 
-const SORT_OPTIONS: { value: SortBy; label: string }[] = [
-  { value: "popularity", label: "Popular" },
-  { value: "title_asc", label: "A–Z" },
-  { value: "title_desc", label: "Z–A" },
-];
+const SORT_OPTIONS = songSortOptions(["popularity", "title_asc", "title_desc"]);
 
 export function SortDropdown({
   value,

@@ -36,11 +36,6 @@ type FilterMeta = {
 
 const PAGE_SIZE = 20;
 
-const SORT_OPTIONS = [
-  { value: "popularity" as const, label: "Popular" },
-  { value: "title_asc" as const, label: "A–Z" },
-  { value: "title_desc" as const, label: "Z–A" },
-];
 
 // Reads q and mine with useSearchParams, so on a static page it renders only in
 // the browser (behind the page's Suspense) and a /search?q= link hydrates cleanly.
@@ -191,7 +186,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
       <div className="space-y-2">
         <div className="flex flex-col gap-2 px-1">
           <div className="flex items-center gap-2">
-            <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} align="left" />
+            <SortDropdown value={sortBy} onChange={setSortBy} align="left" />
             <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
             {currentUser && repertoire.size > 0 && (
               <HideMySongsToggle checked={hideMySongs} onChange={setHideMySongs} />

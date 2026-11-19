@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FILTER_DIM_TAG_TYPE, fetchAllRows, loadSongFilterMeta, songCardPills, type FilterableSong, type MultiFilterDim } from "@singjam/core";
+import { FILTER_DIM_TAG_TYPE, fetchAllRows, loadSongFilterMeta, songCardPills, SONG_SORT_LABEL, type FilterableSong, type MultiFilterDim } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import ConfidencePicker from "@/components/ConfidencePicker";
@@ -358,7 +358,7 @@ export default function SetSongPanel({
                   sortMode === mode ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                 }`}
               >
-                {mode === "popular" ? "Popular" : mode === "alpha" ? "A–Z" : mode === "za" ? "Z–A" : "Leader"}
+                {mode === "popular" ? SONG_SORT_LABEL.popularity : mode === "alpha" ? "A–Z" : mode === "za" ? "Z–A" : "Leader"}
               </button>
             ))}
           </div>

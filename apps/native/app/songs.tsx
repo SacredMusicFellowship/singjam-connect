@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { searchBrowseEntities, songMatchesFilters, type BrowseEntityRow, type CardIdentity, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { searchBrowseEntities, songMatchesFilters, songSortOptions, type SongSortBy, type BrowseEntityRow, type CardIdentity, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { readCache, writeCache } from '@/lib/cache';
 import ContentContainer from '@/components/ContentContainer';
@@ -50,13 +50,9 @@ type SongMeta = {
   production_credits?: ProductionCredit[] | null;
 };
 
-type SortBy = 'popularity' | 'title_asc' | 'title_desc';
+type SortBy = SongSortBy;
 
-const SORT_OPTIONS: { key: SortBy; label: string }[] = [
-  { key: 'popularity', label: 'Popular' },
-  { key: 'title_asc', label: 'A–Z' },
-  { key: 'title_desc', label: 'Z–A' },
-];
+const SORT_OPTIONS = songSortOptions(['popularity', 'title_asc', 'title_desc']).map(({ value, label }) => ({ key: value, label }));
 
 function SkeletonCard() {
   return (
