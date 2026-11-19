@@ -14,6 +14,7 @@ import { SortDropdown } from "@/components/SortDropdown";
 import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
+import BrowseEntityRows from "@/components/BrowseEntityRows";
 import SearchInput from "@/components/SearchInput";
 import FiltersButton from "@/components/FiltersButton";
 import HideMySongsToggle from "@/components/HideMySongsToggle";
@@ -65,7 +66,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     return Number.isFinite(saved) && saved > PAGE_SIZE ? Math.min(saved, 2000) : PAGE_SIZE;
   });
 
-  const { results, loading, error: searchError } = useSongSearch(q, { limit: 50, debounceMs: 200 });
+  const { results, entityRows, loading, error: searchError } = useSongSearch(q, { limit: 50, debounceMs: 200, entities: true });
 
   const hierarchy = useTagHierarchy();
   const filters = useSongFilters(filterMeta, "popularity", hierarchy);
@@ -187,6 +188,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
         </div>
       )}
       {(searchError ?? browseError ?? status ?? actions.status) ? <div className="px-1 text-sm text-zinc-700">{searchError ?? browseError ?? status ?? actions.status}</div> : null}
+      {searching && <BrowseEntityRows rows={entityRows} stale={loading} />}
 
       {/* Filter bar */}
       <div className="space-y-2">

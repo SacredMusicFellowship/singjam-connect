@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { songMatchesFilters, type CardIdentity, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
+import { searchBrowseEntities, songMatchesFilters, type BrowseEntityRow, type CardIdentity, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { readCache, writeCache } from '@/lib/cache';
 import ContentContainer from '@/components/ContentContainer';
@@ -167,6 +167,7 @@ export default function SongLibraryScreen() {
   const [query, setQuery] = useState('');
   const [allSongs, setAllSongs] = useState<SongMeta[]>([]);
   const [searchResults, setSearchResults] = useState<SongMeta[]>([]);
+  const [entityRows, setEntityRows] = useState<BrowseEntityRow[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
   // Your songs come from the session's My-songs store. The list waits until
@@ -202,12 +203,16 @@ export default function SongLibraryScreen() {
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     const q = query.trim();
-    if (!q) { setSearchResults([]); setSearchLoading(false); return; }
+    if (!q) { setSearchResults([]); setEntityRows([]); setSearchLoading(false); return; }
     setSearchLoading(true);
     setSubmitOpen(false);
     timer.current = setTimeout(async () => {
-      const { data } = await supabase.rpc('search_songs', { q, limit_n: 100 });
+      const [{ data }, rows] = await Promise.all([
+        supabase.rpc('search_songs', { q, limit_n: 100 }),
+        searchBrowseEntities(supabase, q).catch(() => [] as BrowseEntityRow[]),
+      ]);
       setSearchResults(((data ?? []) as any[]).map(toSongMeta));
+      setEntityRows(rows);
       setSearchLoading(false);
     }, 250);
   }, [query]);
@@ -284,6 +289,29 @@ export default function SongLibraryScreen() {
           </Text>
         )}
       </View>
+
+      {/* Browse pages whose names match, as on web */}
+      {searching && entityRows.length > 0 && (
+        <View
+          accessibilityLabel="Matching pages"
+          className={`mx-4 mt-3 rounded-2xl border border-zinc-200 bg-white overflow-hidden ${searchLoading ? 'opacity-60' : ''}`}
+        >
+          {entityRows.map((r, i) => (
+            <TouchableOpacity
+              key={r.id}
+              onPress={() => openBrowse(r.href)}
+              accessibilityRole="link"
+              className={`flex-row items-center justify-between px-4 py-2.5 ${i > 0 ? 'border-t border-zinc-100' : ''}`}
+            >
+              <View className="flex-1 mr-3">
+                <Text className="text-sm font-medium text-zinc-900" numberOfLines={1}>{r.name}</Text>
+                <Text className="text-xs text-zinc-500">{r.detail}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#a1a1aa" />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Sort / filters / hide-my-songs, then the catalog total — web's order */}
       <View className="mx-4 mt-3 flex-row items-center px-1" style={{ gap: 8 }}>

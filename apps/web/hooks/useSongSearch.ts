@@ -1,4 +1,4 @@
-import type { CardIdentity, ProductionCredit, RecordingArtistCredit } from "@singjam/core";
+import { searchBrowseEntities, type BrowseEntityRow, type CardIdentity, type ProductionCredit, type RecordingArtistCredit } from "@singjam/core";
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -34,10 +34,12 @@ export type SongSearchResult = {
 
 export function useSongSearch(
   query: string,
-  { limit = 50, debounceMs = 250 }: { limit?: number; debounceMs?: number } = {}
-): { results: SongSearchResult[]; loading: boolean; error: string | null } {
+  { limit = 50, debounceMs = 250, entities = false }: { limit?: number; debounceMs?: number; entities?: boolean } = {}
+): { results: SongSearchResult[]; entityRows: BrowseEntityRow[]; loading: boolean; error: string | null } {
   const supabase = useRef(supabaseBrowser()).current;
   const [results, setResults] = useState<SongSearchResult[]>([]);
+  // Browse pages whose names match (the Song Library asks for these).
+  const [entityRows, setEntityRows] = useState<BrowseEntityRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -51,15 +53,20 @@ export function useSongSearch(
     const trimmed = query.trim();
     if (!trimmed) {
       setResults([]);
+      setEntityRows([]);
       setLoading(false);
       setError(null);
       return;
     }
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
-      const { data, error: rpcError } = await supabase.rpc("search_songs", { q: trimmed, limit_n: limit });
+      const [{ data, error: rpcError }, rows] = await Promise.all([
+        supabase.rpc("search_songs", { q: trimmed, limit_n: limit }),
+        entities ? searchBrowseEntities(supabase, trimmed).catch(() => []) : Promise.resolve([]),
+      ]);
       if (seq !== requestSeq.current) return;
       setLoading(false);
+      setEntityRows(rows);
       if (rpcError) {
         setError("Search failed. Please try again.");
         setResults([]);
@@ -72,7 +79,7 @@ export function useSongSearch(
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, limit, debounceMs]);
+  }, [query, limit, debounceMs, entities]);
 
-  return { results, loading, error };
+  return { results, entityRows, loading, error };
 }

@@ -16,6 +16,7 @@ export * from './utils/yearDisplay';
 export * from './utils/browsePaths';
 export * from './utils/browseEntity';
 export * from './utils/browseHub';
+export * from './utils/browseEntitySearch';
 export * from './utils/officialYouTube';
 export * from './utils/songEnrichmentRules';
 export * from './utils/hymnary';
