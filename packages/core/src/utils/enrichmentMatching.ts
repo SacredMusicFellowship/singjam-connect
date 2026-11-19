@@ -22,14 +22,16 @@ export function matchesWikipediaArticle(song: { title: string; artist: string | 
 
 // Genius titles drift in small ways: "The Jug of Punch" for "A Jug of Punch",
 // "Wabash Cannon Ball (1947)", "Drinking Gourd" for "Drinkin' Gourd".
+// Titles are bounded and the bracket patterns can't nest, so no input can make
+// these patterns backtrack.
 const geniusTitleKey = (t: string) =>
-  norm(t.replace(/\s*[([][^)\]]*[)\]]/g, "").replace(/in['’‘](?=\s|$)/g, "ing")).replace(/^(the|a|an) /, "").replace(/ /g, "");
+  norm(t.slice(0, 300).replace(/[([][^()[\]]*[)\]]/g, " ").replace(/in['’‘](?![a-z])/gi, "ing")).replace(/^(the|a|an) /, "").replace(/ /g, "");
 const compact = (s: string) => norm(s).replace(/ /g, "");
 
 // The song's own title, the words in its brackets ("Hold On (Keep Your Hand on
 // the Plow)") and its alternate titles.
 function geniusTitles(song: GeniusSong): Set<string> {
-  const inBrackets = [...song.title.matchAll(/\(([^)]+)\)/g)].map((m) => m[1]).filter((t) => t.trim().split(/\s+/).length >= 2);
+  const inBrackets = [...song.title.slice(0, 300).matchAll(/\(([^()]+)\)/g)].map((m) => m[1]).filter((t) => t.trim().split(/\s+/).length >= 2);
   return new Set([song.title, ...inBrackets, ...(song.alternateTitles ?? [])].map(geniusTitleKey).filter(Boolean));
 }
 
