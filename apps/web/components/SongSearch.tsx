@@ -6,7 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useSongCardActions } from "@/hooks/useSongCardActions";
-import { matchedAlternateTitles, loadSongFilterMeta } from "@singjam/core";
+import { matchedAlternateTitles, loadSongFilterMeta, searchCountLabel } from "@singjam/core";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import { useBrowseSongs, type BrowseFilters } from "@/hooks/useBrowseSongs";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
@@ -58,7 +58,9 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     return Number.isFinite(saved) && saved > PAGE_SIZE ? Math.min(saved, 2000) : PAGE_SIZE;
   });
 
-  const { results, entityRows, loading, error: searchError } = useSongSearch(q, { limit: 50, debounceMs: 200, entities: true });
+  // "Show all" loads every match for the current query; a new query starts at 50 again.
+  const [showAllFor, setShowAllFor] = useState<string | null>(null);
+  const { results, total: searchTotal, entityRows, loading, error: searchError } = useSongSearch(q, { limit: showAllFor === q ? 2000 : 50, debounceMs: 200, entities: true });
 
   const hierarchy = useTagHierarchy();
   const filters = useSongFilters(filterMeta, "popularity", hierarchy);
@@ -176,7 +178,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
         <div className="px-1 text-xs text-zinc-500">
           {loading
             ? "Searching…"
-            : `${sortedSearch.length} song${sortedSearch.length === 1 ? "" : "s"}${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`}
+            : searchCountLabel({ shown: sortedSearch.length, loaded: results.length, total: searchTotal })}
         </div>
       )}
       {(searchError ?? browseError ?? status ?? actions.status) ? <div className="px-1 text-sm text-zinc-700">{searchError ?? browseError ?? status ?? actions.status}</div> : null}
@@ -237,6 +239,16 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 {results.length > 0 ? "No results match the active filters." : "No songs found."}
               </div>
             ) : null}
+            {results.length < searchTotal && (
+              <button
+                type="button"
+                onClick={() => setShowAllFor(q)}
+                disabled={loading}
+                className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-300 disabled:opacity-60"
+              >
+                {loading ? "Loading…" : `Show all ${searchTotal} songs`}
+              </button>
+            )}
           </div>
         ) : browseLoading && browseSongs.length === 0 ? (
           <div className="divide-y rounded-md border">
