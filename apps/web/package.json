@@ -36,6 +36,7 @@
     "stripe": "^22.4.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "~4.14.0",
     "@netlify/plugin-nextjs": "^5.15.9",
     "@playwright/test": "~1.64.1",
     "@singjam/test-fixtures": "*",
