@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { PGlite } from "@electric-sql/pglite";
+import { normalizeSearch } from "@singjam/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { E2E_PASSWORD } from "../constants";
 import { buildScenario } from "../scenario";
@@ -88,5 +89,25 @@ describe("seed against the migrated schema", () => {
       [E2E_PASSWORD, refs.members.member.auth.id],
     );
     expect(rows[0]).toEqual({ ok: true, hashed: true });
+  });
+  it("normalizes search text in SQL exactly as core normalizeSearch does", async () => {
+    const samples = ["It's O'Brien!", "שָׁלוֹם עֲלֵיכֶם", "״אדון עולם״ — יִגְדַּל", "أَهْلاً وسهلاً", "طـــلع البدر علينا؟", "Café, “Olé”!", "ﬁne ﭏ", "!!! — …"];
+    for (const s of samples) {
+      const { rows } = await db.query<{ n: string }>("select public.search_normalize($1) n", [s]);
+      expect([s, rows[0].n]).toEqual([s, normalizeSearch(s)]);
+    }
+  });
+
+  it("finds a Hebrew title from an unpointed query and doesn't match every song", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("insert into public.songs (title) values ($1)", ["שָׁלוֹם עֲלֵיכֶם"]);
+      const hits = async (q: string) => (await db.query<{ title: string }>("select title from public.search_songs($1, 100)", [q])).rows.map((r) => r.title);
+      expect(await hits("שלום")).toEqual(["שָׁלוֹם עֲלֵיכֶם"]);
+      expect(await hits("نور")).toEqual([]);
+      expect(await hits("!!!")).toEqual([]);
+    } finally {
+      await db.exec("rollback");
+    }
   });
 });
