@@ -52,3 +52,32 @@ export async function createJam(hostId: string, name: string): Promise<{ id: str
   if (error) throw error;
   return data;
 }
+
+// An upcoming official event with its own paid and free tiers, so ticket tests never sell out
+// the seeded events. Deleting it removes its orders and tickets too.
+export async function createTicketedEvent(hostId: string, name: string) {
+  const startsAt = Date.now() + 14 * 24 * 60 * 60 * 1000;
+  const { data: jam, error } = await admin
+    .from("jams")
+    .insert({
+      name,
+      host_user_id: hostId,
+      visibility: "official",
+      starts_at: new Date(startsAt).toISOString(),
+      ends_at: new Date(startsAt + 3 * 60 * 60 * 1000).toISOString(),
+      timezone: "America/Los_Angeles",
+      neighborhood: "Lantern Hill",
+      full_address: "41 Lantern Lane, Lantern Hill, CA 90001",
+      capacity: 50,
+      ticket_limit: 20,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  const { error: tierError } = await admin.from("ticket_types").insert([
+    { jam_id: jam.id, name: "General admission", description: "Lyrics and chords provided", price_cents: 1500, quantity: null, sort_order: 0 },
+    { jam_id: jam.id, name: "Under 12", description: "Kids sing free", price_cents: 0, quantity: 10, sort_order: 1 },
+  ]);
+  if (tierError) throw tierError;
+  return { id: jam.id as string, name };
+}

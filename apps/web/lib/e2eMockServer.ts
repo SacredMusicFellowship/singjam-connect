@@ -1,4 +1,4 @@
-import { mockServer, onUnhandledRequest } from "@singjam/test-fixtures/msw/node";
+import { mockCalls, mockServer, onUnhandledRequest } from "@singjam/test-fixtures/msw/node";
 
 // Only imported by instrumentation.ts under E2E=1, so a test can never email, charge or call a
 // real API. Google Fonts stays reachable: next/font downloads Inter while compiling, and that has
@@ -25,3 +25,6 @@ Object.defineProperty(globalThis, "fetch", {
     currentFetch = next?.__nextPatched ? next : mockedFetch;
   },
 });
+
+// Read by app/api/e2e/mock-calls, so a Playwright test can see what the server tried to send.
+(globalThis as { __e2eMockCalls?: typeof mockCalls }).__e2eMockCalls = mockCalls;

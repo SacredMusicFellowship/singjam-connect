@@ -17,13 +17,25 @@ export function sideEffectsBlocked(what: string): boolean {
 
 // Ticket holds, orders and fulfilment are refused under `next dev` even with
 // ALLOW_DEV_SIDE_EFFECTS=true: a hold takes real stock off sale on the
-// production event, and nobody testing locally means that.
+// production event, and nobody testing locally means that. The one exception
+// is the e2e suite (E2E=1) running against a local Supabase, where every event
+// is fake and Stripe is mocked.
 export function inNextDev(): boolean {
   return process.env.NODE_ENV === "development";
 }
 
+function e2eAgainstLocalDatabase(): boolean {
+  if (process.env.E2E !== "1") return false;
+  try {
+    const { hostname } = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+    return hostname === "localhost" || hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 export function ticketingBlocked(what: string): boolean {
-  const blocked = inNextDev();
+  const blocked = inNextDev() && !e2eAgainstLocalDatabase();
   if (blocked) console.log(`[dev-safety] blocked ${what} (always blocked under next dev)`);
   return blocked;
 }
