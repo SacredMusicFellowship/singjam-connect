@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
@@ -42,22 +42,19 @@ const SORT_OPTIONS = [
   { value: "title_desc" as const, label: "Z–A" },
 ];
 
+// Reads q and mine with useSearchParams, so on a static page it renders only in
+// the browser (behind the page's Suspense) and a /search?q= link hydrates cleanly.
 export default function SongSearch({ initialQuery = "" }: { initialQuery?: string }) {
   const supabase = supabaseBrowser();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [filterMeta, setFilterMeta] = useState<FilterMeta[]>([]);
 
-  const [q, setQ] = useState(() => {
-    if (typeof window === "undefined") return initialQuery;
-    return new URLSearchParams(window.location.search).get("q") ?? initialQuery;
-  });
+  const [q, setQ] = useState(() => searchParams.get("q") ?? initialQuery);
   const [status, setStatus] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [hideMySongs, setHideMySongs] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return new URLSearchParams(window.location.search).get("mine") === "hide";
-  });
+  const [hideMySongs, setHideMySongs] = useState(() => searchParams.get("mine") === "hide");
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [initialCount] = useState(() => {
@@ -309,6 +306,25 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
       </div>
 
       {currentUser && <SubmitSongForm />}
+    </div>
+  );
+}
+
+export function SongSearchSkeleton() {
+  return (
+    <div className="space-y-3">
+      <div className="h-10 animate-pulse rounded-xl bg-zinc-100" />
+      <div className="divide-y rounded-md border">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex items-center justify-between p-4">
+            <div className="space-y-1.5">
+              <div className="h-4 w-48 animate-pulse rounded bg-zinc-200" />
+              <div className="h-3 w-32 animate-pulse rounded bg-zinc-100" />
+            </div>
+            <div className="h-7 w-16 animate-pulse rounded-xl bg-zinc-100" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

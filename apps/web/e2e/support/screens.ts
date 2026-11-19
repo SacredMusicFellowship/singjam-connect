@@ -1,9 +1,12 @@
 import type { PersonaKey } from "@singjam/test-fixtures";
-import { refs } from "../fixtures";
+import { refs, scenario } from "../fixtures";
 
 // Every main screen, and who views it. pages.spec.ts checks each one; the screenshot capture
 // photographs each one at phone and desktop size.
 export type Screen = { name: string; url: string; as: PersonaKey | "visitor" };
+
+// A songwriter of the first song, so the search shows their page above the songs.
+const writer = scenario.people.find((p) => p.id === scenario.songComposers.find((c) => c.song_id === refs.songs[0].id)?.person_id)!;
 
 export const SCREENS: Screen[] = [
   { name: "home-visitor", url: "/", as: "visitor" },
@@ -15,6 +18,7 @@ export const SCREENS: Screen[] = [
   { name: "sets", url: "/sets", as: "member" },
   { name: "set", url: `/set/${refs.sets.memberShared.id}`, as: "member" },
   { name: "songs", url: "/songs", as: "member" },
+  { name: "search", url: `/search?q=${encodeURIComponent(writer.name.split(" ").pop()!)}`, as: "member" },
   { name: "song", url: `/songs/${refs.songs[0].slug}`, as: "member" },
   { name: "friends", url: "/friends", as: "member" },
   { name: "repertoire", url: "/repertoire", as: "member" },

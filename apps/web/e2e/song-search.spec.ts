@@ -26,3 +26,16 @@ test("a search that names no page shows no page rows", async ({ page }) => {
   await expect(page.getByText("No songs found.")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("list", { name: "Matching pages" })).toHaveCount(0);
 });
+
+test("a search link opens with its query, and Back from a song keeps it", async ({ page }) => {
+  const query = writer.name.split(" ").pop()!;
+  await page.goto(`/search?q=${encodeURIComponent(query)}`);
+  await expect(page.getByPlaceholder(/search by title/i)).toHaveValue(query);
+  await expect(page.getByRole("list", { name: "Matching pages" })).toBeVisible({ timeout: 15_000 });
+
+  await page.locator('a[href^="/songs/"]').first().click();
+  await expect(page).toHaveURL(/\/songs\//);
+  await page.goBack();
+  await expect(page.getByPlaceholder(/search by title/i)).toHaveValue(query);
+  await expect(page).toHaveURL(new RegExp(`q=${query}`));
+});
