@@ -1,0 +1,48 @@
+# Opens the app from a clean state with its JavaScript from the e2e Metro (DEV_CLIENT_URL).
+appId: org.singjam.app
+---
+- runFlow:
+    when:
+      true: ${PLATFORM == 'ios'}
+    commands:
+      - clearKeychain
+- launchApp:
+    clearState: true
+    stopApp: true
+# A busy emulator can raise "isn't responding" dialogs; keep waiting.
+- tapOn:
+    text: "Wait"
+    optional: true
+- openLink: ${DEV_CLIENT_URL}
+# iOS asks before a link opens an app.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Runtime version.*|Get started|Jams"
+    timeout: 180000
+# The dev client opens its developer menu on a fresh install, a moment after the app appears.
+- extendedWaitUntil:
+    visible: "Runtime version.*"
+    timeout: 10000
+    optional: true
+- repeat:
+    while:
+      visible: "Runtime version.*"
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                id: "xmark"
+      - runFlow:
+          when:
+            platform: Android
+          commands:
+            - back
+      - waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true

@@ -1,5 +1,8 @@
 import '../global.css';
 
+// Maestro runs the app with EXPO_PUBLIC_E2E=1 against local Supabase and the e2e web server.
+if (process.env.EXPO_PUBLIC_E2E === '1') require('@/lib/e2eMockServer');
+
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
