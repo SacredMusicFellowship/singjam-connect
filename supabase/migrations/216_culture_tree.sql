@@ -15,6 +15,10 @@
 --   the Library of Congress credit it) but still prefers other communities
 --   ("Traditional · Jewish" for Hinei Ma Tov).
 
+-- A fresh replay (local, e2e) runs every migration in one session; start without the pg_temp
+-- helpers earlier migrations defined under the same names.
+discard temp;
+
 create function pg_temp.t(p_type text, p_name text, p_aliases text[] default '{}')
 returns uuid language plpgsql as $$
 declare v uuid;
