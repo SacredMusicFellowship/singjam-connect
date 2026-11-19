@@ -53,8 +53,19 @@ for (const file of walk(join(root, "apps"))) {
   if (/from\(\s*["'`]jams["'`]\s*\)\s*\.select\(\s*(["'`]\s*\*\s*["'`])?\s*\)/.test(src)) fail(file, 'selects * from jams (column grants hide full_address; list the columns)');
 }
 
+// 4. CI runs on fork PRs and costs nothing because it needs no paid service:
+//    workflows may use only GITHUB_TOKEN, never a Netlify, Supabase or other secret.
+const workflowsDir = join(root, ".github/workflows");
+for (const name of readdirSync(workflowsDir).filter((f) => /\.ya?ml$/.test(f))) {
+  const yml = readFileSync(join(workflowsDir, name), "utf8").replace(/#.*$/gm, "");
+  for (const m of yml.matchAll(/\bsecrets\s*(?:\.\s*([A-Za-z0-9_]+)|\[\s*['"]([^'"]+)['"]\s*\]|\b)/g)) {
+    const secret = m[1] ?? m[2];
+    if (secret !== "GITHUB_TOKEN") fail(join(workflowsDir, name), `uses secret ${secret ?? "(all secrets)"} (CI may only use GITHUB_TOKEN)`);
+  }
+}
+
 if (failures.length) {
   console.error(`Repo rule check failed:\n${failures.map((f) => `  - ${f}`).join("\n")}`);
   process.exit(1);
 }
-console.log(`Repo rules OK (${migrations.length} migrations, functions dir clean, no select * from jams).`);
+console.log(`Repo rules OK (${migrations.length} migrations, functions dir clean, no select * from jams, workflows use only GITHUB_TOKEN).`);
