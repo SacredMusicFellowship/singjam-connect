@@ -1,0 +1,22 @@
+appId: org.singjam.app
+name: A newcomer sees public jams but not someone else's private jam
+---
+- runFlow: common/start.yaml
+- runFlow:
+    file: common/sign-in.yaml
+    env:
+      EMAIL: ${NEWCOMER_EMAIL}
+- tapOn: "Jams(, tab.*)?"
+- assertVisible: ".*${OFFICIAL_JAM}.*"
+# Check every screenful of the list, down to past events, not just the first.
+- repeat:
+    while:
+      notVisible: "(?i)past events"
+    times: 10
+    commands:
+      - assertNotVisible: ".*${PRIVATE_JAM}.*"
+      - scroll
+- assertVisible: "(?i)past events"
+- assertNotVisible: ".*${PRIVATE_JAM}.*"
+- tapOn: "Repertoire(, tab.*)?"
+- takeScreenshot: repertoire-empty
