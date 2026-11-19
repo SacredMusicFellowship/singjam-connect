@@ -27,8 +27,8 @@ Use a hybrid of conventional and descriptive style:
 ## Lists: separate cards or joined rows
 
 Same rule on web and native:
-- **Songs are separate cards** (gap between them): Song Library, browse pages, set songs, search results
-- **Joined rows** (one bordered box with dividers) only for: My Repertoire, where songs are managed in bulk; compact pickers inside a panel or sheet ("Add songs", "Add to set"); and lists that aren't songs (navigation rows, notifications, settings, editor and admin tools)
+- **Results are separate cards** (gap between them): songs in the Song Library, browse pages and sets, and everything a search returns, including the matching-page rows above the songs
+- **Joined rows** (one bordered box with dividers) only for: My Repertoire, where songs are managed in bulk; compact pickers inside a panel or sheet ("Add songs", "Add to set"); and settings-style lists that aren't results (notifications, settings, browse index lists, editor and admin tools)
 - **A loading skeleton has the shape of the list it replaces.** For song cards on web use `SongCardSkeleton`
 
 ## Punctuation in UI text

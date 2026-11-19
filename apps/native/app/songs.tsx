@@ -288,16 +288,13 @@ export default function SongLibraryScreen() {
 
       {/* Browse pages whose names match, as on web */}
       {searching && entityRows.length > 0 && (
-        <View
-          accessibilityLabel="Matching pages"
-          className={`mx-4 mt-3 rounded-2xl border border-zinc-200 bg-white overflow-hidden ${searchLoading ? 'opacity-60' : ''}`}
-        >
+        <View accessibilityLabel="Matching pages" className={`mx-4 mt-3 ${searchLoading ? 'opacity-60' : ''}`}>
           {entityRows.map((r, i) => (
             <TouchableOpacity
               key={r.id}
               onPress={() => openBrowse(r.href)}
               accessibilityRole="link"
-              className={`flex-row items-center justify-between px-4 py-2.5 ${i > 0 ? 'border-t border-zinc-100' : ''}`}
+              className={`flex-row items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 ${i > 0 ? 'mt-2' : ''}`}
             >
               <View className="flex-1 mr-3">
                 <Text className="text-sm font-medium text-zinc-900" numberOfLines={1}>{r.name}</Text>

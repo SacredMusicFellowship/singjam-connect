@@ -7,11 +7,11 @@ export default function BrowseEntityRows({ rows, stale }: { rows: BrowseEntityRo
   return (
     <ul
       aria-label="Matching pages"
-      className={`divide-y divide-zinc-100 overflow-hidden rounded-2xl border border-zinc-200 bg-white transition-opacity ${stale ? "opacity-60" : ""}`}
+      className={`grid gap-2 transition-opacity ${stale ? "opacity-60" : ""}`}
     >
       {rows.map((r) => (
         <li key={r.id}>
-          <Link href={r.href} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-zinc-50">
+          <Link href={r.href} className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 shadow-sm hover:border-zinc-300">
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium text-zinc-900">{r.name}</span>
               <span className="block text-xs text-zinc-500">{r.detail}</span>
