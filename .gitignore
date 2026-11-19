@@ -17,3 +17,9 @@ memory/
 
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
+
+# Playwright e2e output and saved sign-ins
+apps/web/.next-e2e/
+apps/web/e2e/.auth/
+apps/web/e2e/.results/
+apps/web/e2e/.report/

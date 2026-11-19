@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
+    // Playwright owns e2e/.
+    exclude: ["**/node_modules/**", "e2e/**"],
   },
   resolve: {
     alias: {
