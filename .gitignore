@@ -23,3 +23,7 @@ apps/web/.next-e2e/
 apps/web/e2e/.auth/
 apps/web/e2e/.results/
 apps/web/e2e/.report/
+
+# Screenshots and test output for PRs are written here locally and published on the pr-assets
+# branch (see TESTING.md), so they never show up in a PR diff.
+pr-assets/

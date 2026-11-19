@@ -12,7 +12,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:screenshots": "E2E_SCREENSHOTS=1 playwright test --project=screenshots-phone --project=screenshots-desktop"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.5.0",

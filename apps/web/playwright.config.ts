@@ -55,6 +55,13 @@ export default defineConfig({
     { name: "desktop-chrome", use: { ...devices["Desktop Chrome"] }, dependencies: ["setup"] },
     { name: "iphone-safari", use: { ...devices["iPhone 15"] }, dependencies: ["setup"] },
     { name: "android-chrome", use: { ...devices["Pixel 7"] }, dependencies: ["setup"] },
+    // Only with npm run e2e:screenshots, so a normal run never writes images.
+    ...(process.env.E2E_SCREENSHOTS
+      ? [
+          { name: "screenshots-phone", testMatch: /\.capture\.ts$/, use: { ...devices["iPhone 15"] }, dependencies: ["setup"] },
+          { name: "screenshots-desktop", testMatch: /\.capture\.ts$/, use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } }, dependencies: ["setup"] },
+        ]
+      : []),
   ],
   webServer: {
     command: `npx next dev --port ${PORT}`,
