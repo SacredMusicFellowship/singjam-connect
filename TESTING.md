@@ -32,7 +32,7 @@ screenshots are safe to share in this public repo.
 | `npm run e2e:screenshots` | Every main screen at phone and desktop size into `pr-assets/<branch>/web/` |
 | `npm run e2e:db:reset` | Reload the migrations and the fake seed |
 
-CI runs all of these except the screenshots and native e2e on every pull request (`.github/workflows/ci.yml`).
+CI runs all of these except the screenshots and native e2e on every pull request. Web and core unit tests run in `.github/workflows/checks.yml`; the rest run in `.github/workflows/ci.yml`. A PR that only changes Markdown, `docs/` or `LICENSE` skips the Supabase and Playwright job. CI uses no secrets and no paid services: the repo-rule check fails if a workflow references any secret other than `GITHUB_TOKEN`.
 
 ## The fake world
 
