@@ -11,3 +11,17 @@ mockServer.listen({
     onUnhandledRequest(request, print);
   },
 });
+
+// `next dev` puts back the fetch it saw at startup every time it recompiles, which would quietly
+// remove MSW and let requests reach the real services. Next's own patched fetch (marked
+// __nextPatched) is let through, since it wraps whatever is installed; any other replacement is
+// that reset, so MSW's fetch goes back in its place.
+const mockedFetch = globalThis.fetch;
+let currentFetch = mockedFetch;
+Object.defineProperty(globalThis, "fetch", {
+  configurable: true,
+  get: () => currentFetch,
+  set: (next: typeof fetch & { __nextPatched?: boolean }) => {
+    currentFetch = next?.__nextPatched ? next : mockedFetch;
+  },
+});
