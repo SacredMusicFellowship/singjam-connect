@@ -23,7 +23,7 @@ export type ScenarioRefs = {
     privateUpcoming: JamRow;
     communityPast: JamRow;
   };
-  sets: { officialNext: SetRow; memberPrivate: SetRow; memberShared: SetRow };
+  sets: { officialNext: SetRow; community: SetRow; memberPrivate: SetRow; memberShared: SetRow };
   songs: SongRow[];
 };
 
@@ -200,7 +200,7 @@ export function buildScenario(options: ScenarioOptions = {}): { scenario: Scenar
         communityUpcoming: communityUpcoming.jam, communityFull: communityFull.jam,
         privateUpcoming: privateUpcoming.jam, communityPast: communityPast.jam,
       },
-      sets: { officialNext: officialNextSet.set, memberPrivate: memberPrivate.set, memberShared: memberShared.set },
+      sets: { officialNext: officialNextSet.set, community: communitySet.set, memberPrivate: memberPrivate.set, memberShared: memberShared.set },
       songs,
     },
   };

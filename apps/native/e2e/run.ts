@@ -161,6 +161,8 @@ function runFlows(platform: Platform, device: string, metroUrl: string, maestroE
     OFFICIAL_JAM: refs.jams.officialNext.name,
     COMMUNITY_JAM: refs.jams.communityUpcoming.name,
     PRIVATE_JAM: refs.jams.privateUpcoming.name,
+    COMMUNITY_SET: refs.sets.community.name,
+    MEMBER_PRIVATE_SET: refs.sets.memberPrivate.name,
     HOST_NAME: `${refs.members.host.profile.display_name} ${refs.members.host.profile.last_name}`,
   };
   console.log(`\nRunning the Maestro flows on ${platform} (${device})`);

@@ -1,0 +1,30 @@
+appId: org.singjam.app
+name: A host unlinks their jam's set list and links it again from the jam page
+---
+- runFlow: common/start.yaml
+- runFlow:
+    file: common/sign-in.yaml
+    env:
+      EMAIL: ${MEMBER_EMAIL}
+- tapOn: "Jams(, tab.*)?"
+- scrollUntilVisible:
+    element: ".*${COMMUNITY_JAM}.*"
+- tapOn: ".*${COMMUNITY_JAM}.*"
+- scrollUntilVisible:
+    element: "Unlink"
+- assertVisible: ".*${COMMUNITY_SET}.*"
+- takeScreenshot: jam-set-list-linked
+- tapOn: "Unlink"
+- assertVisible: "Create set list"
+- assertVisible: "Link existing"
+- takeScreenshot: jam-set-list-empty
+- tapOn: "Link existing"
+- scrollUntilVisible:
+    element: ".*${MEMBER_PRIVATE_SET}.*"
+- assertVisible: ".*${COMMUNITY_SET}.*"
+- takeScreenshot: jam-set-list-picker
+# Link the same set again so the data is as the other flows expect it.
+- tapOn: ".*${COMMUNITY_SET}.*"
+- scrollUntilVisible:
+    element: "Unlink"
+- assertVisible: ".*${COMMUNITY_SET}.*"

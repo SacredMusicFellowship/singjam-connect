@@ -2,22 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { setPath } from "@singjam/core";
+import { jamSetListName, linkableSets, setPath, type LinkableSet } from "@singjam/core";
 import Select from "@/components/Select";
 
 type LinkedSet = { id: string; short_code?: string | null; name: string };
-type OwnedSet = { id: string; name: string; jam_id?: string | null; jam_name?: string | null };
 
 export default function JamSetList({ jamId, jamName, canManage }: { jamId: string; jamName: string | null; canManage: boolean }) {
   const router = useRouter();
   const [set, setSet] = useState<LinkedSet | null | undefined>(undefined);
   const [creating, setCreating] = useState(false);
   const [linking, setLinking] = useState(false);
-  const [availableSets, setAvailableSets] = useState<OwnedSet[] | null>(null);
+  const [availableSets, setAvailableSets] = useState<LinkableSet[] | null>(null);
   const [selectedSetId, setSelectedSetId] = useState("");
   const [linkingInProgress, setLinkingInProgress] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
-  const [confirmMove, setConfirmMove] = useState<OwnedSet | null>(null);
+  const [confirmMove, setConfirmMove] = useState<LinkableSet | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,7 +27,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
 
   async function handleCreate() {
     setCreating(true);
-    const name = jamName ? `${jamName} — set list` : "Set list";
+    const name = jamSetListName(jamName);
     const res = await fetch("/api/sets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,7 +41,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
     if (!availableSets) {
       const res = await fetch("/api/sets");
       const { owned, collaborating } = await res.json();
-      setAvailableSets([...(owned as OwnedSet[]), ...(collaborating as OwnedSet[])]);
+      setAvailableSets(linkableSets(owned, collaborating, jamId));
     }
   }
 
@@ -67,7 +66,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
   async function handleLink(mode: "link" | "move" | "copy") {
     const chosen = availableSets?.find((s) => s.id === selectedSetId);
     if (!chosen) return;
-    if (mode === "link" && chosen.jam_id && chosen.jam_id !== jamId) {
+    if (mode === "link" && chosen.linkedElsewhere) {
       setConfirmMove(chosen);
       return;
     }
@@ -148,7 +147,7 @@ export default function JamSetList({ jamId, jamName, canManage }: { jamId: strin
               <option value="">Choose a set list…</option>
               {availableSets.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.jam_id && s.jam_id !== jamId ? `${s.name} (linked to ${s.jam_name ?? "another jam"})` : s.name}
+                  {s.label}
                 </option>
               ))}
             </Select>

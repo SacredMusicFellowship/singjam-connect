@@ -8,7 +8,7 @@ const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 // role, but the API routes do. Auth travels as a bearer token.
 export async function setApi(
   path: string,
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown
 ): Promise<{ ok: boolean; status: number; json: any }> {
   const { data: { session } } = await supabase.auth.getSession();

@@ -53,6 +53,7 @@ export * from './utils/resolvePlaceAddress';
 export * from './utils/attendeeSummary';
 export * from './utils/setDisplayedSongs';
 export * from './utils/setRoles';
+export * from './utils/jamSetList';
 export * from './utils/shortLinks';
 export * from './utils/singingVoice';
 export * from './utils/songFilters';
