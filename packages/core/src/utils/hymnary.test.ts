@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hymnaryTextsFor, hymnaryTunes, parseCsvRecords, pickHymnaryText, type HymnaryText } from "./hymnary";
+import { hymnaryTextsFor, hymnaryTunes, parseCsvRecords, pickHymnaryText, trimTrailing, type HymnaryText } from "./hymnary";
 import { decideEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const STAND_BY_ME = `displayTitle,firstLine,textTitle,refrainFirstLine,textAuthNumber,languages,authors,meter,textSources,totalInstances
@@ -92,5 +92,11 @@ describe("samePerson", () => {
     expect(samePerson("Mary E. Byrne", "Mary Byrne")).toBe(true);
     expect(samePerson("Charles Wesley", "Samuel Wesley")).toBe(false);
     expect(samePerson("John B. Smith", "John C. Smith")).toBe(false);
+  });
+  it("cleans long runs of brackets and commas quickly", () => {
+    const started = Date.now();
+    expect(hymnaryTextsFor("(".repeat(50_000), [{ textTitle: "(".repeat(50_000), firstLine: "x" }])).toHaveLength(1);
+    expect(trimTrailing("Angels we have heard on high" + ",".repeat(50_000) + "x,;:")).toBe("Angels we have heard on high" + ",".repeat(50_000) + "x");
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });

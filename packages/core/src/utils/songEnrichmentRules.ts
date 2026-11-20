@@ -9,7 +9,7 @@ import {
   SONG_TONALITIES,
 } from "./songVocabulary";
 import { sameArtist } from "./landmarkRecordings";
-import { pickHymnaryText, samePerson, type HymnaryText } from "./hymnary";
+import { pickHymnaryText, samePerson, trimTrailing, type HymnaryText } from "./hymnary";
 import { withoutGenericFaithThemes } from "./genericThemes";
 
 export type Confidence = "high" | "medium" | "low";
@@ -209,7 +209,7 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   const modelComposers = [...(value(g.composers, SURE) ?? []), ...(value(c.composers, SURE) ?? [])];
   const hymn = matchedHymn(src);
   if (hymn) {
-    if (!out.first_line) out.first_line = hymn.firstLine.trim().replace(/[,;:]+$/, "");
+    if (!out.first_line) out.first_line = trimTrailing(hymn.firstLine.trim());
     const named = (list: string[], by: string[]) => list.length > 0 && by.some((w) => list.some((n) => samePerson(n, w)));
     if (!out.composers && !out.lyricists && named(hymn.authors, [...modelLyricists, ...modelComposers])) {
       out.lyricists = hymn.authors;
@@ -418,7 +418,7 @@ export function reviewEnrichment(
   const named = [value(g.tune, SURE), value(c.tune, SURE)].filter((t): t is string => !!t);
   const tune = hymn?.tunes.find((t) => !t.name.startsWith("[") && named.some((n) => norm(n) === norm(t.name)));
   suggestions.text = hymn
-    ? { title: hymn.title, first_line: hymn.firstLine.trim().replace(/[,;:]+$/, ""), authors: hymn.authors, url: hymn.url }
+    ? { title: hymn.title, first_line: trimTrailing(hymn.firstLine.trim()), authors: hymn.authors, url: hymn.url }
     : null;
   suggestions.tune = tune ? { name: hymnTuneName(tune.name), composers: tune.composers } : null;
   if (tune && named.length === 2 && norm(named[0]) === norm(named[1])) agreed.add("text").add("tune");
