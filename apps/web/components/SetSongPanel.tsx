@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FILTER_DIM_TAG_TYPE, fetchAllRows, loadSongFilterMeta, songCardPills, type FilterableSong, type MultiFilterDim } from "@singjam/core";
+import { FILTER_DIM_TAG_TYPE, fetchAllRows, loadSongFilterMeta, songCardPills, SONG_SORT_LABEL, type FilterableSong, type MultiFilterDim } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import ConfidencePicker from "@/components/ConfidencePicker";
@@ -354,11 +354,11 @@ export default function SetSongPanel({
               <button
                 key={mode}
                 onClick={() => { setSortMode(mode); if (mode !== "leader") setSelectedLeaders(new Set()); }}
-                className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                className={`flex-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                   sortMode === mode ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                 }`}
               >
-                {mode === "popular" ? "Popular" : mode === "alpha" ? "A–Z" : mode === "za" ? "Z–A" : "Leader"}
+                {mode === "popular" ? SONG_SORT_LABEL.popularity : mode === "alpha" ? "A–Z" : mode === "za" ? "Z–A" : "Leader"}
               </button>
             ))}
           </div>
@@ -456,6 +456,7 @@ export default function SetSongPanel({
             showMissingSong ? (
               <SubmitSongForm
                 defaultTitle={searchQuery.trim()}
+                setId={setId}
                 onAdded={(song) => {
                   setShowMissingSong(false);
                   handleSearchSongSelect({ song_id: song.id, title: song.title, display_artist: song.display_artist });

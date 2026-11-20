@@ -9,7 +9,9 @@ import {
   SONG_TONALITIES,
 } from "./songVocabulary";
 import { sameArtist } from "./landmarkRecordings";
-import { pickHymnaryText, samePerson, type HymnaryText } from "./hymnary";
+import { pickHymnaryText, samePerson, trimTrailing, type HymnaryText } from "./hymnary";
+import { withoutGenericFaithThemes } from "./genericThemes";
+import { confirmedFirstLine } from "./songAddHints";
 
 export type Confidence = "high" | "medium" | "low";
 export type ModelField<T> = { v: T | null; c: Confidence } | null | undefined;
@@ -37,6 +39,9 @@ export type ModelAnswer = {
   alternate_titles?: ModelField<string[]>;
   music_culture?: ModelField<string>;
   lyric_culture?: ModelField<string>;
+  // Which of the tunes Hymnary prints the song's text to it's usually sung to,
+  // asked separately in a review (askTune) once Hymnary has matched the text.
+  tune?: ModelField<string>;
 };
 
 export type EnrichmentSources = {
@@ -50,6 +55,8 @@ export type EnrichmentSources = {
   writers?: string[];
   hymnary?: HymnaryText[] | null;
   title?: string;
+  // How the person adding the song says it starts (SongAddHints.first_line).
+  firstLineHint?: string;
 };
 
 // A spiritual is neither a hymn nor a contemporary worship song, though
@@ -100,12 +107,14 @@ function firstLyricLine(lyrics: string): string | null {
 }
 
 // Tags both models chose come first; GPT's remaining picks fill up to the cap.
+// Both models must have answered: when one is missing (a failed call, or no
+// answer), one model's taste would decide alone, so nothing is tagged.
 function mergeTags(gpt: string[] | null, claude: string[] | null, allowed: readonly string[]): string[] | undefined {
   const ok = (list: string[] | null) => (list ?? []).filter((t) => allowed.includes(t));
   const g = ok(gpt), c = ok(claude);
+  if (!g.length || !c.length) return undefined;
   const both = g.filter((t) => c.includes(t));
-  const merged = g.length ? [...both, ...g.filter((t) => !both.includes(t))] : c;
-  return merged.length ? merged.slice(0, MAX_TAGS) : undefined;
+  return [...both, ...g.filter((t) => !both.includes(t))].slice(0, MAX_TAGS);
 }
 
 // Every fact needs two independent signals — two models agreeing, or a model
@@ -203,9 +212,12 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   // name them too.
   const modelLyricists = [...(value(g.lyricists, SURE) ?? []), ...(value(c.lyricists, SURE) ?? [])];
   const modelComposers = [...(value(g.composers, SURE) ?? []), ...(value(c.composers, SURE) ?? [])];
-  const hymn = pickHymnaryText(src.hymnary ?? [], src.writers?.length ? src.writers : [...modelComposers, ...modelLyricists], src.title ?? "");
+  const hymn = matchedHymn(src);
   if (hymn) {
-    if (!out.first_line) out.first_line = hymn.firstLine.trim().replace(/[,;:]+$/, "");
+    if (!out.first_line) out.first_line = trimTrailing(hymn.firstLine.trim());
+    // The hymnal's refrain is a printed source for the hook, as its first line is for the first line.
+    const refrain = hymn.refrain && trimTrailing(withoutTrailingBrackets(hymn.refrain).trim(), ",;:.!");
+    if (!out.hook && refrain && norm(refrain).length >= 8) out.hook = refrain;
     const named = (list: string[], by: string[]) => list.length > 0 && by.some((w) => list.some((n) => samePerson(n, w)));
     if (!out.composers && !out.lyricists && named(hymn.authors, [...modelLyricists, ...modelComposers])) {
       out.lyricists = hymn.authors;
@@ -216,7 +228,44 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
     }
   }
 
+  // The remembered first line, once the lyrics or a hymnal print it.
+  if (!out.first_line) {
+    const hinted = confirmedFirstLine(src.firstLineHint, src.lyrics, (src.hymnary ?? []).map((t) => t.firstLine));
+    if (hinted) out.first_line = hinted;
+  }
+
   return out;
+}
+
+// "Gloria in excelsis Deo (Gloria a Dios en el cielo)" without the bracketed translation.
+function withoutTrailingBrackets(s: string): string {
+  const t = s.trimEnd();
+  const open = t.endsWith(")") ? t.lastIndexOf("(") : -1;
+  return open > 0 ? t.slice(0, open) : t;
+}
+
+// The hymnals' text that is this song: checked against the song's writers, or
+// against the writers the models name when the song has none yet.
+export function matchedHymn(src: EnrichmentSources): HymnaryText | null {
+  const g = src.gpt ?? {}, c = src.claude ?? {};
+  const named = [g.composers, c.composers, g.lyricists, c.lyricists].flatMap((f) => value(f, HIGH_OR_MEDIUM) ?? []);
+  return pickHymnaryText(src.hymnary ?? [], src.writers?.length ? src.writers : named, src.title ?? "");
+}
+
+// Hymnals print tune names in capitals ("ST. ANNE"); the catalogue uses title case.
+export function hymnTuneName(name: string): string {
+  return name.toLowerCase().replace(/(^|[\s.-])([a-z])/g, (_, sep: string, ch: string) => sep + ch.toUpperCase());
+}
+
+// A hymn tune's name ("Gloria", "New Britain") is not another title for the
+// song: names of the tunes Hymnary prints the song's texts to, or that a model
+// says it is sung to, are left out of its alternate titles.
+export function withoutTuneNames(titles: string[], src: Pick<EnrichmentSources, "gpt" | "claude" | "hymnary">): string[] {
+  const tunes = new Set([
+    ...(src.hymnary ?? []).flatMap((t) => t.tunes.map((u) => norm(u.name))),
+    ...[src.gpt?.tune?.v, src.claude?.tune?.v].filter((t): t is string => !!t).map(norm),
+  ]);
+  return titles.filter((t) => !tunes.has(norm(t)));
 }
 
 // A first line found by web search counts only when a page's own text holds it:
@@ -246,13 +295,14 @@ function namedByTwo(lists: string[][]): string[] {
 // Productions and alternate titles for the automatic fill: only what two of
 // GPT, Claude and the song's Wikipedia article name.
 export function decideListedFacts(
-  src: Pick<EnrichmentSources, "gpt" | "claude">,
+  src: Pick<EnrichmentSources, "gpt" | "claude" | "hymnary">,
   wiki: WikipediaFacts | null,
 ): { productions?: string[]; alternate_titles?: string[] } {
   const out: { productions?: string[]; alternate_titles?: string[] } = {};
   for (const f of ["productions", "alternate_titles"] as const) {
     const agreed = namedByTwo([value(src.gpt?.[f], HIGH_OR_MEDIUM) ?? [], value(src.claude?.[f], HIGH_OR_MEDIUM) ?? [], wiki?.[f] ?? []]);
-    if (agreed.length) out[f] = agreed;
+    const kept = f === "alternate_titles" ? withoutTuneNames(agreed, src) : agreed;
+    if (kept.length) out[f] = kept;
   }
   return out;
 }
@@ -280,8 +330,11 @@ export type EnrichmentReview = {
     notes: string | null;
     productions: string[];
     alternate_titles: string[];
-    additional_recordings: { artist: string; year: number | null }[];
+    additional_recordings: { artist: string; year: number | null; spotify_url?: string | null }[];
     genius_url: string | null;
+    // The hymnals' text of this song and the tune a model names from its tunes.
+    text?: { title: string; first_line: string; authors: string[]; url: string } | null;
+    tune?: { name: string; composers: string[] } | null;
   };
   agreed: string[];
   fromWikipedia: string[];
@@ -310,7 +363,12 @@ export function decideNotes(
 export function reviewEnrichment(
   src: EnrichmentSources,
   landmarks: { artist: string; year: number | null }[],
-  extra: { wikipedia?: WikipediaFacts | null; geniusUrl?: string | null } = {},
+  extra: {
+    wikipedia?: WikipediaFacts | null;
+    geniusUrl?: string | null;
+    // The song's tags now, so the review drops the same misfits the fill does.
+    existing?: { communities?: string[]; forms?: string[]; genres?: string[] };
+  } = {},
 ): EnrichmentReview {
   const d = decideEnrichment(src);
   const g = src.gpt ?? {}, c = src.claude ?? {};
@@ -342,7 +400,7 @@ export function reviewEnrichment(
   const years = [src.musicbrainz?.recordingYear ?? null, value(g.recording_year, HIGH), value(c.recording_year, HIGH), src.spotifyReleaseYear];
   const suggestions: EnrichmentReview["suggestions"] = {
     year_written: pick("year_written", d.year_written, one<number>("year_written", HIGH)),
-    first_line: pick("first_line", d.first_line, one<string>("first_line")),
+    first_line: pick("first_line", d.first_line, one<string>("first_line") ?? src.firstLineHint ?? null),
     hook: pick("hook", d.hook, one<string>("hook")),
     composers: pick("composers", d.composers, src.musicbrainz?.composers.length ? src.musicbrainz.composers : one<string[]>("composers", HIGH)) ?? [],
     lyricists: pick("lyricists", d.lyricists, src.musicbrainz?.lyricists.length ? src.musicbrainz.lyricists : one<string[]>("lyricists", HIGH)) ?? [],
@@ -365,6 +423,27 @@ export function reviewEnrichment(
     additional_recordings: landmarks,
     genius_url: extra.geniusUrl ?? null,
   };
+  const existing = extra.existing ?? {};
+  const genres = [...(existing.genres ?? []), ...suggestions.genres];
+  suggestions.forms = withoutMisfitForms(suggestions.forms, genres);
+  suggestions.themes = withoutGenericFaithThemes(suggestions.themes, {
+    communities: [...(existing.communities ?? []), ...suggestions.communities],
+    forms: [...(existing.forms ?? []), ...suggestions.forms],
+    genres,
+  });
+  suggestions.alternate_titles = withoutTuneNames(suggestions.alternate_titles, src);
+
+  // A tune counts when Hymnary prints this text to it and a model names it;
+  // both models naming it pre-ticks the text and the tune.
+  const hymn = matchedHymn(src);
+  const named = [value(g.tune, SURE), value(c.tune, SURE)].filter((t): t is string => !!t);
+  const tune = hymn?.tunes.find((t) => !t.name.startsWith("[") && named.some((n) => norm(n) === norm(t.name)));
+  suggestions.text = hymn
+    ? { title: hymn.title, first_line: trimTrailing(hymn.firstLine.trim()), authors: hymn.authors, url: hymn.url }
+    : null;
+  suggestions.tune = tune ? { name: hymnTuneName(tune.name), composers: tune.composers } : null;
+  if (tune && named.length === 2 && norm(named[0]) === norm(named[1])) agreed.add("text").add("tune");
+
   if (landmarks.length) agreed.add("additional_recordings");
   if (extra.geniusUrl) agreed.add("genius_url");
   if (wiki?.notes) fromWikipedia.add("notes");

@@ -230,6 +230,7 @@ function AddSongModal({
                   <SubmitMissingSong
                     defaultTitle={query.trim()}
                     forSet
+                    setId={setId}
                     onCreated={(songId, title) => { setSubmitOpen(false); addSong({ song_id: songId, title }); }}
                   />
                 ) : (
@@ -426,7 +427,7 @@ function SongRow({
         onClose={() => setKeyPickerVisible(false)}
         onSelect={onKeyChange}
       />
-      <View className={`flex-row px-4 py-3 border-b border-zinc-100 ${isActive ? 'bg-amber-50' : song.played ? 'bg-zinc-50' : 'bg-white'}`}>
+      <View className={`mx-4 mb-2 flex-row px-3 py-3 rounded-xl border ${isActive ? 'border-amber-300 bg-amber-50' : song.played ? 'border-zinc-200 bg-zinc-50' : 'border-zinc-200 bg-white'}`}>
         <View className="w-7 items-center mr-2 pt-0.5">
           <Text className="text-zinc-300 text-xs font-semibold">{displayPosition}</Text>
           {canManage && drag ? (
@@ -1608,7 +1609,7 @@ export default function SetDetailScreen() {
             keyExtractor={(item) => item.id}
             onDragEnd={({ data }) => handleReorder(data)}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: canEdit ? 140 : 40 }}
+            contentContainerStyle={{ paddingTop: 12, paddingBottom: canEdit ? 140 : 40 }}
             renderItem={({ item, drag, isActive, getIndex }: RenderItemParams<SetSong>) => (
               <ScaleDecorator>
                 <SongRow
@@ -1634,7 +1635,7 @@ export default function SetDetailScreen() {
             data={displayedSongs}
             keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: canEdit ? 140 : 40 }}
+            contentContainerStyle={{ paddingTop: 12, paddingBottom: canEdit ? 140 : 40 }}
             ListEmptyComponent={
               <View className="items-center justify-center py-16 px-8">
                 <Text className="text-zinc-400 text-sm">No songs match this filter</Text>

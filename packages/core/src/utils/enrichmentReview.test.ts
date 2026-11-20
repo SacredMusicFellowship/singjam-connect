@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideListedFacts, decideNotes, reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
+import { decideListedFacts, decideNotes, hymnTuneName, reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const base = (over: Partial<EnrichmentSources> = {}): EnrichmentSources => ({
   gpt: null, claude: null, musicbrainz: null, spotifyReleaseYear: null, lyrics: null, ...over,
@@ -119,5 +119,71 @@ describe("decideNotes", () => {
   });
   it("leaves notes empty when no source is sure", () => {
     expect(decideNotes({ gpt: { notes: low("A guess.") }, claude: null }, null)).toBeNull();
+  });
+});
+
+describe("reviewEnrichment for a hymn or carol", () => {
+  // Hymnary's entry for "Angels We Have Heard on High": no author, printed in 308 hymnals.
+  const angels = {
+    title: "Angels We Have Heard on High", firstLine: "Angels we have heard on high", authors: [], sources: "",
+    instances: 308, url: "https://hymnary.org/text/angels_we_have_heard_on_high",
+    tunes: [{ name: "GLORIA", composers: [], instances: 301 }, { name: "[Angels we have heard on high]", composers: [], instances: 2 }],
+  };
+  const carol = (over: Partial<EnrichmentSources> = {}) => base({
+    title: "Angels We Have Heard on High",
+    hymnary: [angels],
+    gpt: { composers: hi(["Traditional"]), tune: hi("GLORIA"), alternate_titles: hi(["Gloria", "Les Anges dans nos campagnes"]) },
+    claude: { composers: hi(["Traditional"]), tune: hi("Gloria") },
+    ...over,
+  });
+
+  it("suggests the hymnals' text and the tune both models name, pre-ticked", () => {
+    const r = reviewEnrichment(carol(), []);
+    expect(r.suggestions.text).toEqual({ title: "Angels We Have Heard on High", first_line: "Angels we have heard on high", authors: [], url: angels.url });
+    expect(r.suggestions.tune).toEqual({ name: "Gloria", composers: [] });
+    expect(r.agreed).toEqual(expect.arrayContaining(["text", "tune"]));
+  });
+
+  it("offers a tune only one model names, unticked", () => {
+    const r = reviewEnrichment(carol({ claude: { composers: hi(["Traditional"]) } }), []);
+    expect(r.suggestions.tune?.name).toBe("Gloria");
+    expect(r.agreed).not.toContain("tune");
+    expect(r.agreed).not.toContain("text");
+  });
+
+  it("never suggests a tune Hymnary doesn't print the text to", () => {
+    const r = reviewEnrichment(carol({ gpt: { composers: hi(["Traditional"]), tune: hi("IRIS") }, claude: { composers: hi(["Traditional"]), tune: hi("IRIS") } }), []);
+    expect(r.suggestions.tune).toBeNull();
+    expect(r.suggestions.text?.title).toBe("Angels We Have Heard on High");
+  });
+
+  it("keeps the tune's name out of the alternate titles", () => {
+    const r = reviewEnrichment(carol(), []);
+    expect(r.suggestions.alternate_titles).toEqual(["Les Anges dans nos campagnes"]);
+  });
+
+  it("drops Faith from a religious song, counting the song's own tags", () => {
+    const r = reviewEnrichment(base({ gpt: { themes: hi(["Joy", "Faith"]) }, claude: { themes: hi(["Joy", "Faith"]) } }), [], { existing: { communities: ["Christian"] } });
+    expect(r.suggestions.themes).toEqual(["Joy"]);
+  });
+
+  it("drops Hymn from a spiritual", () => {
+    const r = reviewEnrichment(base({ gpt: { genres: hi(["Spiritual"]), forms: hi(["Hymn"]) }, claude: { genres: hi(["Spiritual"]), forms: hi(["Hymn"]) } }), []);
+    expect(r.suggestions.forms).toEqual([]);
+  });
+});
+
+describe("decideListedFacts", () => {
+  it("leaves a hymn tune's name out of the alternate titles", () => {
+    const tunes = [{ title: "x", firstLine: "x", authors: [], sources: "", instances: 9, url: "", tunes: [{ name: "GLORIA", composers: [], instances: 1 }] }];
+    const r = decideListedFacts({ gpt: { alternate_titles: hi(["Gloria"]) }, claude: { alternate_titles: hi(["Gloria"]) }, hymnary: tunes }, null);
+    expect(r.alternate_titles).toBeUndefined();
+  });
+});
+
+describe("hymnTuneName", () => {
+  it("puts hymnals' capitals into title case", () => {
+    expect(hymnTuneName("ST. ANNE")).toBe("St. Anne");
+    expect(hymnTuneName("NEW BRITAIN")).toBe("New Britain");
   });
 });

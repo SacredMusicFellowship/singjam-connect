@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import SongSearch from "@/components/SongSearch";
+import { Suspense } from "react";
+import SongSearch, { SongSearchSkeleton } from "@/components/SongSearch";
 import Link from "next/link";
 import InfoTooltip from "@/components/InfoTooltip";
 
@@ -25,7 +26,9 @@ export default function SongsPage() {
           Browse by genre, occasion, community…
         </Link>
       </div>
-      <SongSearch />
+      <Suspense fallback={<SongSearchSkeleton />}>
+        <SongSearch />
+      </Suspense>
     </div>
   );
 }

@@ -29,6 +29,8 @@ export type HymnaryTune = { name: string; composers: string[]; instances: number
 export type HymnaryText = {
   title: string;
   firstLine: string;
+  // The refrain's first line ("Gloria in excelsis Deo"), when the text has one.
+  refrain?: string;
   authors: string[];
   sources: string;
   instances: number;
@@ -37,7 +39,15 @@ export type HymnaryText = {
 };
 
 const norm = (s: string) =>
-  s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\([^)]*\)/g, " ").replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+  s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\([^()]*\)/g, " ").replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+
+// A hymnal line without its trailing punctuation ("Angels we have heard on high,").
+// A loop, not /[,;:]+$/: that pattern is slow on a long run of commas.
+export function trimTrailing(s: string, chars = ",;:"): string {
+  let end = s.length;
+  while (end > 0 && chars.includes(s[end - 1])) end--;
+  return s.slice(0, end);
+}
 
 const names = (field: string | undefined) => (field ?? "").split(";").map((n) => n.trim()).filter(Boolean);
 
@@ -48,6 +58,7 @@ export function hymnaryTextsFor(title: string, records: Record<string, string>[]
     .map((r) => ({
       title: r.textTitle || r.displayTitle,
       firstLine: r.firstLine,
+      refrain: r.refrainFirstLine || undefined,
       authors: names(r.authors),
       sources: r.textSources ?? "",
       instances: Number(r.totalInstances) || 0,
@@ -84,7 +95,8 @@ export function samePerson(a: string, b: string): boolean {
 // "Shine On Me", authorless).
 export function pickHymnaryText(texts: HymnaryText[], writers: string[], title: string): HymnaryText | null {
   const named = writers.filter((w) => !TRADITIONAL.has(norm(w)));
-  const traditional = writers.length > 0 && named.length === 0;
+  // A traditional song may still name a translator ("Angels We Have Heard on High").
+  const traditional = writers.some((w) => TRADITIONAL.has(norm(w)));
   return (
     texts.find((t) =>
       t.authors.length

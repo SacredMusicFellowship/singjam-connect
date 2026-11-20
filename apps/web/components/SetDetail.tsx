@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { canRemoveSetSong, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeOwnKnowledge, mergeRefetchedSetSongs, jamPath, reorderSongsForPlayed, setPath, songTagNames, webUrl } from "@singjam/core";
+import { canRemoveSetSong, createLatestWinsQueue, createRefetchGate, fetchAllRows, mergeOwnKnowledge, mergeRefetchedSetSongs, jamPath, reorderSongsForPlayed, setPath, SONG_SORT_LABEL, songTagNames, webUrl } from "@singjam/core";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatComposers } from "@/lib/formatComposers";
 import { matchesSearch } from "@/lib/normalizeSearch";
@@ -1146,7 +1146,7 @@ export default function SetDetail({
               <button
                 key={value}
                 onClick={() => handleSetLinkSharing(value)}
-                className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                className={`flex-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                   linkSharing === value
                     ? "bg-white text-zinc-900 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-700"
@@ -1582,12 +1582,12 @@ export default function SetDetail({
               { value: "custom", label: "Custom" },
               { value: "az",     label: "A–Z" },
               { value: "za",     label: "Z–A" },
-              { value: "popularity", label: "Popular" },
+              { value: "popularity", label: SONG_SORT_LABEL.popularity },
             ] as const).map(({ value, label }) => (
               <button
                 key={value}
                 onClick={() => setSongSort(value)}
-                className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                className={`flex-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                   songSort === value
                     ? "bg-white text-zinc-900 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-700"

@@ -57,6 +57,20 @@ describe('SubmitMissingSong in a set', () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith('old-id', 'Proud Mary'));
   });
 
+  it('sends how the person knows the song, how it starts, and the set it was added to', async () => {
+    const fetchMock = mockFetch({ status: 200, body: match }, { status: 200, body: { id: 'new-id', slug: 'proud-mary' } });
+    await render(<SubmitMissingSong defaultTitle="Proud Mary" forSet setId="set-1" onCreated={jest.fn()} />);
+
+    await fireEvent.press(screen.getByText('Look up'));
+    await fireEvent.press(await screen.findByText('Traditional or folk'));
+    await fireEvent.changeText(screen.getByLabelText('How does it start?'), 'Left a good job in the city');
+    await fireEvent.press(screen.getByText("Yes, that's the song — add it"));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const body = JSON.parse((fetchMock.mock.calls[1] as unknown as [string, { body: string }])[1].body);
+    expect(body).toMatchObject({ known_as: 'traditional', first_line_hint: 'Left a good job in the city', set_id: 'set-1' });
+  });
+
   it('keeps "Open it" outside a set', async () => {
     mockFetch({ status: 200, body: { ...match, existing: { id: 'old-id', slug: null, title: 'Proud Mary', display_artist: null, match: 'same' } } });
     await render(<SubmitMissingSong defaultTitle="Proud Mary" onCreated={jest.fn()} />);

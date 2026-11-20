@@ -12,6 +12,8 @@ export function e2eServerEnv(): Record<string, string> {
     MOCK_OUTSIDE_SERVICES: "true",
     ALLOW_DEV_SIDE_EFFECTS: "true",
     NEXT_DIST_DIR: ".next-e2e",
+    // Next's usage telemetry is an outside request, which MSW blocks and logs as unhandled.
+    NEXT_TELEMETRY_DISABLED: "1",
     NEXT_PUBLIC_SITE_URL: E2E_BASE_URL,
     NEXT_PUBLIC_SUPABASE_URL: supabase.url,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: supabase.anonKey,

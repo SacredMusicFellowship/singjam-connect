@@ -3,7 +3,7 @@ import { View, Text, FlatList, TextInput, TouchableOpacity, RefreshControl, Aler
 import type { GestureResponderEvent } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createRefetchGate, mergeSuggestionsById, songMatchesFilters, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
+import { createRefetchGate, mergeSuggestionsById, songMatchesFilters, countActiveFilters, sortRepertoireSearchResults, songSortOptions, type SongSortBy, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
@@ -45,7 +45,7 @@ type RichUserSong = UserSong & {
 };
 
 type ConfidenceFilter = 'all' | 'lead' | 'support' | 'learn';
-type SortOrder = 'title_asc' | 'title_desc' | 'popularity';
+type SortOrder = SongSortBy;
 
 // ── Constants (mirror web repertoire/page.tsx) ────────────────────────────────
 
@@ -55,11 +55,7 @@ const CONFIDENCE_LEVELS: { key: Exclude<ConfidenceFilter, 'all'>; label: string 
   { key: 'learn', label: 'Learn' },
 ];
 
-const SORT_OPTIONS: { key: SortOrder; label: string }[] = [
-  { key: 'title_asc', label: 'A–Z' },
-  { key: 'title_desc', label: 'Z–A' },
-  { key: 'popularity', label: 'Popular' },
-];
+const SORT_OPTIONS = songSortOptions(['title_asc', 'title_desc', 'popularity']).map(({ value, label }) => ({ key: value, label }));
 
 // Used for the selection set, not filters — the filter sheet toggles its own.
 function toggleSet(set: Set<string>, value: string): Set<string> {
