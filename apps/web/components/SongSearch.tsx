@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import SubmitSongForm from "@/components/SubmitSongForm";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useSongCardActions } from "@/hooks/useSongCardActions";
-import { matchedAlternateTitles, loadSongFilterMeta } from "@singjam/core";
+import { matchedAlternateTitles, loadSongFilterMeta, searchCountLabel } from "@singjam/core";
 import { useSongSearch } from "@/hooks/useSongSearch";
 import { useBrowseSongs, type BrowseFilters } from "@/hooks/useBrowseSongs";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
@@ -14,6 +14,8 @@ import { SortDropdown } from "@/components/SortDropdown";
 import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
+import BrowseEntityRows from "@/components/BrowseEntityRows";
+import SongCardSkeleton from "@/components/SongCardSkeleton";
 import SearchInput from "@/components/SearchInput";
 import FiltersButton from "@/components/FiltersButton";
 import HideMySongsToggle from "@/components/HideMySongsToggle";
@@ -35,28 +37,20 @@ type FilterMeta = {
 
 const PAGE_SIZE = 20;
 
-const SORT_OPTIONS = [
-  { value: "popularity" as const, label: "Popular" },
-  { value: "title_asc" as const, label: "A–Z" },
-  { value: "title_desc" as const, label: "Z–A" },
-];
 
+// Reads q and mine with useSearchParams, so on a static page it renders only in
+// the browser (behind the page's Suspense) and a /search?q= link hydrates cleanly.
 export default function SongSearch({ initialQuery = "" }: { initialQuery?: string }) {
   const supabase = supabaseBrowser();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [filterMeta, setFilterMeta] = useState<FilterMeta[]>([]);
 
-  const [q, setQ] = useState(() => {
-    if (typeof window === "undefined") return initialQuery;
-    return new URLSearchParams(window.location.search).get("q") ?? initialQuery;
-  });
+  const [q, setQ] = useState(() => searchParams.get("q") ?? initialQuery);
   const [status, setStatus] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [hideMySongs, setHideMySongs] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return new URLSearchParams(window.location.search).get("mine") === "hide";
-  });
+  const [hideMySongs, setHideMySongs] = useState(() => searchParams.get("mine") === "hide");
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [initialCount] = useState(() => {
@@ -65,7 +59,9 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     return Number.isFinite(saved) && saved > PAGE_SIZE ? Math.min(saved, 2000) : PAGE_SIZE;
   });
 
-  const { results, loading, error: searchError } = useSongSearch(q, { limit: 50, debounceMs: 200 });
+  // "Show all" loads every match for the current query; a new query starts at 50 again.
+  const [showAllFor, setShowAllFor] = useState<string | null>(null);
+  const { results, total: searchTotal, entityRows, loading, error: searchError } = useSongSearch(q, { limit: showAllFor === q ? 2000 : 50, debounceMs: 200, entities: true });
 
   const hierarchy = useTagHierarchy();
   const filters = useSongFilters(filterMeta, "popularity", hierarchy);
@@ -183,16 +179,17 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
         <div className="px-1 text-xs text-zinc-500">
           {loading
             ? "Searching…"
-            : `${sortedSearch.length} song${sortedSearch.length === 1 ? "" : "s"}${activeFilterCount > 0 && sortedSearch.length < results.length ? ` (${results.length} before filters)` : ""}`}
+            : searchCountLabel({ shown: sortedSearch.length, loaded: results.length, total: searchTotal })}
         </div>
       )}
       {(searchError ?? browseError ?? status ?? actions.status) ? <div className="px-1 text-sm text-zinc-700">{searchError ?? browseError ?? status ?? actions.status}</div> : null}
+      {searching && <BrowseEntityRows rows={entityRows} stale={loading} />}
 
       {/* Filter bar */}
       <div className="space-y-2">
         <div className="flex flex-col gap-2 px-1">
           <div className="flex items-center gap-2">
-            <SortDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} align="left" />
+            <SortDropdown value={sortBy} onChange={setSortBy} align="left" />
             <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
             {currentUser && repertoire.size > 0 && (
               <HideMySongsToggle checked={hideMySongs} onChange={setHideMySongs} />
@@ -243,21 +240,19 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
                 {results.length > 0 ? "No results match the active filters." : "No songs found."}
               </div>
             ) : null}
+            {results.length < searchTotal && (
+              <button
+                type="button"
+                onClick={() => setShowAllFor(q)}
+                disabled={loading}
+                className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-300 disabled:opacity-60"
+              >
+                {loading ? "Loading…" : `Show all ${searchTotal} songs`}
+              </button>
+            )}
           </div>
         ) : browseLoading && browseSongs.length === 0 ? (
-          <div className="divide-y rounded-md border">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center justify-between p-4">
-                <div className="space-y-1.5">
-                  <div className="h-4 w-48 animate-pulse rounded bg-zinc-200" />
-                  <div className="h-3 w-32 animate-pulse rounded bg-zinc-100" />
-                </div>
-                <div className="flex gap-2">
-                  <div className="h-7 w-16 animate-pulse rounded-xl bg-zinc-100" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <SongCardSkeleton />
         ) : (
           <div className={`grid gap-2 transition-opacity ${browseLoading ? "opacity-60" : ""}`}>
             {browseSongs.map((r) => (
@@ -307,6 +302,15 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
       </div>
 
       {currentUser && <SubmitSongForm />}
+    </div>
+  );
+}
+
+export function SongSearchSkeleton() {
+  return (
+    <div className="space-y-3">
+      <div className="h-10 animate-pulse rounded-xl bg-zinc-100" />
+      <SongCardSkeleton />
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { useSongSearch, type SongSearchResult } from "@/hooks/useSongSearch";
 import { sortRepertoireSearchResults } from "@/lib/sortRepertoireSearchResults";
 import { SortDropdown } from "@/components/SortDropdown";
 import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
-import { matchedAlternateTitles } from "@singjam/core";
+import { matchedAlternateTitles, songSortOptions } from "@singjam/core";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import AddToSetPanel from "@/components/AddToSetPanel";
@@ -36,11 +36,7 @@ const CONFIDENCE_LEVELS = [
 
 type ConfidenceKey = (typeof CONFIDENCE_LEVELS)[number]["key"];
 
-const SORT_OPTIONS = [
-  { value: "title_asc" as const, label: "A–Z" },
-  { value: "title_desc" as const, label: "Z–A" },
-  { value: "popularity" as const, label: "Popular" },
-];
+const SORT_OPTIONS = songSortOptions(["title_asc", "title_desc", "popularity"]);
 
 type Item = {
   song_id: string;

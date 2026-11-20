@@ -3,7 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Linking } fr
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   browsePath, KIND_LABEL, loadBrowseEntity, loadBrowseRelated, loadBrowseSongs, traditionalCultureChips,
-  songMatchesFilters, type BrowseEntity, type BrowseKind, type BrowseRelatedGroup, type BrowseSongRow, type LinkedTag, type SongFilterState,
+  songMatchesFilters, songSortOptions, type SongSortBy, type BrowseEntity, type BrowseKind, type BrowseRelatedGroup, type BrowseSongRow, type LinkedTag, type SongFilterState,
 } from '@singjam/core';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
 import SuggestionCard, { type Suggestion } from '@/components/SuggestionCard';
@@ -18,12 +18,8 @@ import HideMySongsToggle from '@/components/HideMySongsToggle';
 import CreditText from '@/components/CreditText';
 import { useMySongTools } from '@/lib/useMySongTools';
 
-type SortBy = 'popularity' | 'title_asc' | 'title_desc';
-const SORT_OPTIONS: { key: SortBy; label: string }[] = [
-  { key: 'popularity', label: 'Most known' },
-  { key: 'title_asc', label: 'A–Z' },
-  { key: 'title_desc', label: 'Z–A' },
-];
+type SortBy = SongSortBy;
+const SORT_OPTIONS = songSortOptions(['popularity', 'title_asc', 'title_desc']).map(({ value, label }) => ({ key: value, label }));
 
 function TagLinks({ label, tags, onPress }: { label: string; tags: LinkedTag[]; onPress: (t: LinkedTag) => void }) {
   if (tags.length === 0) return null;
