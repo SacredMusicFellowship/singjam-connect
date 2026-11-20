@@ -1,12 +1,23 @@
 import { expect, test } from "./fixtures";
-import { hydrated, openPage } from "./support/signIn";
+import type { Page } from "@playwright/test";
+import { openPage } from "./support/signIn";
 import { admin } from "./support/supabase";
+
+// WebKit on CI can lose the first click while /search is still settling, so
+// click until the form opens.
+async function openAddForm(page: Page) {
+  await openPage(page, "/search");
+  const title = page.getByPlaceholder("e.g. Proud Mary");
+  await expect(async () => {
+    if (!(await title.isVisible())) await page.getByRole("button", { name: "Add a missing song" }).click();
+    await expect(title).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+}
 
 test("a member adds a missing song and says how they know it and how it starts", async ({ page, freshMember }) => {
   const title = `Harbour Carol ${freshMember.id.slice(0, 8)}`;
   try {
-    await openPage(page, "/search");
-    await (await hydrated(page.getByRole("button", { name: "Add a missing song" }))).click();
+    await openAddForm(page);
     await page.getByPlaceholder("e.g. Proud Mary").fill(title);
     await page.getByRole("button", { name: "Look up" }).click();
 
@@ -31,8 +42,7 @@ test("a member adds a missing song and says how they know it and how it starts",
 test("a misspelled artist is corrected to the one in the library, not added again", async ({ page, freshMember }) => {
   const title = `Harbour Reel ${freshMember.id.slice(0, 8)}`;
   try {
-    await openPage(page, "/search");
-    await (await hydrated(page.getByRole("button", { name: "Add a missing song" }))).click();
+    await openAddForm(page);
     await page.getByPlaceholder("e.g. Proud Mary").fill(title);
     await page.getByPlaceholder("e.g. Creedence Clearwater Revival").fill("Delphine Arowood");
     await page.getByRole("button", { name: "Look up" }).click();
@@ -52,8 +62,7 @@ test("a misspelled artist is corrected to the one in the library, not added agai
 });
 
 test("an artist nobody knows gets a spelling warning before it's added", async ({ page, freshMember }) => {
-  await openPage(page, "/search");
-  await (await hydrated(page.getByRole("button", { name: "Add a missing song" }))).click();
+  await openAddForm(page);
   await page.getByPlaceholder("e.g. Proud Mary").fill(`Harbour Waltz ${freshMember.id.slice(0, 8)}`);
   await page.getByPlaceholder("e.g. Creedence Clearwater Revival").fill("Zephyrine Quillfeather");
   await page.getByRole("button", { name: "Look up" }).click();
