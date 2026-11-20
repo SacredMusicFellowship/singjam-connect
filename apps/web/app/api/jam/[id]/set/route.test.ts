@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetUser, mockServerFrom, mockAdminFrom } = vi.hoisted(() => ({
+const { mockGetUser, mockServerFrom, mockAdminFrom, mockSupabaseFromBearer } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockServerFrom: vi.fn(),
   mockAdminFrom: vi.fn(),
+  mockSupabaseFromBearer: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -13,11 +14,15 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
+vi.mock("@/lib/supabase/bearer", () => ({
+  supabaseFromBearer: mockSupabaseFromBearer,
+}));
+
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: vi.fn(() => ({ from: mockAdminFrom })),
 }));
 
-import { PUT, DELETE } from "./route";
+import { GET, PUT, DELETE } from "./route";
 
 // Builds a chainable Supabase query mock that resolves at the terminal method.
 function chain(result: any, extra: Record<string, any> = {}) {
@@ -39,8 +44,28 @@ function putReq(jamId: string, body: object) {
   });
 }
 
-function deleteReq(jamId: string) {
-  return new Request(`http://localhost/api/jam/${jamId}/set`, { method: "DELETE" });
+function deleteReq(jamId: string, headers: Record<string, string> = {}) {
+  return new Request(`http://localhost/api/jam/${jamId}/set`, { method: "DELETE", headers });
+}
+
+function bearerPutReq(jamId: string, body: object) {
+  return new Request(`http://localhost/api/jam/${jamId}/set`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer native-token" },
+    body: JSON.stringify(body),
+  });
+}
+
+// The native app sends no cookie session, only a bearer token, so its queries
+// must run on the bearer client.
+function signedOutCookieWithBearer(userId: string | null) {
+  mockGetUser.mockResolvedValue({ data: { user: null } });
+  const bearerFrom = vi.fn();
+  mockSupabaseFromBearer.mockReturnValue({
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: userId ? { id: userId } : null } }) },
+    from: bearerFrom,
+  });
+  return bearerFrom;
 }
 
 const HOST_ID = "host-1";
@@ -68,6 +93,7 @@ function setupSuccess({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockSupabaseFromBearer.mockReset();
   mockGetUser.mockResolvedValue({ data: { user: { id: HOST_ID } } });
   // Default: not a co-host, unless a test overrides with its own mockReturnValueOnce queue.
   mockAdminFrom.mockReturnValue(chain({ data: null }));
@@ -309,5 +335,62 @@ describe("DELETE /api/jam/[id]/set", () => {
     mockServerFrom.mockReturnValueOnce(chain({ data: jamRow }));
     const res = await DELETE(deleteReq(JAM_ID), { params: Promise.resolve({ id: JAM_ID }) });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("requests from the native app (bearer token)", () => {
+  it("links a set for a host signed in with a bearer token, reading through the bearer client", async () => {
+    const bearerFrom = signedOutCookieWithBearer(HOST_ID);
+    bearerFrom
+      .mockReturnValueOnce(chain({ data: jamRow }))
+      .mockReturnValueOnce(chain({ data: setRow }));
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ error: null }))
+      .mockReturnValueOnce(chain({ data: [] }))
+      .mockReturnValueOnce(chain({ data: [] }));
+
+    const res = await PUT(bearerPutReq(JAM_ID, { setId: SET_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+
+    expect(res.status).toBe(200);
+    expect(mockSupabaseFromBearer).toHaveBeenCalledWith("native-token");
+    expect(bearerFrom).toHaveBeenCalledWith("jams");
+    expect(bearerFrom).toHaveBeenCalledWith("sets");
+    expect(mockServerFrom).not.toHaveBeenCalled();
+  });
+
+  it("unlinks a set for a host signed in with a bearer token", async () => {
+    const bearerFrom = signedOutCookieWithBearer(HOST_ID);
+    bearerFrom.mockReturnValueOnce(chain({ data: jamRow }));
+    mockAdminFrom.mockReturnValueOnce(chain({ error: null }));
+
+    const res = await DELETE(deleteReq(JAM_ID, { Authorization: "Bearer native-token" }), {
+      params: Promise.resolve({ id: JAM_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(bearerFrom).toHaveBeenCalledWith("jams");
+  });
+
+  it("reads the jam's set list through the bearer client", async () => {
+    const bearerFrom = signedOutCookieWithBearer(HOST_ID);
+    const linked = { id: SET_ID, short_code: "abc123", name: "Spring Sing" };
+    bearerFrom.mockReturnValueOnce(chain({ data: linked }));
+
+    const res = await GET(
+      new Request(`http://localhost/api/jam/${JAM_ID}/set`, { headers: { Authorization: "Bearer native-token" } }),
+      { params: Promise.resolve({ id: JAM_ID }) }
+    );
+
+    expect(await res.json()).toEqual({ set: linked });
+    expect(mockServerFrom).not.toHaveBeenCalled();
+  });
+
+  it("still returns 401 when the bearer token doesn't resolve to a user", async () => {
+    signedOutCookieWithBearer(null);
+
+    const res = await PUT(bearerPutReq(JAM_ID, { setId: SET_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+
+    expect(res.status).toBe(401);
+    expect(mockAdminFrom).not.toHaveBeenCalled();
   });
 });
