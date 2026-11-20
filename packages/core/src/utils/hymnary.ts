@@ -39,7 +39,15 @@ export type HymnaryText = {
 };
 
 const norm = (s: string) =>
-  s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\([^)]*\)/g, " ").replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+  s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\([^()]*\)/g, " ").replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+
+// A hymnal line without its trailing punctuation ("Angels we have heard on high,").
+// A loop, not /[,;:]+$/: that pattern is slow on a long run of commas.
+export function trimTrailing(s: string, chars = ",;:"): string {
+  let end = s.length;
+  while (end > 0 && chars.includes(s[end - 1])) end--;
+  return s.slice(0, end);
+}
 
 const names = (field: string | undefined) => (field ?? "").split(";").map((n) => n.trim()).filter(Boolean);
 

@@ -9,7 +9,7 @@ import {
   SONG_TONALITIES,
 } from "./songVocabulary";
 import { sameArtist } from "./landmarkRecordings";
-import { pickHymnaryText, samePerson, type HymnaryText } from "./hymnary";
+import { pickHymnaryText, samePerson, trimTrailing, type HymnaryText } from "./hymnary";
 import { withoutGenericFaithThemes } from "./genericThemes";
 import { confirmedFirstLine } from "./songAddHints";
 
@@ -214,9 +214,9 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   const modelComposers = [...(value(g.composers, SURE) ?? []), ...(value(c.composers, SURE) ?? [])];
   const hymn = matchedHymn(src);
   if (hymn) {
-    if (!out.first_line) out.first_line = hymn.firstLine.trim().replace(/[,;:]+$/, "");
+    if (!out.first_line) out.first_line = trimTrailing(hymn.firstLine.trim());
     // The hymnal's refrain is a printed source for the hook, as its first line is for the first line.
-    const refrain = hymn.refrain?.replace(/\s*\([^)]*\)\s*$/, "").trim().replace(/[,;:.!]+$/, "");
+    const refrain = hymn.refrain && trimTrailing(withoutTrailingBrackets(hymn.refrain).trim(), ",;:.!");
     if (!out.hook && refrain && norm(refrain).length >= 8) out.hook = refrain;
     const named = (list: string[], by: string[]) => list.length > 0 && by.some((w) => list.some((n) => samePerson(n, w)));
     if (!out.composers && !out.lyricists && named(hymn.authors, [...modelLyricists, ...modelComposers])) {
@@ -235,6 +235,13 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   }
 
   return out;
+}
+
+// "Gloria in excelsis Deo (Gloria a Dios en el cielo)" without the bracketed translation.
+function withoutTrailingBrackets(s: string): string {
+  const t = s.trimEnd();
+  const open = t.endsWith(")") ? t.lastIndexOf("(") : -1;
+  return open > 0 ? t.slice(0, open) : t;
 }
 
 // The hymnals' text that is this song: checked against the song's writers, or
@@ -432,7 +439,7 @@ export function reviewEnrichment(
   const named = [value(g.tune, SURE), value(c.tune, SURE)].filter((t): t is string => !!t);
   const tune = hymn?.tunes.find((t) => !t.name.startsWith("[") && named.some((n) => norm(n) === norm(t.name)));
   suggestions.text = hymn
-    ? { title: hymn.title, first_line: hymn.firstLine.trim().replace(/[,;:]+$/, ""), authors: hymn.authors, url: hymn.url }
+    ? { title: hymn.title, first_line: trimTrailing(hymn.firstLine.trim()), authors: hymn.authors, url: hymn.url }
     : null;
   suggestions.tune = tune ? { name: hymnTuneName(tune.name), composers: tune.composers } : null;
   if (tune && named.length === 2 && norm(named[0]) === norm(named[1])) agreed.add("text").add("tune");
