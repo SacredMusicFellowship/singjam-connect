@@ -23,7 +23,8 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const norm = (s: string) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
 
-export type Field = keyof ModelAnswer;
+// The tune is asked on its own (askTune): one more field makes Claude's schema too large.
+export type Field = Exclude<keyof ModelAnswer, "tune">;
 export type SongContext = {
   title: string;
   artist: string | null;

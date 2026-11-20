@@ -5,6 +5,7 @@ import {
   decideEnrichment,
   decideListedFacts,
   decideNotes,
+  matchedHymn,
   SONG_COMMUNITIES,
   SONG_CULTURES,
   SONG_FORMS,
@@ -18,6 +19,7 @@ import {
   type EnrichmentSources,
   reviewEnrichment,
   type ModelAnswer,
+  type ModelField,
   type WikipediaFacts,
 } from "@singjam/core";
 import { askClaudeJson, askGptJson, type ModelUsage } from "@/lib/enrichmentModels";
@@ -39,11 +41,11 @@ const FIELD_RULES: Record<Field, string> = {
   year_written: "year_written: year the song was composed (not recorded)",
   recording_year: "recording_year: year the named artist's recording was first released (original single or studio album, not a compilation, remaster or live album)",
   composers: 'composers: full canonical names of who wrote the music; ["Traditional"] for traditional songs',
-  lyricists: "lyricists: who wrote the words (often the same people as the composers)",
+  lyricists: "lyricists: who wrote the words that are sung (often the same people as the composers). Words translated or paraphrased from another language are by their translator, not \"Traditional\" (a carol's English words by the person who wrote them)",
   tonality: `tonality: one of ${SONG_TONALITIES.join(", ")}`,
   meter: `meter: time-signature numerator, one of ${SONG_METERS.join(", ")}`,
-  vibe: 'vibe: "Banger" (upbeat, high energy) or "Ballad" (slow, tender)',
-  genres: `genres: 1 to 3, each from: ${SONG_GENRES.join(", ")}`,
+  vibe: 'vibe: "Banger" (upbeat, high energy) or "Ballad" (slow, tender), as the song is usually sung, not as the named artist arranged it',
+  genres: `genres: 1 to 3 for the song itself, not the named artist's style (a traditional carol recorded by a pop act is not Pop), each from: ${SONG_GENRES.join(", ")}`,
   themes: `themes: 1 to 3 lyrical themes, each from: ${SONG_THEMES.join(", ")}. A Bible story is not Mythology`,
   languages: "languages: languages it is sung in, plain English names",
   cultures: `cultures: where the song comes from (nationality, ethnicity or region), each from: ${SONG_CULTURES.join(", ")}. Never "British". Religious traditions go in communities. Name the song's own musical tradition, never the performers' ethnicity: a spiritual or a traditional blues is African American; a soul or hip-hop record by Black artists gets no culture for that reason alone`,
@@ -54,7 +56,7 @@ const FIELD_RULES: Record<Field, string> = {
   hook: "hook: the most recognisable lyric phrase, usually from the chorus, verbatim and short",
   notes: "notes: a short factual paragraph on the song's origin and history that a musician would find useful (disputed credits, notable recordings; Roud or Child numbers for traditional songs). Null if nothing solid",
   productions: "productions: the film, musical or TV show the song was written for or first introduced in. Not productions that later used an existing song or recording. Empty if none",
-  alternate_titles: "alternate_titles: other titles the song is commonly known by; empty if none",
+  alternate_titles: "alternate_titles: other titles the song is commonly known by, not the name of the hymn tune it is sung to; empty if none",
   music_culture: `music_culture: for a traditional song, the tradition its melody comes from, one of: ${SONG_CULTURES.join(", ")}. Null otherwise`,
   lyric_culture: `lyric_culture: for a traditional song, the tradition its words come from, one of: ${SONG_CULTURES.join(", ")}. Null otherwise`,
 };
@@ -118,8 +120,18 @@ function blankToNull(answer: ModelAnswer | null): ModelAnswer | null {
   return out as ModelAnswer;
 }
 
-const askClaude = async (song: SongContext, usage: ModelUsage[]) =>
-  blankToNull(await askClaudeJson<ModelAnswer>(prompt(song), schemaFor(song.wanted), "fields", 16000, "fill", usage));
+// Claude refuses a structured-output schema of about 20 fields or more ("compiled
+// grammar is too large"; a new song's fill reached that in #456), so it's asked
+// in parts of at most 11 fields, side by side, and the answers are merged.
+const CLAUDE_FIELDS_PER_CALL = 11;
+async function askClaude(song: SongContext, usage: ModelUsage[]) {
+  const parts: Field[][] = [];
+  for (let i = 0; i < song.wanted.length; i += CLAUDE_FIELDS_PER_CALL) parts.push(song.wanted.slice(i, i + CLAUDE_FIELDS_PER_CALL));
+  const answers = await Promise.all(parts.map((wanted) =>
+    askClaudeJson<ModelAnswer>(prompt({ ...song, wanted }), schemaFor(wanted), "fields", 16000, "fill", usage)));
+  const got = answers.filter((a): a is ModelAnswer => !!a);
+  return got.length ? blankToNull(Object.assign({}, ...got)) : null;
+}
 
 // ---- Gathering every source, the one way all enrichment does it ----
 
@@ -348,12 +360,37 @@ async function fillSong(
   return { songId, decision, notes, geniusUrl, usage, firstLineSource };
 }
 
+// Once Hymnary has matched the song's text, each model says which of the
+// text's printed tunes it's usually sung to. Two models naming the same one
+// pre-tick it in the review (reviewEnrichment).
+async function askTune(sources: EnrichmentSources, usage: ModelUsage[]) {
+  const tunes = (matchedHymn(sources)?.tunes ?? []).map((t) => t.name).filter((n) => !n.startsWith("[")).slice(0, 12);
+  if (!tunes.length) return;
+  const p = {
+    system: "You are a careful hymnologist. Accuracy matters more than coverage: answer \"\" when you don't know.",
+    user: `Hymnals print the words of "${sources.title}" to these tunes: ${tunes.join(", ")}.
+Which one is it usually sung to in English-speaking churches today? Return JSON: {"tune": {"v": "<one of those names exactly, or \"\">", "c": "high" | "medium" | "low"}}`,
+  };
+  const schema = {
+    type: "object", additionalProperties: false, required: ["tune"],
+    properties: { tune: { type: "object", additionalProperties: false, required: ["v", "c"],
+      properties: { v: { type: "string", enum: [...tunes, ""] }, c: { type: "string", enum: ["high", "medium", "low"] } } } },
+  };
+  const [g, c] = await Promise.all([
+    timed("GPT tune", 60_000, [], () => askGptJson<ModelField<string>>(p, "tune", "tune", usage)),
+    timed("Claude tune", 60_000, [], () => askClaudeJson<ModelField<string>>(p, schema, "tune", 2000, "tune", usage)),
+  ]);
+  const answer = (a: ModelField<string> | null) => (a?.v ? a : null);
+  if (sources.gpt && answer(g)) sources.gpt.tune = answer(g);
+  if (sources.claude && answer(c)) sources.claude.tune = answer(c);
+}
+
 // Review mode for the song editor: asks every source about every field, saves
 // nothing, and returns suggestions a person ticks before they're applied.
 export async function proposeEnrichment(admin: SupabaseClient, songId: string) {
   const { data: song, error } = await admin
     .from("songs")
-    .select("title, display_artist, song_alternate_titles(title), song_productions(productions(name)), song_recording_artists(position, artists(name)), song_composers(people(name)), song_lyricists(people(name))")
+    .select("title, display_artist, song_alternate_titles(title), song_productions(productions(name)), song_recording_artists(position, artists(name)), song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name))")
     .eq("id", songId)
     .single();
   if (error || !song) throw error ?? new Error(`song ${songId} not found`);
@@ -378,7 +415,13 @@ export async function proposeEnrichment(admin: SupabaseClient, songId: string) {
     gatherSources(context, { links: true, geniusWriters }),
     addLandmarkRecordings(admin, songId, { dryRun: true }).catch(() => ({ added: [] as LandmarkResult[], usage: [] as ModelUsage[] })),
   ]);
-  const review = reviewEnrichment(gathered.sources, landmarks.added, { wikipedia: gathered.wikipedia, geniusUrl: gathered.geniusUrl });
+  await askTune(gathered.sources, gathered.usage);
+  const tagged = (type: TagType) => (s.song_tags ?? []).filter((t: any) => t.tags?.type === type && t.context === "general").map((t: any) => t.tags.name as string);
+  const review = reviewEnrichment(gathered.sources, landmarks.added, {
+    wikipedia: gathered.wikipedia,
+    geniusUrl: gathered.geniusUrl,
+    existing: { communities: tagged("community"), forms: tagged("form"), genres: tagged("genre") },
+  });
   const existingTitles = new Set([s.title, ...(s.song_alternate_titles ?? []).map((t: any) => t.title)].map(norm));
   review.suggestions.alternate_titles = review.suggestions.alternate_titles.filter((t) => !existingTitles.has(norm(t)));
   return {

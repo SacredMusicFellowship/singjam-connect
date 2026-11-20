@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import CatalogLinkField from "@/components/catalog/CatalogLinkField";
+import { createText, createTune } from "@/components/catalog/catalogWrites";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
@@ -155,6 +156,11 @@ export default function SongEditor({
   const [firstLine, setFirstLine] = useState(song?.first_line ?? "");
   const [hook, setHook] = useState(song?.hook ?? "");
   const [notes, setNotes] = useState(song?.notes ?? "");
+  // Notes taken from a review keep their source while they're left as suggested.
+  const [appliedNotes, setAppliedNotes] = useState<{ text: string; source: "wikipedia" | "ai" } | null>(null);
+  const notesSource = appliedNotes && notes === appliedNotes.text
+    ? appliedNotes.source
+    : song?.notes_source && notes === (song.notes ?? "") ? song.notes_source : null;
   const [geniusUrl, setGeniusUrl] = useState(song?.genius_url ?? "");
   const [chordChartUrl, setChordChartUrl] = useState(song?.chord_chart_url ?? "");
   const [year, setYear] = useState(song?.year?.toString() ?? "");
@@ -439,6 +445,8 @@ export default function SongEditor({
       { key: "productions", label: "Add productions", current: "", suggested: newOnly(s.productions, productionNames).join(", ") },
       { key: "genius_url", label: "Genius lyrics link", current: geniusUrl, suggested: s.genius_url ?? "" },
       { key: "alternate_titles", label: "Add alternate titles", current: "", suggested: newOnly(s.alternate_titles, altTitles.map((t) => t.title)).join(", ") },
+      { key: "text", label: "Text", current: allTexts.find((t) => t.id === textId)?.title ?? "", suggested: s.text?.title ?? "" },
+      { key: "tune", label: "Tune", current: allTunes.find((t) => t.id === tuneId)?.tune_label ?? "", suggested: s.tune?.name ?? "" },
     ];
     const split = (v: string) => v.split(/,\s*/).filter(Boolean);
     const people = new Set(["composers", "lyricists"]);
@@ -515,6 +523,27 @@ export default function SongEditor({
     }
     if (accept("notes") && aiSuggestions.notes) {
       setNotes(aiSuggestions.notes);
+      setAppliedNotes({ text: aiSuggestions.notes, source: reviewInfo.fromWikipedia.has("notes") ? "wikipedia" : "ai" });
+    }
+    // A suggested text or tune links one already in the catalogue by that name, or adds it.
+    const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+    try {
+      const text = aiSuggestions.text;
+      if (accept("text") && text) {
+        const found = allTexts.find((t) => same(t.title, text.title))
+          ?? await createText({ title: text.title, firstLine: text.first_line, kind: "hymn", authors: text.authors }, allPeople);
+        if (!allTexts.some((t) => t.id === found.id)) setAllTexts((prev) => [...prev, found]);
+        setTextId(found.id);
+      }
+      const tune = aiSuggestions.tune;
+      if (accept("tune") && tune) {
+        const found = allTunes.find((t) => same(t.tune_label, tune.name))
+          ?? await createTune({ name: tune.name, composers: tune.composers }, allPeople);
+        if (!allTunes.some((t) => t.id === found.id)) setAllTunes((prev) => [...prev, found]);
+        setTuneId(found.id);
+      }
+    } catch (e: any) {
+      setError(e?.message ?? "Couldn't link the text or tune.");
     }
     if (accept("productions") && aiSuggestions.productions.length) {
       const { existingIds, pendingNames } = splitExistingAndPending(aiSuggestions.productions, allProductions);
@@ -579,7 +608,8 @@ export default function SongEditor({
         p_song_id: song!.id,
         p: songSavePayload(
           {
-            title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, cardLine, textId, tuneId,
+            title, displayArtist, firstLine, hook, notes, notesSource: appliedNotes && notes === appliedNotes.text ? appliedNotes.source : undefined,
+            geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, cardLine, textId, tuneId,
             genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
             composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
             productions, pendingProductionNames, productionYears,
@@ -1044,9 +1074,9 @@ export default function SongEditor({
       <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3">
           <h2 className="text-sm font-semibold text-slate-700">Additional notes</h2>
-          {song?.notes_source && notes === (song.notes ?? "") && (
+          {notesSource && (
             <span className="text-xs text-slate-500">
-              {song.notes_source === "wikipedia" ? "Written from Wikipedia" : "AI-written · not checked"}
+              {notesSource === "wikipedia" ? "Written from Wikipedia" : "AI-written · not checked"}
             </span>
           )}
         </div>

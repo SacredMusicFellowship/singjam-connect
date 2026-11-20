@@ -3,8 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import TagCombobox from "@/components/TagCombobox";
-import { supabaseBrowser } from "@/lib/supabase/client";
-import { personIdFor } from "@/components/catalog/catalogWrites";
+import { createText, createTune } from "@/components/catalog/catalogWrites";
 
 type Option = { id: string; name: string; slug: string };
 type Lookup = { id: string; name: string };
@@ -55,25 +54,11 @@ export default function CatalogLinkField({ kind, songTitle, options, value, save
     setBusy(true);
     setError(null);
     try {
-      const db = supabaseBrowser();
       if (kind === "text") {
-        const { data, error } = await db.from("texts").insert({ title: n, slug: "x" }).select("id, title, slug").single();
-        if (error || !data) throw error ?? new Error("Couldn't create the text.");
+        const data = await createText({ title: n }, people);
         onCreated({ id: data.id, name: data.title, slug: data.slug });
       } else {
-        const { data: tune, error } = await db.from("tunes").insert({ name: n || null, slug: "x" }).select("id").single();
-        if (error || !tune) throw error ?? new Error("Couldn't create the tune.");
-        if (composer.trim()) {
-          const person_id = await personIdFor(composer.trim(), people);
-          const { error: e } = await db.from("tune_credits").insert({ tune_id: tune.id, person_id, role: "composer" });
-          if (e) throw e;
-        }
-        if (community) {
-          const { error: e } = await db.from("tune_tags").insert({ tune_id: tune.id, tag_id: community });
-          if (e) throw e;
-        }
-        const { data, error: e } = await db.from("tunes").select("id, slug, tune_label").eq("id", tune.id).single();
-        if (e || !data) throw e ?? new Error("Couldn't load the new tune.");
+        const data = await createTune({ name: n || null, composers: composer.trim() ? [composer.trim()] : [], communityId: community || undefined }, people);
         onCreated({ id: data.id, name: data.tune_label, slug: data.slug });
       }
       setCreating(false);

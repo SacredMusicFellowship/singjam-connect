@@ -53,6 +53,10 @@ describe("pickHymnaryText", () => {
     expect(pickHymnaryText([spiritual], ["Thomas A. Dorsey"], "Were You There")).toBeNull();
     expect(pickHymnaryText([{ ...spiritual, instances: 2 }], ["Traditional"], "Were You There")).toBeNull();
   });
+  it("takes an authorless text for a traditional song that also names its translator", () => {
+    const carol = text({ authors: [], instances: 308, firstLine: "Angels we have heard on high" });
+    expect(pickHymnaryText([carol], ["Traditional", "James Chadwick"], "Angels We Have Heard on High")).toBe(carol);
+  });
   it("rejects an authorless text that doesn't open with the title", () => {
     expect(pickHymnaryText([text({ authors: [], instances: 1315, firstLine: "I heard the voice of Jesus say" })], ["Traditional"], "Shine On Me")).toBeNull();
   });

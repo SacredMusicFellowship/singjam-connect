@@ -32,6 +32,11 @@ describe("songSavePayload", () => {
     expect(build({}).fields).not.toHaveProperty("card_line");
   });
 
+  it("sends where the notes came from only when given", () => {
+    expect(build({ notesSource: "wikipedia" }).fields).toMatchObject({ notes_source: "wikipedia" });
+    expect(build({}).fields).not.toHaveProperty("notes_source");
+  });
+
   it("sends every tag type as one tags object", () => {
     expect(build({ genres: ["Folk"], forms: ["Hymn"], communities: ["Jewish"] }).tags).toEqual({
       genre: ["Folk"], theme: [], language: [], culture: [], form: ["Hymn"], occasion: [], community: ["Jewish"],

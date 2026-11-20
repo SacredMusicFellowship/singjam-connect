@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const answers = vi.hoisted(() => ({ gpt: {} as Record<string, unknown>, claude: {} as Record<string, unknown> }));
+const answers = vi.hoisted(() => ({ gpt: {} as Record<string, unknown>, claude: {} as Record<string, unknown>, claudeSchemas: [] as any[] }));
 
 vi.mock("openai", () => ({
   default: class {
@@ -11,7 +11,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
   default: class {
     beta = {
       messages: {
-        create: async () => ({
+        create: async (req: any) => (answers.claudeSchemas.push(req.output_config?.format?.schema), {
           model: "claude",
           usage: { input_tokens: 0, output_tokens: 0 },
           stop_reason: "end_turn",
@@ -74,6 +74,24 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+describe("enrichSong — asking Claude", () => {
+  it("asks about a new song's fields in parts small enough for Claude's schema, and uses every part's answers", async () => {
+    answers.claudeSchemas = [];
+    answers.gpt = { alternate_titles: hi(["Cups"]) };
+    answers.claude = { alternate_titles: hi(["Cups"]) };
+    const { db, writes } = fakeDb([], { year_written: null, tonality: null, meter: null, vibe: null, first_line: null, hook: null, song_composers: [], song_lyricists: [] });
+
+    await enrichSong(db, "song-1");
+
+    const fieldCalls = answers.claudeSchemas.filter((s) => s?.properties?.fields);
+    const asked = fieldCalls.map((s) => s.properties.fields.required as string[]);
+    expect(asked.length).toBeGreaterThan(1);
+    expect(asked.every((f) => f.length <= 11)).toBe(true);
+    expect(asked.flat()).toContain("alternate_titles");
+    expect(writes).toContainEqual({ table: "song_alternate_titles", row: [{ song_id: "song-1", title: "Cups" }] });
+  });
 });
 
 describe("enrichSong — productions and alternate titles", () => {

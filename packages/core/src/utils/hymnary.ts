@@ -84,7 +84,8 @@ export function samePerson(a: string, b: string): boolean {
 // "Shine On Me", authorless).
 export function pickHymnaryText(texts: HymnaryText[], writers: string[], title: string): HymnaryText | null {
   const named = writers.filter((w) => !TRADITIONAL.has(norm(w)));
-  const traditional = writers.length > 0 && named.length === 0;
+  // A traditional song may still name a translator ("Angels We Have Heard on High").
+  const traditional = writers.some((w) => TRADITIONAL.has(norm(w)));
   return (
     texts.find((t) =>
       t.authors.length
