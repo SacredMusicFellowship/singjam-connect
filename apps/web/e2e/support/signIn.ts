@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { E2E_PASSWORD } from "@singjam/test-fixtures";
 
@@ -10,6 +10,16 @@ export async function openPage(page: Page, url: string): Promise<void> {
     await page.goto(url);
   }).toPass();
   await page.waitForLoadState("networkidle");
+}
+
+// Waits until React has hydrated this element, so typing into it reaches its onChange. Network idle
+// isn't enough on a slow machine: WebKit on CI can still be hydrating a large page after the last
+// request, and text typed into a field before then is reset to the server value.
+export async function hydrated(locator: Locator): Promise<Locator> {
+  await expect
+    .poll(() => locator.evaluate((el) => Object.keys(el).some((key) => key.startsWith("__reactProps$"))))
+    .toBe(true);
+  return locator;
 }
 
 export async function signIn(page: Page, email: string, password = E2E_PASSWORD): Promise<void> {
