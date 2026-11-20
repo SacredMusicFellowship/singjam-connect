@@ -11,8 +11,7 @@ import {
   verifiedFirstLine,
   type HymnaryText,
   type ModelAnswer,
-  type WikipediaFacts,
-} from "@singjam/core";
+  type WikipediaFacts, type SongAddHints } from "@singjam/core";
 import { askClaudeJson, type ModelUsage } from "@/lib/enrichmentModels";
 
 // The outside sources enrichment consults besides the two models: MusicBrainz,
@@ -34,6 +33,8 @@ export type SongContext = {
   writers?: string[];
   alternateTitles?: string[];
   firstLine?: string | null;
+  // What the person adding it told us (songs.add_hints).
+  addHints?: SongAddHints | null;
 };
 
 export async function musicbrainz(path: string) {

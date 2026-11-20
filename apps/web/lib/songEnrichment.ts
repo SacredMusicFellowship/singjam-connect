@@ -6,6 +6,7 @@ import {
   decideListedFacts,
   decideNotes,
   matchedHymn,
+  addHintLines,
   SONG_COMMUNITIES,
   SONG_CULTURES,
   SONG_FORMS,
@@ -71,6 +72,7 @@ Only use the listed values where a list is given. For each field give confidence
   const known = [
     song.writers?.length ? `Written by: ${song.writers.join(", ")}` : null,
     song.firstLine ? `First line: "${song.firstLine}"` : null,
+    ...addHintLines(song.addHints, song.artist),
   ].filter(Boolean).join("\n");
   const user = `Song: "${song.title}" — ${song.artist ?? "(no artist)"}${song.production ? ` — from ${song.production}` : ""}${known ? `\n${known}\nAnswer about this song, not another song with the same title.` : ""}
 Fill these fields:
@@ -193,11 +195,14 @@ export async function gatherSources(
       ? timed("Genius", 20_000, checks, () =>
           lookUpGenius({ title, alternateTitles: song.alternateTitles, artists: song.artists ?? (artist ? [artist] : []), writers: opts.geniusWriters ?? song.writers ?? [] }))
       : null,
-    wants("first_line", "composers") ? timed("Hymnary", 60_000, checks, () => lookUpHymnary(title)) : null,
+    wants("first_line", "composers") || song.addHints?.known_as === "hymn" ? timed("Hymnary", 60_000, checks, () => lookUpHymnary(title)) : null,
   ]);
   const order = ["GPT", "Claude", "MusicBrainz", "LRCLIB", "Hymnary", "Wikipedia", "Genius"];
   return {
-    sources: { gpt, claude, musicbrainz, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics, artist, writers: song.writers ?? [], hymnary, title },
+    sources: {
+      gpt, claude, musicbrainz, spotifyReleaseYear: opts.spotifyReleaseYear ?? null, lyrics, artist, writers: song.writers ?? [], hymnary, title,
+      firstLineHint: song.addHints?.first_line,
+    },
     wikipedia,
     geniusUrl,
     checks: checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name)),
@@ -217,7 +222,7 @@ export async function enrichSong(
   const { data: song, error } = await admin
     .from("songs")
     .select(
-      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, notes, genius_url, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(title), song_recording_artists(artist_id, year, position, artists(name))"
+      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, notes, genius_url, add_hints, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(title), song_recording_artists(artist_id, year, position, artists(name))"
     )
     .eq("id", songId)
     .single();
@@ -295,6 +300,7 @@ async function fillSong(
     writers,
     alternateTitles: (s.song_alternate_titles ?? []).map((t: any) => t.title),
     firstLine: s.first_line ?? null,
+    addHints: s.add_hints ?? null,
   };
   const { sources, wikipedia, geniusUrl, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear, links: !s.genius_url });
   const decision = { ...decideEnrichment(sources), ...decideListedFacts(sources, wikipedia) };
@@ -390,7 +396,7 @@ Which one is it usually sung to in English-speaking churches today? Return JSON:
 export async function proposeEnrichment(admin: SupabaseClient, songId: string) {
   const { data: song, error } = await admin
     .from("songs")
-    .select("title, display_artist, song_alternate_titles(title), song_productions(productions(name)), song_recording_artists(position, artists(name)), song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name))")
+    .select("title, display_artist, add_hints, song_alternate_titles(title), song_productions(productions(name)), song_recording_artists(position, artists(name)), song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name))")
     .eq("id", songId)
     .single();
   if (error || !song) throw error ?? new Error(`song ${songId} not found`);
@@ -407,6 +413,7 @@ export async function proposeEnrichment(admin: SupabaseClient, songId: string) {
     production: (s.song_productions ?? []).map((p: any) => p.productions?.name).filter(Boolean).join(", ") || null,
     wanted: ALL_FIELDS,
     alternateTitles: (s.song_alternate_titles ?? []).map((t: any) => t.title),
+    addHints: s.add_hints ?? null,
   };
   // The review asks the models about the credits afresh, so the song's current
   // writers only go to the Genius lookup, never into the prompt.

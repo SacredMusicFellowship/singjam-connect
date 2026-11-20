@@ -11,6 +11,7 @@ import {
 import { sameArtist } from "./landmarkRecordings";
 import { pickHymnaryText, samePerson, type HymnaryText } from "./hymnary";
 import { withoutGenericFaithThemes } from "./genericThemes";
+import { confirmedFirstLine } from "./songAddHints";
 
 export type Confidence = "high" | "medium" | "low";
 export type ModelField<T> = { v: T | null; c: Confidence } | null | undefined;
@@ -54,6 +55,8 @@ export type EnrichmentSources = {
   writers?: string[];
   hymnary?: HymnaryText[] | null;
   title?: string;
+  // How the person adding the song says it starts (SongAddHints.first_line).
+  firstLineHint?: string;
 };
 
 // A spiritual is neither a hymn nor a contemporary worship song, though
@@ -220,6 +223,12 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
     }
   }
 
+  // The remembered first line, once the lyrics or a hymnal print it.
+  if (!out.first_line) {
+    const hinted = confirmedFirstLine(src.firstLineHint, src.lyrics, (src.hymnary ?? []).map((t) => t.firstLine));
+    if (hinted) out.first_line = hinted;
+  }
+
   return out;
 }
 
@@ -379,7 +388,7 @@ export function reviewEnrichment(
   const years = [src.musicbrainz?.recordingYear ?? null, value(g.recording_year, HIGH), value(c.recording_year, HIGH), src.spotifyReleaseYear];
   const suggestions: EnrichmentReview["suggestions"] = {
     year_written: pick("year_written", d.year_written, one<number>("year_written", HIGH)),
-    first_line: pick("first_line", d.first_line, one<string>("first_line")),
+    first_line: pick("first_line", d.first_line, one<string>("first_line") ?? src.firstLineHint ?? null),
     hook: pick("hook", d.hook, one<string>("hook")),
     composers: pick("composers", d.composers, src.musicbrainz?.composers.length ? src.musicbrainz.composers : one<string[]>("composers", HIGH)) ?? [],
     lyricists: pick("lyricists", d.lyricists, src.musicbrainz?.lyricists.length ? src.musicbrainz.lyricists : one<string[]>("lyricists", HIGH)) ?? [],

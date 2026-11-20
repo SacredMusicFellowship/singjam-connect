@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { KNOWN_AS, type KnownAs } from "@singjam/core";
 
 type Match = {
   title: string;
@@ -27,10 +28,12 @@ function spotifyTrackId(url: string | null): string | null {
 
 // With `onAdded` (a set's Add songs), the form starts open and hands back the
 // song it added, or the one already in the library, instead of opening it.
+// `setId` lets enrichment use that set's jam tags as context.
 export type AddedSong = { id: string; title: string; display_artist: string | null };
 
-export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel }: {
+export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, setId }: {
   defaultTitle?: string;
+  setId?: string;
   onAdded?: (song: AddedSong) => void;
   onCancel?: () => void;
 } = {}) {
@@ -38,6 +41,8 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel }:
   const [open, setOpen] = useState(!!onAdded);
   const [title, setTitle] = useState(defaultTitle);
   const [artist, setArtist] = useState("");
+  const [knownAs, setKnownAs] = useState<KnownAs | null>(null);
+  const [firstLine, setFirstLine] = useState("");
   const [step, setStep] = useState<Step>({ type: "input" });
   const [error, setError] = useState<string | null>(null);
 
@@ -70,7 +75,10 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel }:
     const res = await fetch("/api/songs/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...match, confirmed: true, add_anyway: addAnyway }),
+      body: JSON.stringify({
+        ...match, confirmed: true, add_anyway: addAnyway,
+        known_as: knownAs, first_line_hint: firstLine.trim() || null, set_id: setId ?? null,
+      }),
     });
     const json = await res.json();
     if (onAdded && (res.ok || (res.status === 409 && json.id))) {
@@ -155,6 +163,10 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel }:
 
       {step.type === "preview" && <MatchPreview match={step.match} />}
 
+      {step.type === "preview" && step.match.existing?.match !== "same" && (
+        <AddHints knownAs={knownAs} onKnownAs={setKnownAs} firstLine={firstLine} onFirstLine={setFirstLine} />
+      )}
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-wrap gap-3">
@@ -208,7 +220,7 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel }:
             )}
 
             <button
-              onClick={() => { setOpen(false); setTitle(""); setArtist(""); reset(); onCancel?.(); }}
+              onClick={() => { setOpen(false); setTitle(""); setArtist(""); setKnownAs(null); setFirstLine(""); reset(); onCancel?.(); }}
               className="rounded-full border border-zinc-200 px-5 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
             >
               Cancel
@@ -216,6 +228,54 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel }:
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// Two optional details that help enrichment get the song right; skipping them
+// adds the song exactly as before.
+function AddHints({ knownAs, onKnownAs, firstLine, onFirstLine }: {
+  knownAs: KnownAs | null;
+  onKnownAs: (v: KnownAs | null) => void;
+  firstLine: string;
+  onFirstLine: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl bg-zinc-50 p-3">
+      <div>
+        <p id="known-as-label" className="text-sm font-medium text-zinc-700">
+          How do you know it? <span className="font-normal text-zinc-400">Optional</span>
+        </p>
+        <div role="group" aria-labelledby="known-as-label" className="mt-1.5 flex flex-wrap gap-2">
+          {KNOWN_AS.map((k) => (
+            <button
+              key={k.value}
+              type="button"
+              aria-pressed={knownAs === k.value}
+              onClick={() => onKnownAs(knownAs === k.value ? null : k.value)}
+              className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+                knownAs === k.value ? "border-amber-500 bg-amber-500 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-amber-300"
+              }`}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label htmlFor="add-song-first-line" className="block text-sm font-medium text-zinc-700">
+          How does it start? <span className="font-normal text-zinc-400">Optional</span>
+        </label>
+        <input
+          id="add-song-first-line"
+          value={firstLine}
+          onChange={(e) => onFirstLine(e.target.value)}
+          maxLength={200}
+          placeholder="The first line, if you know it"
+          className="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+        />
+      </div>
+      <p className="text-xs text-zinc-500">Helps us fill in the right writers, words and details.</p>
     </div>
   );
 }

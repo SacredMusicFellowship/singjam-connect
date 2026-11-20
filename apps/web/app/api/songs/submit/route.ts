@@ -6,6 +6,16 @@ import { findExistingSong, findOnSpotify } from "@/lib/songLookup";
 import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
 import { idsFor, tagIds } from "@/lib/songEnrichment";
 import { parseTagSpecs, parseWriters } from "@/lib/songAddDetails";
+import { knownByRecordingFor, parseAddHints } from "@singjam/core";
+
+// The tag names of the jam a set belongs to, as context for enrichment.
+async function setContext(db: ReturnType<typeof admin>, setId: unknown): Promise<string[]> {
+  if (typeof setId !== "string" || !/^[0-9a-f-]{36}$/i.test(setId)) return [];
+  const { data: set } = await db.from("sets").select("jam_id").eq("id", setId).maybeSingle();
+  if (!set?.jam_id) return [];
+  const { data } = await db.from("jam_tags").select("tags(name)").eq("jam_id", set.jam_id);
+  return ((data ?? []) as any[]).map((r) => r.tags?.name).filter((n): n is string => !!n);
+}
 
 async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): Promise<string | null> {
   const { data: found } = await db.from("artists").select("id").ilike("name", name).limit(1).maybeSingle();
@@ -20,7 +30,9 @@ async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): P
 // Older clients send only title/artist; those are matched on Spotify here.
 // Admins and song editors (the CSV import) may also send sourced writers and
 // tags and a first line, which enrichment then leaves alone, and no_recording
-// for a traditional song that has no recording to match.
+// for a traditional song that has no recording to match. Anyone may add hints
+// (known_as, first_line_hint, and set_id for the set it's being added to),
+// which enrichment uses but never saves as facts on their own.
 export async function POST(req: Request) {
   const supabase = await supabaseServer();
   let user = (await supabase.auth.getUser()).data.user ?? null;
@@ -64,9 +76,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This song is already in our library.", id: existing.id, slug: existing.slug }, { status: 409 });
   }
 
+  const hints = parseAddHints(body, await setContext(db, body.set_id));
   const { data: song, error: songErr } = await db
     .from("songs")
-    .insert({ title, display_artist: artist, first_line: firstLine, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString() })
+    .insert({
+      title, display_artist: artist, first_line: firstLine, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString(),
+      add_hints: hints, known_by_recording: knownByRecordingFor(hints),
+    })
     .select("id, slug")
     .single();
   if (songErr || !song) {

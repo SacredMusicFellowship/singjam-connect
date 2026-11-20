@@ -456,6 +456,7 @@ export default function SetSongPanel({
             showMissingSong ? (
               <SubmitSongForm
                 defaultTitle={searchQuery.trim()}
+                setId={setId}
                 onAdded={(song) => {
                   setShowMissingSong(false);
                   handleSearchSongSelect({ song_id: song.id, title: song.title, display_artist: song.display_artist });
