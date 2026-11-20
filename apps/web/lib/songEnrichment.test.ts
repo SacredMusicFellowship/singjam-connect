@@ -104,8 +104,8 @@ describe("addLandmarkRecordings", () => {
 
     const { added } = await run(db);
 
-    expect(added).toEqual([{ artist: "Arthur Collins & Byron G. Harlan", year: 1911 }]);
-    expect(inserted).toEqual([{ song_id: "song-1", artist_id: "a1", year: 1911, position: 1 }]);
+    expect(added).toEqual([{ artist: "Arthur Collins & Byron G. Harlan", year: 1911, spotify_url: null }]);
+    expect(inserted).toEqual([{ song_id: "song-1", artist_id: "a1", year: 1911, spotify_url: null, position: 1 }]);
   });
 
   it("adds nothing when only one model names a recording", async () => {
@@ -133,8 +133,8 @@ describe("addLandmarkRecordings", () => {
     musicBrainzHas([{ artist: "Bessie Smith", date: "" }]);
     const { db, inserted } = fakeDb(["Ray Charles"]);
 
-    expect((await run(db)).added).toEqual([{ artist: "Bessie Smith", year: null }]);
-    expect(inserted).toEqual([{ song_id: "song-1", artist_id: "a1", year: null, position: 1 }]);
+    expect((await run(db)).added).toEqual([{ artist: "Bessie Smith", year: null, spotify_url: null }]);
+    expect(inserted).toEqual([{ song_id: "song-1", artist_id: "a1", year: null, spotify_url: null, position: 1 }]);
   });
 
   it("writes nothing on a dry run", async () => {
@@ -142,7 +142,7 @@ describe("addLandmarkRecordings", () => {
     musicBrainzHas([{ artist: "Bessie Smith", date: "1927" }]);
     const { db, inserted } = fakeDb(["Ray Charles"]);
 
-    expect((await run(db, { dryRun: true })).added).toEqual([{ artist: "Bessie Smith", year: 1927 }]);
+    expect((await run(db, { dryRun: true })).added).toEqual([{ artist: "Bessie Smith", year: 1927, spotify_url: null }]);
     expect(inserted).toEqual([]);
   });
 });
