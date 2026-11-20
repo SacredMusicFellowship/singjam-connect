@@ -6,7 +6,7 @@ import { findExistingSong, findOnSpotify } from "@/lib/songLookup";
 import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
 import { idsFor, tagIds } from "@/lib/songEnrichment";
 import { parseTagSpecs, parseWriters } from "@/lib/songAddDetails";
-import { knownByRecordingFor, parseAddHints } from "@singjam/core";
+import { isPlaceholderArtist, parseAddHints } from "@singjam/core";
 
 // The tag names of the jam a set belongs to, as context for enrichment.
 async function setContext(db: ReturnType<typeof admin>, setId: unknown): Promise<string[]> {
@@ -47,15 +47,18 @@ export async function POST(req: Request) {
 
   let title: string = body.title.trim();
   const noRecording = body.no_recording === true;
-  let artist: string | null = noRecording ? null : body.artist?.trim() || null;
+  let artist: string | null = noRecording || isPlaceholderArtist(body.artist) ? null : body.artist?.trim() || null;
   let spotifyUrl: string | null = body.spotify_url ?? null;
   let releaseYear: number | null = typeof body.release_year === "number" ? body.release_year : null;
-  const youtubeUrl: string | null =
-    body.youtube_official && /^[A-Za-z0-9_-]{11}$/.test(body.youtube_id ?? "") ? `https://www.youtube.com/watch?v=${body.youtube_id}` : null;
+  const confirmedVideo = body.confirmed && /^[A-Za-z0-9_-]{11}$/.test(body.youtube_id ?? "") ? `https://www.youtube.com/watch?v=${body.youtube_id}` : null;
+  // A video goes on the recording only when it's that artist's official upload
+  // (the hourly backfill finds one later otherwise). A song with no recording
+  // artist keeps the video the person confirmed as the song's own.
+  const youtubeUrl = body.youtube_official ? confirmedVideo : null;
 
   if (!body.confirmed && !noRecording) {
     const match = await findOnSpotify(title, artist ?? "").catch(() => null);
-    if (match) ({ title, artist, spotify_url: spotifyUrl, release_year: releaseYear } = match);
+    if (match && !isPlaceholderArtist(match.artist)) ({ title, artist, spotify_url: spotifyUrl, release_year: releaseYear } = match);
     // The CSV import's titles are sourced; Spotify's track name ("Graves Into
     // Gardens (Live)", "Trust In God (feat. Chris Brown)") only supplies the recording.
     if (match && body.keep_title === true) title = body.title.trim();
@@ -81,7 +84,7 @@ export async function POST(req: Request) {
     .from("songs")
     .insert({
       title, display_artist: artist, first_line: firstLine, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString(),
-      add_hints: hints, known_by_recording: knownByRecordingFor(hints),
+      add_hints: hints, youtube_url: artist ? null : confirmedVideo,
     })
     .select("id, slug")
     .single();

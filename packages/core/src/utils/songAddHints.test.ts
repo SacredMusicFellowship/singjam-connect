@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addHintLines, confirmedFirstLine, knownByRecordingFor, parseAddHints } from "./songAddHints";
+import { addHintLines, confirmedFirstLine, isPlaceholderArtist, parseAddHints } from "./songAddHints";
 import { decideEnrichment, reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const base = (over: Partial<EnrichmentSources> = {}): EnrichmentSources => ({
@@ -16,12 +16,11 @@ describe("parseAddHints", () => {
   });
 });
 
-describe("knownByRecordingFor", () => {
-  it("marks traditional songs and hymns as not known by a recording, and leaves the rest alone", () => {
-    expect(knownByRecordingFor({ known_as: "traditional" })).toBe(false);
-    expect(knownByRecordingFor({ known_as: "hymn" })).toBe(false);
-    expect(knownByRecordingFor({ known_as: "recording" })).toBeNull();
-    expect(knownByRecordingFor(null)).toBeNull();
+describe("isPlaceholderArtist", () => {
+  it("treats Spotify's stand-in credits as no artist", () => {
+    for (const n of ["Traditional", "Trad.", "Anonymous", "Various Artists", "Traditional Carol"]) expect(isPlaceholderArtist(n)).toBe(true);
+    expect(isPlaceholderArtist("The Traditional Fools")).toBe(false);
+    expect(isPlaceholderArtist(null)).toBe(false);
   });
 });
 

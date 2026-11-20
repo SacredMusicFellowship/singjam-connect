@@ -30,10 +30,11 @@ export function parseAddHints(input: { known_as?: unknown; first_line_hint?: unk
   return Object.keys(hints).length ? hints : null;
 }
 
-// A traditional song or a hymn isn't known by whoever recorded the version found
-// on Spotify, so its card and page lead with its origin instead.
-export function knownByRecordingFor(hints: SongAddHints | null): boolean | null {
-  return hints?.known_as === "traditional" || hints?.known_as === "hymn" ? false : null;
+// Spotify credits some tracks to "Traditional" or "Various Artists": a credit,
+// not a performer, so it never becomes the song's recording artist.
+const PLACEHOLDER_ARTISTS = /^(traditional|trad|anonymous|anon|unknown|unknown artists?|various|various artists|traditional (carol|folk|hymn|song))$/;
+export function isPlaceholderArtist(name: string | null | undefined): boolean {
+  return !!name && PLACEHOLDER_ARTISTS.test(name.trim().toLowerCase().replace(/\.$/, ""));
 }
 
 // Lines added to the enrichment prompt.

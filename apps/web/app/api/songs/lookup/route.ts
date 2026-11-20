@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { supabaseAdmin as admin } from "@/lib/supabase/admin";
 import { findExistingSong, findOnSpotify, findOnYouTube } from "@/lib/songLookup";
+import { isPlaceholderArtist } from "@singjam/core";
 
 export async function GET(req: NextRequest) {
   const supabase = await supabaseServer();
@@ -18,10 +19,13 @@ export async function GET(req: NextRequest) {
   if (!title) return NextResponse.json({ error: "title is required" }, { status: 400 });
 
   try {
-    const spotify = await findOnSpotify(title, artist);
-    const canonical = { title: spotify?.title ?? title, artist: spotify?.artist ?? artist };
+    const found = await findOnSpotify(title, artist);
+    // A track credited to "Traditional" has no performer to keep, so it's no match.
+    const spotify = found && !isPlaceholderArtist(found.artist) ? found : null;
+    const canonical = { title: spotify?.title ?? title, artist: spotify?.artist ?? (isPlaceholderArtist(artist) ? "" : artist) };
     const [youtube, existing] = await Promise.all([
-      canonical.artist ? findOnYouTube(canonical.title, canonical.artist) : Promise.resolve(null),
+      // With no artist (a traditional song or hymn) the preview is searched by title alone.
+      findOnYouTube(canonical.title, canonical.artist),
       findExistingSong(admin(), [canonical.title, title], canonical.artist || artist || null),
     ]);
     return NextResponse.json({
