@@ -13,6 +13,8 @@ export default function ChordsLink({
    *  a pill's width, so it doesn't span a whole line if the row wraps). */
   pill?: boolean;
 }) {
+  // Chart links are typed in by members, so only an http(s) address becomes a link.
+  if (!/^https?:\/\//i.test(href)) return null;
   return (
     <>
       <a

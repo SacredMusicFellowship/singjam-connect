@@ -2,7 +2,24 @@ import { leadArtist, sameArtist } from "./landmarkRecordings";
 
 const norm = (s: string) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-const baseTitle = (t: string) => norm(t.replace(/\s*\([^)]*\)/g, ""));
+// The title without its parenthesized parts and the spaces before them. A loop,
+// not /\s*\([^)]*\)/g: that pattern is slow on a long run of spaces or of "(".
+function withoutParens(t: string): string {
+  let out = "";
+  let i = 0;
+  for (;;) {
+    const open = t.indexOf("(", i);
+    if (open < 0) break;
+    const close = t.indexOf(")", open + 1);
+    if (close < 0) break;
+    let start = open;
+    while (start > i && /\s/.test(t[start - 1])) start--;
+    out += t.slice(i, start);
+    i = close + 1;
+  }
+  return out + t.slice(i);
+}
+const baseTitle = (t: string) => norm(withoutParens(t));
 const SONG_WORDS = /\b(song|hymn|ballad|carol|single|spiritual|anthem|shanty|lullaby|standard|tune|aria)\b/i;
 
 export type WikipediaPage = { title: string; type: string; description: string | null; extract: string };

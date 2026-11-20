@@ -93,6 +93,21 @@ describe("decideEnrichment — lyrics", () => {
     expect(decideEnrichment(base({ gpt: { first_line: hi("Gosto muito de te ver") }, claude: { first_line: hi("Gosto muito de você") } })).first_line).toBeUndefined();
     expect(decideEnrichment(base({ gpt: { first_line: hi("Have you seen the ghost of John?") }, claude: { first_line: hi("Have you seen the ghost of John") } })).first_line).toBe("Have you seen the ghost of John?");
   });
+  it("falls back to the lyrics' own first line, unless it's only vocables", () => {
+    const firstLine = (top: string) => decideEnrichment(base({ lyrics: `${top}\nAnd the land is dark` })).first_line;
+    expect(firstLine("When the night has come, my love")).toBe("When the night has come, my love");
+    expect(firstLine("Ooh, mm-hmm, la la la, whoa oh yeah")).toBeUndefined();
+    expect(firstLine("Mmmm hmmm, ahmm, nanana, hey hey")).toBeUndefined();
+    expect(firstLine("Oh yeah, ohh yeah, oh oh oh oh")).toBe("Oh yeah, ohh yeah, oh oh oh oh");
+    expect(firstLine("Mmh mmh mmh mmh mmh mmh mmh")).toBe("Mmh mmh mmh mmh mmh mmh mmh");
+  });
+  it("finishes quickly on a long run of vocable-like letters", () => {
+    for (const top of ["m" + "mm".repeat(50_000), "h" + "mahm".repeat(50_000), "a" + "hmm".repeat(50_000), "mm".repeat(50_000) + "x"]) {
+      const start = performance.now();
+      decideEnrichment(base({ lyrics: `${top}\nAnd the land is dark` }));
+      expect(performance.now() - start).toBeLessThan(500);
+    }
+  });
 });
 
 describe("decideEnrichment — a recording artist who wrote the song", () => {
