@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as admin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
-import { findExistingSong, findOnSpotify } from "@/lib/songLookup";
+import { findExistingSong, findKnownArtist, findOnSpotify } from "@/lib/songLookup";
 import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
 import { idsFor, tagIds } from "@/lib/songEnrichment";
 import { parseTagSpecs, parseWriters } from "@/lib/songAddDetails";
@@ -18,8 +18,8 @@ async function setContext(db: ReturnType<typeof admin>, setId: unknown): Promise
 }
 
 async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): Promise<string | null> {
-  const { data: found } = await db.from("artists").select("id").ilike("name", name).limit(1).maybeSingle();
-  if (found) return found.id;
+  const known = await findKnownArtist(db, name);
+  if (known) return known.id;
   const { data: created } = await db.from("artists").insert({ name }).select("id").single();
   return created?.id ?? null;
 }
@@ -52,8 +52,8 @@ export async function POST(req: Request) {
   let releaseYear: number | null = typeof body.release_year === "number" ? body.release_year : null;
   const confirmedVideo = body.confirmed && /^[A-Za-z0-9_-]{11}$/.test(body.youtube_id ?? "") ? `https://www.youtube.com/watch?v=${body.youtube_id}` : null;
   // A video goes on the recording only when it's that artist's official upload
-  // (the hourly backfill finds one later otherwise). A song with no recording
-  // artist keeps the video the person confirmed as the song's own.
+  // (the hourly backfill finds one later otherwise). Any other video the person
+  // confirmed is kept as the song's own, which shows until the recording has one.
   const youtubeUrl = body.youtube_official ? confirmedVideo : null;
 
   if (!body.confirmed && !noRecording) {
@@ -65,6 +65,8 @@ export async function POST(req: Request) {
   }
 
   const db = admin();
+  // Whatever the client sent, a misspelling of an artist we have becomes our spelling.
+  if (artist) artist = (await findKnownArtist(db, artist))?.name ?? artist;
   const writers = parseWriters(body.writers);
   const tagSpecs = parseTagSpecs(body.tags);
   const firstLine = typeof body.first_line === "string" ? body.first_line.trim() || null : null;
@@ -84,7 +86,7 @@ export async function POST(req: Request) {
     .from("songs")
     .insert({
       title, display_artist: artist, first_line: firstLine, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString(),
-      add_hints: hints, youtube_url: artist ? null : confirmedVideo,
+      add_hints: hints, youtube_url: youtubeUrl && artist ? null : confirmedVideo,
     })
     .select("id, slug")
     .single();

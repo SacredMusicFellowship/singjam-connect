@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetUser, mockBearerGetUser, mockFrom, mockFindOnSpotify, mockTrigger, mockFindExisting } = vi.hoisted(() => ({
+const { mockGetUser, mockBearerGetUser, mockFrom, mockFindOnSpotify, mockTrigger, mockFindExisting, mockFindKnownArtist } = vi.hoisted(() => ({
   mockFindExisting: vi.fn(),
+  mockFindKnownArtist: vi.fn(),
   mockGetUser: vi.fn(),
   mockBearerGetUser: vi.fn(),
   mockFrom: vi.fn(),
@@ -9,7 +10,7 @@ const { mockGetUser, mockBearerGetUser, mockFrom, mockFindOnSpotify, mockTrigger
   mockTrigger: vi.fn(),
 }));
 
-vi.mock("@/lib/songLookup", () => ({ findOnSpotify: mockFindOnSpotify, findExistingSong: mockFindExisting }));
+vi.mock("@/lib/songLookup", () => ({ findOnSpotify: mockFindOnSpotify, findExistingSong: mockFindExisting, findKnownArtist: mockFindKnownArtist }));
 vi.mock("@/lib/triggerSongEnrichment", () => ({ triggerSongEnrichment: mockTrigger }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -46,6 +47,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFindOnSpotify.mockResolvedValue(null);
   mockFindExisting.mockResolvedValue(null);
+  mockFindKnownArtist.mockResolvedValue(null);
 });
 
 
@@ -95,6 +97,7 @@ describe("POST /api/songs/submit", () => {
     expect(inserts.songs).toMatchObject({ title: "Proud Mary", display_artist: "Creedence Clearwater Revival", submitted_by: "u1" });
     expect(inserts.songs).not.toHaveProperty("needs_review");
     expect(inserts.song_recording_artists).toMatchObject({ spotify_url: "https://open.spotify.com/track/x", youtube_url: "https://www.youtube.com/watch?v=5hid10y4bWs", youtube_ok: true });
+    expect(inserts.songs.youtube_url).toBeNull();
     expect(mockTrigger).toHaveBeenCalledWith("s1", 1969);
   });
 
@@ -124,7 +127,7 @@ describe("POST /api/songs/submit", () => {
     });
   });
 
-  it("doesn't store a preview video that isn't an official upload", async () => {
+  it("keeps a confirmed video that isn't an official upload as the song's own, off the recording", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     const inserts: Record<string, any> = {};
     mockFrom.mockImplementation((table: string) => {
@@ -141,7 +144,7 @@ describe("POST /api/songs/submit", () => {
     await POST(req({ title: "Ripple", artist: "Grateful Dead", confirmed: true, youtube_id: "abcdefghijk", youtube_official: false }));
 
     expect(inserts.song_recording_artists.youtube_url).toBeNull();
-    expect(inserts.songs.youtube_url).toBeNull();
+    expect(inserts.songs.youtube_url).toBe("https://www.youtube.com/watch?v=abcdefghijk");
   });
 
   it("drops a stand-in artist like \"Traditional\" and keeps the confirmed video as the song's own", async () => {
@@ -162,6 +165,29 @@ describe("POST /api/songs/submit", () => {
 
     expect(inserts.songs).toMatchObject({ display_artist: null, youtube_url: "https://www.youtube.com/watch?v=abcdefghijk" });
     expect(inserts.song_recording_artists).toBeUndefined();
+  });
+
+  it("files a misspelled artist under the artist we already have, whatever the client sent", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockFindKnownArtist.mockResolvedValue({ id: "fm", name: "Fleetwood Mac" });
+    const inserts: Record<string, any> = {};
+    mockFrom.mockImplementation((table: string) => {
+      const c: any = {};
+      for (const m of ["select", "ilike", "is", "limit", "eq"]) c[m] = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: null });
+      c.insert = vi.fn((row: any) => {
+        inserts[table] = row;
+        return { select: () => ({ single: async () => ({ data: { id: "s1", slug: "everywhere" } }) }) };
+      });
+      return c;
+    });
+
+    await POST(req({ title: "Everywhere", artist: "Fleewood Mac", confirmed: true }));
+
+    expect(mockFindExisting).toHaveBeenCalledWith(expect.anything(), ["Everywhere", "Everywhere"], "Fleetwood Mac");
+    expect(inserts.songs.display_artist).toBe("Fleetwood Mac");
+    expect(inserts.song_recording_artists.artist_id).toBe("fm");
+    expect(inserts.artists).toBeUndefined();
   });
 
   it("matches an unconfirmed title on Spotify first (older clients)", async () => {

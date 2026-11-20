@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import YouTubePlayer from '@/components/YouTubePlayer';
-import { KNOWN_AS, type KnownAs } from '@singjam/core';
+import { addSongSpellingNote, KNOWN_AS, type KnownAs } from '@singjam/core';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
 type Match = {
   title: string;
   artist: string | null;
+  artist_known?: boolean;
   spotify_url: string | null;
   release_year: number | null;
   youtube_id: string | null;
@@ -149,6 +150,15 @@ export default function SubmitMissingSong({
               <Text className="text-zinc-500"> · {match.existing ? match.existing.display_artist : match.artist}</Text>
             ) : null}
           </Text>
+          {(() => {
+            const note = addSongSpellingNote(artist, match);
+            if (!note) return null;
+            return note.tone === 'warning' ? (
+              <Text accessibilityRole="alert" className="mb-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">{note.text}</Text>
+            ) : (
+              <Text className="mb-2 text-xs text-zinc-500">{note.text}</Text>
+            );
+          })()}
           {match.youtube_id ? (
             <YouTubePlayer videoId={match.youtube_id} />
           ) : !hasMedia ? (

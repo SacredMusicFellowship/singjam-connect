@@ -26,7 +26,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
   },
 }));
 
-vi.mock("@/lib/songLookup", () => ({ findOnSpotify: async () => null }));
+vi.mock("@/lib/songLookup", async (actual) => ({ ...(await actual<object>()), findOnSpotify: async () => null }));
 
 import { addFirstRecordings, addLandmarkRecordings } from "./songEnrichment";
 
@@ -41,6 +41,8 @@ function fakeDb(existing: string[]) {
     song_recording_artists: existing.map((name, i) => ({ position: i, artists: { name } })),
   };
   const db = {
+    // similar_artists: every artist, for findKnownArtist to choose from.
+    rpc: async () => ({ data: artists.map(({ id, name }) => ({ id, name })), error: null }),
     from(table: string) {
       let filter: string | null = null;
       const q: any = {
@@ -153,6 +155,8 @@ function fakeSongDb(song: Row) {
   const inserted: Row[] = [];
   const alternates: Row[] = [];
   const db = {
+    // similar_artists: every artist, for findKnownArtist to choose from.
+    rpc: async () => ({ data: artists.map(({ id, name }) => ({ id, name })), error: null }),
     from(table: string) {
       let filter: string | null = null;
       const q: any = {

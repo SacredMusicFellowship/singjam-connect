@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { KNOWN_AS, type KnownAs } from "@singjam/core";
+import { addSongSpellingNote, KNOWN_AS, type KnownAs } from "@singjam/core";
 
 type Match = {
   title: string;
   artist: string | null;
+  artist_known?: boolean;
   spotify_url: string | null;
   release_year: number | null;
   youtube_id: string | null;
@@ -161,7 +162,7 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, s
 
       {isSubmitting && <p className="text-xs text-zinc-400">Adding it to the library…</p>}
 
-      {step.type === "preview" && <MatchPreview match={step.match} />}
+      {step.type === "preview" && <MatchPreview match={step.match} typedArtist={artist} />}
 
       {step.type === "preview" && step.match.existing?.match !== "same" && (
         <AddHints knownAs={knownAs} onKnownAs={setKnownAs} firstLine={firstLine} onFirstLine={setFirstLine} />
@@ -280,8 +281,9 @@ function AddHints({ knownAs, onKnownAs, firstLine, onFirstLine }: {
   );
 }
 
-function MatchPreview({ match }: { match: Match }) {
+function MatchPreview({ match, typedArtist }: { match: Match; typedArtist: string }) {
   const trackId = spotifyTrackId(match.spotify_url);
+  const note = addSongSpellingNote(typedArtist, match);
   return (
     <div className="space-y-2">
       {match.existing ? (
@@ -296,6 +298,11 @@ function MatchPreview({ match }: { match: Match }) {
         <p className="text-sm text-zinc-700">
           Is this the song? <span className="font-medium">{match.title}</span>
           {match.artist && <span className="text-zinc-500"> · {match.artist}</span>}
+        </p>
+      )}
+      {note && (
+        <p role={note.tone === "warning" ? "alert" : undefined} className={note.tone === "warning" ? "rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800" : "text-xs text-zinc-500"}>
+          {note.text}
         </p>
       )}
       {match.youtube_id ? (

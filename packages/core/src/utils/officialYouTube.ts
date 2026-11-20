@@ -11,17 +11,18 @@ const NOT_THE_RECORDING = /\b(live|cover|karaoke|instrumental|reaction|tutorial|
 // title must name the song (by any of its titles: "Erie Canal" is how Pete
 // Seeger's record names "Low Bridge"). Covers, live cuts and fan uploads don't qualify.
 export function isOfficialYouTubeUpload(
-  video: { title: string; channelTitle: string },
+  video: { title?: string; channelTitle?: string },
   songTitle: string | string[],
   artistName: string,
 ): boolean {
   if (Array.isArray(songTitle)) return songTitle.some((t) => isOfficialYouTubeUpload(video, t, artistName));
   const artist = squash(artistName).replace(/^the/, "");
-  const channel = squash(video.channelTitle).replace(/^the/, "");
+  // A search result missing its channel can't be shown to be the artist's own.
+  const channel = squash(video.channelTitle ?? "").replace(/^the/, "");
   if (!artist) return false;
   const channelOk = [artist, `${artist}topic`, `${artist}vevo`, `${artist}official`].includes(channel);
   if (!channelOk) return false;
-  const title = words(video.title);
+  const title = words(video.title ?? "");
   const titleWords = new Set(title.split(" "));
   const songWords = words(songTitle).split(" ").filter((w) => w && w !== "the");
   if (!songWords.length || !songWords.every((w) => titleWords.has(w))) return false;

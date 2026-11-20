@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { newOutages, OUTAGE_STREAK, usageCost, type RunChecks, type TagType } from "@singjam/core";
 import { norm } from "@/lib/enrichmentSources";
 import type { ModelUsage } from "@/lib/enrichmentModels";
+import { findKnownArtist } from "@/lib/songLookup";
 
 // The catalogue writes enrichment and the add-song route share: names to ids
 // (people, artists, tags) and what a run cost.
@@ -9,7 +10,8 @@ import type { ModelUsage } from "@/lib/enrichmentModels";
 export async function idsFor(admin: SupabaseClient, table: "people" | "languages" | "artists", names: string[]) {
   const ids: string[] = [];
   for (const name of names) {
-    const { data: found } = await admin.from(table).select("id").ilike("name", name).limit(1).maybeSingle();
+    // An artist may be credited with a variant spelling ("Beatles"); people are matched exactly.
+    const found = table === "artists" ? await findKnownArtist(admin, name) : (await admin.from(table).select("id").ilike("name", name).limit(1).maybeSingle()).data;
     const id = found?.id ?? (await admin.from(table).insert({ name }).select("id").single()).data?.id;
     if (id) ids.push(id);
   }

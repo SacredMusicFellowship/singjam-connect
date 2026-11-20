@@ -7,7 +7,7 @@ import { createText, createTune } from "@/components/catalog/catalogWrites";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
-import { MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type CardLine, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
+import { closestArtist, MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type CardLine, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -1360,9 +1360,12 @@ function RecordingArtistField({
   const trimmedQuery = query.trim();
   const showSuggestions = trimmedQuery.length > 0;
   const atCap = items.length + pendingItems.length >= MAX_RECORDINGS;
-  const suggestions = allArtists.filter(
-    (a) => !items.find((e) => e.id === a.id) && !pendingItems.find((p) => p.name === a.name) && a.name.toLowerCase().includes(trimmedQuery.toLowerCase())
-  );
+  const available = allArtists.filter((a) => !items.find((e) => e.id === a.id) && !pendingItems.find((p) => p.name === a.name));
+  const contains = available.filter((a) => a.name.toLowerCase().includes(trimmedQuery.toLowerCase()));
+  // A misspelling ("Fleewood Mac") offers the artist we have before "Create".
+  const nearName = closestArtist(trimmedQuery, available.map((a) => a.name));
+  const near = available.find((a) => a.name === nearName && !contains.includes(a));
+  const suggestions = near ? [near, ...contains] : contains;
 
   return (
     <div className="space-y-2">
