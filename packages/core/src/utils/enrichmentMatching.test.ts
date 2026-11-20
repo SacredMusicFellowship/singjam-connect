@@ -31,6 +31,20 @@ describe("matchesWikipediaArticle", () => {
     const other = page({ title: "Hallelujah (Leonard Cohen song)", description: "1984 song by Leonard Cohen", extract: `"Hallelujah" is a song written by Leonard Cohen.` });
     expect(matchesWikipediaArticle({ title: "Hallelujah I Love Her So", artist: "Ray Charles" }, other)).toBe(false);
   });
+
+  it("drops every bracketed part of both titles, but not an unclosed one", () => {
+    const wabash = page({ title: "Wabash Cannonball (song)", description: "American folk song", extract: "The Wabash Cannonball is an American folk song." });
+    expect(matchesWikipediaArticle({ title: "Wabash Cannonball (1947)  (Live (Remastered)", artist: null }, wabash)).toBe(true);
+    expect(matchesWikipediaArticle({ title: "Wabash Cannonball (1947", artist: null }, wabash)).toBe(false);
+  });
+
+  it("finishes quickly on a long run of spaces or of '('", () => {
+    for (const title of [" ".repeat(50_000) + "x", "(".repeat(50_000), "a" + " (".repeat(50_000)]) {
+      const start = performance.now();
+      matchesWikipediaArticle({ title, artist: null }, page({ title, description: "song", extract: "a song" }));
+      expect(performance.now() - start).toBeLessThan(500);
+    }
+  });
 });
 
 const song = (over: Partial<GeniusSong>): GeniusSong => ({ title: "", artists: [], writers: [], ...over });
