@@ -62,21 +62,21 @@ export default async function AdminAttendancePage({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Attendance</h1>
-          <p className="text-sm text-slate-500">
-            Everyone who checked in or joined the set list at an official event, across {eventCount} {eventCount === 1 ? "event" : "events"}.
-            Updated nightly after each event ends; first-timers get the ActiveCampaign tag.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-fit rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600">
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">Attendance</h1>
+            <p className="text-sm text-slate-500">
+              Everyone who checked in or joined the set list at an official event, across {eventCount} {eventCount === 1 ? "event" : "events"}.
+              Updated nightly after each event ends; first-timers get the ActiveCampaign tag.
+            </p>
+          </div>
+          <div className="shrink-0 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600">
             <span className="font-semibold text-slate-900">{people.length}</span>{" "}
             {people.length === 1 ? "person" : "people"}
           </div>
-          <RunSweepButton />
         </div>
+        <RunSweepButton />
       </div>
 
       {people.length === 0 ? (

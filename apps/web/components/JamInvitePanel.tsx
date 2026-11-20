@@ -202,7 +202,7 @@ export default function JamInvitePanel({
                   <button
                     onClick={() => inviteUser(u.id)}
                     disabled={isSent || inviting === u.id}
-                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                       isSent
                         ? "bg-green-100 text-green-700 cursor-default"
                         : "bg-amber-500 text-white hover:bg-amber-400 disabled:opacity-50"
@@ -237,7 +237,7 @@ export default function JamInvitePanel({
           <button
             onClick={inviteEmail}
             disabled={emailBusy || !emailInput.trim()}
-            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {emailBusy ? "Sending…" : "Send"}
           </button>
@@ -256,7 +256,7 @@ export default function JamInvitePanel({
           <button
             onClick={() => shareInvite()}
             disabled={shareBusy}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
           >
             {shareBusy ? "Opening…" : (
               <>
@@ -274,7 +274,7 @@ export default function JamInvitePanel({
             <button
               onClick={() => shareInvite("sms")}
               disabled={shareBusy}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
             >
               {shareBusy ? "Opening…" : (
                 <>
@@ -289,7 +289,7 @@ export default function JamInvitePanel({
             <button
               onClick={() => shareInvite("whatsapp")}
               disabled={shareBusy}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-[#25D366] bg-white px-4 py-2.5 text-sm font-medium text-[#128C7E] hover:bg-green-50 disabled:opacity-50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 rounded-full border border-[#25D366] bg-white px-4 py-2.5 text-sm font-medium text-[#128C7E] hover:bg-green-50 disabled:opacity-50 transition-colors"
             >
               {shareBusy ? "Opening…" : (
                 <>
@@ -315,7 +315,7 @@ export default function JamInvitePanel({
         <button
           onClick={copyInviteLink}
           disabled={copyBusy}
-          className="w-full flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+          className="w-full flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
         >
           {copyBusy ? "Copying…" : (
             <>

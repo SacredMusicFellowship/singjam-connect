@@ -222,7 +222,7 @@ export default async function TicketsCompletePage({
           </p>
           <Link
             href={`/auth?next=${eventPath}`}
-            className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+            className="inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             Create an account
           </Link>
@@ -247,7 +247,7 @@ export default async function TicketsCompletePage({
           </p>
           <Link
             href={setHref}
-            className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+            className="inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             View set list
           </Link>
@@ -258,7 +258,7 @@ export default async function TicketsCompletePage({
         {outcome.kind === "paid" && linkedSet && !memberSongInvite && (
           <Link
             href={setHref}
-            className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+            className="inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             View set list
           </Link>
@@ -267,8 +267,8 @@ export default async function TicketsCompletePage({
           href={eventPath}
           className={
             outcome.kind === "paid" && linkedSet
-              ? "inline-block rounded-xl border border-zinc-200 px-5 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
-              : "inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+              ? "inline-block rounded-full border border-zinc-200 px-5 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+              : "inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           }
         >
           Back to {jamName}

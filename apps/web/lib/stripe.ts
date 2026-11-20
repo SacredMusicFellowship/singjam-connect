@@ -26,7 +26,12 @@ export function stripe(): Stripe {
       // Under `next dev` only, so production keeps stripe-node's default transport.
       process.env.NODE_ENV === "development"
         ? { httpClient: Stripe.createFetchHttpClient(stripeDevFetch) }
-        : undefined,
+        : // Tests answer Stripe with MSW. stripe-node's default transport waits for
+          // the socket's secureConnect before writing the body, and MSW's mock socket
+          // waits for the body, so they deadlock; the fetch transport doesn't.
+          process.env.MOCK_OUTSIDE_SERVICES === "true"
+          ? { httpClient: Stripe.createFetchHttpClient() }
+          : undefined,
     );
   }
   return client;

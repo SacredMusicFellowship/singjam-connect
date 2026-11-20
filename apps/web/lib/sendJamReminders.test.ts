@@ -8,6 +8,8 @@ function makeAdmin({
   alreadySentIds = [] as string[],
   profile = { display_name: "Alice", username: null },
   insertError = null as any,
+  set = null as any,
+  collaborators = [] as any[],
 } = {}) {
   const mockInsert = vi.fn().mockResolvedValue({ error: insertError });
 
@@ -49,6 +51,12 @@ function makeAdmin({
           select: () => ({ eq: () => ({ data: alreadySentIds.map((id) => ({ jam_id: id })) }) }),
         };
       }
+      if (table === "sets") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: set }) }) }) };
+      }
+      if (table === "set_collaborators") {
+        return { select: () => ({ eq: () => ({ eq: async () => ({ data: collaborators }) }) }) };
+      }
       if (table === "profiles") {
         return {
           select: () => ({
@@ -62,7 +70,7 @@ function makeAdmin({
     }),
     auth: {
       admin: {
-        getUserById: vi.fn().mockResolvedValue({ data: { user: { email: "alice@example.com" } } }),
+        getUserById: vi.fn(async (id: string) => ({ data: { user: { email: id === "host-1" ? "alice@example.com" : `${id}@example.com` } } })),
       },
     },
     _mockInsert: mockInsert,
@@ -334,5 +342,50 @@ describe("sendJamReminders", () => {
     } as any;
 
     await expect(sendJamReminders(admin, makeResend())).rejects.toThrow("DB error");
+  });
+});
+
+describe("sendJamReminders — the jam's set list", () => {
+  const html = (resend: any, to: string) =>
+    (resend.batch.send.mock.calls as any[]).flatMap((c) => c[0]).find((p: any) => p.to === to)?.html as string;
+  const SET = { id: "set-1", short_code: "abc123", owner_user_id: "host-1", link_sharing: "private" };
+
+  it("links the set and asks the host and editors to add songs, and only links it for viewers", async () => {
+    const admin = makeAdmin({
+      jams: [BASE_JAM],
+      rsvps: [{ user_id: "editor-1" }, { user_id: "viewer-1" }],
+      set: SET,
+      collaborators: [{ user_id: "editor-1", role: "editor" }, { user_id: "viewer-1", role: "viewer" }],
+    });
+    const resend = makeResend();
+
+    await sendJamReminders(admin, resend);
+
+    for (const to of ["alice@example.com", "editor-1@example.com"]) {
+      expect(html(resend, to)).toContain("https://singjam.org/set/abc123");
+      expect(html(resend, to)).toContain("Add it to the set list");
+    }
+    expect(html(resend, "viewer-1@example.com")).toContain("https://singjam.org/set/abc123");
+    expect(html(resend, "viewer-1@example.com")).not.toContain("Add it to the set list");
+  });
+
+  it("leaves the set out for an invitee who can't open a private set", async () => {
+    const admin = makeAdmin({ jams: [BASE_JAM], invites: [{ invited_user_id: "invitee-1" }], set: SET });
+    const resend = makeResend();
+
+    await sendJamReminders(admin, resend);
+
+    expect(html(resend, "invitee-1@example.com")).not.toContain("Set list");
+    expect(html(resend, "alice@example.com")).toContain("Set list");
+  });
+
+  it("sends the usual reminder when the jam has no set list", async () => {
+    const admin = makeAdmin({ jams: [BASE_JAM], rsvps: [{ user_id: "editor-1" }] });
+    const resend = makeResend();
+
+    await sendJamReminders(admin, resend);
+
+    expect(sentTo(resend).sort()).toEqual(["alice@example.com", "editor-1@example.com"]);
+    expect(html(resend, "alice@example.com")).not.toContain("Set list");
   });
 });

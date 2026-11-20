@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { attachSongCards, fetchAllRows } from "@singjam/core";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
 import SetDetail from "@/components/SetDetail";
 import type { SongKnowledge } from "@/components/setDetailShared";
@@ -30,12 +31,16 @@ const getSet = cache(async (id: string) => {
 
 const getSetSongs = cache(async (id: string) => {
   const supabase = await getServerSupabase();
-  const { data } = await supabase
-    .from("set_songs")
-    .select("id, song_id, position, key_note, notes, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))")
-    .eq("set_id", id)
-    .order("position", { ascending: true });
-  return (data ?? []) as any[];
+  // Cards come alongside the rows, not after them (one round trip; migration 235).
+  const [{ data }, { data: cards }] = await Promise.all([
+    supabase
+      .from("set_songs")
+      .select("id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))")
+      .eq("set_id", id)
+      .order("position", { ascending: true }),
+    supabase.rpc("set_song_cards", { p_set_id: id }),
+  ]);
+  return attachSongCards((data ?? []) as any[], cards);
 });
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -66,12 +71,20 @@ export default async function SetPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }) {
-  const id = await resolveSetId((await params).id);
+  const [id, user, { invite: inviteToken }] = await Promise.all([
+    resolveSetId((await params).id),
+    getServerUser(),
+    searchParams,
+  ]);
   if (!id) notFound();
-  const { invite: inviteToken } = await searchParams;
   const supabase = await getServerSupabase();
 
-  const user = await getServerUser();
+  // RLS decides whether the viewer can see the linked jam; when they can, the
+  // same read gives the short code for the "Back to jam" link. Started now so
+  // it overlaps the reads below rather than following them.
+  const linkedJamPromise = getSet(id).then(async (s) =>
+    s?.jam_id ? (await supabase.from("jams").select("id, short_code").eq("id", s.jam_id).maybeSingle()).data : null
+  );
 
   const [set, songs, collabRes, requestsRes, profileRes] = await Promise.all([
     getSet(id),
@@ -157,7 +170,7 @@ export default async function SetPage({
       if (invite && (!(invite as any).user_id || (invite as any).user_id === user.id)) {
         const { data: claimed } = await admin
           .from("set_collaborators")
-          .update({ user_id: user.id, status: "accepted" })
+          .update({ user_id: user.id, status: "accepted", invitee_email: null })
           .eq("id", (invite as any).id)
           .select("id, user_id, status, role, profiles!user_id(display_name, last_name, username, avatar_url)")
           .single();
@@ -199,21 +212,22 @@ export default async function SetPage({
   const participantIds = [set.owner_user_id, ...collaborators.map((c: any) => c.user_id)].filter(Boolean) as string[];
 
   // Fetch all knowledge levels for every participant × song combination
-  const songKnowledge = songIds.length > 0 && participantIds.length > 0
-    ? ((await supabase
-        .from("user_songs")
-        .select("user_id, song_id, confidence, key_note")
-        .in("user_id", participantIds)
-        .in("song_id", songIds)
-        .in("confidence", ["lead", "support", "learn"])
-      ).data ?? []) as SongKnowledge[]
-    : [];
-
-  // RLS decides whether the viewer can see the linked jam; when they can, the
-  // same read gives the short code for the "Back to jam" link.
-  const linkedJam = set.jam_id
-    ? (await supabase.from("jams").select("id, short_code").eq("id", set.jam_id).maybeSingle()).data
-    : null;
+  const [songKnowledge, linkedJam] = await Promise.all([
+    songIds.length > 0 && participantIds.length > 0
+      ? fetchAllRows<SongKnowledge>((from, to) =>
+          supabase
+            .from("user_songs")
+            .select("user_id, song_id, confidence, key_note")
+            .in("user_id", participantIds)
+            .in("song_id", songIds)
+            .in("confidence", ["lead", "support", "learn"])
+            .order("user_id")
+            .order("song_id")
+            .range(from, to)
+        )
+      : Promise.resolve([] as SongKnowledge[]),
+    linkedJamPromise,
+  ]);
   const canAccessJam = linkedJam !== null;
 
   return (
@@ -230,11 +244,11 @@ export default async function SetPage({
         isOwner={isOwner}
         canManage={canManage}
         isAdmin={isAdmin}
-        isSongEditor={isSongEditor}
         isPublicViewer={isPublicViewer}
         songKnowledge={songKnowledge}
         canAccessJam={canAccessJam}
         jamShortCode={(linkedJam as any)?.short_code ?? null}
+        renderId={crypto.randomUUID()}
       />
       {!user && <SetGuestPrompt setId={set.id} shortCode={set.short_code} forEvent={!!set.jam_id} />}
     </Suspense>

@@ -1,5 +1,8 @@
 import '../global.css';
 
+// Maestro runs the app with EXPO_PUBLIC_E2E=1 against local Supabase and the e2e web server.
+if (process.env.EXPO_PUBLIC_E2E === '1') require('@/lib/e2eMockServer');
+
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -92,7 +95,7 @@ function RootNavigator() {
   }, [session, initialised, profileComplete, isGuest, segments]);
 
   return (
-    <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
+    <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal', headerTransparent: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="setup" options={{ headerShown: false }} />
@@ -108,6 +111,8 @@ function RootNavigator() {
       <Stack.Screen name="set/[id]" options={{ headerTintColor: '#d97706' }} />
       <Stack.Screen name="set/new" options={{ presentation: 'modal', title: 'New Set', headerTintColor: '#d97706' }} />
       <Stack.Screen name="song/[id]" options={{ headerTintColor: '#d97706' }} />
+      <Stack.Screen name="blog/index" options={{ title: 'Inside SingJam', headerTintColor: '#d97706' }} />
+      <Stack.Screen name="blog/[slug]" options={{ title: 'Inside SingJam', headerTintColor: '#d97706' }} />
     </Stack>
   );
 }

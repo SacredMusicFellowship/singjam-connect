@@ -1,3 +1,4 @@
+import type { CardIdentity, ProductionCredit, RecordingArtistCredit } from "@singjam/core";
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -5,6 +6,8 @@ export type SongSearchResult = {
   song_id: string;
   title: string;
   display_artist: string | null;
+  byline?: string | null;
+  card_identity?: CardIdentity;
   first_line: string | null;
   aka: string[] | null;
   score: number;
@@ -14,6 +17,9 @@ export type SongSearchResult = {
   genres: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
@@ -22,6 +28,8 @@ export type SongSearchResult = {
   popularity: number;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
 };
 
 export function useSongSearch(

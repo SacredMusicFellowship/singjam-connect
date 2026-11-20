@@ -239,5 +239,20 @@ describe("POST /api/sets/[id]/invite", () => {
       expect(mockResendSend).toHaveBeenCalledOnce();
       expect(mockResendSend).toHaveBeenCalledWith(expect.objectContaining({ to: "newuser@example.com" }));
     });
+
+    // Without the address, someone who signed up another way could never be matched to the invite.
+    it("stores the invitee's address, lowercased, so sign-in can claim it", async () => {
+      mockAdminFrom
+        .mockReturnValueOnce(chain({ data: setRow }))
+        .mockReturnValueOnce(chain({ data: inviterProfile }))
+        .mockReturnValueOnce(chain({ data: { token: "tok-abc" } }));
+      await POST(
+        req("set-1", { inviteeEmail: " NewUser@Example.com " }),
+        { params: Promise.resolve({ id: "set-1" }) }
+      );
+      expect(mockAdminFrom.mock.results[2].value.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ invitee_email: "newuser@example.com" })
+      );
+    });
   });
 });

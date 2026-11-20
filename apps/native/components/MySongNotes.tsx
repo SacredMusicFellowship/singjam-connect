@@ -72,7 +72,7 @@ export default function MySongNotes({ songId, userId, className = '' }: { songId
           style={{ textAlignVertical: 'top' }}
         />
         <View className="flex-row items-center gap-3 mt-2">
-          <TouchableOpacity onPress={() => save()} className="rounded-lg bg-amber-500 px-3 py-1.5">
+          <TouchableOpacity onPress={() => save()} className="rounded-full bg-amber-500 px-3 py-1.5">
             <Text className="text-xs font-semibold text-white">Save</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={cancel} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>

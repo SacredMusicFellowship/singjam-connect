@@ -5,25 +5,27 @@ function makeSupabase({
   shared,
   theirSongs,
   songDetails,
+  bylines = [],
 }: {
   shared: any[];
   theirSongs: any[];
   songDetails: any[];
+  bylines?: { song_id: string; byline: string | null }[];
 }) {
   return {
-    rpc: vi.fn().mockResolvedValue({ data: shared }),
+    rpc: vi.fn((fn: string) => Promise.resolve({ data: fn === "shared_songs_with" ? shared : bylines })),
     from: vi.fn((table: string) => {
       if (table === "user_songs") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ data: theirSongs }),
-          }),
+        const q: any = {
+          select: () => q, eq: () => q, order: () => q,
+          range: (f: number, t: number) => Promise.resolve({ data: theirSongs.slice(f, t + 1), error: null }),
         };
+        return q;
       }
       if (table === "songs") {
         return {
           select: vi.fn().mockReturnValue({
-            in: vi.fn().mockResolvedValue({ data: songDetails }),
+            in: vi.fn((_col: string, ids: string[]) => Promise.resolve({ data: songDetails.filter((d) => ids.includes(d.id)), error: null })),
           }),
         };
       }
@@ -89,5 +91,20 @@ describe("fetchProfileSongs", () => {
     expect(sharedSongs).toEqual([]);
     expect(additionalSongs).toEqual([]);
     expect(wantsToLearnSongs).toEqual([]);
+  });
+
+  it("loads every song of a profile with more than a page of them, and shared songs' bylines", async () => {
+    const theirSongs = Array.from({ length: 1200 }, (_, i) => ({ song_id: `s${i}`, confidence: "lead" }));
+    const supabase = makeSupabase({
+      shared: [{ song_id: "s0", title: "Shared", display_artist: "Someone", slug: "shared" }],
+      theirSongs,
+      songDetails: theirSongs.map((r) => ({ id: r.song_id, title: r.song_id, display_artist: null, byline: null, slug: null })),
+      bylines: [{ song_id: "s0", byline: "Traditional · Irish" }],
+    });
+
+    const { sharedSongs, additionalSongs } = await fetchProfileSongs(supabase, "profile-1");
+
+    expect(sharedSongs[0].byline).toBe("Traditional · Irish");
+    expect(additionalSongs).toHaveLength(1199);
   });
 });

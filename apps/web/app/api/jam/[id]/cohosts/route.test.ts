@@ -100,6 +100,13 @@ describe("POST /api/jam/[id]/cohosts", () => {
       expect.objectContaining({ userId: ATTENDEE_ID, type: "jam_cohost_added" })
     );
   });
+
+  it("refuses co-hosts on an official event, even from its creator", async () => {
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { ...jamRow, visibility: "official" } }));
+    const res = await POST(makeReq("POST", JAM_ID, { userId: ATTENDEE_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+    expect(res.status).toBe(400);
+    expect(mockAdminFrom).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("DELETE /api/jam/[id]/cohosts", () => {

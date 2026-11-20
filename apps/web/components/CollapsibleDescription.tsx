@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * An event description, capped at about eleven lines from md up so a long one
+ * An event description, capped at about eleven lines from sm up so a long one
  * doesn't run far past the poster column beside it. Phones, with nothing
  * beside it, always show the whole thing. "Show more" only appears when the
  * cap actually cuts something off, re-measured whenever the width changes.
@@ -30,7 +30,7 @@ export default function CollapsibleDescription({ text }: { text: string }) {
       <div className="relative">
         <p
           ref={ref}
-          className={`whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 ${expanded ? "" : "md:max-h-64 md:overflow-hidden"}`}
+          className={`whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 ${expanded ? "" : "sm:max-h-64 sm:overflow-hidden"}`}
         >
           {text}
         </p>

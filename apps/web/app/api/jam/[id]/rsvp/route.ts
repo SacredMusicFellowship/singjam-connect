@@ -29,6 +29,14 @@ export async function POST(
 
   const { status, waitlistPosition } = await rsvpToJam(admin, jam, user.id);
 
+  // RSVPing is an answer to their invite, so it leaves the host's pending list.
+  await admin
+    .from("jam_invites")
+    .update({ status: "accepted" })
+    .eq("jam_id", jamId)
+    .eq("invited_user_id", user.id)
+    .eq("status", "pending");
+
   return NextResponse.json({ status, waitlist_position: waitlistPosition });
 }
 

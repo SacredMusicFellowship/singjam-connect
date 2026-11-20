@@ -1,10 +1,25 @@
-import { memo, useCallback, useRef } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView } from 'react-native';
-import { countActiveFilters, type SongFilterState, type SongFilterOptions } from '@singjam/core';
+import OrderToggle, { COUNT_OR_AZ } from '@/components/OrderToggle';
+import {
+  countActiveFilters,
+  MULTI_FILTER_DIMS,
+  rootFacets,
+  orderFacets,
+  type FacetOrder,
+  type FacetOption,
+  type MultiFilterDim,
+  type SongFilterFacets,
+  type SongFilterOptions,
+  type SongFilterState,
+  type TagHierarchy,
+} from '@singjam/core';
 
 // The facet filter sheet for both the Song Library and Repertoire screens —
-// native's counterpart to web's single `FilterPanel`, which `/search` and
-// `/repertoire` likewise share. Web renders it inline; on a phone it's a sheet.
+// native's counterpart to web's FilterPanel, which `/search` and `/repertoire`
+// likewise share. Each tag section lists its most-used options with song
+// counts, nests sub-tags under their parents, and can show all; one search box
+// finds a filter in any section.
 //
 // Generic over the caller's filter state so a screen can carry extra fields
 // alongside the shared dimensions (Song Library keeps `sortBy` in the same
@@ -13,6 +28,9 @@ import { countActiveFilters, type SongFilterState, type SongFilterOptions } from
 export function emptyFilterDimensions(): SongFilterState {
   return {
     genres: new Set(),
+    forms: new Set(),
+    occasions: new Set(),
+    communities: new Set(),
     cultures: new Set(),
     languages: new Set(),
     themes: new Set(),
@@ -30,19 +48,30 @@ export function toggleFilterValue(set: Set<string>, value: string): Set<string> 
   return next;
 }
 
-type MultiDim = 'genres' | 'cultures' | 'languages' | 'themes';
-type SingleDim = 'vibe' | 'tonality' | 'meter';
-type ChipDim = MultiDim | SingleDim;
+const DIM_LABEL: Record<MultiFilterDim, string> = {
+  genres: 'Genre',
+  forms: 'Form',
+  occasions: 'Occasion',
+  communities: 'Community',
+  cultures: 'Culture',
+  languages: 'Language',
+  themes: 'Theme',
+};
 
-const MULTI: MultiDim[] = ['genres', 'cultures', 'languages', 'themes'];
+const TOP_N = 8;
+
+type SingleDim = 'vibe' | 'tonality' | 'meter';
+type ChipDim = MultiFilterDim | SingleDim;
 
 // Memoised, and it reports which dimension it belongs to rather than closing over
-// a handler: the sheet renders ~200 chips off a full catalog, and rebuilding an
+// a handler: the sheet renders many chips off a full catalog, and rebuilding an
 // inline onPress for each of them re-rendered the lot on every tap. With a stable
 // onToggle only the chip whose `selected` actually flipped re-renders.
-const Chip = memo(function Chip({ label, dim, selected, onToggle }: {
+const Chip = memo(function Chip({ label, dim, count, sublabel, selected, onToggle }: {
   label: string;
   dim: ChipDim;
+  count?: number;
+  sublabel?: string;
   selected: boolean;
   onToggle: (dim: ChipDim, value: string) => void;
 }) {
@@ -51,7 +80,11 @@ const Chip = memo(function Chip({ label, dim, selected, onToggle }: {
       onPress={() => onToggle(dim, label)}
       className={`px-3 py-1.5 rounded-full border mr-2 mb-2 ${selected ? 'bg-amber-500 border-amber-500' : 'bg-white border-zinc-200'}`}
     >
-      <Text className={`text-sm font-medium ${selected ? 'text-white' : 'text-zinc-600'}`}>{label}</Text>
+      <Text className={`text-sm font-medium ${selected ? 'text-white' : 'text-zinc-600'}`}>
+        {label}
+        {sublabel ? <Text className={selected ? 'text-amber-100' : 'text-zinc-400'}>{` · ${sublabel}`}</Text> : null}
+        {count != null ? <Text className={selected ? 'text-amber-100' : 'text-zinc-400'}>{`  ${count}`}</Text> : null}
+      </Text>
     </TouchableOpacity>
   );
 });
@@ -60,10 +93,82 @@ function SectionLabel({ title }: { title: string }) {
   return <Text className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2 mt-4">{title}</Text>;
 }
 
+function TagSection({ dim, options, hierarchy, selected, onToggle, open, onToggleOpen, order }: {
+  dim: MultiFilterDim;
+  options: FacetOption[];
+  hierarchy: TagHierarchy | null;
+  selected: Set<string>;
+  onToggle: (dim: ChipDim, value: string) => void;
+  open: boolean;
+  onToggleOpen: () => void;
+  order: FacetOrder;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const byValue = useMemo(() => new Map(options.map(o => [o.value, o])), [options]);
+  const roots = useMemo(() => orderFacets(rootFacets(options, dim, hierarchy), order), [options, dim, hierarchy, order]);
+  const childMap = hierarchy?.[dim]?.children;
+  const childOptions = (value: string) => orderFacets((childMap?.get(value) ?? [])
+    .map(c => byValue.get(c))
+    .filter((o): o is FacetOption => !!o), order);
+  const shownRoots = showAll ? roots : roots.filter((o, i) => i < TOP_N || selected.has(o.value));
+  const hidden = roots.length - shownRoots.length;
+
+  function renderOption(o: FacetOption, depth: number): React.ReactNode {
+    const kids = childOptions(o.value);
+    const isOpen = expanded.has(o.value) || kids.some(k => selected.has(k.value));
+    return (
+      <View key={`${depth}:${o.value}`} className={isOpen && kids.length ? 'w-full' : ''}>
+        <View className="flex-row items-center">
+          <Chip label={o.value} dim={dim} count={o.count} selected={selected.has(o.value)} onToggle={onToggle} />
+          {kids.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setExpanded(prev => toggleFilterValue(prev, o.value))}
+              accessibilityLabel={`${isOpen ? 'Hide' : 'Show'} kinds of ${o.value}`}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+              className="mb-2 -ml-1 mr-2"
+            >
+              <Text className="text-xs text-zinc-400">{isOpen ? '▾' : '▸'} {kids.length}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {isOpen && kids.length > 0 && (
+          <View className="flex-row flex-wrap pl-3 ml-1 border-l-2 border-amber-100">
+            {kids.map(k => renderOption(k, depth + 1))}
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <View className="border-b border-zinc-100 py-1">
+      <TouchableOpacity onPress={onToggleOpen} className="flex-row items-center justify-between py-2">
+        <Text className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+          {DIM_LABEL[dim]}{selected.size > 0 ? ` · ${selected.size}` : ''}
+        </Text>
+        <Text className="text-xs text-zinc-400">{open ? '▾' : '▸'}</Text>
+      </TouchableOpacity>
+      {open && (
+        <View className="flex-row flex-wrap items-start">
+          {shownRoots.map(o => renderOption(o, 0))}
+          {(hidden > 0 || showAll) && roots.length > TOP_N && (
+            <TouchableOpacity onPress={() => setShowAll(s => !s)} className="px-2 py-1.5 mb-2">
+              <Text className="text-sm font-medium text-amber-600">{showAll ? 'Show fewer' : `Show all ${roots.length}`}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
 export default function SongFilterSheet<T extends SongFilterState>({
   visible,
   filters,
   options,
+  facets,
+  hierarchy,
   yearBounds,
   emptyHint,
   onChange,
@@ -72,6 +177,8 @@ export default function SongFilterSheet<T extends SongFilterState>({
   visible: boolean;
   filters: T;
   options: SongFilterOptions;
+  facets: SongFilterFacets;
+  hierarchy: TagHierarchy | null;
   yearBounds: { min: number | null; max: number | null };
   // Shown when the pool has no facets to offer at all — only reachable on
   // Repertoire, where the pool is the user's own (possibly tiny) song list.
@@ -80,6 +187,9 @@ export default function SongFilterSheet<T extends SongFilterState>({
   onClose: () => void;
 }) {
   const activeCount = countActiveFilters(filters);
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState<Set<string>>(() => new Set(['genres']));
+  const [order, setOrder] = useState<FacetOrder>('count');
 
   function set(patch: Partial<SongFilterState>) {
     onChange({ ...filters, ...patch });
@@ -92,8 +202,8 @@ export default function SongFilterSheet<T extends SongFilterState>({
 
   const handleToggle = useCallback((dim: ChipDim, value: string) => {
     const { filters: f, onChange: emit } = latest.current;
-    if ((MULTI as string[]).includes(dim)) {
-      const key = dim as MultiDim;
+    if ((MULTI_FILTER_DIMS as readonly string[]).includes(dim)) {
+      const key = dim as MultiFilterDim;
       emit({ ...f, [key]: toggleFilterValue(f[key], value) });
     } else {
       const key = dim as SingleDim;
@@ -101,11 +211,16 @@ export default function SongFilterSheet<T extends SongFilterState>({
     }
   }, []);
 
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return MULTI_FILTER_DIMS.flatMap(dim => facets[dim].filter(o => o.value.toLowerCase().includes(q)).map(o => ({ dim, ...o })))
+      .sort((a, b) => Number(!a.value.toLowerCase().startsWith(q)) - Number(!b.value.toLowerCase().startsWith(q)) || b.count - a.count)
+      .slice(0, 12);
+  }, [query, facets]);
+
   const hasAnyOption =
-    options.genres.length > 0 ||
-    options.cultures.length > 0 ||
-    options.languages.length > 0 ||
-    options.themes.length > 0 ||
+    MULTI_FILTER_DIMS.some(dim => facets[dim].length > 0) ||
     options.vibes.length > 0 ||
     options.tonalities.length > 0 ||
     options.meters.length > 0 ||
@@ -128,39 +243,57 @@ export default function SongFilterSheet<T extends SongFilterState>({
           </TouchableOpacity>
         </View>
 
-        <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingBottom: 40 }}>
-          {options.genres.length > 0 && (
-            <>
-              <SectionLabel title="Genre" />
-              <View className="flex-row flex-wrap">
-                {options.genres.map(g => <Chip key={g} label={g} dim="genres" selected={filters.genres.has(g)} onToggle={handleToggle} />)}
-              </View>
-            </>
+        <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          {hasAnyOption && <OrderToggle value={order} onChange={setOrder} options={COUNT_OR_AZ} className="mt-3" />}
+          {hasAnyOption && (
+            <TextInput
+              className="mt-3 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900"
+              placeholder="Find a filter: genre, occasion, community…"
+              placeholderTextColor="#a1a1aa"
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
           )}
-          {options.cultures.length > 0 && (
-            <>
-              <SectionLabel title="Culture" />
-              <View className="flex-row flex-wrap">
-                {options.cultures.map(c => <Chip key={c} label={c} dim="cultures" selected={filters.cultures.has(c)} onToggle={handleToggle} />)}
-              </View>
-            </>
-          )}
-          {options.languages.length > 0 && (
-            <>
-              <SectionLabel title="Language" />
-              <View className="flex-row flex-wrap">
-                {options.languages.map(l => <Chip key={l} label={l} dim="languages" selected={filters.languages.has(l)} onToggle={handleToggle} />)}
-              </View>
-            </>
-          )}
-          {options.themes.length > 0 && (
-            <>
-              <SectionLabel title="Theme" />
-              <View className="flex-row flex-wrap">
-                {options.themes.map(t => <Chip key={t} label={t} dim="themes" selected={filters.themes.has(t)} onToggle={handleToggle} />)}
-              </View>
-            </>
-          )}
+          {query.trim() ? (
+            <View className="flex-row flex-wrap mt-3">
+              {matches.length === 0 ? (
+                <Text className="text-sm text-zinc-400">No filter matches “{query.trim()}” in these songs.</Text>
+              ) : (
+                matches.map(m => (
+                  <Chip
+                    key={`${m.dim}:${m.value}`}
+                    label={m.value}
+                    dim={m.dim}
+                    sublabel={DIM_LABEL[m.dim]}
+                    count={m.count}
+                    selected={filters[m.dim].has(m.value)}
+                    onToggle={(d, v) => { handleToggle(d, v); setQuery(''); }}
+                  />
+                ))
+              )}
+            </View>
+          ) : null}
+
+          <View className="mt-2">
+            {MULTI_FILTER_DIMS.map(dim =>
+              facets[dim].length > 0 ? (
+                <TagSection
+                  key={dim}
+                  dim={dim}
+                  options={facets[dim]}
+                  hierarchy={hierarchy}
+                  selected={filters[dim]}
+                  onToggle={handleToggle}
+                  open={open.has(dim)}
+                  onToggleOpen={() => setOpen(prev => toggleFilterValue(prev, dim))}
+                  order={order}
+                />
+              ) : null
+            )}
+          </View>
+
           {options.vibes.length > 0 && (
             <>
               <SectionLabel title="Vibe" />

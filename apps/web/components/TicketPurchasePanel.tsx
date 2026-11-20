@@ -24,9 +24,9 @@ const money = (cents: number, currency: string) =>
 
 // Every tier row and the button live in one narrow column rather than the
 // page's full 896px: a full-width Buy button reads as a banner, not a button.
-// Full width on a phone, capped at 384px from sm, and from md the event page's
-// right-hand column is already that narrow, so it fills it.
-const COLUMN = "w-full sm:max-w-sm md:max-w-none";
+// From sm up the event page's right-hand column is already that narrow, so it
+// fills it.
+const COLUMN = "w-full";
 
 
 // Buyers can't take the whole allocation in one order by accident, and it keeps
@@ -51,7 +51,7 @@ function Stepper({
         aria-label={`Remove one ${label}`}
         onClick={() => onChange(Math.max(0, value - 1))}
         disabled={value === 0}
-        className="h-8 w-8 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+        className="h-8 w-8 rounded-full border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
       >
         −
       </button>
@@ -61,7 +61,7 @@ function Stepper({
         aria-label={`Add one ${label}`}
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
-        className="h-8 w-8 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+        className="h-8 w-8 rounded-full border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
       >
         +
       </button>
@@ -329,7 +329,7 @@ export default function TicketPurchasePanel({
             autoComplete="name"
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             placeholder="Your name"
           />
           <label className="block text-xs font-medium text-zinc-600" htmlFor="guest-email">
@@ -342,7 +342,7 @@ export default function TicketPurchasePanel({
             required
             value={guestEmail}
             onChange={(e) => setGuestEmail(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             placeholder="you@example.com"
           />
           <p className="text-xs text-zinc-400">
@@ -410,13 +410,13 @@ export default function TicketPurchasePanel({
                 }}
                 placeholder="Promo code"
                 autoCapitalize="characters"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
+                className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={applyPromo}
                 disabled={promoBusy || !promoCode.trim()}
-                className="shrink-0 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+                className="shrink-0 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
               >
                 {promoBusy ? "Checking…" : "Apply"}
               </button>
@@ -431,7 +431,7 @@ export default function TicketPurchasePanel({
           <button
             type="button"
             onClick={() => setShowPromo(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-[0.85rem] font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+            className="flex w-full items-center justify-center gap-1.5 rounded-full border border-dashed border-zinc-300 px-3 py-2 text-[0.85rem] font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
           >
             <span aria-hidden="true">＋</span> Promo Code
           </button>
@@ -459,7 +459,7 @@ export default function TicketPurchasePanel({
       <button
         onClick={startCheckout}
         disabled={busy || count === 0 || nothingOnSale || (!isSignedIn && !emailLooksValid)}
-        className="w-full rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+        className="w-full rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
       >
         {soldOut
           ? "Sold out"

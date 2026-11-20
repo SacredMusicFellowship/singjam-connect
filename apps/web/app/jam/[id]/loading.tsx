@@ -1,4 +1,4 @@
-// Mirrors JamView's layout: JamSplit's two columns from md up (poster and
+// Mirrors JamView's layout: JamSplit's two columns from sm up (poster and
 // who's going beside the title, date, place and description), the map below.
 export default function JamLoading() {
   const detailRow = (titleWidth: string, subWidth: string) => (
@@ -13,10 +13,10 @@ export default function JamLoading() {
 
   return (
     <div className="space-y-4 pb-10">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:items-start md:gap-x-10 md:gap-y-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:items-start sm:gap-x-10 sm:gap-y-6">
         <div className="space-y-6">
-          <div className="aspect-[3/2] w-full animate-pulse rounded-2xl bg-zinc-100 md:aspect-square" />
-          <div className="hidden space-y-3 md:block">
+          <div className="aspect-[3/2] w-full animate-pulse rounded-2xl bg-zinc-100 sm:aspect-square" />
+          <div className="hidden space-y-3 sm:block">
             <div className="h-4 w-24 animate-pulse rounded bg-zinc-200" />
             <div className="flex -space-x-2">
               {[0, 1, 2, 3, 4].map((i) => (

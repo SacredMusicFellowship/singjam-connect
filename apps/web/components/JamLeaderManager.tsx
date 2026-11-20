@@ -191,7 +191,7 @@ export default function JamLeaderManager({
                   <button
                     onClick={() => add({ userId: u.id }, u.id)}
                     disabled={leading || busy === u.id}
-                    className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:bg-zinc-200 disabled:text-zinc-500 transition-colors"
+                    className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:bg-zinc-200 disabled:text-zinc-500 transition-colors"
                   >
                     {leading ? "Leading" : busy === u.id ? "Adding…" : "Add"}
                   </button>
@@ -215,19 +215,19 @@ export default function JamLeaderManager({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name"
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
           />
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
           />
           <button
             type="submit"
             disabled={!name.trim() || !email.trim() || guestAlreadyLeading || busy === "guest"}
-            className="shrink-0 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="shrink-0 rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {busy === "guest" ? "Adding…" : "Add"}
           </button>

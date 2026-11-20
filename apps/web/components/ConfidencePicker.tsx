@@ -73,7 +73,7 @@ export default function ConfidencePicker({
             onClick={handleVoiceConfirm}
             className={isCompact
               ? "rounded-full border border-amber-400 bg-amber-50 px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
-              : "rounded-xl border border-amber-400 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+              : "rounded-full border border-amber-400 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
             }
           >
             Yes
@@ -83,7 +83,7 @@ export default function ConfidencePicker({
             onClick={() => setAskingVoice(false)}
             className={isCompact
               ? "rounded-full border border-indigo-200 bg-white px-2.5 py-1 text-xs text-zinc-500 hover:bg-indigo-100 disabled:opacity-50"
-              : "rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:bg-indigo-100 disabled:opacity-50"
+              : "rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:bg-indigo-100 disabled:opacity-50"
             }
           >
             Not now
@@ -119,7 +119,7 @@ export default function ConfidencePicker({
                       ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
                       : "border-indigo-200 bg-white text-zinc-700 hover:bg-indigo-100"
                   }`
-                : `rounded-xl border px-3 py-1.5 text-sm transition-colors disabled:opacity-40 ${
+                : `rounded-full border px-3 py-1.5 text-sm transition-colors disabled:opacity-40 ${
                     key === "lead"
                       ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
                       : "border-indigo-200 bg-white text-zinc-700 hover:bg-indigo-100"
@@ -134,7 +134,7 @@ export default function ConfidencePicker({
           onClick={onCancel}
           className={isCompact
             ? "rounded-full border border-indigo-200 bg-white px-2 py-1 text-xs text-zinc-500 hover:bg-indigo-100"
-            : "rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:bg-indigo-100"
+            : "rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:bg-indigo-100"
           }
           aria-label="Cancel"
         >
