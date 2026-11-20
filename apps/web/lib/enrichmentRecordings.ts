@@ -74,7 +74,7 @@ async function musicBrainzRecording(title: string, artist: string) {
   return found ? { credit: credit ?? artist, year: years.length ? Math.min(...years) : null } : null;
 }
 
-export type LandmarkResult = { artist: string; year: number | null };
+export type LandmarkResult = { artist: string; year: number | null; spotify_url: string | null };
 
 // Adds the iconic other recordings of a song: both models must name the artist,
 // and MusicBrainz must have the recording. Most songs get none.
@@ -95,11 +95,12 @@ export async function addLandmarkRecordings(admin: SupabaseClient, songId: strin
     const found = await musicBrainzRecording(song.title, pick.artist.length >= pick.altArtist.length ? pick.artist : pick.altArtist);
     if (!found) continue;
     const year = landmarkYear(pick.gptYear, pick.claudeYear, found.year);
-    added.push({ artist: found.credit, year });
+    const spotify_url = await spotifyFor(song.title, found.credit);
+    added.push({ artist: found.credit, year, spotify_url });
     if (opts.dryRun) continue;
     const [artistId] = await idsFor(admin, "artists", [found.credit]);
     if (!artistId) continue;
-    await admin.from("song_recording_artists").insert({ song_id: songId, artist_id: artistId, year, position: position++ });
+    await admin.from("song_recording_artists").insert({ song_id: songId, artist_id: artistId, year, spotify_url, position: position++ });
   }
   return { added, usage };
 }
@@ -157,7 +158,7 @@ export async function addFirstRecordings(admin: SupabaseClient, songId: string, 
   const usage: ModelUsage[] = [];
   const { data: song } = await admin
     .from("songs")
-    .select("title, first_line, youtube_url, tune_id, known_by_recording, song_recording_artists(count), song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name))")
+    .select("title, first_line, tune_id, known_by_recording, song_recording_artists(count), song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name))")
     .eq("id", songId)
     .single();
   const s = song as any;
@@ -165,7 +166,7 @@ export async function addFirstRecordings(admin: SupabaseClient, songId: string, 
   // reference recording is left alone: a model can't tell which melody a
   // recording of the words uses. Nor one marked as not known by a recording (a
   // camp song: a model will find a different song with the same title).
-  if (!s || s.song_recording_artists?.[0]?.count || s.tune_id || s.youtube_url || s.known_by_recording === false) return { added: [] as FirstRecordingResult[], usage };
+  if (!s || s.song_recording_artists?.[0]?.count || s.tune_id || s.known_by_recording === false) return { added: [] as FirstRecordingResult[], usage };
   const writers = [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])]
     .map((r: any) => r.people?.name as string | undefined)
     .filter((n, i, all): n is string => !!n && all.indexOf(n) === i);

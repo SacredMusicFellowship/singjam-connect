@@ -98,6 +98,32 @@ describe("POST /api/songs/submit", () => {
     expect(mockTrigger).toHaveBeenCalledWith("s1", 1969);
   });
 
+  it("saves a member's hints with the set's jam tags", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const inserts: Record<string, any> = {};
+    const setId = "11111111-2222-3333-4444-555555555555";
+    mockFrom.mockImplementation((table: string) => {
+      const c: any = {};
+      for (const m of ["select", "ilike", "is", "limit", "eq"]) c[m] = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: table === "sets" ? { jam_id: "jam-1" } : null });
+      c.then = (resolve: (v: unknown) => void) => resolve({ data: table === "jam_tags" ? [{ tags: { name: "Christmas" } }, { tags: { name: "Christian" } }] : null });
+      c.insert = vi.fn((row: any) => {
+        inserts[table] = row;
+        return { select: () => ({ single: async () => ({ data: table === "songs" ? { id: "s1", slug: "harbour-carol" } : { id: "a1" } }) }) };
+      });
+      return c;
+    });
+
+    const res = await POST(req({ title: "Harbour Carol", artist: "Mara Quill", confirmed: true, known_as: "traditional", first_line_hint: "Lights along the harbour", set_id: setId }));
+
+    expect(res.status).toBe(200);
+    expect(inserts.songs).not.toHaveProperty("known_by_recording");
+    expect(inserts.songs).toMatchObject({
+      first_line: null,
+      add_hints: { known_as: "traditional", first_line: "Lights along the harbour", context: ["Christmas", "Christian"] },
+    });
+  });
+
   it("doesn't store a preview video that isn't an official upload", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     const inserts: Record<string, any> = {};
@@ -115,6 +141,27 @@ describe("POST /api/songs/submit", () => {
     await POST(req({ title: "Ripple", artist: "Grateful Dead", confirmed: true, youtube_id: "abcdefghijk", youtube_official: false }));
 
     expect(inserts.song_recording_artists.youtube_url).toBeNull();
+    expect(inserts.songs.youtube_url).toBeNull();
+  });
+
+  it("drops a stand-in artist like \"Traditional\" and keeps the confirmed video as the song's own", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const inserts: Record<string, any> = {};
+    mockFrom.mockImplementation((table: string) => {
+      const c: any = {};
+      for (const m of ["select", "ilike", "is", "limit", "eq"]) c[m] = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: null });
+      c.insert = vi.fn((row: any) => {
+        inserts[table] = row;
+        return { select: () => ({ single: async () => ({ data: { id: "s1", slug: "harbour-carol" } }) }) };
+      });
+      return c;
+    });
+
+    await POST(req({ title: "Harbour Carol", artist: "Traditional", confirmed: true, youtube_id: "abcdefghijk", youtube_official: false }));
+
+    expect(inserts.songs).toMatchObject({ display_artist: null, youtube_url: "https://www.youtube.com/watch?v=abcdefghijk" });
+    expect(inserts.song_recording_artists).toBeUndefined();
   });
 
   it("matches an unconfirmed title on Spotify first (older clients)", async () => {

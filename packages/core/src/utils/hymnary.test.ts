@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hymnaryTextsFor, hymnaryTunes, parseCsvRecords, pickHymnaryText, type HymnaryText } from "./hymnary";
+import { hymnaryTextsFor, hymnaryTunes, parseCsvRecords, pickHymnaryText, trimTrailing, type HymnaryText } from "./hymnary";
 import { decideEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const STAND_BY_ME = `displayTitle,firstLine,textTitle,refrainFirstLine,textAuthNumber,languages,authors,meter,textSources,totalInstances
@@ -53,6 +53,10 @@ describe("pickHymnaryText", () => {
     expect(pickHymnaryText([spiritual], ["Thomas A. Dorsey"], "Were You There")).toBeNull();
     expect(pickHymnaryText([{ ...spiritual, instances: 2 }], ["Traditional"], "Were You There")).toBeNull();
   });
+  it("takes an authorless text for a traditional song that also names its translator", () => {
+    const carol = text({ authors: [], instances: 308, firstLine: "Angels we have heard on high" });
+    expect(pickHymnaryText([carol], ["Traditional", "James Chadwick"], "Angels We Have Heard on High")).toBe(carol);
+  });
   it("rejects an authorless text that doesn't open with the title", () => {
     expect(pickHymnaryText([text({ authors: [], instances: 1315, firstLine: "I heard the voice of Jesus say" })], ["Traditional"], "Shine On Me")).toBeNull();
   });
@@ -60,7 +64,10 @@ describe("pickHymnaryText", () => {
 
 describe("decideEnrichment with Hymnary", () => {
   const base = (over: Partial<EnrichmentSources>): EnrichmentSources => ({ gpt: null, claude: null, musicbrainz: null, spotifyReleaseYear: null, lyrics: null, ...over });
-  const hymnary = hymnaryTextsFor("Were You There", parseCsvRecords(WERE_YOU_THERE)).map((t) => ({ ...t, tunes: [] }));
+  it("takes the hymnal's refrain as the hook, without a bilingual hymnal's translation", () => {
+    const hymnary = [text({ authors: [], instances: 308, firstLine: "Angels we have heard on high", refrain: "Gloria in excelsis Deo (Gloria a Dios en el cielo)" })];
+    expect(decideEnrichment(base({ writers: ["Traditional"], hymnary, title: "Angels We Have Heard on High" })).hook).toBe("Gloria in excelsis Deo");
+  });  const hymnary = hymnaryTextsFor("Were You There", parseCsvRecords(WERE_YOU_THERE)).map((t) => ({ ...t, tunes: [] }));
   it("uses the hymnals' first line when nothing else placed one", () => {
     expect(decideEnrichment(base({ writers: ["Traditional"], hymnary, title: "Were You There" })).first_line).toBe("Were you there when they crucified my Lord?");
   });
@@ -88,5 +95,11 @@ describe("samePerson", () => {
     expect(samePerson("Mary E. Byrne", "Mary Byrne")).toBe(true);
     expect(samePerson("Charles Wesley", "Samuel Wesley")).toBe(false);
     expect(samePerson("John B. Smith", "John C. Smith")).toBe(false);
+  });
+  it("cleans long runs of brackets and commas quickly", () => {
+    const started = Date.now();
+    expect(hymnaryTextsFor("(".repeat(50_000), [{ textTitle: "(".repeat(50_000), firstLine: "x" }])).toHaveLength(1);
+    expect(trimTrailing("Angels we have heard on high" + ",".repeat(50_000) + "x,;:")).toBe("Angels we have heard on high" + ",".repeat(50_000) + "x");
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });

@@ -9,6 +9,8 @@ export type SongForm = {
   firstLine: string;
   hook: string;
   notes: string;
+  // Set only when the notes are exactly what a review suggested (migration 246).
+  notesSource?: "wikipedia" | "ai";
   geniusUrl: string;
   chordChartUrl: string;
   year: string;
@@ -82,6 +84,7 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       ...(form.cardLine !== undefined ? { card_line: form.cardLine } : {}),
       ...(form.textId !== undefined ? { text_id: form.textId || null } : {}),
       ...(form.tuneId !== undefined ? { tune_id: form.tuneId || null } : {}),
+      ...(form.notesSource ? { notes_source: form.notesSource } : {}),
     },
     tags: {
       genre: form.genres,

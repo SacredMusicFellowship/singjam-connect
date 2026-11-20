@@ -44,6 +44,12 @@ describe("decideEnrichment — tags and musical fields", () => {
     expect(d).toMatchObject({ meter: "4", vibe: "Ballad" });
     expect(d.tonality).toBeUndefined();
   });
+  it("tags nothing when only one model chose genres or themes", () => {
+    const d = decideEnrichment(base({ gpt: { genres: hi(["Pop"]), themes: hi(["Love"]) }, claude: null }));
+    expect(d.genres).toBeUndefined();
+    expect(d.themes).toBeUndefined();
+  });
+
   it("caps genres and themes at 3 from the approved lists, shared picks first", () => {
     const d = decideEnrichment(base({ gpt: { genres: hi(["Rock", "Pop", "Soul", "Funk"]), themes: hi(["Love", "Made Up Theme"]) }, claude: { genres: hi(["Soul"]), themes: hi(["Love"]) } }));
     expect(d.genres).toEqual(["Soul", "Rock", "Pop"]);

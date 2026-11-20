@@ -230,6 +230,7 @@ function AddSongModal({
                   <SubmitMissingSong
                     defaultTitle={query.trim()}
                     forSet
+                    setId={setId}
                     onCreated={(songId, title) => { setSubmitOpen(false); addSong({ song_id: songId, title }); }}
                   />
                 ) : (
