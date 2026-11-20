@@ -63,3 +63,18 @@ test("a review's text, tune and notes are applied, and the notes keep their sour
     if (data?.tune_id) await admin.from("tunes").delete().eq("id", data.tune_id);
   }
 });
+
+test("the recording artist picker offers the artist a misspelling means before creating a new one", async ({ page }) => {
+  const { data: song, error } = await admin.from("songs").insert({ title: `Picker Check ${randomUUID().slice(0, 8)}` }).select("id").single();
+  if (error || !song) throw error;
+  try {
+    await openPage(page, `/song-editor/songs/${song.id}`);
+    const search = await hydrated(page.getByPlaceholder("Search recording artists…"));
+    await search.fill("Delphine Arowood");
+    const options = page.locator("li button");
+    await expect(options.first()).toHaveText("Delphine Arrowood");
+    await expect(page.getByRole("button", { name: /Create "Delphine Arowood"/ })).toBeVisible();
+  } finally {
+    await admin.from("songs").delete().eq("id", song.id);
+  }
+});

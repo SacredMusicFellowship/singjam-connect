@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addHintLines, confirmedFirstLine, isPlaceholderArtist, parseAddHints } from "./songAddHints";
+import { addHintLines, addSongSpellingNote, confirmedFirstLine, isPlaceholderArtist, parseAddHints } from "./songAddHints";
 import { decideEnrichment, reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const base = (over: Partial<EnrichmentSources> = {}): EnrichmentSources => ({
@@ -57,5 +57,27 @@ describe("the first-line hint in enrichment", () => {
     const r = reviewEnrichment(src, []);
     expect(r.suggestions.first_line).toBe("Lights along the harbour");
     expect(r.agreed).not.toContain("first_line");
+  });
+});
+
+describe("addSongSpellingNote", () => {
+  const found = { artist: "Fleetwood Mac", artist_known: true, spotify_url: "https://open.spotify.com/track/x", existing: null };
+  it("says nothing when the typed artist was found as typed", () => {
+    expect(addSongSpellingNote("fleetwood mac", found)).toBeNull();
+  });
+  it("shows what was typed when the artist was corrected", () => {
+    expect(addSongSpellingNote("Fleewood Mac", found)).toEqual({ tone: "info", text: "You typed “Fleewood Mac”." });
+  });
+  it("warns when neither Spotify nor the library knows the artist", () => {
+    expect(addSongSpellingNote("Fleewood Mac", { ...found, artist: "Fleewood Mac", artist_known: false, spotify_url: null })).toMatchObject({ tone: "warning" });
+  });
+  it("warns about the title when the artist is known but Spotify has no such song", () => {
+    expect(addSongSpellingNote("Fleetwood Mac", { ...found, spotify_url: null })?.text).toMatch(/title's spelling/);
+  });
+  it("says nothing for a traditional song, an existing song or an older server", () => {
+    expect(addSongSpellingNote("", { ...found, artist: null, spotify_url: null })).toBeNull();
+    expect(addSongSpellingNote("Traditional", { ...found, artist: null, spotify_url: null })).toBeNull();
+    expect(addSongSpellingNote("Fleewood Mac", { ...found, existing: { id: "s1" } })).toBeNull();
+    expect(addSongSpellingNote("Fleetwood Mac", { artist: "Fleetwood Mac", spotify_url: null, existing: null })).toBeNull();
   });
 });

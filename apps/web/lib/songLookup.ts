@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isOfficialYouTubeUpload, isSameArtistSpelling, isSameTitle, sameSong } from "@singjam/core";
+import { closestArtist, fetchAllRows, isNearTitle, isOfficialYouTubeUpload, isSameArtistSpelling, isSameTitle, sameSong } from "@singjam/core";
 import { getSpotifyToken } from "@/lib/spotify";
 
 const REISSUE_SUFFIX = /\s+-\s+.*(remaster|version|mono|stereo|edit|mix|live).*$|\s*\((?:[^)]*(remaster|version|mono|stereo|edit|mix))[^)]*\)/i;
@@ -51,11 +51,26 @@ export async function findOnYouTube(title: string, artist: string) {
   return pick ? { youtube_id: pick.id.videoId as string, youtube_official: !!official } : null;
 }
 
+export type KnownArtist = { id: string; name: string };
+
+// The artist we already have that this name spells, exactly or with a typo, so
+// adding a song never creates "Fleewood Mac" beside "Fleetwood Mac". Throws on a
+// database error rather than risk creating a duplicate.
+export async function findKnownArtist(db: SupabaseClient, name: string | null): Promise<KnownArtist | null> {
+  if (!name?.trim()) return null;
+  const { data, error } = await db.rpc("similar_artists", { q: name.trim() });
+  if (error) throw error;
+  const rows = (data ?? []) as KnownArtist[];
+  const pick = closestArtist(name, rows.map((r) => r.name));
+  return rows.find((r) => r.name === pick) ?? null;
+}
+
 export type ExistingSong = { id: string; slug: string | null; title: string; display_artist: string | null; match: "same" | "possible" };
 
 // Candidates come from search_songs (the library search: stemmed full-text plus
 // alternate titles), so "The Sounds of Silence" turns up for "sound of silence";
-// sameSong then decides which of them is really this song.
+// sameSong then decides which of them is really this song. The artist's own songs
+// are checked too, allowing a typo in the title ("Everywere"), which search misses.
 export async function findExistingSong(db: SupabaseClient, titles: string[], artist: string | null): Promise<ExistingSong | null> {
   const seen = new Map<string, any>();
   for (const q of [...new Set(titles.filter(Boolean))]) {
@@ -74,6 +89,25 @@ export async function findExistingSong(db: SupabaseClient, titles: string[], art
       .flat()
       .reduce<"same" | "possible" | false>((best, v) => (best === "same" || v === "same" ? "same" : best || v), false);
     if (verdict) matches.push({ id: row.song_id, slug: row.slug, title: row.title, display_artist: row.display_artist, match: verdict });
+  }
+  const known = await findKnownArtist(db, artist);
+  if (known) {
+    const rows = await fetchAllRows<any>((from, to) =>
+      db
+        .from("song_recording_artists")
+        .select("song_id, songs(slug, title, display_artist, song_alternate_titles(title))")
+        .eq("artist_id", known.id)
+        .order("song_id")
+        .range(from, to),
+    );
+    for (const r of rows) {
+      const song = r.songs;
+      if (!song || matches.some((m) => m.id === r.song_id)) continue;
+      const names = [song.title, ...(song.song_alternate_titles ?? []).map((a: { title: string }) => a.title)];
+      if (!titles.some((t) => names.some((n) => isNearTitle(t, n)))) continue;
+      const exact = titles.some((t) => names.some((n) => isSameTitle(t, n)));
+      matches.push({ id: r.song_id, slug: song.slug, title: song.title, display_artist: song.display_artist, match: exact ? "same" : "possible" });
+    }
   }
   return matches.find((m) => m.match === "same") ?? matches[0] ?? null;
 }

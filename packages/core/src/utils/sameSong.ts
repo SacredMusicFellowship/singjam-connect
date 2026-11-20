@@ -46,12 +46,45 @@ export function isSameTitle(a: string, b: string): boolean {
 
 const artistKey = (s: string) => words(s).filter((w) => w !== "the").join(" ");
 
-// The artist someone typed and one a search found are the same act, allowing a
-// typo ("Fleewood Mac", "Doly Parton") but not a different short name ("Toto" / "Tool").
+// Two artist keys are one act spelled differently: a typo is allowed in longer
+// names, never in short ones ("Muse" / "Mase", "Toto" / "Tool").
+function nearKeys(a: string, b: string): boolean {
+  if (a === b) return true;
+  const len = Math.min(a.length, b.length);
+  const allowed = len < 5 ? 0 : len < 10 ? 1 : 2;
+  return allowed > 0 && editDistance(a, b) <= allowed;
+}
+
+export function isSameArtistName(a: string, b: string): boolean {
+  const ka = artistKey(a);
+  return !!ka && ka === artistKey(b);
+}
+
 export function isSameArtistSpelling(typed: string, found: string): boolean {
   const a = artistKey(typed), b = artistKey(found);
-  if (!a || !b) return false;
-  return a === b || editDistance(a, b) <= Math.min(2, Math.max(1, Math.floor(Math.min(a.length, b.length) / 5)));
+  return !!a && !!b && nearKeys(a, b);
+}
+
+// The one name in `known` that the typed name spells, exactly or with a typo
+// ("Fleewood Mac" → "Fleetwood Mac"). Null when none is close or two are equally close.
+export function closestArtist(typed: string, known: string[]): string | null {
+  const a = artistKey(typed);
+  if (!a) return null;
+  const close = known
+    .map((name) => ({ name, key: artistKey(name) }))
+    .filter((k) => k.key && nearKeys(a, k.key))
+    .map((k) => ({ ...k, d: k.key === a ? 0 : editDistance(a, k.key) }))
+    .sort((x, y) => x.d - y.d);
+  if (!close.length) return null;
+  return close.some((k) => k.d === close[0].d && k.key !== close[0].key) ? null : close[0].name;
+}
+
+// Same title allowing a typo even in a short one ("Everywere"), for songs by the
+// same artist, where two near-identical titles are almost always one song.
+export function isNearTitle(a: string, b: string): boolean {
+  if (isSameTitle(a, b)) return true;
+  const ka = songTitleKeys(a), kb = songTitleKeys(b);
+  return ka.some((x) => kb.some((y) => Math.min(x.length, y.length) >= 5 && editDistance(x, y) <= 1));
 }
 
 // Same title plus a shared artist is the same song. Two different artists under
@@ -65,5 +98,5 @@ export function sameSong(
   if (!isSameTitle(a.title, b.title)) return false;
   const aa = a.artists.map(artistKey).filter(Boolean), bb = b.artists.map(artistKey).filter(Boolean);
   if (!aa.length || !bb.length) return "possible";
-  return aa.some((x) => bb.includes(x)) ? "same" : false;
+  return aa.some((x) => bb.some((y) => nearKeys(x, y))) ? "same" : false;
 }

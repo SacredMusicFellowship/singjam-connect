@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as admin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
-import { findExistingSong, findOnSpotify } from "@/lib/songLookup";
+import { findExistingSong, findKnownArtist, findOnSpotify } from "@/lib/songLookup";
 import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
 import { idsFor, tagIds } from "@/lib/songEnrichment";
 import { parseTagSpecs, parseWriters } from "@/lib/songAddDetails";
@@ -18,8 +18,8 @@ async function setContext(db: ReturnType<typeof admin>, setId: unknown): Promise
 }
 
 async function findOrCreateArtist(db: ReturnType<typeof admin>, name: string): Promise<string | null> {
-  const { data: found } = await db.from("artists").select("id").ilike("name", name).limit(1).maybeSingle();
-  if (found) return found.id;
+  const known = await findKnownArtist(db, name);
+  if (known) return known.id;
   const { data: created } = await db.from("artists").insert({ name }).select("id").single();
   return created?.id ?? null;
 }
@@ -65,6 +65,8 @@ export async function POST(req: Request) {
   }
 
   const db = admin();
+  // Whatever the client sent, a misspelling of an artist we have becomes our spelling.
+  if (artist) artist = (await findKnownArtist(db, artist))?.name ?? artist;
   const writers = parseWriters(body.writers);
   const tagSpecs = parseTagSpecs(body.tags);
   const firstLine = typeof body.first_line === "string" ? body.first_line.trim() || null : null;

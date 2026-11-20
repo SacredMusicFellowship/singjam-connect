@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSameTitle, sameSong, isSameArtistSpelling } from "./sameSong";
+import { closestArtist, isNearTitle, isSameTitle, sameSong, isSameArtistSpelling } from "./sameSong";
 
 describe("isSameTitle", () => {
   it("ignores a leading 'The', plurals, apostrophes and case", () => {
@@ -40,13 +40,49 @@ describe("isSameArtistSpelling", () => {
   it("accepts a typo in the artist someone typed", () => {
     expect(isSameArtistSpelling("Fleewood Mac", "Fleetwood Mac")).toBe(true);
     expect(isSameArtistSpelling("Doly Parton", "Dolly Parton")).toBe(true);
-    expect(isSameArtistSpelling("Totto", "TOTO")).toBe(true);
     expect(isSameArtistSpelling("Beatles", "The Beatles")).toBe(true);
   });
   it("rejects a different act", () => {
     expect(isSameArtistSpelling("Toto", "Tool")).toBe(false);
+    expect(isSameArtistSpelling("Muse", "Mase")).toBe(false);
+    expect(isSameArtistSpelling("Totto", "TOTO")).toBe(false);
     expect(isSameArtistSpelling("Fleetwood Mac", "Snoop Dogg")).toBe(false);
     expect(isSameArtistSpelling("Bad Wolves", "Dolly Parton")).toBe(false);
     expect(isSameArtistSpelling("", "Adele")).toBe(false);
+  });
+});
+
+describe("closestArtist", () => {
+  const known = ["Fleetwood Mac", "Mac Miller", "Dolly Parton", "The Beatles", "Muse"];
+  it("finds the artist a typo spells", () => {
+    expect(closestArtist("Fleewood Mac", known)).toBe("Fleetwood Mac");
+    expect(closestArtist("Beatles", known)).toBe("The Beatles");
+    expect(closestArtist("dolly parton", known)).toBe("Dolly Parton");
+  });
+  it("returns nothing for a new artist or a near short name", () => {
+    expect(closestArtist("Mase", known)).toBeNull();
+    expect(closestArtist("Phoebe Bridgers", known)).toBeNull();
+    expect(closestArtist("", known)).toBeNull();
+  });
+  it("won't choose between two equally close names", () => {
+    expect(closestArtist("Jon Smith", ["John Smith", "Jon Smyth"])).toBeNull();
+  });
+});
+
+describe("isNearTitle", () => {
+  it("allows a typo in a short title", () => {
+    expect(isNearTitle("Everywere", "Everywhere")).toBe(true);
+    expect(isNearTitle("Jolenne", "Jolene")).toBe(true);
+  });
+  it("keeps short different titles apart", () => {
+    expect(isNearTitle("Rain", "Pain")).toBe(false);
+    expect(isNearTitle("Dreams", "Gypsy")).toBe(false);
+  });
+});
+
+describe("sameSong with a misspelled artist", () => {
+  it("is still the same song", () => {
+    expect(sameSong({ title: "Dreams", artists: ["Fleetwod Mac"] }, { title: "Dreams", artists: ["Fleetwood Mac"] })).toBe("same");
+    expect(sameSong({ title: "Dreams", artists: ["The Cranberries"] }, { title: "Dreams", artists: ["Fleetwood Mac"] })).toBe(false);
   });
 });

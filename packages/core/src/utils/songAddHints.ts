@@ -1,3 +1,5 @@
+import { isSameArtistName } from "./sameSong";
+
 // What the person adding a song can tell us beyond its title and artist. All
 // optional; each is a hint to enrichment, never a fact on its own.
 
@@ -61,4 +63,22 @@ export function confirmedFirstLine(hint: string | undefined, lyrics: string | nu
   if (h.length < 12) return null;
   if (lyrics && ` ${norm(lyrics)} `.includes(` ${h} `)) return hint!;
   return hymnalFirstLines.some((l) => ` ${norm(l)} `.startsWith(` ${h} `) || ` ${h} `.startsWith(` ${norm(l)} `)) ? hint! : null;
+}
+
+export type SpellingNote = { tone: "info" | "warning"; text: string };
+
+// What the add form says about spelling under "Is this the song?". `artist_known`
+// is the lookup's word that Spotify or our library knows the artist.
+export function addSongSpellingNote(
+  typedArtist: string,
+  match: { artist: string | null; artist_known?: boolean; spotify_url: string | null; existing: unknown },
+): SpellingNote | null {
+  const typed = typedArtist.trim();
+  if (!typed || isPlaceholderArtist(typed) || match.existing) return null;
+  if (match.artist_known === false)
+    return { tone: "warning", text: `We couldn't find “${typed}” on Spotify or in our library. Check the spelling before adding.` };
+  if (match.artist && !isSameArtistName(match.artist, typed)) return { tone: "info", text: `You typed “${typed}”.` };
+  if (match.artist_known && !match.spotify_url)
+    return { tone: "warning", text: "We couldn't find this song on Spotify. Check the title's spelling before adding." };
+  return null;
 }

@@ -38,3 +38,9 @@ describe("youTubeVideoId", () => {
     expect(youTubeVideoId(null)).toBeNull();
   });
 });
+
+describe("isOfficialYouTubeUpload with an incomplete search result", () => {
+  it("isn't official, rather than failing the lookup", () => {
+    expect(isOfficialYouTubeUpload({ title: "Everywhere" }, "Everywhere", "Fleetwood Mac")).toBe(false);
+  });
+});

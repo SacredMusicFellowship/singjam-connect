@@ -16,7 +16,7 @@ vi.mock("@/lib/enrichmentSources", () => ({
     }],
   }),
 }));
-vi.mock("@/lib/songLookup", () => ({ findOnSpotify: async () => spotify.hit }));
+vi.mock("@/lib/songLookup", async (actual) => ({ ...(await actual<object>()), findOnSpotify: async () => spotify.hit }));
 vi.mock("@/lib/enrichmentDb", () => ({ idsFor: async () => ["artist-2"] }));
 
 import { addLandmarkRecordings } from "./enrichmentRecordings";
