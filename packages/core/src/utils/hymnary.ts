@@ -29,6 +29,8 @@ export type HymnaryTune = { name: string; composers: string[]; instances: number
 export type HymnaryText = {
   title: string;
   firstLine: string;
+  // The refrain's first line ("Gloria in excelsis Deo"), when the text has one.
+  refrain?: string;
   authors: string[];
   sources: string;
   instances: number;
@@ -48,6 +50,7 @@ export function hymnaryTextsFor(title: string, records: Record<string, string>[]
     .map((r) => ({
       title: r.textTitle || r.displayTitle,
       firstLine: r.firstLine,
+      refrain: r.refrainFirstLine || undefined,
       authors: names(r.authors),
       sources: r.textSources ?? "",
       instances: Number(r.totalInstances) || 0,

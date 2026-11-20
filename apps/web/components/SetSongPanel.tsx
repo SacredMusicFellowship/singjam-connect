@@ -354,7 +354,7 @@ export default function SetSongPanel({
               <button
                 key={mode}
                 onClick={() => { setSortMode(mode); if (mode !== "leader") setSelectedLeaders(new Set()); }}
-                className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                className={`flex-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                   sortMode === mode ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                 }`}
               >

@@ -107,12 +107,14 @@ function firstLyricLine(lyrics: string): string | null {
 }
 
 // Tags both models chose come first; GPT's remaining picks fill up to the cap.
+// Both models must have answered: when one is missing (a failed call, or no
+// answer), one model's taste would decide alone, so nothing is tagged.
 function mergeTags(gpt: string[] | null, claude: string[] | null, allowed: readonly string[]): string[] | undefined {
   const ok = (list: string[] | null) => (list ?? []).filter((t) => allowed.includes(t));
   const g = ok(gpt), c = ok(claude);
+  if (!g.length || !c.length) return undefined;
   const both = g.filter((t) => c.includes(t));
-  const merged = g.length ? [...both, ...g.filter((t) => !both.includes(t))] : c;
-  return merged.length ? merged.slice(0, MAX_TAGS) : undefined;
+  return [...both, ...g.filter((t) => !both.includes(t))].slice(0, MAX_TAGS);
 }
 
 // Every fact needs two independent signals — two models agreeing, or a model
@@ -213,6 +215,9 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   const hymn = matchedHymn(src);
   if (hymn) {
     if (!out.first_line) out.first_line = hymn.firstLine.trim().replace(/[,;:]+$/, "");
+    // The hymnal's refrain is a printed source for the hook, as its first line is for the first line.
+    const refrain = hymn.refrain?.replace(/\s*\([^)]*\)\s*$/, "").trim().replace(/[,;:.!]+$/, "");
+    if (!out.hook && refrain && norm(refrain).length >= 8) out.hook = refrain;
     const named = (list: string[], by: string[]) => list.length > 0 && by.some((w) => list.some((n) => samePerson(n, w)));
     if (!out.composers && !out.lyricists && named(hymn.authors, [...modelLyricists, ...modelComposers])) {
       out.lyricists = hymn.authors;

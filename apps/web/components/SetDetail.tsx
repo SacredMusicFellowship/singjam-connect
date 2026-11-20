@@ -1146,7 +1146,7 @@ export default function SetDetail({
               <button
                 key={value}
                 onClick={() => handleSetLinkSharing(value)}
-                className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                className={`flex-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                   linkSharing === value
                     ? "bg-white text-zinc-900 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-700"
@@ -1587,7 +1587,7 @@ export default function SetDetail({
               <button
                 key={value}
                 onClick={() => setSongSort(value)}
-                className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                className={`flex-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                   songSort === value
                     ? "bg-white text-zinc-900 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-700"
