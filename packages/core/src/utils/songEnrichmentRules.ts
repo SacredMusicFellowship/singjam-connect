@@ -309,7 +309,7 @@ export type EnrichmentReview = {
     notes: string | null;
     productions: string[];
     alternate_titles: string[];
-    additional_recordings: { artist: string; year: number | null }[];
+    additional_recordings: { artist: string; year: number | null; spotify_url?: string | null }[];
     genius_url: string | null;
     // The hymnals' text of this song and the tune a model names from its tunes.
     text?: { title: string; first_line: string; authors: string[]; url: string } | null;

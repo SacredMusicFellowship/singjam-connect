@@ -551,12 +551,12 @@ export default function SongEditor({
       setPendingProductionNames((prev) => [...prev, ...pendingNames.filter((n) => !prev.includes(n))]);
     }
     if (accept("additional_recordings") && aiSuggestions.additional_recordings.length) {
-      const toAdd: { id: string; year: number | null }[] = [];
+      const toAdd: { id: string; year: number | null; spotify_url: string | null }[] = [];
       const openSlots = MAX_RECORDINGS - recordingArtists.length - pendingRecordingArtists.length;
       for (const rec of aiSuggestions.additional_recordings.slice(0, Math.max(0, openSlots))) {
         const artistId = await resolvePersonName(rec.artist, "artists", allArtists);
         if (artistId && !recordingArtists.find((e) => e.id === artistId) && !toAdd.find((e) => e.id === artistId)) {
-          toAdd.push({ id: artistId, year: rec.year });
+          toAdd.push({ id: artistId, year: rec.year, spotify_url: rec.spotify_url ?? null });
         }
       }
       if (toAdd.length) {

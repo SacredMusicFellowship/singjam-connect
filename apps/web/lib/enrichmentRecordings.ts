@@ -74,7 +74,7 @@ async function musicBrainzRecording(title: string, artist: string) {
   return found ? { credit: credit ?? artist, year: years.length ? Math.min(...years) : null } : null;
 }
 
-export type LandmarkResult = { artist: string; year: number | null };
+export type LandmarkResult = { artist: string; year: number | null; spotify_url: string | null };
 
 // Adds the iconic other recordings of a song: both models must name the artist,
 // and MusicBrainz must have the recording. Most songs get none.
@@ -95,11 +95,12 @@ export async function addLandmarkRecordings(admin: SupabaseClient, songId: strin
     const found = await musicBrainzRecording(song.title, pick.artist.length >= pick.altArtist.length ? pick.artist : pick.altArtist);
     if (!found) continue;
     const year = landmarkYear(pick.gptYear, pick.claudeYear, found.year);
-    added.push({ artist: found.credit, year });
+    const spotify_url = await spotifyFor(song.title, found.credit);
+    added.push({ artist: found.credit, year, spotify_url });
     if (opts.dryRun) continue;
     const [artistId] = await idsFor(admin, "artists", [found.credit]);
     if (!artistId) continue;
-    await admin.from("song_recording_artists").insert({ song_id: songId, artist_id: artistId, year, position: position++ });
+    await admin.from("song_recording_artists").insert({ song_id: songId, artist_id: artistId, year, spotify_url, position: position++ });
   }
   return { added, usage };
 }
