@@ -9,12 +9,14 @@ export type ModelUsage = { model: string; input: number; output: number; reasoni
 export type ModelPrompt = { system: string; user: string };
 
 // `key` picks the answer out of the JSON object (null: the whole object).
-export async function askGptJson<T>(p: ModelPrompt, key: string | null, label: string, usage: ModelUsage[]): Promise<T | null> {
+// `effort` "none" skips GPT's reasoning: measured on 16 well-known songs it
+// answered the song fields as well as "low" at 45% less (1.5¢ vs 2.7¢ a song).
+export async function askGptJson<T>(p: ModelPrompt, key: string | null, label: string, usage: ModelUsage[], effort: "none" | "low" = "low"): Promise<T | null> {
   if (!process.env.OPENAI_API_KEY) return null;
   try {
     const res = await new OpenAI().chat.completions.create({
       model: "gpt-5.5",
-      reasoning_effort: "low",
+      reasoning_effort: effort,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: p.system },

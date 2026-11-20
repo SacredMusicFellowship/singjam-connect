@@ -69,12 +69,17 @@ const NUMBER_FIELDS = new Set<Field>(["year_written", "recording_year"]);
 function prompt(song: SongContext) {
   const system = `You are a careful music researcher filling gaps in a song database. Accuracy matters more than coverage: a wrong value is far worse than a missing one.
 Only use the listed values where a list is given. For each field give confidence "high", "medium" or "low", and use null for the value when you don't know. Never guess facts or reconstruct lyrics you are unsure of.`;
+  // A traditional song's recording artist is one version of it: naming the
+  // artist beside the title drew models to the cover's genres (a carol as Pop).
+  const hinted = song.addHints?.known_as === "traditional" || song.addHints?.known_as === "hymn";
+  const oneVersion = !!song.artist && (song.traditional || hinted);
   const known = [
     song.writers?.length ? `Written by: ${song.writers.join(", ")}` : null,
     song.firstLine ? `First line: "${song.firstLine}"` : null,
     ...addHintLines(song.addHints, song.artist),
+    oneVersion && !hinted ? `It's a traditional song; ${song.artist}'s recording is one version of it, so describe the song itself.` : null,
   ].filter(Boolean).join("\n");
-  const user = `Song: "${song.title}" — ${song.artist ?? "(no artist)"}${song.production ? ` — from ${song.production}` : ""}${known ? `\n${known}\nAnswer about this song, not another song with the same title.` : ""}
+  const user = `Song: "${song.title}"${oneVersion ? "" : ` — ${song.artist ?? "(no artist)"}`}${song.production ? ` — from ${song.production}` : ""}${known ? `\n${known}\nAnswer about this song, not another song with the same title.` : ""}
 Fill these fields:
 ${song.wanted.map((f) => `- ${FIELD_RULES[f]}`).join("\n")}
 Return JSON: {"fields": {"<field>": {"v": <value or null>, "c": "high" | "medium" | "low"}}}. Where null isn't allowed, use "", 0 or [] for unknown.`;
@@ -112,7 +117,7 @@ function schemaFor(wanted: Field[]) {
   };
 }
 
-const askGpt = (song: SongContext, usage: ModelUsage[]) => askGptJson<ModelAnswer>(prompt(song), "fields", "fill", usage);
+const askGpt = (song: SongContext, usage: ModelUsage[]) => askGptJson<ModelAnswer>(prompt(song), "fields", "fill", usage, "none");
 
 function blankToNull(answer: ModelAnswer | null): ModelAnswer | null {
   if (!answer) return null;
@@ -271,7 +276,7 @@ export async function enrichSong(
           return { added: [] as FirstRecordingResult[], usage: [] as ModelUsage[] };
         })];
     const usage = [...filled.usage, ...landmarks.usage, ...first.usage];
-    if (!opts.dryRun) await recordEnrichmentUsage(admin, songId, "fill", usage);
+    if (!opts.dryRun) await recordEnrichmentUsage(admin, songId, "fill", usage, filled.checks);
     return { ...filled, usage, landmarks: landmarks.added, firstRecordings: first.added };
   } finally {
     if (!opts.dryRun) await admin.from("songs").update({ enrichment_finished_at: new Date().toISOString() }).eq("id", songId);
@@ -301,6 +306,7 @@ async function fillSong(
     alternateTitles: (s.song_alternate_titles ?? []).map((t: any) => t.title),
     firstLine: s.first_line ?? null,
     addHints: s.add_hints ?? null,
+    traditional: writers.some((w) => /^traditional$/i.test(w)),
   };
   const { sources, wikipedia, geniusUrl, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear, links: !s.genius_url });
   const decision = { ...decideEnrichment(sources), ...decideListedFacts(sources, wikipedia) };
@@ -363,7 +369,7 @@ async function fillSong(
     const titles = decision.alternate_titles.filter((t, i, all) => norm(t) !== norm(s.title) && all.findIndex((x) => norm(x) === norm(t)) === i);
     if (titles.length) await admin.from("song_alternate_titles").insert(titles.map((title) => ({ song_id: songId, title })));
   }
-  return { songId, decision, notes, geniusUrl, usage, firstLineSource };
+  return { songId, decision, notes, geniusUrl, usage, checks, firstLineSource };
 }
 
 // Once Hymnary has matched the song's text, each model says which of the
@@ -418,6 +424,7 @@ export async function proposeEnrichment(admin: SupabaseClient, songId: string) {
   // The review asks the models about the credits afresh, so the song's current
   // writers only go to the Genius lookup, never into the prompt.
   const geniusWriters = [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])].map((r: any) => r.people?.name).filter(Boolean);
+  context.traditional = geniusWriters.some((w: string) => /^traditional$/i.test(w));
   const [gathered, landmarks] = await Promise.all([
     gatherSources(context, { links: true, geniusWriters }),
     addLandmarkRecordings(admin, songId, { dryRun: true }).catch(() => ({ added: [] as LandmarkResult[], usage: [] as ModelUsage[] })),
@@ -446,7 +453,7 @@ export async function runEnrichmentReview(admin: SupabaseClient, songId: string,
   try {
     const { usage, ...review } = await proposeEnrichment(admin, songId);
     console.log(`[enrich-review] ${songId}: usage ${JSON.stringify(usage)}`);
-    await recordEnrichmentUsage(admin, songId, "review", usage);
+    await recordEnrichmentUsage(admin, songId, "review", usage, review.checks);
     proposal = { requested_at: requestedAt, finished_at: new Date().toISOString(), ...review };
   } catch (e) {
     console.error(`[enrich-review] ${songId} failed: ${e instanceof Error ? e.message : String(e)}`);

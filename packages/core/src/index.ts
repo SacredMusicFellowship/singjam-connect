@@ -22,6 +22,7 @@ export * from './utils/songSort';
 export * from './utils/officialYouTube';
 export * from './utils/songEnrichmentRules';
 export * from './utils/songAddHints';
+export * from './utils/enrichmentHealth';
 export * from './utils/hymnary';
 export * from './utils/songMelodies';
 export * from './utils/sameSong';

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { usageCost, type TagType } from "@singjam/core";
+import { newOutages, OUTAGE_STREAK, usageCost, type RunChecks, type TagType } from "@singjam/core";
 import { norm } from "@/lib/enrichmentSources";
 import type { ModelUsage } from "@/lib/enrichmentModels";
 
@@ -32,12 +32,37 @@ export async function tagIds(admin: SupabaseClient, type: TagType, names: string
   return ids;
 }
 
-// Keeps what a run cost (migration 214). Best effort: a failed write never
-// fails the enrichment itself.
-export async function recordEnrichmentUsage(admin: SupabaseClient, songId: string, kind: "fill" | "review", usage: ModelUsage[]) {
+// Keeps what a run cost (migration 214) and which sources answered (249).
+// Best effort: a failed write never fails the enrichment itself.
+export async function recordEnrichmentUsage(
+  admin: SupabaseClient,
+  songId: string,
+  kind: "fill" | "review",
+  usage: ModelUsage[],
+  checks?: { name: string; ok: boolean }[],
+) {
   if (!usage.length) return;
   const { usd, unpriced } = usageCost(usage);
   if (unpriced.length) console.warn(`[song-enrichment] no price for ${unpriced.join(", ")}; cost recorded without them`);
-  const { error } = await admin.from("song_enrichment_runs").insert({ song_id: songId, kind, usage, cost_usd: Number(usd.toFixed(5)) });
+  const { error } = await admin.from("song_enrichment_runs").insert({ song_id: songId, kind, usage, checks: checks ?? null, cost_usd: Number(usd.toFixed(5)) });
   if (error) console.error("[song-enrichment] couldn't record usage:", error.message);
+  if (checks?.some((c) => !c.ok)) await alertOnOutage(admin).catch((e) => console.error("[song-enrichment] outage check failed:", e));
+}
+
+// Emails the admin when GPT or Claude has just failed OUTAGE_STREAK runs in a row.
+async function alertOnOutage(admin: SupabaseClient) {
+  const { data } = await admin.from("song_enrichment_runs").select("checks").order("ran_at", { ascending: false }).order("id", { ascending: false }).limit(OUTAGE_STREAK + 1);
+  const down = newOutages(((data ?? []) as { checks: RunChecks }[]).map((r) => r.checks));
+  if (!down.length) return;
+  const names = down.join(" and ");
+  console.error(`[song-enrichment] ${names} failed the last ${OUTAGE_STREAK} runs`);
+  // Loaded only to send: the mail client needs its key, which enrichment otherwise doesn't.
+  const { FROM_ADDRESS, resend } = await import("@/lib/resend");
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: process.env.ADMIN_EMAIL ?? "benkramarz@gmail.com",
+    subject: `Song enrichment: ${names} hasn't answered in ${OUTAGE_STREAK} runs`,
+    text: `${names} failed on the last ${OUTAGE_STREAK} song enrichment runs, so new songs are being filled in from fewer sources than the two-source rule expects.\n\nThe Netlify function log for enrich-song-background shows the error. Each run's sources are in song_enrichment_runs.checks, and the admin song import page shows failures over the last 24 hours.`,
+  });
+  if (error) console.error("[song-enrichment] outage email failed:", error.message);
 }

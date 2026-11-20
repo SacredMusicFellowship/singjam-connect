@@ -35,6 +35,8 @@ export type SongContext = {
   firstLine?: string | null;
   // What the person adding it told us (songs.add_hints).
   addHints?: SongAddHints | null;
+  // Credited to Traditional: the recording artist is one version, not the song.
+  traditional?: boolean;
 };
 
 export async function musicbrainz(path: string) {
