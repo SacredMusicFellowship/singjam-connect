@@ -15,6 +15,7 @@ import { ActiveFilterChips, FilterPanel } from "@/components/FilterPanel";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
 import SongCard from "@/components/SongCard";
 import BrowseEntityRows from "@/components/BrowseEntityRows";
+import SongCardSkeleton from "@/components/SongCardSkeleton";
 import SearchInput from "@/components/SearchInput";
 import FiltersButton from "@/components/FiltersButton";
 import HideMySongsToggle from "@/components/HideMySongsToggle";
@@ -251,19 +252,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
             )}
           </div>
         ) : browseLoading && browseSongs.length === 0 ? (
-          <div className="divide-y rounded-md border">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center justify-between p-4">
-                <div className="space-y-1.5">
-                  <div className="h-4 w-48 animate-pulse rounded bg-zinc-200" />
-                  <div className="h-3 w-32 animate-pulse rounded bg-zinc-100" />
-                </div>
-                <div className="flex gap-2">
-                  <div className="h-7 w-16 animate-pulse rounded-xl bg-zinc-100" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <SongCardSkeleton />
         ) : (
           <div className={`grid gap-2 transition-opacity ${browseLoading ? "opacity-60" : ""}`}>
             {browseSongs.map((r) => (
@@ -321,17 +310,7 @@ export function SongSearchSkeleton() {
   return (
     <div className="space-y-3">
       <div className="h-10 animate-pulse rounded-xl bg-zinc-100" />
-      <div className="divide-y rounded-md border">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex items-center justify-between p-4">
-            <div className="space-y-1.5">
-              <div className="h-4 w-48 animate-pulse rounded bg-zinc-200" />
-              <div className="h-3 w-32 animate-pulse rounded bg-zinc-100" />
-            </div>
-            <div className="h-7 w-16 animate-pulse rounded-xl bg-zinc-100" />
-          </div>
-        ))}
-      </div>
+      <SongCardSkeleton />
     </div>
   );
 }
