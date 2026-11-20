@@ -18,9 +18,8 @@ test("a member adds a missing song and says how they know it and how it starts",
     await page.getByRole("button", { name: "Add song", exact: true }).click();
 
     await expect(page).toHaveURL(/\/songs\//);
-    const { data } = await admin.from("songs").select("known_by_recording, add_hints, first_line").eq("title", title).single();
+    const { data } = await admin.from("songs").select("add_hints, first_line").eq("title", title).single();
     expect(data).toEqual({
-      known_by_recording: false,
       add_hints: { known_as: "hymn", first_line: "Lights along the harbour, shining through the night" },
       first_line: null,
     });
