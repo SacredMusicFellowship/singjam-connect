@@ -1,3 +1,4 @@
+import { webUrl } from "@singjam/core";
 import { UltimateGuitarIcon } from "@/components/setDetailShared";
 
 // A song's Ultimate Guitar chart: the icon alone on phones, an icon + "Chords"
@@ -13,10 +14,12 @@ export default function ChordsLink({
    *  a pill's width, so it doesn't span a whole line if the row wraps). */
   pill?: boolean;
 }) {
+  const url = webUrl(href);
+  if (!url) return null;
   return (
     <>
       <a
-        href={href}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
         className={`sm:hidden shrink-0 transition-opacity hover:opacity-80 ${pill ? "flex flex-1 max-w-20 items-center justify-center rounded-full border border-zinc-200 bg-white px-3 py-0.5" : "rounded-lg p-1.5"}`}
@@ -26,7 +29,7 @@ export default function ChordsLink({
         <UltimateGuitarIcon />
       </a>
       <a
-        href={href}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
         className={`hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white pl-1.5 pr-3 transition-colors hover:border-zinc-300 hover:bg-zinc-50 ${size === "md" ? "py-1.5" : "py-1"}`}

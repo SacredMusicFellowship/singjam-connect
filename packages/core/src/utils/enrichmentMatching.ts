@@ -2,7 +2,7 @@ import { leadArtist, sameArtist } from "./landmarkRecordings";
 
 const norm = (s: string) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-const baseTitle = (t: string) => norm(t.replace(/\s*\([^)]*\)/g, ""));
+const baseTitle = (t: string) => norm(t.replace(/\([^()]*\)/g, " "));
 const SONG_WORDS = /\b(song|hymn|ballad|carol|single|spiritual|anthem|shanty|lullaby|standard|tune|aria)\b/i;
 
 export type WikipediaPage = { title: string; type: string; description: string | null; extract: string };

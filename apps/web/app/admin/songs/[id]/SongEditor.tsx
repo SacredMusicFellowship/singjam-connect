@@ -7,7 +7,7 @@ import { createText, createTune } from "@/components/catalog/catalogWrites";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
-import { closestArtist, MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type CardLine, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
+import { closestArtist, MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type CardLine, type EnrichmentReview, type SongTagRow, type SourceRef, webUrl } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -163,6 +163,8 @@ export default function SongEditor({
     : song?.notes_source && notes === (song.notes ?? "") ? song.notes_source : null;
   const [geniusUrl, setGeniusUrl] = useState(song?.genius_url ?? "");
   const [chordChartUrl, setChordChartUrl] = useState(song?.chord_chart_url ?? "");
+  const geniusLink = webUrl(geniusUrl);
+  const chordChartLink = webUrl(chordChartUrl);
   const [year, setYear] = useState(song?.year?.toString() ?? "");
   const [yearWritten, setYearWritten] = useState(song?.year_written?.toString() ?? "");
   const [tonalities, setTonalities] = useState<string[]>(() =>
@@ -966,8 +968,8 @@ export default function SongEditor({
           <div className="flex gap-2">
             <input value={geniusUrl} onChange={(e) => setGeniusUrl(e.target.value)}
               className="input flex-1" placeholder="https://genius.com/…" />
-            {geniusUrl && (
-              <a href={geniusUrl} target="_blank" rel="noopener noreferrer"
+            {geniusLink && (
+              <a href={geniusLink} target="_blank" rel="noopener noreferrer"
                 className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>
@@ -978,8 +980,8 @@ export default function SongEditor({
           <div className="flex gap-2">
             <input value={chordChartUrl} onChange={(e) => setChordChartUrl(e.target.value)}
               className="input flex-1" placeholder="https://tabs.ultimate-guitar.com/…" />
-            {chordChartUrl && (
-              <a href={chordChartUrl} target="_blank" rel="noopener noreferrer"
+            {chordChartLink && (
+              <a href={chordChartLink} target="_blank" rel="noopener noreferrer"
                 className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>

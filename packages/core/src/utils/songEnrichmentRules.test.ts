@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideEnrichment, verifiedFirstLine, withoutMisfitForms, type EnrichmentSources, type ModelAnswer } from "./songEnrichmentRules";
+import { decideEnrichment, isVocalOnly, verifiedFirstLine, withoutMisfitForms, type EnrichmentSources, type ModelAnswer } from "./songEnrichmentRules";
 
 const base = (over: Partial<EnrichmentSources> = {}): EnrichmentSources => ({
   gpt: null, claude: null, musicbrainz: null, spotifyReleaseYear: null, lyrics: null, ...over,
@@ -135,5 +135,27 @@ describe("verifiedFirstLine", () => {
     expect(verifiedFirstLine(answer, [{ url: "x", cited_text: "Ezekiel saw de wheel" }])).toBeNull();
     expect(verifiedFirstLine({ first_line: "Chorus: Ezekiel saw the wheel" }, [{ url: "x", cited_text: "Chorus: Ezekiel saw the wheel" }])).toBeNull();
     expect(verifiedFirstLine({ first_line: "Ezekiel" }, [{ url: "x", cited_text: "Ezekiel" }])).toBeNull();
+  });
+});
+
+describe("isVocalOnly", () => {
+  it("sees lines of only sung sounds", () => {
+    for (const line of ["oh oh oh", "mmm", "ooh yeah", "hmm", "ohyeah", "la la la la", "whoa oh", "a", "mh", "hmmm mm"]) {
+      expect(isVocalOnly(line), line).toBe(true);
+    }
+  });
+
+  it("sees a line with words", () => {
+    for (const line of ["", " oh", "m", "oh my darling", "mmh", "hey jude", "amazing grace", "la la land"]) {
+      expect(isVocalOnly(line), line).toBe(false);
+    }
+  });
+
+  it("stays fast on long runs that would make a regex backtrack", () => {
+    const start = Date.now();
+    for (const s of ["m" + "mm".repeat(20000) + "x", "h" + "mmmh".repeat(10000) + "x", "a" + "hmm".repeat(10000) + "x", "oh ".repeat(20000) + "x"]) {
+      expect(isVocalOnly(s)).toBe(false);
+    }
+    expect(Date.now() - start).toBeLessThan(500);
   });
 });

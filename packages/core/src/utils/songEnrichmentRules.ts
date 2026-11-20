@@ -96,7 +96,38 @@ const value = <T>(f: ModelField<T>, levels: Confidence[]): T | null =>
 const sameNames = (a: string[], b: string[]) =>
   a.length === b.length && [...a].map(norm).sort().join("|") === [...b].map(norm).sort().join("|");
 
-const VOCAL = /^((oh|ooh|yeah|hey|mm+|mh|hm+|la|na|whoa|uh|ah|a)\s*)+$/;
+const VOCAL_SOUNDS = ["oh", "ooh", "yeah", "hey", "mh", "la", "na", "whoa", "uh", "ah", "a"];
+
+// Is the line only sung sounds ("oh oh", "mmm", "ooh yeah")? Sounds may run
+// together or be spaced. Walked by hand rather than with a regex: a pattern like
+// (mm+|hm+|…)+ backtracks exponentially on a long "mmmm…".
+export function isVocalOnly(s: string): boolean {
+  if (!s) return false;
+  const ends = new Array<boolean>(s.length + 1).fill(false);
+  const mark = (from: number, to: number) => {
+    for (let j = from; j <= to && !ends[j]; j++) ends[j] = true;
+  };
+  // mRun[i]: how many m's in a row start at i.
+  const mRun = new Array<number>(s.length + 1).fill(0);
+  for (let i = s.length - 1; i >= 0; i--) if (s[i] === "m") mRun[i] = mRun[i + 1] + 1;
+  for (let i = 0; i < s.length; i++) {
+    if (i > 0 && !ends[i]) continue;
+    if (/\s/.test(s[i])) {
+      if (i > 0) ends[i + 1] = true;
+      continue;
+    }
+    for (const w of VOCAL_SOUNDS) if (s.startsWith(w, i)) ends[i + w.length] = true;
+    if (s[i] === "m") {
+      const run = mRun[i];
+      if (run >= 2) mark(i + 2, i + run);
+    }
+    if (s[i] === "h") {
+      const run = mRun[i + 1];
+      if (run >= 1) mark(i + 2, i + 1 + run);
+    }
+  }
+  return ends[s.length];
+}
 
 function firstLyricLine(lyrics: string): string | null {
   for (const raw of lyrics.split("\n")) {
@@ -190,7 +221,7 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
     const head = norm(src.lyrics.slice(0, 400));
     const all = ` ${norm(src.lyrics)} `;
     const lrc = firstLyricLine(src.lyrics);
-    const opensWithAdLib = !!lrc && VOCAL.test(norm(lrc));
+    const opensWithAdLib = !!lrc && isVocalOnly(norm(lrc));
     // A model's line at the top of the lyrics wins; failing that, a model's
     // line found later in them beats the lyrics' own first line, which can be a
     // performer's spoken introduction (Tom Dooley's "This one next tells a story…").
@@ -198,7 +229,7 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
       lines.find((l) => norm(l).length >= 12 && (head.startsWith(norm(l)) || (opensWithAdLib && head.includes(norm(l))))) ??
       lines.find((l) => norm(l).length >= 12 && all.includes(` ${norm(l)} `));
     if (fromModel) out.first_line = fromModel;
-    else if (lrc && lrc.length >= 20 && !VOCAL.test(norm(lrc)) && !/chorus|verse|intro|[{}*]/i.test(lrc)) out.first_line = lrc;
+    else if (lrc && lrc.length >= 20 && !isVocalOnly(norm(lrc)) && !/chorus|verse|intro|[{}*]/i.test(lrc)) out.first_line = lrc;
     const hook = hooks.find((h) => all.includes(` ${norm(h)} `));
     if (hook) out.hook = hook;
   } else {

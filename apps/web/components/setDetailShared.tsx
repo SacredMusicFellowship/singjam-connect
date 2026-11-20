@@ -90,7 +90,7 @@ export function getYoutubeId(url: string | null | undefined): string | null {
   try {
     const u = new URL(url);
     if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0] || null;
-    if (u.hostname.includes("youtube.com")) {
+    if (u.hostname === "youtube.com" || u.hostname.endsWith(".youtube.com")) {
       return u.searchParams.get("v")
         ?? u.pathname.match(/\/(?:embed|v|shorts)\/([^/?]+)/)?.[1]
         ?? null;

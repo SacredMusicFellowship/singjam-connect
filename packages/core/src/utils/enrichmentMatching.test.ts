@@ -4,6 +4,14 @@ import { confirmsGeniusSong, matchesGeniusHit, matchesWikipediaArticle, samePeop
 const page = (over: Partial<WikipediaPage>): WikipediaPage => ({ title: "", type: "standard", description: null, extract: "", ...over });
 
 describe("matchesWikipediaArticle", () => {
+  it("stays fast on a title of open brackets or spaces", () => {
+    const page: WikipediaPage = { title: "Cups", type: "standard", description: "2012 single", extract: "Cups is a song" };
+    const start = Date.now();
+    expect(matchesWikipediaArticle({ title: "(".repeat(50000), artist: null }, page)).toBe(false);
+    expect(matchesWikipediaArticle({ title: "Cups" + " ".repeat(50000) + "x", artist: null }, page)).toBe(false);
+    expect(Date.now() - start).toBeLessThan(500);
+  });
+
   const cups = page({
     title: "Cups (song)",
     description: "2012 song by Anna Kendrick",

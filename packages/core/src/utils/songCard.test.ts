@@ -8,6 +8,14 @@ describe("tagSlug", () => {
     expect(tagSlug("Māori")).toBe("maori");
     expect(tagSlug("Black Church (US)")).toBe("black-church-us");
   });
+
+  it("trims leading and trailing separators, quickly on a long run", () => {
+    expect(tagSlug("--Folk--")).toBe("folk");
+    expect(tagSlug("(Folk)!")).toBe("folk");
+    const start = Date.now();
+    expect(tagSlug("a" + "-".repeat(100000) + "!")).toBe("a");
+    expect(Date.now() - start).toBeLessThan(500);
+  });
 });
 // Each expected slug is what the database's tag_slug() (migration 202) returned
 // for the name: card pills build tag links in TS, so the two must agree. All
