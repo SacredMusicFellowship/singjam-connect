@@ -1,20 +1,31 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isOfficialYouTubeUpload, sameSong } from "@singjam/core";
+import { isOfficialYouTubeUpload, isSameArtistSpelling, isSameTitle, sameSong } from "@singjam/core";
 import { getSpotifyToken } from "@/lib/spotify";
 
 const REISSUE_SUFFIX = /\s+-\s+.*(remaster|version|mono|stereo|edit|mix|live).*$|\s*\((?:[^)]*(remaster|version|mono|stereo|edit|mix))[^)]*\)/i;
 
 export type SpotifyMatch = { title: string; artist: string; spotify_url: string; release_year: number | null };
 
-export async function findOnSpotify(title: string, artist: string): Promise<SpotifyMatch | null> {
-  const token = await getSpotifyToken();
-  if (!token) return null;
-  const q = artist ? `track:${title} artist:${artist}` : `track:${title}`;
+async function searchSpotify(q: string, token: string): Promise<any[]> {
   const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=10`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) return null;
-  const items: any[] = (await res.json()).tracks?.items ?? [];
+  return res.ok ? (await res.json()).tracks?.items ?? [] : [];
+}
+
+export async function findOnSpotify(title: string, artist: string): Promise<SpotifyMatch | null> {
+  const token = await getSpotifyToken();
+  if (!token) return null;
+  // Spotify's artist filter guesses rather than matches ("Doly Parton" returns a
+  // Bad Wolves cover), so every result is checked: this title, by the typed artist
+  // allowing a typo. A plain search forgives typos the filter misses. Failing both,
+  // a same-titled track under another name ("CCR") is still taken.
+  const titled = (t: any) => isSameTitle(t.name.replace(REISSUE_SUFFIX, ""), title);
+  const byArtist = (t: any) => titled(t) && (!artist || isSameArtistSpelling(artist, t.artists?.[0]?.name ?? ""));
+  const filtered = await searchSpotify(artist ? `track:${title} artist:${artist}` : `track:${title}`, token);
+  let items = filtered.filter(byArtist);
+  if (!items.length && artist) items = (await searchSpotify(`${title} ${artist}`, token)).filter(byArtist);
+  if (!items.length) items = filtered.filter(titled).slice(0, 1);
   // Prefer the original album or single over a compilation of the same track.
   const track = [...items].sort((a, b) => (a.album?.album_type === "compilation" ? 1 : 0) - (b.album?.album_type === "compilation" ? 1 : 0))[0];
   if (!track) return null;

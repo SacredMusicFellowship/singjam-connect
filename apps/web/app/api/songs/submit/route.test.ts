@@ -95,6 +95,7 @@ describe("POST /api/songs/submit", () => {
     expect(inserts.songs).toMatchObject({ title: "Proud Mary", display_artist: "Creedence Clearwater Revival", submitted_by: "u1" });
     expect(inserts.songs).not.toHaveProperty("needs_review");
     expect(inserts.song_recording_artists).toMatchObject({ spotify_url: "https://open.spotify.com/track/x", youtube_url: "https://www.youtube.com/watch?v=5hid10y4bWs", youtube_ok: true });
+    expect(inserts.songs.youtube_url).toBeNull();
     expect(mockTrigger).toHaveBeenCalledWith("s1", 1969);
   });
 
@@ -124,7 +125,7 @@ describe("POST /api/songs/submit", () => {
     });
   });
 
-  it("doesn't store a preview video that isn't an official upload", async () => {
+  it("keeps a confirmed video that isn't an official upload as the song's own, off the recording", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     const inserts: Record<string, any> = {};
     mockFrom.mockImplementation((table: string) => {
@@ -141,7 +142,7 @@ describe("POST /api/songs/submit", () => {
     await POST(req({ title: "Ripple", artist: "Grateful Dead", confirmed: true, youtube_id: "abcdefghijk", youtube_official: false }));
 
     expect(inserts.song_recording_artists.youtube_url).toBeNull();
-    expect(inserts.songs.youtube_url).toBeNull();
+    expect(inserts.songs.youtube_url).toBe("https://www.youtube.com/watch?v=abcdefghijk");
   });
 
   it("drops a stand-in artist like \"Traditional\" and keeps the confirmed video as the song's own", async () => {

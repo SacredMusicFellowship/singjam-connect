@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSameTitle, sameSong } from "./sameSong";
+import { isSameTitle, sameSong, isSameArtistSpelling } from "./sameSong";
 
 describe("isSameTitle", () => {
   it("ignores a leading 'The', plurals, apostrophes and case", () => {
@@ -33,5 +33,20 @@ describe("sameSong", () => {
   });
   it("is only a possible match when one side has no artist", () => {
     expect(sameSong({ title: "Summertime", artists: [] }, { title: "Summertime", artists: ["Ella Fitzgerald"] })).toBe("possible");
+  });
+});
+
+describe("isSameArtistSpelling", () => {
+  it("accepts a typo in the artist someone typed", () => {
+    expect(isSameArtistSpelling("Fleewood Mac", "Fleetwood Mac")).toBe(true);
+    expect(isSameArtistSpelling("Doly Parton", "Dolly Parton")).toBe(true);
+    expect(isSameArtistSpelling("Totto", "TOTO")).toBe(true);
+    expect(isSameArtistSpelling("Beatles", "The Beatles")).toBe(true);
+  });
+  it("rejects a different act", () => {
+    expect(isSameArtistSpelling("Toto", "Tool")).toBe(false);
+    expect(isSameArtistSpelling("Fleetwood Mac", "Snoop Dogg")).toBe(false);
+    expect(isSameArtistSpelling("Bad Wolves", "Dolly Parton")).toBe(false);
+    expect(isSameArtistSpelling("", "Adele")).toBe(false);
   });
 });

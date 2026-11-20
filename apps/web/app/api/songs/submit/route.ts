@@ -52,8 +52,8 @@ export async function POST(req: Request) {
   let releaseYear: number | null = typeof body.release_year === "number" ? body.release_year : null;
   const confirmedVideo = body.confirmed && /^[A-Za-z0-9_-]{11}$/.test(body.youtube_id ?? "") ? `https://www.youtube.com/watch?v=${body.youtube_id}` : null;
   // A video goes on the recording only when it's that artist's official upload
-  // (the hourly backfill finds one later otherwise). A song with no recording
-  // artist keeps the video the person confirmed as the song's own.
+  // (the hourly backfill finds one later otherwise). Any other video the person
+  // confirmed is kept as the song's own, which shows until the recording has one.
   const youtubeUrl = body.youtube_official ? confirmedVideo : null;
 
   if (!body.confirmed && !noRecording) {
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     .from("songs")
     .insert({
       title, display_artist: artist, first_line: firstLine, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString(),
-      add_hints: hints, youtube_url: artist ? null : confirmedVideo,
+      add_hints: hints, youtube_url: youtubeUrl && artist ? null : confirmedVideo,
     })
     .select("id, slug")
     .single();

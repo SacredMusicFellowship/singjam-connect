@@ -46,6 +46,14 @@ export function isSameTitle(a: string, b: string): boolean {
 
 const artistKey = (s: string) => words(s).filter((w) => w !== "the").join(" ");
 
+// The artist someone typed and one a search found are the same act, allowing a
+// typo ("Fleewood Mac", "Doly Parton") but not a different short name ("Toto" / "Tool").
+export function isSameArtistSpelling(typed: string, found: string): boolean {
+  const a = artistKey(typed), b = artistKey(found);
+  if (!a || !b) return false;
+  return a === b || editDistance(a, b) <= Math.min(2, Math.max(1, Math.floor(Math.min(a.length, b.length) / 5)));
+}
+
 // Same title plus a shared artist is the same song. Two different artists under
 // one title are different songs ("Dreams" — Fleetwood Mac / The Cranberries)
 // unless one is a cover listed on the other; with no artist on one side it's
