@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import YouTubePlayer from '@/components/YouTubePlayer';
+import { KNOWN_AS, type KnownAs } from '@singjam/core';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -18,19 +19,24 @@ type Match = {
 // Mirrors web's SubmitSongForm: look the song up, show the YouTube match so the
 // user can confirm it's the one they mean, then add it. The server fills in the
 // rest (writers, years, key, tags, lyrics) in the background.
-// `forSet` (a set's Add songs) words it for adding the song to that set.
+// `forSet` (a set's Add songs) words it for adding the song to that set, and
+// `setId` lets enrichment use that set's jam tags as context.
 export default function SubmitMissingSong({
   defaultTitle = '',
   forSet = false,
+  setId,
   onCreated,
 }: {
   defaultTitle?: string;
   forSet?: boolean;
+  setId?: string;
   onCreated: (songId: string, title: string) => void;
 }) {
   const [title, setTitle] = useState(defaultTitle);
   const [artist, setArtist] = useState('');
   const [match, setMatch] = useState<Match | null>(null);
+  const [knownAs, setKnownAs] = useState<KnownAs | null>(null);
+  const [firstLine, setFirstLine] = useState('');
   const [busy, setBusy] = useState<'lookup' | 'submit' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,7 +76,10 @@ export default function SubmitMissingSong({
       const res = await fetch(`${WEB_URL}/api/songs/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...auth },
-        body: JSON.stringify({ ...chosen, confirmed: true, add_anyway: addAnyway }),
+        body: JSON.stringify({
+          ...chosen, confirmed: true, add_anyway: addAnyway,
+          known_as: knownAs, first_line_hint: firstLine.trim() || null, set_id: setId ?? null,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       // 409 means it already exists — still hand back the id so we open it.
@@ -145,6 +154,41 @@ export default function SubmitMissingSong({
           ) : !hasMedia ? (
             <Text className="text-xs text-zinc-400 mb-2">No recording found to preview — you can still add the song.</Text>
           ) : null}
+        </View>
+      ) : null}
+
+      {match && match.existing?.match !== 'same' ? (
+        <View className="mt-3 rounded-xl bg-zinc-50 p-3">
+          <Text className="text-sm font-medium text-zinc-700">
+            How do you know it? <Text className="font-normal text-zinc-400">Optional</Text>
+          </Text>
+          <View className="mt-1.5 flex-row flex-wrap" style={{ gap: 8 }}>
+            {KNOWN_AS.map((k) => (
+              <TouchableOpacity
+                key={k.value}
+                onPress={() => setKnownAs(knownAs === k.value ? null : k.value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: knownAs === k.value }}
+                className={`px-3 py-1 rounded-full border ${knownAs === k.value ? 'border-amber-500 bg-amber-500' : 'border-slate-200 bg-white'}`}
+              >
+                <Text className={`text-sm ${knownAs === k.value ? 'text-white' : 'text-slate-600'}`}>{k.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text className="mt-3 text-sm font-medium text-zinc-700">
+            How does it start? <Text className="font-normal text-zinc-400">Optional</Text>
+          </Text>
+          <TextInput
+            className="mt-1.5 border border-zinc-200 rounded-xl bg-white px-3 py-2 text-zinc-900"
+            placeholder="The first line, if you know it"
+            placeholderTextColor="#a1a1aa"
+            value={firstLine}
+            onChangeText={setFirstLine}
+            maxLength={200}
+            editable={!busy}
+            accessibilityLabel="How does it start?"
+          />
+          <Text className="mt-2 text-xs text-zinc-500">Helps us fill in the right writers, words and details.</Text>
         </View>
       ) : null}
 

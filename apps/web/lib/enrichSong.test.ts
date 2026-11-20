@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const answers = vi.hoisted(() => ({ gpt: {} as Record<string, unknown>, claude: {} as Record<string, unknown>, claudeSchemas: [] as any[] }));
+const answers = vi.hoisted(() => ({ gpt: {} as Record<string, unknown>, claude: {} as Record<string, unknown>, claudeSchemas: [] as any[], claudePrompts: [] as string[], gptEfforts: [] as string[] }));
 
 vi.mock("openai", () => ({
   default: class {
-    chat = { completions: { create: async () => ({ model: "gpt", usage: {}, choices: [{ message: { content: JSON.stringify({ fields: answers.gpt }) } }] }) } };
+    chat = { completions: { create: async (req: any) => (answers.gptEfforts.push(req.reasoning_effort), { model: "gpt", usage: {}, choices: [{ message: { content: JSON.stringify({ fields: answers.gpt }) } }] }) } };
   },
 }));
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class {
     beta = {
       messages: {
-        create: async (req: any) => (answers.claudeSchemas.push(req.output_config?.format?.schema), {
+        create: async (req: any) => (answers.claudeSchemas.push(req.output_config?.format?.schema), answers.claudePrompts.push(req.messages?.[0]?.content ?? ""), {
           model: "claude",
           usage: { input_tokens: 0, output_tokens: 0 },
           stop_reason: "end_turn",
@@ -48,6 +48,7 @@ function fakeDb(songTags: Row[] = allTags, over: Row = {}) {
         upsert: (row: Row | Row[]) => { writes.push({ table, row }); return Promise.resolve({ error: null }); },
         eq: () => q,
         ilike: () => q,
+        order: () => q,
         limit: () => q,
         single: async () => ({ data: table === "songs" ? song : null }),
         maybeSingle: async () => ({ data: null }),
@@ -91,6 +92,33 @@ describe("enrichSong — asking Claude", () => {
     expect(asked.every((f) => f.length <= 11)).toBe(true);
     expect(asked.flat()).toContain("alternate_titles");
     expect(writes).toContainEqual({ table: "song_alternate_titles", row: [{ song_id: "song-1", title: "Cups" }] });
+  });
+
+  it("asks GPT the song's fields without reasoning, and keeps reasoning for the recordings question", async () => {
+    answers.gptEfforts = [];
+    answers.gpt = {};
+    answers.claude = {};
+    const { db } = fakeDb();
+
+    await enrichSong(db, "song-1");
+
+    expect(answers.gptEfforts[0]).toBe("none");
+    expect(answers.gptEfforts.slice(1)).toEqual(["low"]);
+  });
+});
+
+describe("enrichSong — a traditional song's recording", () => {
+  it("names the recording artist as one version rather than beside the title", async () => {
+    answers.claudePrompts = [];
+    answers.gpt = {};
+    answers.claude = {};
+    const { db } = fakeDb(allTags, { title: "Harbour Carol", song_composers: [{ people: { name: "Traditional" } }], song_lyricists: [] });
+
+    await enrichSong(db, "song-1");
+
+    const fields = answers.claudePrompts.find((p) => p.includes("Fill these fields"))!;
+    expect(fields).toContain('Song: "Harbour Carol"\n');
+    expect(fields).toContain("Anna Kendrick's recording is one version of it, so describe the song itself.");
   });
 });
 

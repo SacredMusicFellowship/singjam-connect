@@ -238,6 +238,15 @@ describe("addFirstRecordings", () => {
     expect((await run(db, { dryRun: true })).added.map((a: any) => a.artist)).toEqual(["Pete Seeger", "The Weavers"]);
   });
 
+  it("still adds a recording to a song that has its own video", async () => {
+    answers.gpt = [{ artist: "Pete Seeger", year: 1957, why: "iconic", recorded_title: "Erie Canal" }];
+    answers.claude = [];
+    musicBrainzKnows([{ artist: "Pete Seeger", title: "Erie Canal", date: "1958-01-01" }]);
+    const { db } = fakeSongDb({ ...lowBridge, youtube_url: "https://www.youtube.com/watch?v=abcdefghijk" });
+
+    expect((await run(db, { dryRun: true })).added.map((a: any) => a.artist)).toEqual(["Pete Seeger"]);
+  });
+
   it("leaves a song marked as not known by a recording alone", async () => {
     answers.gpt = answers.claude = [{ artist: "George Harrison", year: 1982, why: "original", recorded_title: "That's the Way It Goes" }];
     const { db, inserted } = fakeSongDb({ ...lowBridge, title: "That's the Way It Goes", known_by_recording: false });

@@ -64,7 +64,10 @@ describe("pickHymnaryText", () => {
 
 describe("decideEnrichment with Hymnary", () => {
   const base = (over: Partial<EnrichmentSources>): EnrichmentSources => ({ gpt: null, claude: null, musicbrainz: null, spotifyReleaseYear: null, lyrics: null, ...over });
-  const hymnary = hymnaryTextsFor("Were You There", parseCsvRecords(WERE_YOU_THERE)).map((t) => ({ ...t, tunes: [] }));
+  it("takes the hymnal's refrain as the hook, without a bilingual hymnal's translation", () => {
+    const hymnary = [text({ authors: [], instances: 308, firstLine: "Angels we have heard on high", refrain: "Gloria in excelsis Deo (Gloria a Dios en el cielo)" })];
+    expect(decideEnrichment(base({ writers: ["Traditional"], hymnary, title: "Angels We Have Heard on High" })).hook).toBe("Gloria in excelsis Deo");
+  });  const hymnary = hymnaryTextsFor("Were You There", parseCsvRecords(WERE_YOU_THERE)).map((t) => ({ ...t, tunes: [] }));
   it("uses the hymnals' first line when nothing else placed one", () => {
     expect(decideEnrichment(base({ writers: ["Traditional"], hymnary, title: "Were You There" })).first_line).toBe("Were you there when they crucified my Lord?");
   });

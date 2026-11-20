@@ -11,6 +11,7 @@ import {
 import { sameArtist } from "./landmarkRecordings";
 import { pickHymnaryText, samePerson, trimTrailing, type HymnaryText } from "./hymnary";
 import { withoutGenericFaithThemes } from "./genericThemes";
+import { confirmedFirstLine } from "./songAddHints";
 
 export type Confidence = "high" | "medium" | "low";
 export type ModelField<T> = { v: T | null; c: Confidence } | null | undefined;
@@ -54,6 +55,8 @@ export type EnrichmentSources = {
   writers?: string[];
   hymnary?: HymnaryText[] | null;
   title?: string;
+  // How the person adding the song says it starts (SongAddHints.first_line).
+  firstLineHint?: string;
 };
 
 // A spiritual is neither a hymn nor a contemporary worship song, though
@@ -104,12 +107,14 @@ function firstLyricLine(lyrics: string): string | null {
 }
 
 // Tags both models chose come first; GPT's remaining picks fill up to the cap.
+// Both models must have answered: when one is missing (a failed call, or no
+// answer), one model's taste would decide alone, so nothing is tagged.
 function mergeTags(gpt: string[] | null, claude: string[] | null, allowed: readonly string[]): string[] | undefined {
   const ok = (list: string[] | null) => (list ?? []).filter((t) => allowed.includes(t));
   const g = ok(gpt), c = ok(claude);
+  if (!g.length || !c.length) return undefined;
   const both = g.filter((t) => c.includes(t));
-  const merged = g.length ? [...both, ...g.filter((t) => !both.includes(t))] : c;
-  return merged.length ? merged.slice(0, MAX_TAGS) : undefined;
+  return [...both, ...g.filter((t) => !both.includes(t))].slice(0, MAX_TAGS);
 }
 
 // Every fact needs two independent signals — two models agreeing, or a model
@@ -210,6 +215,9 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
   const hymn = matchedHymn(src);
   if (hymn) {
     if (!out.first_line) out.first_line = trimTrailing(hymn.firstLine.trim());
+    // The hymnal's refrain is a printed source for the hook, as its first line is for the first line.
+    const refrain = hymn.refrain && trimTrailing(withoutTrailingBrackets(hymn.refrain).trim(), ",;:.!");
+    if (!out.hook && refrain && norm(refrain).length >= 8) out.hook = refrain;
     const named = (list: string[], by: string[]) => list.length > 0 && by.some((w) => list.some((n) => samePerson(n, w)));
     if (!out.composers && !out.lyricists && named(hymn.authors, [...modelLyricists, ...modelComposers])) {
       out.lyricists = hymn.authors;
@@ -220,7 +228,20 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
     }
   }
 
+  // The remembered first line, once the lyrics or a hymnal print it.
+  if (!out.first_line) {
+    const hinted = confirmedFirstLine(src.firstLineHint, src.lyrics, (src.hymnary ?? []).map((t) => t.firstLine));
+    if (hinted) out.first_line = hinted;
+  }
+
   return out;
+}
+
+// "Gloria in excelsis Deo (Gloria a Dios en el cielo)" without the bracketed translation.
+function withoutTrailingBrackets(s: string): string {
+  const t = s.trimEnd();
+  const open = t.endsWith(")") ? t.lastIndexOf("(") : -1;
+  return open > 0 ? t.slice(0, open) : t;
 }
 
 // The hymnals' text that is this song: checked against the song's writers, or
@@ -379,7 +400,7 @@ export function reviewEnrichment(
   const years = [src.musicbrainz?.recordingYear ?? null, value(g.recording_year, HIGH), value(c.recording_year, HIGH), src.spotifyReleaseYear];
   const suggestions: EnrichmentReview["suggestions"] = {
     year_written: pick("year_written", d.year_written, one<number>("year_written", HIGH)),
-    first_line: pick("first_line", d.first_line, one<string>("first_line")),
+    first_line: pick("first_line", d.first_line, one<string>("first_line") ?? src.firstLineHint ?? null),
     hook: pick("hook", d.hook, one<string>("hook")),
     composers: pick("composers", d.composers, src.musicbrainz?.composers.length ? src.musicbrainz.composers : one<string[]>("composers", HIGH)) ?? [],
     lyricists: pick("lyricists", d.lyricists, src.musicbrainz?.lyricists.length ? src.musicbrainz.lyricists : one<string[]>("lyricists", HIGH)) ?? [],
