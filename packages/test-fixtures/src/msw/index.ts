@@ -4,12 +4,12 @@ import { googleHandlers } from "./handlers/google";
 import { messagingHandlers } from "./handlers/messaging";
 import { musicHandlers } from "./handlers/music";
 import { openaiHandlers } from "./handlers/openai";
-import { stripeHandlers } from "./handlers/stripe";
+import { FIXTURE_PROMOTION_CODES, stripeHandlers } from "./handlers/stripe";
 
 import { recordUnmocked } from "./calls";
 
 export { mockCalls, resetMockCalls, takeUnmocked, type MockCall, type MockService } from "./calls";
-export { stripeHandlers, messagingHandlers, musicHandlers, googleHandlers, openaiHandlers, anthropicHandlers };
+export { FIXTURE_PROMOTION_CODES, stripeHandlers, messagingHandlers, musicHandlers, googleHandlers, openaiHandlers, anthropicHandlers };
 
 // Every outside service the app talks to: Stripe, Resend, ActiveCampaign, Expo push, OpenAI,
 // Anthropic, Spotify, Genius, YouTube, Google OAuth and Places, MusicBrainz, Last.fm,
