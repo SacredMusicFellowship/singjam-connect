@@ -7,6 +7,8 @@ export function jamReminderHtml({
   startsAt,
   timezone,
   address,
+  setUrl,
+  canAddSongs,
 }: {
   name?: string | null;
   jamName: string;
@@ -14,6 +16,9 @@ export function jamReminderHtml({
   startsAt?: string | null;
   timezone?: string | null;
   address?: string | null;
+  // The jam's set list, when it has one this person can open.
+  setUrl?: string | null;
+  canAddSongs?: boolean;
 }) {
   const greeting = name ? `Hi ${name},` : "Hi,";
   const dateStr = formatJamTime(startsAt, timezone);
@@ -35,6 +40,15 @@ export function jamReminderHtml({
     <p style="font-size:13px;font-weight:600;color:#71717a;margin:0 0 4px">Where</p>
     <a href="https://maps.google.com/?q=${encodeURIComponent(address)}"
        style="font-size:15px;font-weight:500;color:#18181b;margin:0;text-decoration:underline">${address}</a>
+  </div>` : ""}
+  ${setUrl ? `
+  <div style="margin-top:12px;padding:16px;background:#f4f4f5;border-radius:10px">
+    <p style="font-size:13px;font-weight:600;color:#71717a;margin:0 0 4px">Set list</p>
+    <p style="font-size:15px;color:#18181b;margin:0 0 12px">${canAddSongs ? "Have a song you'd love to sing? <strong>Add it to the set list</strong> so everyone can prepare." : "See what's planned before you arrive."}</p>
+    <a href="${setUrl}"
+       style="display:inline-block;background-color:#fff;color:#18181b;font-weight:600;font-size:14px;padding:8px 16px;border-radius:8px;border:1px solid #d4d4d8;text-decoration:none">
+      See the set list
+    </a>
   </div>` : ""}
   <a href="${jamUrl}"
      style="display:inline-block;margin-top:24px;background-color:#f59e0b;color:#fff;font-weight:600;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none">

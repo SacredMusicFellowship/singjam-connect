@@ -103,14 +103,14 @@ export default function JamRsvpButton({
           <button
             onClick={() => { rsvp(); setConfirming(false); }}
             disabled={busy}
-            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {isFull ? "Join waitlist" : "I'm going"}
           </button>
           <button
             onClick={() => setConfirming(false)}
             disabled={busy}
-            className="rounded-xl border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
+            className="rounded-full border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
           >
             Can't go
           </button>
@@ -119,7 +119,7 @@ export default function JamRsvpButton({
         <button
           onClick={() => setConfirming(true)}
           disabled={busy}
-          className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+          className="rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
         >
           {isFull ? "Join waitlist" : "RSVP"}
         </button>

@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { syncContact } from "@/lib/activecampaign";
 import { claimGuestTickets } from "@/lib/ticketClaim";
+import { claimEmailInvites } from "@/lib/claimEmailInvites";
+import { jamPathById } from "@/lib/shortRef";
 
 // Called after immediate-session signup (email confirmation disabled) to
 // create the profile and link any invite token, mirroring the callback route.
@@ -37,6 +39,8 @@ export async function POST(req: Request) {
   if (user.email) {
     await claimGuestTickets(admin, user.id, user.email).catch((err) =>
       console.error("[tickets] claimGuestTickets failed for", user.email, err));
+    await claimEmailInvites(admin, user.id, user.email).catch((err) =>
+      console.error("[invites] claimEmailInvites failed for", user.email, err));
   }
 
   // Link invite and resolve jam ID
@@ -55,5 +59,5 @@ export async function POST(req: Request) {
     jamId = invite?.jam_id ?? null;
   }
 
-  return NextResponse.json({ jamId });
+  return NextResponse.json({ jamId, jamPath: jamId ? await jamPathById(jamId) : null });
 }

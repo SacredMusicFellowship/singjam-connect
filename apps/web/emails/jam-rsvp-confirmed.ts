@@ -54,10 +54,13 @@ export function jamRsvpConfirmedHtml({
   endsAt,
   timezone,
   address,
+  rsvpId,
 }: {
   name?: string | null;
   jamName: string;
   jamId: string;
+  /** Lets the .ics link carry a public jam's full address without a session — see the ics route. */
+  rsvpId?: string | null;
   jamUrl: string;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -66,7 +69,7 @@ export function jamRsvpConfirmedHtml({
 }) {
   const greeting = name ? `Hi ${name},` : "Hi,";
   const dateStr = formatJamTime(startsAt, timezone);
-  const icsUrl = `https://singjam.org/api/jam/${jamId}/ics`;
+  const icsUrl = `https://singjam.org/api/jam/${jamId}/ics${rsvpId ? `?rsvp=${rsvpId}` : ""}`;
   const googleUrl = startsAt
     ? googleCalendarUrl({ title: jamName, startsAt, endsAt: endsAt ?? null, location: address ?? null })
     : null;

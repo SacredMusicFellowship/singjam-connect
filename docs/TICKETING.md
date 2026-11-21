@@ -364,8 +364,12 @@ Action items for Ben — none of this is discoverable from the codebase:
 - [ ] Confirm the Stripe account's legal entity — Sacred Music Fellowship?
 - [ ] Confirm a bank account is connected and payouts are enabled
 - [ ] Test-mode and live-mode secret keys
-- [ ] Check whether the org qualifies for Stripe's nonprofit processing
-      discount (501(c)(3) — worth confirming the current rate and applying)
+- [x] ~~Check whether the org qualifies for Stripe's nonprofit processing
+      discount~~ — **it does not.** Settled 2026-09-08 against Stripe's own
+      support page: eligibility needs "at least 80% of your Stripe payment
+      volume from tax-deductible donations", and ticket sales are named as a
+      category that does not count toward that threshold. Standard 2.9% + 30c
+      applies.
 - [ ] Decide whether ticket sales are taxable in the venues being used
 - [ ] Decide the native purchase flow: `@stripe/stripe-react-native` in-app vs
       opening the web purchase page in a browser
@@ -590,12 +594,14 @@ at the door**. Check the check-in flow one-handed before an event depends on it.
 
 ## Ben's Dashboard tasks (no code)
 
+*(The 501(c)(3) rate used to be top of this list. It is not available to us —
+the discount requires 80% of account volume to be tax-deductible donations, and
+Stripe names ticket sales as excluded. Being a nonprofit was never the
+qualifying condition; the revenue mix was.)*
+
 - **Turn on developer/API email alerts** at Settings → Communication preferences,
   so a failing endpoint reaches a human. Coarse — it fires on sustained failure,
   not the first one — but strictly better than nothing.
-- **Check the 501(c)(3) rate.** The account is `business_type: non_profit`, and
-  Stripe's nonprofit pricing is an application, not automatic. It applies to every
-  ticket ever sold, so it is worth more than most of this list.
 - **Create a test-mode "Tickets" payment method configuration.** The live one
   (`pmc_1UDAnBL0Q3ZMbggU8t7ijh1h`) is live-mode only, so local checkout still shows
   the wide method list. Its id would go in `apps/web/.env.local`, not Netlify.

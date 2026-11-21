@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
-import { SITE_URL } from "@/lib/stripe";
-import { sendTicketEmail, type PaidOrder } from "@/lib/ticketFulfilment";
+import { SITE_URL, stripe } from "@/lib/stripe";
+import { fulfilPendingOrder, sendTicketEmail, type PaidOrder } from "@/lib/ticketFulfilment";
 import { markAttending } from "@/lib/jamAttendance";
 import { ticketDeliveryFailedEmailHtml, type FailedTicketDelivery } from "@/emails/ticket-delivery-failed";
+import { jamPath } from "@singjam/core";
 
 // The failure Stripe cannot see. It watches for our endpoint erroring, not for
 // it returning 200 while the ticket never went out — which is exactly what
@@ -80,12 +81,14 @@ async function alertUndelivered(admin: SupabaseClient, failures: FailedTicketDel
   if (!hasNewOrder && Date.now() - lastAlertAt < ALERT_COOLDOWN_MS) return false;
 
   const now = new Date().toISOString();
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: ALERT_TO,
     subject: `Action required: ${failures.length} paid ticket${failures.length === 1 ? "" : "s"} not delivered`,
     html: ticketDeliveryFailedEmailHtml(failures),
   });
+  // Unsent means unrecorded, so the next sweep tries the alert again.
+  if (error) return false;
   await admin.from("system_flags").upsert({
     key: ALERT_FLAG,
     value: JSON.stringify({ at: now, ids: failures.map((f) => f.orderId) }),
@@ -101,6 +104,9 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
     .from("ticket_orders")
     .select(ORDER_COLS)
     .eq("status", "paid")
+    // A leader's comp has its own email (lib/jamLeaders.ts); the purchase
+    // receipt would tell them they paid $0.00.
+    .eq("source", "purchase")
     .is("ticket_email_sent_at", null)
     .order("paid_at", { ascending: true })
     .order("id", { ascending: true })
@@ -117,7 +123,7 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
   // One lookup for the whole batch: the alert is useless without event names.
   const { data: jams } = await admin
     .from("jams")
-    .select("id, name, timezone")
+    .select("id, short_code, name, timezone")
     .in("id", [...new Set(orders.map((o) => o.jam_id))]);
   const jamsById = new Map((jams ?? []).map((j: any) => [j.id, j]));
 
@@ -129,7 +135,7 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
     const describe = (reason: string): FailedTicketDelivery => ({
       orderId: order.id,
       jamName: jam?.name ?? "an event",
-      jamUrl: `${SITE_URL}/jam/${order.jam_id}`,
+      jamUrl: `${SITE_URL}${jamPath({ id: order.jam_id, short_code: jam?.short_code })}`,
       buyerEmail: order.buyer_email,
       amountLabel: formatAmount(order.amount_cents, order.currency),
       paidLabel: formatPaidAt(order.paid_at, jam?.timezone ?? null),
@@ -235,4 +241,130 @@ export async function reconcileTicketAttendance(admin: SupabaseClient): Promise<
   }
 
   return { pending: rows.length, seated, failed };
+}
+
+// ---------------------------------------------------------------------------
+// The failure nobody was watching for: Stripe took the money and its webhook
+// never arrived.
+// ---------------------------------------------------------------------------
+//
+// The webhook is the only thing that fulfils an order, so a delivery that never
+// lands leaves the buyer paid, unticketed, un-emailed and off the guest list —
+// and neither existing sweep can see it. sweepUndeliveredTickets looks for
+// `paid` orders with no email, and reconcileTicketAttendance for `paid` orders
+// with no seat; a lost webhook leaves the order `pending`, so it is invisible
+// to both.
+//
+// Worse, we actively close it off. expireStaleTicketHolds marks any lapsed
+// `pending` order `expired`, so within ten minutes of the hold running out the
+// order stops looking pending at all. **That is why this runs before it** — see
+// the ordering in netlify/functions/flush-email-outbox.ts, which is load-bearing
+// rather than incidental.
+//
+// It was never observed in production, and the live webhook has since been
+// proven in both directions. This exists because the confirmation page now
+// tells a buyer "You're in!" the moment Stripe confirms, which is right for
+// them but removed the symptom that would have made a lost webhook obvious.
+//
+// Stripe is the authority here, not us: an order is only fulfilled when Stripe
+// itself reports payment_status 'paid'. Fulfilment goes through the very same
+// fulfilPendingOrder the webhook calls, whose `.eq("status","pending")` guard
+// makes a double delivery a no-op — so this racing a late webhook is safe.
+
+/** Bounded so a sweep cannot turn into an unbounded pile of Stripe calls. */
+const RECONCILE_LIMIT = 25;
+/** Anything older than this is a support conversation, not a sweep. */
+const RECONCILE_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
+
+export type LostWebhookResult = {
+  /** Orders whose session was checked against Stripe. */
+  checked: number;
+  /** Sessions belonging to Stripe's other mode, which this key cannot read. */
+  skipped: number;
+  /** Paid at Stripe, unfulfilled here, now fulfilled. */
+  recovered: number;
+  /** Paid at Stripe but already marked expired — needs a human. */
+  stranded: number;
+  /** Session could not be read, or fulfilment refused. */
+  failed: number;
+};
+
+export async function reconcileLostWebhooks(admin: SupabaseClient): Promise<LostWebhookResult> {
+  const result: LostWebhookResult = { checked: 0, skipped: 0, recovered: 0, stranded: 0, failed: 0 };
+
+  // A key can only read sessions from its own mode, and the table holds both:
+  // production accumulated test-mode orders while this flow was being built.
+  // Retrieving those raises "No such checkout.session", which is not a failure
+  // and must not be logged as one — left unfiltered it produced ten errors per
+  // sweep, every ten minutes, which is exactly how a real failure gets missed.
+  const readablePrefix = (process.env.STRIPE_RESTRICTED_KEY ?? "").includes("_live_")
+    ? "cs_live_"
+    : "cs_test_";
+
+  // `expired` is included for detection only. A hold that lapsed may have had
+  // its stock resold, so re-issuing could oversell a capped tier — that is a
+  // judgement call for a person, not a sweep. Going forward this should stay
+  // empty, because reconciling runs before the expiry step.
+  const { data: orders, error } = await admin
+    .from("ticket_orders")
+    .select("id, status, stripe_checkout_session_id")
+    .in("status", ["pending", "expired"])
+    .not("stripe_checkout_session_id", "is", null)
+    .is("paid_at", null)
+    .gte("created_at", new Date(Date.now() - RECONCILE_LOOKBACK_MS).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(RECONCILE_LIMIT);
+
+  if (error) {
+    console.error(`[ticketSweep] lost-webhook queue failed: ${error.message}`);
+    return result;
+  }
+
+  for (const order of orders ?? []) {
+    if (!order.stripe_checkout_session_id!.startsWith(readablePrefix)) {
+      result.skipped += 1;
+      continue;
+    }
+    let session;
+    try {
+      session = await stripe().checkout.sessions.retrieve(order.stripe_checkout_session_id!);
+    } catch (err) {
+      // Stripe unreachable, or a session from the other mode. Never treat an
+      // unreadable session as an unpaid one — just leave it for the next pass.
+      console.error(`[ticketSweep] could not read session for order ${order.id}:`, err);
+      result.failed += 1;
+      continue;
+    }
+    result.checked += 1;
+    if (session.payment_status !== "paid") continue;
+
+    if (order.status === "expired") {
+      // Money taken and the hold already released. Loud on purpose: this should
+      // be unreachable, and if it ever fires somebody has paid for nothing.
+      console.error(
+        `[ticketSweep] STRANDED PAID ORDER ${order.id} — Stripe says paid but the hold was expired. ` +
+          `Needs a human: re-issue or refund.`
+      );
+      result.stranded += 1;
+      continue;
+    }
+
+    const fulfilled = await fulfilPendingOrder(admin, order.id, {
+      amountCents: session.amount_total ?? null,
+      paymentIntentId:
+        typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : session.payment_intent?.id ?? null,
+    });
+    if (fulfilled) {
+      // Worth a line in the log even on success: it means a webhook was lost.
+      console.error(`[ticketSweep] recovered lost webhook for order ${order.id}`);
+      result.recovered += 1;
+    } else {
+      // A webhook landed between the query and here. The guard did its job.
+      result.failed += 1;
+    }
+  }
+
+  return result;
 }

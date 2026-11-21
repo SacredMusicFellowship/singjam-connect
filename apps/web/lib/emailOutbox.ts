@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Resend } from "resend";
 import { welcomeEmailHtml, finishSetupEmailHtml } from "@/emails/welcome";
+import { DEV_SAFETY_ERROR } from "@/lib/devSafety";
 
 const FROM_ADDRESS = "SingJam <hello@singjam.org>";
 const MAX_ATTEMPTS = 5;
@@ -42,6 +43,9 @@ async function deliver(admin: SupabaseClient, resend: Resend, row: OutboxRow): P
   try {
     const { subject, html } = renderEmail(row);
     const { error } = await resend.emails.send({ from: FROM_ADDRESS, to: row.recipient, subject, html });
+    // Not an attempt: counting it would fail the row after five local clicks,
+    // and production would then never send it.
+    if ((error?.name as string | undefined) === DEV_SAFETY_ERROR) return false;
     if (error) throw new Error(error.message ?? "Resend send error");
 
     await admin

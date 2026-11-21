@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { getSpotifyToken } from "@/lib/spotify";
 
 export async function GET(req: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireRole("admin", "song_editor");
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(req.url);

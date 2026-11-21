@@ -1,8 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { markAttending } from "@/lib/jamAttendance";
 import { SITE_URL } from "@/lib/stripe";
-import { resend, FROM_ADDRESS } from "@/lib/resend";
+import { resend, EVENTS_FROM_ADDRESS } from "@/lib/resend";
 import { ticketConfirmationHtml } from "@/emails/ticket-confirmation";
+import { syncContact } from "@/lib/activecampaign";
+import { findEventSet } from "@/lib/eventSet";
+import { jamPath, setPath } from "@singjam/core";
 
 // Turning a pending order into a real ticket: mark it paid, send the ticket,
 // seat the buyer. Two callers reach this — the Stripe webhook for anything that
@@ -41,31 +44,27 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
   const [{ data: jam }, { data: tickets }] = await Promise.all([
     admin
       .from("jams")
-      .select("name, starts_at, ends_at, timezone, full_address, neighborhood")
+      .select("name, short_code, starts_at, ends_at, timezone, full_address, neighborhood")
       .eq("id", order.jam_id)
       .maybeSingle(),
-    admin.from("tickets").select("qr_token, ticket_types(name)").eq("order_id", order.id),
+    admin.from("tickets").select("qr_token, ticket_types(name, price_cents)").eq("order_id", order.id),
   ]);
 
   // The set is the reason to come back before the day, so the email leads with
-  // it when the event has one — same order as the confirmation page.
-  const { data: linkedSet } = await admin
-    .from("sets")
-    .select("id")
-    .eq("jam_id", order.jam_id)
-    .maybeSingle();
+  // it whenever the event has one — same rule and order as the confirmation page.
+  const linkedSet = await findEventSet(admin, order.jam_id);
 
   const jamName = jam?.name ?? "the jam";
 
-  await resend.emails.send({
-    from: FROM_ADDRESS,
+  const { error } = await resend.emails.send({
+    from: EVENTS_FROM_ADDRESS,
     to: email,
     subject: `Your ticket${(tickets ?? []).length === 1 ? "" : "s"} for ${jamName}`,
     html: ticketConfirmationHtml({
       name,
       jamName,
       jamId: order.jam_id,
-      jamUrl: `${SITE_URL}/jam/${order.jam_id}`,
+      jamUrl: `${SITE_URL}${jamPath({ id: order.jam_id, short_code: (jam as any)?.short_code })}`,
       startsAt: jam?.starts_at,
       endsAt: (jam as any)?.ends_at ?? null,
       timezone: (jam as any)?.timezone,
@@ -73,14 +72,18 @@ export async function sendTicketEmail(admin: SupabaseClient, order: PaidOrder): 
       tickets: (tickets ?? []).map((t: any) => ({
         tierName: t.ticket_types?.name ?? "Ticket",
         qrToken: t.qr_token,
+        priceCents: t.ticket_types?.price_cents ?? null,
       })),
       amountCents: order.amount_cents,
       currency: order.currency,
       isGuest: !order.buyer_user_id,
-      signUpUrl: `${SITE_URL}/auth?next=/jam/${order.jam_id}`,
-      setUrl: linkedSet ? `${SITE_URL}/set/${linkedSet.id}` : null,
+      signUpUrl: `${SITE_URL}/auth?next=${jamPath({ id: order.jam_id, short_code: (jam as any)?.short_code })}`,
+      setUrl: linkedSet ? `${SITE_URL}${setPath(linkedSet)}` : null,
     }),
   });
+  // Thrown, not `return false`: false means "no address", which the sweeper
+  // gives up on, while a failed send must stay in the retry queue.
+  if (error) throw new Error(error.message ?? "Resend send error");
 
   return true;
 }
@@ -110,7 +113,9 @@ export async function fulfilPendingOrder(
     })
     .eq("id", orderId)
     .eq("status", "pending")
-    .select("id, jam_id, buyer_user_id, buyer_email, buyer_name, amount_cents, currency, ticket_email_sent_at")
+    .select(
+      "id, jam_id, buyer_user_id, buyer_email, buyer_name, amount_cents, currency, ticket_email_sent_at, marketing_opt_in"
+    )
     .maybeSingle();
 
   // Already fulfilled, expired, or gone — a redelivery, so nothing to do.
@@ -126,6 +131,24 @@ export async function fulfilPendingOrder(
       }
     } catch (e) {
       console.error("ticket confirmation email failed", updated.id, e);
+    }
+  }
+
+  // Only on a real sale, and only for a guest who asked. Members reach the
+  // mailing list by creating an account, and an order that was never paid for
+  // should not put anyone on a list. Isolated like the email: an ActiveCampaign
+  // outage must not fail a webhook for an order that is correctly paid.
+  if ((updated as any).marketing_opt_in && !updated.buyer_user_id && updated.buyer_email) {
+    try {
+      // Checkout collects one "Name" field, so split it rather than putting
+      // "Ada Lovelace" in a field labelled First name.
+      const [firstName, ...rest] = (updated.buyer_name ?? "").trim().split(/\s+/);
+      await syncContact(updated.buyer_email, {
+        ...(firstName ? { firstName } : {}),
+        ...(rest.length ? { lastName: rest.join(" ") } : {}),
+      }, { tag: false });
+    } catch (e) {
+      console.error("mailing list sync failed", updated.id, e);
     }
   }
 

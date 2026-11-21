@@ -8,10 +8,11 @@
   # --quiet` exits 0 (→ Netlify cancels the build) only when NONE of apps/web,
   # the shared packages, or the root build config changed. Any error (e.g. a
   # missing ref on a shallow clone) exits non-zero, so it fails safe to a build.
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../packages ../../package.json ../../package-lock.json ../../netlify.toml"
+  # Test-only changes (e2e specs, unit tests, test config, the fake-data package) also skip it.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ':(top)apps/web' ':(top)packages' ':(top)package.json' ':(top)package-lock.json' ':(top)netlify.toml' ':(top,exclude,glob)**/*.test.ts' ':(top,exclude,glob)**/*.test.tsx' ':(top,exclude,glob)**/__tests__/**' ':(top,exclude)apps/web/e2e' ':(top,exclude)apps/web/playwright.config.ts' ':(top,exclude)apps/web/vitest.config.ts' ':(top,exclude)apps/web/vitest.setup.ts' ':(top,exclude)packages/test-fixtures'"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

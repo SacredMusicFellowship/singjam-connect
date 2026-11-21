@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { claimGuestTickets } from "@/lib/ticketClaim";
+import { jamPathById } from "@/lib/shortRef";
 
 // Attaches anything bought as a guest under the signed-in address.
 //
@@ -24,5 +25,5 @@ export async function POST(req: Request) {
   if (!user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const jamIds = await claimGuestTickets(supabaseAdmin(), user.id, user.email);
-  return NextResponse.json({ jam_ids: jamIds });
+  return NextResponse.json({ jam_ids: jamIds, jam_path: jamIds[0] ? await jamPathById(jamIds[0]) : null });
 }

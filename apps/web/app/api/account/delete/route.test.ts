@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { NextRequest } from "next/server";
 
-const { mockGetUser, mockAdminGetUser, mockDeleteUser, mockDeleteContact } = vi.hoisted(() => ({
+const { mockGetUser, mockAdminGetUser, mockDeleteUser, mockDeleteContact, attendanceDeletes } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockAdminGetUser: vi.fn(),
   mockDeleteUser: vi.fn(),
   mockDeleteContact: vi.fn(),
+  attendanceDeletes: [] as { table: string; col: string; value: string }[],
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -16,6 +18,14 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: vi.fn(() => ({
     auth: { getUser: mockAdminGetUser, admin: { deleteUser: mockDeleteUser } },
+    from: (table: string) => ({
+      delete: () => ({
+        eq: async (col: string, value: string) => {
+          attendanceDeletes.push({ table, col, value });
+          return { error: null };
+        },
+      }),
+    }),
   })),
 }));
 
@@ -24,12 +34,13 @@ vi.mock("@/lib/activecampaign", () => ({ deleteContact: mockDeleteContact }));
 import { DELETE } from "./route";
 
 function req(headers?: Record<string, string>) {
-  return new Request("https://singjam.org/api/account/delete", { method: "DELETE", headers });
+  return new Request("https://singjam.org/api/account/delete", { method: "DELETE", headers }) as NextRequest;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockGetUser.mockResolvedValue({ data: { user: { id: "user-1", email: "singer@example.com" } } });
+  attendanceDeletes.length = 0;
+  mockGetUser.mockResolvedValue({ data: { user: { id: "user-1", email: "Singer@Example.com" } } });
   mockAdminGetUser.mockResolvedValue({ data: { user: null } });
   mockDeleteContact.mockResolvedValue(true);
   mockDeleteUser.mockResolvedValue({ error: null });
@@ -46,8 +57,16 @@ describe("DELETE /api/account/delete", () => {
   it("deletes the ActiveCampaign contact and the Supabase user", async () => {
     const res = await DELETE(req());
     expect(res.status).toBe(200);
-    expect(mockDeleteContact).toHaveBeenCalledWith("singer@example.com");
+    expect(mockDeleteContact).toHaveBeenCalledWith("Singer@Example.com");
     expect(mockDeleteUser).toHaveBeenCalledWith("user-1");
+  });
+
+  it("deletes their event attendance by account and by email, so no history is left behind", async () => {
+    await DELETE(req());
+    expect(attendanceDeletes).toEqual([
+      { table: "event_attendance", col: "user_id", value: "user-1" },
+      { table: "event_attendance", col: "email", value: "singer@example.com" },
+    ]);
   });
 
   it("still deletes the Supabase user when the ActiveCampaign cleanup fails", async () => {

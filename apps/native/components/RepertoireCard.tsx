@@ -1,25 +1,28 @@
 import { memo } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Linking, Alert } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { formatComposers } from '@singjam/core';
+import { formatJammers, songRowText, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
-
-const CONFIDENCE_LEVELS = [
-  { key: 'lead', label: 'Lead' },
-  { key: 'support', label: 'Support' },
-  { key: 'learn', label: 'Learn' },
-];
+import RolePill from '@/components/RolePill';
+import MyKeyChip from '@/components/MyKeyChip';
+import { SongRowLine } from '@/components/SongRowTitle';
 
 export type RepertoireCardSong = {
   song_id: string;
   title: string;
   confidence: string;
+  key_note: string | null;
   display_artist: string | null;
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
   composers: string[];
   cultures: string[];
+  communities?: string[];
   productions: string[];
   popularity: number;
+  chord_chart_url?: string | null;
 };
 
 // Every callback takes the song back rather than being bound to it, so a list
@@ -27,46 +30,43 @@ export type RepertoireCardSong = {
 type Props = {
   song: RepertoireCardSong;
   selected: boolean;
-  canLead: boolean;
   isLast: boolean;
   onToggleSelect: (song: RepertoireCardSong) => void;
   onConfidenceChange: (song: RepertoireCardSong, confidence: string) => void;
+  onKeyTap: (song: RepertoireCardSong) => void;
   onAddToSet: (song: RepertoireCardSong) => void;
   onView: (song: RepertoireCardSong) => void;
-  onRemove: (song: RepertoireCardSong) => void;
 };
 
 // Mirrors the repertoire row card in web's repertoire/page.tsx: checkbox,
 // title + (songwriters), production/artist line, jammer count, then a
-// confidence control + Add to set / View / Remove actions.
+// confidence control, the member's own key + Add to set / View actions.
 function RepertoireCard({
-  song, selected, canLead, isLast,
-  onToggleSelect, onConfidenceChange, onAddToSet, onView, onRemove,
+  song, selected, isLast,
+  onToggleSelect, onConfidenceChange, onKeyTap, onAddToSet, onView,
 }: Props) {
   function handleConfidenceTap(event: GestureResponderEvent) {
     showOptionsSheet({
       title: song.title,
       anchor: anchorFrom(event),
       options: [
-        { label: canLead ? 'Lead' : 'Lead (singers only)', disabled: !canLead, onPress: () => onConfidenceChange(song, 'lead') },
+        { label: 'Lead', onPress: () => onConfidenceChange(song, 'lead') },
         { label: 'Support', onPress: () => onConfidenceChange(song, 'support') },
         { label: 'Learn', onPress: () => onConfidenceChange(song, 'learn') },
       ],
     });
   }
 
-  function handleRemoveTap() {
-    Alert.alert('Remove song', `Remove "${song.title}" from your repertoire?`, [
-      { text: 'Remove', style: 'destructive', onPress: () => onRemove(song) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }
-
-  const composersLabel = song.composers.length > 0
-    ? formatComposers(song.composers, song.cultures)
-    : null;
-  const confidenceLabel = CONFIDENCE_LEVELS.find(l => l.key === song.confidence)?.label ?? 'Learn';
-  const isLead = song.confidence === 'lead';
+  const row = songRowText({
+    title: song.title,
+    byline: song.byline,
+    displayArtist: song.display_artist,
+    composers: song.composers,
+    cultures: song.cultures,
+    recordingArtists: song.recording_artists,
+    identity: song.card_identity,
+    productions: song.productions,
+  });
 
   return (
     <View
@@ -91,59 +91,41 @@ function RepertoireCard({
           <TouchableOpacity onPress={() => onView(song)}>
             <Text numberOfLines={1}>
               <Text className="font-medium text-zinc-900">{song.title}</Text>
-              {composersLabel ? (
-                <Text className="text-zinc-400"> ({composersLabel})</Text>
-              ) : null}
+              {row.writers ? <Text className="text-zinc-400"> ({row.writers})</Text> : null}
             </Text>
           </TouchableOpacity>
-          <Text className="text-sm text-zinc-500 mt-0.5" numberOfLines={1}>
-            {song.productions.length > 0 ? (
-              <>from <Text className="italic">{song.productions.join(', ')}</Text></>
-            ) : (
-              song.display_artist ?? '—'
-            )}
-          </Text>
+          <SongRowLine shows={row.shows} credits={row.credits} className="text-sm text-zinc-500 mt-0.5" empty="—" />
           {song.popularity > 0 && (
             <Text className="text-xs text-zinc-400 mt-0.5">
-              {song.popularity} {song.popularity === 1 ? 'jammer' : 'jammers'}
+              {formatJammers(song.popularity)}
             </Text>
           )}
         </View>
       </View>
 
       <View className="flex-row flex-wrap items-center gap-2 mt-3 ml-8">
-        <TouchableOpacity
-          onPress={handleConfidenceTap}
-          className={`flex-row items-center rounded-xl border px-2.5 py-1.5 ${
-            isLead ? 'border-amber-400 bg-amber-100' : 'border-zinc-200 bg-white'
-          }`}
-        >
-          <Text className={`text-sm ${isLead ? 'text-amber-800 font-semibold' : 'text-zinc-700'}`}>
-            {confidenceLabel}
-          </Text>
-          <Ionicons name="chevron-down" size={12} color={isLead ? '#92400e' : '#71717a'} style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-
+        <RolePill level={song.confidence} onPress={handleConfidenceTap} size="md" />
+        <MyKeyChip value={song.key_note} onPress={() => onKeyTap(song)} size="md" />
         <TouchableOpacity
           onPress={() => onAddToSet(song)}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5"
+          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5"
         >
           <Text className="text-sm text-zinc-600">Add to set</Text>
         </TouchableOpacity>
+        {song.chord_chart_url ? (
+          // Same Chords link as the set list.
+          <TouchableOpacity
+            onPress={() => Linking.openURL(song.chord_chart_url!).catch(() => Alert.alert('Could not open link'))}
+            className="flex-row items-center gap-1 px-3 py-1.5 rounded-full border border-zinc-200 bg-white"
+            accessibilityLabel="Chord chart"
+          >
+            <Text className="text-sm font-medium text-zinc-600">Chords</Text>
+            <Ionicons name="open-outline" size={11} color="#a1a1aa" />
+          </TouchableOpacity>
+        ) : null}
 
-        <TouchableOpacity
-          onPress={() => onView(song)}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5"
-        >
-          <Text className="text-sm text-zinc-600">View</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={handleRemoveTap}
-          className="rounded-xl border border-zinc-200 bg-white px-2 py-1"
-        >
-          <Text className="text-xs text-zinc-400">Remove</Text>
-        </TouchableOpacity>
+
       </View>
     </View>
   );

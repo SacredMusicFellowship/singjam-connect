@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetUser, mockAdminFrom, mockCreateNotification } = vi.hoisted(() => ({
+const { mockGetUser, mockAdminFrom, mockCreateNotification, mockRsvpToJam } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockAdminFrom: vi.fn(),
   mockCreateNotification: vi.fn(),
+  mockRsvpToJam: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -20,11 +21,14 @@ vi.mock("@/lib/notifications", () => ({
   createNotification: mockCreateNotification,
 }));
 
+// The RSVP rules themselves are covered in lib/jamRsvp.test.ts.
+vi.mock("@/lib/jamRsvp", () => ({ rsvpToJam: mockRsvpToJam, RSVP_JAM_COLUMNS: "id" }));
+
 import { POST } from "./route";
 
 function chain(result: any) {
   const c: any = {};
-  for (const m of ["select", "eq", "update", "insert"]) c[m] = vi.fn().mockReturnValue(c);
+  for (const m of ["select", "eq", "neq", "update", "insert"]) c[m] = vi.fn().mockReturnValue(c);
   c.single = vi.fn().mockResolvedValue(result);
   c.maybeSingle = vi.fn().mockResolvedValue(result);
   c.then = (resolve: any) => Promise.resolve(result).then(resolve);
@@ -72,32 +76,77 @@ describe("POST /api/jam/[id]/invite/respond", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: HOST_ID } } });
     mockAdminFrom
       .mockReturnValueOnce(chain({ data: INVITE_ROW })) // jam_invites select
-      .mockReturnValueOnce(chain({ error: null })) // jam_invites status update
-      .mockReturnValueOnce(chain({ data: { capacity: null, name: "Test Jam", host_user_id: HOST_ID } })); // jams select
+      .mockReturnValueOnce(chain({ data: [{ id: "invite-1" }] })) // jam_invites status update
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Test Jam", host_user_id: HOST_ID } })); // jams select
 
     const res = await POST(makeReq({ response: "accepted" }), { params: Promise.resolve({ id: JAM_ID }) });
     expect(res.status).toBe(400);
-    // Only 3 admin calls — no jam_rsvps insert/update ever attempted
-    expect(mockAdminFrom).toHaveBeenCalledTimes(3);
+    expect(mockRsvpToJam).not.toHaveBeenCalled();
   });
 
-  it("auto-RSVPs a regular invitee who accepts", async () => {
+  it("RSVPs an invitee who accepts and tells a separate inviter", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "invitee-1" } } });
     mockAdminFrom
       .mockReturnValueOnce(chain({ data: INVITE_ROW })) // jam_invites select
-      .mockReturnValueOnce(chain({ error: null })) // jam_invites status update
-      .mockReturnValueOnce(chain({ data: { capacity: null, name: "Test Jam", host_user_id: HOST_ID } })) // jams select
-      .mockReturnValueOnce(chain({ count: 0 })) // attending count
-      .mockReturnValueOnce(chain({ data: null })) // existing rsvp lookup
-      .mockReturnValueOnce(chain({ error: null })) // rsvp insert
-      .mockReturnValueOnce(chain({ data: null })) // linked set lookup
+      .mockReturnValueOnce(chain({ data: [{ id: "invite-1" }] })) // jam_invites status update
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Test Jam", host_user_id: HOST_ID } })) // jams select
       .mockReturnValueOnce(chain({ data: { display_name: "Invitee" } })); // profile lookup
+    mockRsvpToJam.mockResolvedValue({ status: "attending", waitlistPosition: null });
 
     const res = await POST(makeReq({ response: "accepted" }), { params: Promise.resolve({ id: JAM_ID }) });
     expect(res.status).toBe(200);
-    const rsvpInsertChain = mockAdminFrom.mock.results[5].value;
-    expect(rsvpInsertChain.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ jam_id: JAM_ID, user_id: "invitee-1", status: "attending" })
+    expect(await res.json()).toEqual({ ok: true, rsvpStatus: "attending" });
+    expect(mockRsvpToJam).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: JAM_ID }), "invitee-1");
+    // The host hears through rsvpToJam; the route itself only tells the inviter.
+    expect(mockCreateNotification).toHaveBeenCalledTimes(1);
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "someone-else", type: "invite_accepted" })
     );
+  });
+
+  it("reports the waitlist when accepting a full jam", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "invitee-1" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { ...INVITE_ROW, invited_by: HOST_ID } }))
+      .mockReturnValueOnce(chain({ data: [{ id: "invite-1" }] }))
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Test Jam", host_user_id: HOST_ID } }));
+    mockRsvpToJam.mockResolvedValue({ status: "waitlist", waitlistPosition: 2 });
+
+    const res = await POST(makeReq({ response: "accepted" }), { params: Promise.resolve({ id: JAM_ID }) });
+    expect(await res.json()).toEqual({ ok: true, rsvpStatus: "waitlist" });
+  });
+
+  it("tells nobody when an already-accepted invite is accepted again", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "invitee-1" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { ...INVITE_ROW, status: "accepted" } }))
+      .mockReturnValueOnce(chain({ data: [] })) // conditional update matched nothing
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Test Jam", host_user_id: HOST_ID } }));
+    mockRsvpToJam.mockResolvedValue({ status: "attending", waitlistPosition: null });
+
+    const res = await POST(makeReq({ response: "accepted" }), { params: Promise.resolve({ id: JAM_ID }) });
+    expect(res.status).toBe(200);
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+
+  it("tells the inviter about a decline once, not on a repeat", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "invitee-1" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: INVITE_ROW }))
+      .mockReturnValueOnce(chain({ data: [{ id: "invite-1" }] }))
+      .mockReturnValueOnce(chain({ data: { display_name: "Invitee" } }))
+      .mockReturnValueOnce(chain({ data: { name: "Test Jam" } }));
+    await POST(makeReq({ response: "declined" }), { params: Promise.resolve({ id: JAM_ID }) });
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "someone-else", type: "invite_declined" })
+    );
+
+    mockCreateNotification.mockClear();
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { ...INVITE_ROW, status: "declined" } }))
+      .mockReturnValueOnce(chain({ data: [] }));
+    await POST(makeReq({ response: "declined" }), { params: Promise.resolve({ id: JAM_ID }) });
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+    expect(mockRsvpToJam).not.toHaveBeenCalled();
   });
 });

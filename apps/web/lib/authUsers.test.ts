@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fetchAllAuthEmails, fetchAllAuthUsers } from "./authUsers";
+import { fetchAllAuthEmails, fetchAllAuthUsers, findAuthUserByEmail } from "./authUsers";
 
 function pagedAdmin(pages: { id: string; email?: string | null }[][]) {
   return {
@@ -70,5 +70,22 @@ describe("fetchAllAuthUsers", () => {
         .mockResolvedValueOnce({ data: { users: [] }, error: { message: "boom" } }),
     };
     await expect(fetchAllAuthUsers(admin, 2)).rejects.toThrow("boom");
+  });
+});
+
+describe("findAuthUserByEmail", () => {
+  // A bare listUsers() stops at 50 users, so members past the first page were
+  // treated as strangers and sent a sign-up invite instead of an in-app one.
+  it("finds a user beyond the first page, ignoring case and whitespace", async () => {
+    const admin = pagedAdmin([
+      [{ id: "a", email: "a@x.com" }, { id: "b", email: "b@x.com" }],
+      [{ id: "c", email: "Joel@X.com" }],
+    ]);
+    expect(await findAuthUserByEmail(admin, " joel@x.com ", 2)).toEqual({ id: "c", email: "Joel@X.com" });
+  });
+
+  it("returns null when nobody has the address", async () => {
+    const admin = pagedAdmin([[{ id: "a", email: "a@x.com" }]]);
+    expect(await findAuthUserByEmail(admin, "nobody@x.com", 2)).toBeNull();
   });
 });

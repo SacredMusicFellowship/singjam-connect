@@ -95,21 +95,23 @@ export default function AdminSettingsPage() {
     setAcLoading(false);
   }
 
-  async function resync(userIds: string[]) {
-    setResyncing((prev) => new Set([...prev, ...userIds]));
+  async function resync(rows: ACSyncStatus[]) {
+    setResyncing((prev) => new Set([...prev, ...rows.map((r) => r.userId)]));
     await fetch("/api/admin/ac-sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userIds }),
+      body: JSON.stringify({
+        userIds: rows.filter((r) => !r.guest).map((r) => r.userId),
+        guestEmails: rows.filter((r) => r.guest).map((r) => r.email),
+      }),
     });
     // Refresh status after resync
     await loadACStatus();
     setResyncing(new Set());
   }
 
-  const usersWithIssues = (acStatus ?? []).filter(
-    (s) => !s.inAC || !s.hasTag || s.missingLists.length > 0
-  );
+  const hasACIssue = (s: ACSyncStatus) => !s.inAC || (!s.guest && !s.hasTag) || s.missingLists.length > 0;
+  const usersWithIssues = (acStatus ?? []).filter(hasACIssue);
   const usersWithUnsubscribes = (acStatus ?? []).filter((s) => s.unsubscribedLists.length > 0);
 
   return (
@@ -149,7 +151,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={revalidateJams}
             disabled={revalidating}
-            className="text-sm px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+            className="shrink-0 min-w-[8.5rem] whitespace-nowrap text-sm px-4 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
           >
             {revalidating ? "Refreshing…" : "Refresh now"}
           </button>
@@ -168,7 +170,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={sendReminders}
             disabled={reminderSending}
-            className="text-sm px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+            className="shrink-0 min-w-[8.5rem] whitespace-nowrap text-sm px-4 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
           >
             {reminderSending ? "Sending…" : "Send now"}
           </button>
@@ -186,9 +188,9 @@ export default function AdminSettingsPage() {
           <div className="flex gap-2">
             {acStatus !== null && usersWithIssues.length > 0 && (
               <button
-                onClick={() => resync(usersWithIssues.map((s) => s.userId))}
+                onClick={() => resync(usersWithIssues)}
                 disabled={resyncing.size > 0}
-                className="text-sm px-3 py-1.5 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
+                className="text-sm px-3 py-1.5 rounded-full bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
               >
                 Resync all ({usersWithIssues.length})
               </button>
@@ -196,7 +198,7 @@ export default function AdminSettingsPage() {
             <button
               onClick={checkACStatus}
               disabled={acLoading}
-              className="text-sm px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
+              className="shrink-0 min-w-[8.5rem] whitespace-nowrap text-sm px-4 py-1.5 rounded-full bg-zinc-900 text-white font-medium hover:bg-zinc-700 disabled:opacity-50"
             >
               {acLoading ? "Checking…" : acStatus === null ? "Check status" : "Refresh"}
             </button>
@@ -227,17 +229,20 @@ export default function AdminSettingsPage() {
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {acStatus.map((s) => {
-                  const hasIssue = !s.inAC || !s.hasTag || s.missingLists.length > 0;
+                  const hasIssue = hasACIssue(s);
                   const isSyncing = resyncing.has(s.userId);
                   const rowBg = hasIssue ? "bg-red-50" : s.unsubscribedLists.length > 0 ? "bg-amber-50" : "";
                   return (
                     <tr key={s.userId} className={rowBg}>
-                      <td className="px-4 py-3 text-zinc-700 font-mono text-xs">{s.email}</td>
+                      <td className="px-4 py-3 text-zinc-700 font-mono text-xs">
+                        {s.email}
+                        {s.guest && <span className="ml-2 font-sans text-zinc-400">guest buyer</span>}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         {s.inAC ? <span className="text-green-500">✓</span> : <span className="text-red-400">✗</span>}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {s.hasTag ? <span className="text-green-500">✓</span> : <span className="text-red-400">✗</span>}
+                        {s.guest ? <span className="text-zinc-300">—</span> : s.hasTag ? <span className="text-green-500">✓</span> : <span className="text-red-400">✗</span>}
                       </td>
                       <td className="px-4 py-3 text-center">
                         {s.missingLists.length === 0 && s.unsubscribedLists.length === 0 ? (
@@ -260,9 +265,9 @@ export default function AdminSettingsPage() {
                       <td className="px-4 py-3 text-right">
                         {hasIssue && (
                           <button
-                            onClick={() => resync([s.userId])}
+                            onClick={() => resync([s])}
                             disabled={isSyncing}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-amber-500 text-white font-medium hover:bg-amber-600 disabled:opacity-50"
+                            className="text-xs px-2.5 py-1 rounded-full bg-amber-500 text-white font-medium hover:bg-amber-600 disabled:opacity-50"
                           >
                             {isSyncing ? "Syncing…" : "Resync"}
                           </button>
@@ -274,7 +279,7 @@ export default function AdminSettingsPage() {
               </tbody>
             </table>
             <div className="px-4 py-3 border-t border-zinc-100 text-xs text-zinc-400">
-              {acStatus.length} users · {acStatus.filter((s) => s.inAC && s.hasTag && s.missingLists.length === 0 && s.unsubscribedLists.length === 0).length} clean · {usersWithIssues.length} with issues{usersWithUnsubscribes.length > 0 ? ` · ${usersWithUnsubscribes.length} unsubscribed` : ""}
+              {acStatus.length} users · {acStatus.filter((s) => !hasACIssue(s) && s.unsubscribedLists.length === 0).length} clean · {usersWithIssues.length} with issues{usersWithUnsubscribes.length > 0 ? ` · ${usersWithUnsubscribes.length} unsubscribed` : ""}
             </div>
           </div>
         )}

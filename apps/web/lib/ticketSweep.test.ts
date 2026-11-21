@@ -1,19 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/lib/stripe", () => ({ SITE_URL: "https://singjam.org" }));
+// Hoisted so the @/lib/stripe factory above can close over it.
+const { mockRetrieve } = vi.hoisted(() => ({ mockRetrieve: vi.fn() }));
+
+vi.mock("@/lib/stripe", () => ({
+  SITE_URL: "https://singjam.org",
+  stripe: vi.fn(() => ({ checkout: { sessions: { retrieve: mockRetrieve } } })),
+}));
 vi.mock("@/lib/resend", () => ({
   resend: { emails: { send: vi.fn().mockResolvedValue({ error: null }) } },
   FROM_ADDRESS: "SingJam <hello@singjam.org>",
 }));
-vi.mock("@/lib/ticketFulfilment", () => ({ sendTicketEmail: vi.fn() }));
+vi.mock("@/lib/ticketFulfilment", () => ({ sendTicketEmail: vi.fn(), fulfilPendingOrder: vi.fn() }));
 vi.mock("@/lib/jamAttendance", () => ({ markAttending: vi.fn() }));
 
 import {
   sweepUndeliveredTickets,
   expireStaleTicketHolds,
   reconcileTicketAttendance,
+  reconcileLostWebhooks,
 } from "./ticketSweep";
-import { sendTicketEmail } from "@/lib/ticketFulfilment";
+import { sendTicketEmail, fulfilPendingOrder } from "@/lib/ticketFulfilment";
 import { resend } from "@/lib/resend";
 import { markAttending } from "@/lib/jamAttendance";
 
@@ -43,6 +50,8 @@ function makeAdmin({
     obj.limit = pass();
     obj.is = pass();
     obj.in = pass();
+    obj.not = pass();
+    obj.gte = pass();
     obj.maybeSingle = pass();
     obj.eq = vi.fn((col: string, val: any) => {
       if (col === "id") id = val;
@@ -82,7 +91,10 @@ const sent = () => (resend.emails.send as any).mock.calls;
 
 beforeEach(() => {
   vi.mocked(sendTicketEmail).mockReset();
+  vi.mocked(fulfilPendingOrder).mockReset();
+  process.env.STRIPE_RESTRICTED_KEY = "rk_test_fake";
   vi.mocked(markAttending).mockReset();
+  mockRetrieve.mockReset();
   (resend.emails.send as any).mockReset();
   (resend.emails.send as any).mockResolvedValue({ error: null });
 });
@@ -303,5 +315,128 @@ describe("reconcileTicketAttendance", () => {
     const { admin } = makeAdmin({ rpcError: { message: "no such function" } });
     expect(await reconcileTicketAttendance(admin)).toEqual({ pending: 0, seated: 0, failed: 0 });
     expect(markAttending).not.toHaveBeenCalled();
+  });
+});
+
+describe("reconcileLostWebhooks", () => {
+  const lost = (over: Partial<any> = {}) => ({
+    id: "o1",
+    status: "pending",
+    stripe_checkout_session_id: "cs_test_1",
+    ...over,
+  });
+  const session = (over: Partial<any> = {}) => ({
+    payment_status: "paid",
+    amount_total: 1576,
+    payment_intent: "pi_1",
+    ...over,
+  });
+
+  it("fulfils a pending order Stripe says was paid", async () => {
+    // The whole point: the webhook never arrived, so nothing else would have
+    // noticed this order.
+    const { admin } = makeAdmin({ queue: [lost()] });
+    mockRetrieve.mockResolvedValue(session());
+    vi.mocked(fulfilPendingOrder).mockResolvedValue({ id: "o1" } as any);
+
+    const r = await reconcileLostWebhooks(admin);
+    expect(r).toMatchObject({ checked: 1, skipped: 0, recovered: 1, stranded: 0, failed: 0 });
+    // Fulfilment must go through the same path the webhook uses, with Stripe's
+    // own total rather than our pre-discount subtotal.
+    expect(fulfilPendingOrder).toHaveBeenCalledWith(admin, "o1", {
+      amountCents: 1576,
+      paymentIntentId: "pi_1",
+    });
+  });
+
+  it("leaves an unpaid session alone", async () => {
+    const { admin } = makeAdmin({ queue: [lost()] });
+    mockRetrieve.mockResolvedValue(session({ payment_status: "unpaid" }));
+
+    const r = await reconcileLostWebhooks(admin);
+    expect(r).toMatchObject({ checked: 1, recovered: 0 });
+    expect(fulfilPendingOrder).not.toHaveBeenCalled();
+  });
+
+  it("never treats an unreadable session as unpaid", async () => {
+    // Stripe down, or a session from the other mode. Counting that as "not
+    // paid" would quietly abandon a real sale.
+    const { admin } = makeAdmin({ queue: [lost()] });
+    mockRetrieve.mockRejectedValue(new Error("connection reset"));
+
+    const r = await reconcileLostWebhooks(admin);
+    expect(r).toMatchObject({ checked: 0, recovered: 0, failed: 1 });
+    expect(fulfilPendingOrder).not.toHaveBeenCalled();
+  });
+
+  it("refuses to re-issue an already-expired order, and reports it", async () => {
+    // The hold lapsed, so the stock may have been resold — re-issuing could
+    // oversell a capped tier. That is a person's decision.
+    const { admin } = makeAdmin({ queue: [lost({ status: "expired" })] });
+    mockRetrieve.mockResolvedValue(session());
+
+    const r = await reconcileLostWebhooks(admin);
+    expect(r).toMatchObject({ checked: 1, recovered: 0, stranded: 1 });
+    expect(fulfilPendingOrder).not.toHaveBeenCalled();
+  });
+
+  it("counts a late webhook winning the race as failed, not recovered", async () => {
+    // fulfilPendingOrder returns null when the status guard no longer matches,
+    // which is exactly what makes racing Stripe safe.
+    const { admin } = makeAdmin({ queue: [lost()] });
+    mockRetrieve.mockResolvedValue(session());
+    vi.mocked(fulfilPendingOrder).mockResolvedValue(null as any);
+
+    const r = await reconcileLostWebhooks(admin);
+    expect(r).toMatchObject({ recovered: 0, failed: 1 });
+  });
+
+  it("handles a session whose payment_intent is an expanded object", async () => {
+    const { admin } = makeAdmin({ queue: [lost()] });
+    mockRetrieve.mockResolvedValue(session({ payment_intent: { id: "pi_expanded" } }));
+    vi.mocked(fulfilPendingOrder).mockResolvedValue({ id: "o1" } as any);
+
+    await reconcileLostWebhooks(admin);
+    expect(fulfilPendingOrder).toHaveBeenCalledWith(
+      admin,
+      "o1",
+      expect.objectContaining({ paymentIntentId: "pi_expanded" })
+    );
+  });
+
+  it("skips a session from Stripe's other mode instead of erroring on it", async () => {
+    // The table holds both modes; a key can only read its own. Retrieving the
+    // wrong one raises "No such checkout.session", which is not a failure —
+    // and logging it as one produced ten errors every ten minutes.
+    process.env.STRIPE_RESTRICTED_KEY = "rk_live_fake";
+    const { admin } = makeAdmin({ queue: [lost({ stripe_checkout_session_id: "cs_test_old" })] });
+
+    const r = await reconcileLostWebhooks(admin);
+    expect(r).toMatchObject({ checked: 0, skipped: 1, failed: 0 });
+    expect(mockRetrieve).not.toHaveBeenCalled();
+  });
+
+  it("reads sessions from its own mode", async () => {
+    process.env.STRIPE_RESTRICTED_KEY = "rk_live_fake";
+    const { admin } = makeAdmin({ queue: [lost({ stripe_checkout_session_id: "cs_live_mine" })] });
+    mockRetrieve.mockResolvedValue(session());
+    vi.mocked(fulfilPendingOrder).mockResolvedValue({ id: "o1" } as any);
+
+    const r = await reconcileLostWebhooks(admin);
+    expect(r).toMatchObject({ checked: 1, skipped: 0, recovered: 1 });
+  });
+
+  it("does nothing and reports nothing when the queue is empty", async () => {
+    const { admin } = makeAdmin({ queue: [] });
+    expect(await reconcileLostWebhooks(admin)).toEqual({
+      checked: 0, skipped: 0, recovered: 0, stranded: 0, failed: 0,
+    });
+    expect(mockRetrieve).not.toHaveBeenCalled();
+  });
+
+  it("gives up quietly if the queue query fails", async () => {
+    // A failed query really does return data: null, so keep that shape.
+    const { admin } = makeAdmin({ queue: null as any, queueError: { message: "boom" } });
+    expect(await reconcileLostWebhooks(admin)).toMatchObject({ checked: 0, recovered: 0 });
   });
 });

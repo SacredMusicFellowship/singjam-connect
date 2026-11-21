@@ -6,6 +6,8 @@ import { enqueueWelcomeEmail } from "@/lib/emailOutbox";
 import { syncContact } from "@/lib/activecampaign";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { claimGuestTickets } from "@/lib/ticketClaim";
+import { claimEmailInvites } from "@/lib/claimEmailInvites";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function GET(request: Request) {
   const { searchParams, origin: requestOrigin } = new URL(request.url);
@@ -65,6 +67,8 @@ export async function GET(request: Request) {
       if (user.email) {
         await claimGuestTickets(supabaseAdmin(), user.id, user.email).catch((err) =>
           console.error("[tickets] claimGuestTickets failed for", user.email, err));
+        await claimEmailInvites(supabaseAdmin(), user.id, user.email).catch((err) =>
+          console.error("[invites] claimEmailInvites failed for", user.email, err));
       }
 
       const isFirstLogin =
@@ -99,7 +103,7 @@ export async function GET(request: Request) {
           inviteJamId = invite?.jam_id ?? null;
         }
 
-        const postSetup = inviteJamId ? `/jam/${inviteJamId}` : next ?? "/repertoire";
+        const postSetup = inviteJamId ? await jamPathById(inviteJamId) : next ?? "/repertoire";
         destination = `/account?next=${encodeURIComponent(postSetup)}`;
       } else {
         if (isFirstLogin && user.email) {
@@ -123,7 +127,7 @@ export async function GET(request: Request) {
             .select("jam_id")
             .eq("token", inviteToken)
             .maybeSingle();
-          destination = invite?.jam_id ? `/jam/${invite.jam_id}` : next ?? "/repertoire";
+          destination = invite?.jam_id ? await jamPathById(invite.jam_id) : next ?? "/repertoire";
         } else {
           destination = next ?? "/repertoire";
         }

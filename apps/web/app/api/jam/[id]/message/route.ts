@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canManageJam } from "@/lib/jamAuthz";
-import { resend, FROM_ADDRESS } from "@/lib/resend";
+import { EVENTS_FROM_ADDRESS } from "@/lib/resend";
+import { sendBulkEmail } from "@/lib/sendBulkEmail";
 import { jamHostMessageHtml } from "@/emails/jam-host-message";
 import { isJamCohost } from "@/lib/jamCohosts";
+import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function POST(
   req: Request,
@@ -48,7 +51,7 @@ export async function POST(
     .single();
   const hostName = (hostProfile as any)?.display_name ?? (hostProfile as any)?.username ?? "Your host";
 
-  const jamUrl = `https://singjam.org/jam/${jamId}`;
+  const jamUrl = `https://singjam.org${await jamPathById(jamId)}`;
   const jamName = jam.name ?? "Your jam";
 
   // Collect recipients — keyed by email to deduplicate
@@ -71,10 +74,14 @@ export async function POST(
       ]);
       const email = authData.user?.email;
       if (email) {
-        recipientMap.set(email, (profile as any)?.display_name ?? (profile as any)?.username ?? null);
+        recipientMap.set(email.toLowerCase(), (profile as any)?.display_name ?? (profile as any)?.username ?? null);
       }
     })
   );
+
+  for (const [email, name] of await guestTicketBuyers(admin, jamId)) {
+    if (!recipientMap.has(email)) recipientMap.set(email, name);
+  }
 
   // If "all_invited", also include pending invitees
   if (audience === "all_invited") {
@@ -91,27 +98,28 @@ export async function POST(
             admin.from("profiles").select("display_name, username").eq("id", inv.invited_user_id).single(),
             admin.auth.admin.getUserById(inv.invited_user_id),
           ]);
-          const email = authData.user?.email;
+          const email = authData.user?.email?.toLowerCase();
           if (email && !recipientMap.has(email)) {
             recipientMap.set(email, (profile as any)?.display_name ?? (profile as any)?.username ?? null);
           }
-        } else if (inv.invitee_email && !recipientMap.has(inv.invitee_email)) {
-          recipientMap.set(inv.invitee_email, null);
+        } else if (inv.invitee_email && !recipientMap.has(inv.invitee_email.toLowerCase())) {
+          recipientMap.set(inv.invitee_email.toLowerCase(), null);
         }
       })
     );
   }
 
-  await Promise.all(
-    Array.from(recipientMap.entries()).map(([email, name]) =>
-      resend.emails.send({
-        from: FROM_ADDRESS,
-        to: email,
-        subject: `[${jamName}] ${subject}`,
-        html: jamHostMessageHtml({ recipientName: name, hostName, jamName, jamUrl, subject, body: message }),
-      })
-    )
+  const { sent, failed } = await sendBulkEmail(
+    Array.from(recipientMap.keys()).map((email) => ({
+      from: EVENTS_FROM_ADDRESS,
+      to: email,
+      subject: `[${jamName}] ${subject}`,
+      html: jamHostMessageHtml({ hostName, jamName, jamUrl, subject, body: message }),
+    }))
   );
 
-  return NextResponse.json({ sent: recipientMap.size });
+  if (sent === 0 && failed > 0) {
+    return NextResponse.json({ error: "Your message couldn't be sent. Please try again." }, { status: 502 });
+  }
+  return NextResponse.json({ sent, failed });
 }

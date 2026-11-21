@@ -7,6 +7,7 @@ const {
   mockGetUserById,
   mockCreateNotification,
   mockSend,
+  mockRsvpToJam,
 } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockBearerGetUser: vi.fn(),
@@ -14,6 +15,7 @@ const {
   mockGetUserById: vi.fn(),
   mockCreateNotification: vi.fn(),
   mockSend: vi.fn().mockResolvedValue({}),
+  mockRsvpToJam: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -37,9 +39,11 @@ vi.mock("@/lib/resend", () => ({
 }));
 
 vi.mock("@/emails/jam-waitlist-promoted", () => ({ jamWaitlistPromotedHtml: vi.fn(() => "<html>") }));
-vi.mock("@/emails/jam-rsvp-confirmed", () => ({ jamRsvpConfirmedHtml: vi.fn(() => "<html>") }));
 
 vi.mock("@/lib/notifications", () => ({ createNotification: mockCreateNotification }));
+
+// The RSVP rules themselves are covered in lib/jamRsvp.test.ts.
+vi.mock("@/lib/jamRsvp", () => ({ rsvpToJam: mockRsvpToJam, RSVP_JAM_COLUMNS: "id" }));
 
 import { POST, DELETE } from "./route";
 
@@ -64,6 +68,7 @@ const HOST_ID = "host-1";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockAdminFrom.mockReturnValue(chain({ error: null }));
 });
 
 describe("POST /api/jam/[id]/rsvp", () => {
@@ -77,38 +82,36 @@ describe("POST /api/jam/[id]/rsvp", () => {
   it("authenticates via bearer token when there is no cookie session", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
     mockBearerGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
-    mockAdminFrom
-      .mockReturnValueOnce(chain({ data: { capacity: null, host_user_id: USER_ID, name: "X", visibility: "community" } })) // jams
-      .mockReturnValueOnce(chain({ count: 0 })) // attending count
-      .mockReturnValueOnce(chain({ data: { id: "r1", status: "attending" } })) // existing rsvp
-      .mockReturnValueOnce(chain({ error: null })) // rsvp update
-      .mockReturnValueOnce(chain({ data: null })); // linked set
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID, host_user_id: HOST_ID, visibility: "community" } }));
+    mockRsvpToJam.mockResolvedValue({ status: "attending", waitlistPosition: null });
 
     const res = await POST(makeReq("POST", { Authorization: "Bearer tok" }), { params: Promise.resolve({ id: JAM_ID }) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "attending", waitlist_position: null });
+    expect(mockRsvpToJam).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: JAM_ID }), USER_ID);
   });
 
-  it("waitlists (with position) when the jam is at capacity", async () => {
+  // An invitee who taps RSVP instead of Accept must still leave the host's pending list.
+  it("marks the caller's pending invite accepted", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
-    mockAdminFrom
-      .mockReturnValueOnce(chain({ data: { capacity: 1, host_user_id: HOST_ID, name: "X", visibility: "community" } })) // jams
-      .mockReturnValueOnce(chain({ count: 1 })) // attending count → full
-      .mockReturnValueOnce(chain({ data: null })) // existing rsvp
-      .mockReturnValueOnce(chain({ count: 2 })) // waitlist count → position 3
-      .mockReturnValueOnce(chain({ error: null })) // rsvp insert
-      .mockReturnValueOnce(chain({ data: { display_name: "Me" } })); // host-notify profile lookup
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID, host_user_id: HOST_ID, visibility: "private" } }));
+    mockRsvpToJam.mockResolvedValue({ status: "attending", waitlistPosition: null });
+
+    await POST(makeReq("POST"), { params: Promise.resolve({ id: JAM_ID }) });
+    expect(mockAdminFrom).toHaveBeenNthCalledWith(2, "jam_invites");
+    const inviteChain = mockAdminFrom.mock.results[1].value;
+    expect(inviteChain.update).toHaveBeenCalledWith({ status: "accepted" });
+    expect(inviteChain.eq).toHaveBeenCalledWith("invited_user_id", USER_ID);
+    expect(inviteChain.eq).toHaveBeenCalledWith("status", "pending");
+  });
+
+  it("returns the waitlist position the RSVP landed on", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID, host_user_id: HOST_ID, visibility: "community" } }));
+    mockRsvpToJam.mockResolvedValue({ status: "waitlist", waitlistPosition: 3 });
 
     const res = await POST(makeReq("POST"), { params: Promise.resolve({ id: JAM_ID }) });
-    expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "waitlist", waitlist_position: 3 });
-    const insertChain = mockAdminFrom.mock.results[4].value;
-    expect(insertChain.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "waitlist", waitlist_position: 3, user_id: USER_ID })
-    );
-    expect(mockCreateNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: HOST_ID, type: "jam_rsvp" })
-    );
   });
 
   it("rejects RSVPs to official (external-ticketing) events", async () => {
@@ -116,6 +119,15 @@ describe("POST /api/jam/[id]/rsvp", () => {
     mockAdminFrom.mockReturnValueOnce(chain({ data: { capacity: null, host_user_id: HOST_ID, name: "X", visibility: "official" } }));
     const res = await POST(makeReq("POST"), { params: Promise.resolve({ id: JAM_ID }) });
     expect(res.status).toBe(400);
+    expect(mockRsvpToJam).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a jam that doesn't exist", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: null }));
+    const res = await POST(makeReq("POST"), { params: Promise.resolve({ id: JAM_ID }) });
+    expect(res.status).toBe(404);
+    expect(mockRsvpToJam).not.toHaveBeenCalled();
   });
 });
 

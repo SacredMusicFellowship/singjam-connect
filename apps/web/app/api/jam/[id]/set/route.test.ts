@@ -233,6 +233,49 @@ describe("PUT /api/jam/[id]/set", () => {
       expect(mockAdminFrom).toHaveBeenCalledTimes(3);
     });
   });
+
+  describe("set already linked elsewhere", () => {
+    const linkedElsewhere = { owner_user_id: HOST_ID, jam_id: "other-jam" };
+
+    it("returns 409 instead of silently moving the set off its current jam", async () => {
+      mockServerFrom
+        .mockReturnValueOnce(chain({ data: jamRow }))
+        .mockReturnValueOnce(chain({ data: linkedElsewhere }));
+      const res = await PUT(putReq(JAM_ID, { setId: SET_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ linkedJamId: "other-jam" });
+      expect(mockAdminFrom).not.toHaveBeenCalled();
+    });
+
+    it("moves the set when the caller confirms with move: true", async () => {
+      mockServerFrom
+        .mockReturnValueOnce(chain({ data: jamRow }))
+        .mockReturnValueOnce(chain({ data: linkedElsewhere }));
+      mockAdminFrom.mockReturnValueOnce(chain({ error: null }));
+      const res = await PUT(putReq(JAM_ID, { setId: SET_ID, move: true }), { params: Promise.resolve({ id: JAM_ID }) });
+      expect(res.status).toBe(200);
+      expect(mockAdminFrom.mock.results[0].value.update).toHaveBeenCalledWith({ jam_id: JAM_ID });
+    });
+
+    it("re-linking a set to the jam it is already on needs no confirmation", async () => {
+      mockServerFrom
+        .mockReturnValueOnce(chain({ data: jamRow }))
+        .mockReturnValueOnce(chain({ data: { owner_user_id: HOST_ID, jam_id: JAM_ID } }));
+      mockAdminFrom.mockReturnValueOnce(chain({ error: null }));
+      const res = await PUT(putReq(JAM_ID, { setId: SET_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+      expect(res.status).toBe(200);
+    });
+
+    it("returns 409 with a readable message when the jam already has a set list", async () => {
+      mockServerFrom
+        .mockReturnValueOnce(chain({ data: jamRow }))
+        .mockReturnValueOnce(chain({ data: setRow }));
+      mockAdminFrom.mockReturnValueOnce(chain({ error: { code: "23505", message: "duplicate key value violates unique constraint" } }));
+      const res = await PUT(putReq(JAM_ID, { setId: SET_ID }), { params: Promise.resolve({ id: JAM_ID }) });
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toMatch(/already has a set list/);
+    });
+  });
 });
 
 describe("DELETE /api/jam/[id]/set", () => {

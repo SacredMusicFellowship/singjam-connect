@@ -10,6 +10,7 @@ type Jam = {
   id: string;
   name: string;
   starts_at: string;
+  timezone: string | null;
 };
 
 type Props = {
@@ -42,7 +43,7 @@ export default function InviteToJamModal({ visible, inviteeUserId, inviteeName, 
     // Jams the current user is hosting
     const { data: hosted } = await supabase
       .from('jams')
-      .select('id, name, starts_at')
+      .select('id, name, starts_at, timezone')
       .eq('host_user_id', user.id)
       .gte('starts_at', now)
       .order('starts_at');
@@ -50,7 +51,7 @@ export default function InviteToJamModal({ visible, inviteeUserId, inviteeName, 
     // Jams user is attending where guests can invite
     const { data: rsvps } = await supabase
       .from('jam_rsvps')
-      .select('jam:jams(id, name, starts_at, guests_can_invite)')
+      .select('jam:jams(id, name, starts_at, timezone, guests_can_invite)')
       .eq('user_id', user.id)
       .eq('status', 'attending')
       .neq('jam.host_user_id', user.id);
@@ -58,10 +59,10 @@ export default function InviteToJamModal({ visible, inviteeUserId, inviteeName, 
     const attended: Jam[] = ((rsvps ?? []) as any[])
       .map(r => r.jam)
       .filter(j => j && j.guests_can_invite && j.starts_at >= now)
-      .map(j => ({ id: j.id, name: j.name, starts_at: j.starts_at }));
+      .map(j => ({ id: j.id, name: j.name, starts_at: j.starts_at, timezone: j.timezone }));
 
     const hostedJams: Jam[] = (hosted ?? []).map((j: any) => ({
-      id: j.id, name: j.name, starts_at: j.starts_at,
+      id: j.id, name: j.name, starts_at: j.starts_at, timezone: j.timezone,
     }));
 
     // Merge + dedup + sort
@@ -123,7 +124,7 @@ export default function InviteToJamModal({ visible, inviteeUserId, inviteeName, 
                 <View className="mx-4 my-2 bg-red-50 border border-red-200 rounded-xl p-3">
                   <Text className="text-red-600 text-sm">{error}</Text>
                 </View>
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => {
               const isSent = sent.has(item.id);
@@ -132,7 +133,7 @@ export default function InviteToJamModal({ visible, inviteeUserId, inviteeName, 
                   <View className="flex-1 mr-3">
                     <Text className="font-semibold text-zinc-900" numberOfLines={1}>{item.name}</Text>
                     <Text className="text-sm text-zinc-400 mt-0.5">
-                      {formatJamTime(item.starts_at)}
+                      {formatJamTime(item.starts_at, item.timezone)}
                     </Text>
                   </View>
                   <TouchableOpacity

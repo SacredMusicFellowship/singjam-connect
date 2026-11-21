@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
 import JamEventCard, { type JamEventCardData } from "@/components/JamEventCard";
 import UpcomingJamsCta from "@/components/UpcomingJamsCta";
 
@@ -11,12 +12,22 @@ const getUpcomingJams = unstable_cache(
     );
     const { data } = await supabase
       .from("jams")
-      .select("id, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url")
+      .select("id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, image_focal_point, image_list_url")
       .eq("visibility", "official")
       .gte("starts_at", new Date().toISOString())
       .order("starts_at", { ascending: true })
       .limit(3);
-    return data ?? [];
+    const jams = data ?? [];
+
+    // One call for the whole teaser rather than per-tier availability lookups.
+    const { data: tiers } = jams.length
+      ? await supabase.rpc("jam_ticket_tiers", { jam_ids: jams.map((j) => j.id) })
+      : { data: [] };
+
+    // Folded here rather than at render time so the summaries ride the same
+    // 60s cache as the jams and the page does no work per request.
+    const summaries = Array.from(summarizeTicketTiers(tiers as JamTicketTier[] | null).values());
+    return { jams, summaries };
   },
   ["upcoming-jams"],
   { revalidate: 60, tags: ["upcoming-jams"] }
@@ -42,7 +53,8 @@ export function UpcomingJamsSkeleton() {
 }
 
 export default async function UpcomingJams() {
-  const jams = await getUpcomingJams();
+  const { jams, summaries } = await getUpcomingJams();
+  const summaryByJam = new Map((summaries as JamTicketSummary[]).map((s) => [s.jam_id, s]));
 
   return (
     <section className="space-y-3">
@@ -63,7 +75,11 @@ export default async function UpcomingJams() {
       ) : (
         <div className="grid gap-3">
           {jams.map((jam) => (
-            <JamEventCard key={jam.id} jam={jam as JamEventCardData} />
+            <JamEventCard
+              key={jam.id}
+              jam={jam as JamEventCardData}
+              ticketSummary={summaryByJam.get(jam.id) ?? null}
+            />
           ))}
         </div>
       )}

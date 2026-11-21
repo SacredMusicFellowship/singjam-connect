@@ -43,9 +43,40 @@ type ACProfileRow = {
   singing_voice: string | null;
 };
 
+type GuestOrderRow = {
+  id: string;
+  buyer_email: string;
+  buyer_name: string | null;
+};
+
+// Guest buyers who ticked the mailing-list box at checkout. They belong on the
+// lists but not the SingJam App User tag, and once they make an account they
+// are audited as a member instead.
+async function fetchOptedInGuests(admin: ReturnType<typeof supabaseAdmin>, memberEmails: Set<string>) {
+  const orders = await fetchAllRows<GuestOrderRow>((from, to) =>
+    admin
+      .from("ticket_orders")
+      .select("id,buyer_email,buyer_name")
+      .eq("status", "paid")
+      .eq("marketing_opt_in", true)
+      .is("buyer_user_id", null)
+      .not("buyer_email", "is", null)
+      .order("id")
+      .range(from, to) as any
+  );
+  const guests = new Map<string, string | null>();
+  for (const o of orders) {
+    const email = o.buyer_email.toLowerCase();
+    if (memberEmails.has(email)) continue;
+    if (!guests.has(email) || o.buyer_name) guests.set(email, o.buyer_name);
+  }
+  return guests;
+}
+
 export type ACSyncStatus = {
   email: string;
   userId: string;
+  guest: boolean;
   inAC: boolean;
   hasTag: boolean;
   missingLists: string[];
@@ -63,14 +94,20 @@ export async function GET() {
   ]);
 
   const acByEmail = new Map(acContacts.map((c) => [c.email?.toLowerCase(), c]));
+  const memberEmails = new Set(sbUsers.map((u) => u.email?.toLowerCase() ?? ""));
+  const guests = await fetchOptedInGuests(admin, memberEmails);
+
+  const people = [
+    ...sbUsers.map((u) => ({ email: u.email?.toLowerCase() ?? "", userId: u.id, guest: false })),
+    ...[...guests.keys()].map((email) => ({ email, userId: email, guest: true })),
+  ];
 
   const statuses: ACSyncStatus[] = await Promise.all(
-    sbUsers.map(async (sbUser) => {
-      const email = sbUser.email?.toLowerCase() ?? "";
+    people.map(async ({ email, userId, guest }) => {
       const acContact = acByEmail.get(email);
 
       if (!acContact) {
-        return { email, userId: sbUser.id, inAC: false, hasTag: false, missingLists: [...LIST_IDS], unsubscribedLists: [] };
+        return { email, userId, guest, inAC: false, hasTag: false, missingLists: [...LIST_IDS], unsubscribedLists: [] };
       }
 
       const [tagsData, listsData] = await Promise.all([
@@ -85,7 +122,8 @@ export async function GET() {
 
       return {
         email,
-        userId: sbUser.id,
+        userId,
+        guest,
         inAC: true,
         hasTag: tagIds.includes(SINGJAM_TAG_ID),
         missingLists: LIST_IDS.filter((id) => !subscribedLists.has(id) && !unsubscribedListSet.has(id)),
@@ -101,9 +139,9 @@ export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (!auth.ok) return auth.response;
 
-  const { userIds }: { userIds: string[] } = await req.json();
-  if (!Array.isArray(userIds) || userIds.length === 0) {
-    return NextResponse.json({ error: "userIds required" }, { status: 400 });
+  const { userIds = [], guestEmails = [] }: { userIds?: string[]; guestEmails?: string[] } = await req.json();
+  if (!Array.isArray(userIds) || !Array.isArray(guestEmails) || userIds.length + guestEmails.length === 0) {
+    return NextResponse.json({ error: "userIds or guestEmails required" }, { status: 400 });
   }
 
   const admin = supabaseAdmin();
@@ -119,6 +157,8 @@ export async function POST(req: Request) {
   ]);
 
   const profileById = new Map(profiles.map((p) => [p.id, p]));
+  const memberEmails = new Set(sbUsers.map((u) => u.email?.toLowerCase() ?? ""));
+  const guests = guestEmails.length > 0 ? await fetchOptedInGuests(admin, memberEmails) : new Map<string, string | null>();
 
   const targets = sbUsers.filter((u) => userIds.includes(u.id));
 
@@ -140,8 +180,29 @@ export async function POST(req: Request) {
         favoriteGenres: p?.favorite_genres || undefined,
       };
       try {
-        await syncContact(u.email, profile);
-        synced++;
+        const failures = await syncContact(u.email, profile);
+        if (failures.length > 0) failed++;
+        else synced++;
+      } catch {
+        failed++;
+      }
+    })
+  );
+
+  // Only emails that really are opted-in guests — the request body can't put
+  // an arbitrary address on the lists.
+  await Promise.all(
+    guestEmails.map(async (raw) => {
+      const email = raw.toLowerCase();
+      if (!guests.has(email)) { failed++; return; }
+      const [firstName, ...rest] = (guests.get(email) ?? "").trim().split(/\s+/);
+      try {
+        const failures = await syncContact(email, {
+          ...(firstName ? { firstName } : {}),
+          ...(rest.length ? { lastName: rest.join(" ") } : {}),
+        }, { tag: false });
+        if (failures.length > 0) failed++;
+        else synced++;
       } catch {
         failed++;
       }

@@ -60,6 +60,11 @@ describe("jamRsvpConfirmedHtml", () => {
     expect(html).toContain("/api/jam/jam-123/ics");
   });
 
+  it("puts the RSVP's id in the .ics link", () => {
+    const html = jamRsvpConfirmedHtml({ ...BASE, startsAt: "2026-06-10T19:00:00Z", rsvpId: "rsvp-1" });
+    expect(html).toContain("/api/jam/jam-123/ics?rsvp=rsvp-1");
+  });
+
   it("omits address block when address is null", () => {
     const html = jamRsvpConfirmedHtml({ ...BASE, address: null });
     expect(html).not.toContain("Where");
