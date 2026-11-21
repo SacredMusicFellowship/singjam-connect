@@ -601,7 +601,9 @@ export default function SetDetailScreen() {
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
-      .channel(`set-detail-${id}`)
+      // Unique per screen: the same set can be open twice in the stack (a link to it from its own
+      // song page), and Supabase hands back the first screen's already-subscribed channel by name.
+      .channel(`set-detail-${id}-${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'set_songs', filter: `set_id=eq.${id}` },
