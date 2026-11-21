@@ -1,4 +1,4 @@
-import { Image, Modal, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 
 // Shown on a phone held up at the jam, in web's QR look (SetInvitePanel): dark
 // slate, the welcome, and the QR on a white card. The image comes from the web
@@ -7,6 +7,7 @@ export default function SetQrModal({ uri, onClose }: { uri: string | null; onClo
   return (
     <Modal visible={!!uri} animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center bg-slate-900 px-6">
+        <StatusBar barStyle="light-content" />
         <Text className="text-center text-3xl font-bold tracking-tight text-white">Welcome to SingJam!</Text>
         <Text className="mt-1 text-center text-xl font-bold tracking-tight text-amber-400">Scan to see today's songs</Text>
         <View className="mt-5 flex-row flex-wrap items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 py-2.5">

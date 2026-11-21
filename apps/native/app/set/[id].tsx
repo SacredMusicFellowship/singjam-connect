@@ -230,6 +230,8 @@ function SetSettingsModal({
   onCollaboratorAdded,
   onCollaboratorRemoved,
   onCollaboratorRoleChanged,
+  onShowQr,
+  onDismiss,
 }: {
   visible: boolean;
   setId: string;
@@ -242,6 +244,8 @@ function SetSettingsModal({
   onCollaboratorAdded: (c: Collaborator) => void;
   onCollaboratorRemoved: (id: string) => void;
   onCollaboratorRoleChanged: (id: string, role: string) => void;
+  onShowQr: (uri: string) => void;
+  onDismiss: () => void;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ id: string; display_name: string | null; last_name: string | null; username: string | null }[]>([]);
@@ -251,7 +255,6 @@ function SetSettingsModal({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [linkRole, setLinkRole] = useState<'editor' | 'viewer'>('editor');
   const [linkBusy, setLinkBusy] = useState<'share' | 'qr' | null>(null);
-  const [qrUri, setQrUri] = useState<string | null>(null);
 
   // Co-owner may only be granted to a named user, and only by the owner.
   const inviteRoleOptions: ('editor' | 'viewer' | 'co-owner')[] = isOwner ? ['editor', 'viewer', 'co-owner'] : ['editor', 'viewer'];
@@ -359,7 +362,7 @@ function SetSettingsModal({
     if (!invite) return;
     // React Native's URL has no searchParams.
     const token = invite.url.match(/[?&]invite=([^&#]+)/)?.[1] ?? '';
-    setQrUri(`${WEB_URL}/api/sets/${setId}/qr?invite=${token}`);
+    onShowQr(`${WEB_URL}/api/sets/${setId}/qr?invite=${token}`);
   }
 
   // Owner manages everyone; a co-owner manages only non-co-owner collaborators.
@@ -372,7 +375,7 @@ function SetSettingsModal({
   ];
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onDismiss={onDismiss}>
       <KeyboardAvoidingView className="flex-1 bg-white" behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View className="flex-row items-center px-4 pt-4 pb-3 border-b border-zinc-100">
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -526,7 +529,6 @@ function SetSettingsModal({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <SetQrModal uri={qrUri} onClose={() => setQrUri(null)} />
     </Modal>
   );
 }
@@ -546,6 +548,10 @@ export default function SetDetailScreen() {
   const [blocked, setBlocked] = useState<'private' | 'join' | null>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [qrUri, setQrUri] = useState<string | null>(null);
+  // iOS won't present the full-screen QR over the invite sheet, so the sheet closes first and the
+  // QR opens once it has gone (onDismiss is iOS-only; Android shows it straight away).
+  const pendingQrRef = useRef<string | null>(null);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   // As on web: order, key, played and leader saves go out one at a time per
   // song (the order per set), latest tap winning, and live updates for a field
@@ -1172,7 +1178,17 @@ export default function SetDetailScreen() {
         onCollaboratorAdded={(c) => setCollaborators(prev => prev.some(x => x.id === c.id) ? prev : [...prev, c])}
         onCollaboratorRemoved={(cid) => setCollaborators(prev => prev.filter(c => c.id !== cid))}
         onCollaboratorRoleChanged={(cid, role) => setCollaborators(prev => prev.map(c => c.id === cid ? { ...c, role } : c))}
+        onShowQr={(uri) => {
+          setSettingsVisible(false);
+          if (Platform.OS === 'ios') pendingQrRef.current = uri;
+          else setQrUri(uri);
+        }}
+        onDismiss={() => {
+          if (pendingQrRef.current) setQrUri(pendingQrRef.current);
+          pendingQrRef.current = null;
+        }}
       />
+      <SetQrModal uri={qrUri} onClose={() => setQrUri(null)} />
 
       <ContentContainer style={{ backgroundColor: 'white' }}>
       <View className="flex-1 bg-white">
