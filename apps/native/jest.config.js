@@ -1,6 +1,9 @@
 module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  // The first render in a file compiles React Native's modules on demand, which can take more than
+  // jest's 5 s default on a cold CI runner.
+  testTimeout: 20000,
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^@singjam/core$': '<rootDir>/../../packages/core/src/index.ts',
