@@ -15,7 +15,7 @@ import TicketPurchasePanel from "@/components/TicketPurchasePanel";
 import JamLeaderManager from "@/components/JamLeaderManager";
 import LeaderSpotControls from "@/components/LeaderSpotControls";
 import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
-import { jamPath } from "@singjam/core";
+import { jamPath, ticketedEventAttendance } from "@singjam/core";
 
 export type InviteEntry = {
   id: string;
@@ -123,7 +123,12 @@ export default function JamView({
   // checkout, you still don't have one yet. Buying holds back nothing but "Add
   // to calendar", so once you're attending — a ticket bought, or added as a
   // leader — you get it back.
-  const sellsTickets = hasTicketTiers || !!jamCardData.tickets_url;
+  const { sellsTickets, goingOnTicket } = ticketedEventAttendance({
+    hasTicketTiers,
+    ticketsUrl: jamCardData.tickets_url,
+    rsvpStatus: data.rsvpStatus,
+    isLeader: !!myLeader,
+  });
 
   // Passed as undefined rather than an empty fragment when there is nothing to
   // put in it: JamCard tests this to decide whether to render the actions row
@@ -133,7 +138,6 @@ export default function JamView({
   // A ticket holder or leader gets the same "You're going" as an RSVP. A ticket
   // isn't given back from here, so there's no Cancel; a leader gets "Can't make
   // it?" instead, which steps them down.
-  const goingOnTicket = (sellsTickets && data.rsvpStatus === "attending") || !!myLeader;
   const hasActions = showRsvp || (!userId && !isOfficial) || goingOnTicket;
 
   const router = useRouter();
