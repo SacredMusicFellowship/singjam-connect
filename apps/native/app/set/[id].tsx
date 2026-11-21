@@ -601,7 +601,9 @@ export default function SetDetailScreen() {
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
-      .channel(`set-detail-${id}`)
+      // Unique per screen: the same set can be open twice in the stack (a link to it from its own
+      // song page), and Supabase hands back the first screen's already-subscribed channel by name.
+      .channel(`set-detail-${id}-${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'set_songs', filter: `set_id=eq.${id}` },
@@ -1139,20 +1141,19 @@ export default function SetDetailScreen() {
         options={{
           title: set.name,
           headerTintColor: '#d97706',
-          headerRight: () => (
+          // Only when there's a button to show: iOS 26 draws an empty headerRight as an empty glass circle.
+          headerRight: canEdit ? () => (
             <View className="flex-row gap-4">
-              {canEdit && (
-                <TouchableOpacity onPress={() => setSettingsVisible(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Invite people">
-                  <Ionicons name="person-add-outline" size={20} color="#71717a" />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity onPress={() => setSettingsVisible(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Invite people">
+                <Ionicons name="person-add-outline" size={20} color="#71717a" />
+              </TouchableOpacity>
               {isOwner && (
-                <TouchableOpacity onPress={confirmDeleteSet} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity onPress={confirmDeleteSet} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Delete set">
                   <Ionicons name="trash-outline" size={20} color="#ef4444" />
                 </TouchableOpacity>
               )}
             </View>
-          ),
+          ) : undefined,
         }}
       />
 
