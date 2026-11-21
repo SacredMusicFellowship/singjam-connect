@@ -1139,20 +1139,19 @@ export default function SetDetailScreen() {
         options={{
           title: set.name,
           headerTintColor: '#d97706',
-          headerRight: () => (
+          // Only when there's a button to show: iOS 26 draws an empty headerRight as an empty glass circle.
+          headerRight: canEdit ? () => (
             <View className="flex-row gap-4">
-              {canEdit && (
-                <TouchableOpacity onPress={() => setSettingsVisible(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Invite people">
-                  <Ionicons name="person-add-outline" size={20} color="#71717a" />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity onPress={() => setSettingsVisible(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Invite people">
+                <Ionicons name="person-add-outline" size={20} color="#71717a" />
+              </TouchableOpacity>
               {isOwner && (
-                <TouchableOpacity onPress={confirmDeleteSet} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity onPress={confirmDeleteSet} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Delete set">
                   <Ionicons name="trash-outline" size={20} color="#ef4444" />
                 </TouchableOpacity>
               )}
             </View>
-          ),
+          ) : undefined,
         }}
       />
 
