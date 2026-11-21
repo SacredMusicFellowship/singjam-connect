@@ -7,10 +7,11 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import { attendeeRole, canEditJam, jamPath, ticketedEventAttendance, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
+import { attendeeRole, canEditJam, canManageJamAs, jamPath, ticketedEventAttendance, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
+import JamSetList from '@/components/JamSetList';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -69,10 +70,6 @@ type Attendee = {
   avatar_url: string | null;
 };
 
-type JamSet = {
-  id: string;
-  name: string;
-};
 
 type UserSearchResult = {
   id: string;
@@ -332,7 +329,6 @@ export default function JamDetailScreen() {
   // instead of waiting for a reload to learn your own name and avatar.
   const [me, setMe] = useState<Omit<Attendee, 'status'> | null>(null);
   const [canHostOfficial, setCanHostOfficial] = useState(false);
-  const [jamSets, setJamSets] = useState<JamSet[]>([]);
   const [leaders, setLeaders] = useState<JamLeader[]>([]);
   const [cohostIds, setCohostIds] = useState<Set<string>>(new Set());
   const [myLeader, setMyLeader] = useState<MyLeaderSpot | null>(null);
@@ -353,7 +349,7 @@ export default function JamDetailScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
 
-    const [jamResult, rsvpsResult, inviteResult, setsResult, meResult, addressResult] = await Promise.all([
+    const [jamResult, rsvpsResult, inviteResult, meResult, addressResult] = await Promise.all([
       supabase
         .from('jams')
         .select(`
@@ -376,11 +372,6 @@ export default function JamDetailScreen() {
       user
         ? supabase.from('jam_invites').select('status').eq('jam_id', id).eq('invited_user_id', user.id).maybeSingle()
         : Promise.resolve({ data: null }),
-      supabase
-        .from('sets')
-        .select('id, name')
-        .eq('jam_id', id)
-        .limit(10),
       user
         ? supabase.from('profiles').select('display_name, username, avatar_url, can_host_official').eq('id', user.id).single()
         : Promise.resolve({ data: null }),
@@ -482,7 +473,6 @@ export default function JamDetailScreen() {
       setCanHostOfficial(p?.can_host_official === true);
     }
     setMyInviteStatus(inviteResult.data?.status ?? null);
-    setJamSets((setsResult.data ?? []).map((s: any) => ({ id: s.id, name: s.name })));
     setLoading(false);
   }
 
@@ -659,6 +649,12 @@ export default function JamDetailScreen() {
 
   const isHosting = jam.host_id === myUserId;
   const isOfficial = jam.visibility === 'official';
+  const canManage = canManageJamAs(
+    { host_user_id: jam.host_id, visibility: jam.visibility },
+    myUserId ? { id: myUserId, can_host_official: canHostOfficial } : null,
+    !!myUserId && cohostIds.has(myUserId),
+  );
+  const hasFullAccess = isOfficial || myRsvpStatus === 'attending' || canManage;
   const { sellsTickets, goingOnTicket } = ticketedEventAttendance({
     hasTicketTiers,
     ticketsUrl: jam.tickets_url,
@@ -985,25 +981,9 @@ export default function JamDetailScreen() {
           </View>
         ) : null}
 
-        {/* Associated sets */}
-        {jamSets.length > 0 ? (
-          <View className="px-4 mb-10">
-            <Text className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
-              Sets
-            </Text>
-            {jamSets.map(s => (
-              <TouchableOpacity
-                key={s.id}
-                onPress={() => router.push(`/set/${s.id}` as any)}
-                className="flex-row items-center py-3 border-b border-zinc-100"
-              >
-                <Ionicons name="list-outline" size={16} color="#a1a1aa" style={{ marginRight: 10 }} />
-                <Text className="flex-1 text-zinc-900">{s.name}</Text>
-                <Ionicons name="chevron-forward" size={16} color="#a1a1aa" />
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : null}
+        {/* The set list sits with what attendees see, as on web: anyone running
+            the jam can create, link or unlink it. */}
+        {hasFullAccess ? <JamSetList jamId={jam.id} jamName={jam.name} canManage={canManage} /> : null}
       </ScrollView>
       </ContentContainer>
     </>

@@ -12,3 +12,15 @@ export function canEditJam(
   if (jam.host_user_id === user.id) return true;
   return jam.visibility === "official" && user.can_host_official === true;
 }
+
+// Who may run a jam: anyone who can edit it, plus its co-hosts. Co-hosts share
+// the running of a jam (set list, invites, the door) without being able to
+// change or cancel it.
+export function canManageJamAs(
+  jam: { host_user_id: string | null; visibility: string | null },
+  user: { id: string; can_host_official?: boolean | null } | null,
+  isCohost: boolean,
+): boolean {
+  if (!user) return false;
+  return canEditJam(jam, user) || isCohost;
+}
