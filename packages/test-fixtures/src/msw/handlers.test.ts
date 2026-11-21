@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
-import { installMockServer, isLocalRequest, mockCalls, mockServer, takeUnmocked } from "./node";
+import { FIXTURE_PROMOTION_CODES, installMockServer, isLocalRequest, mockCalls, mockServer, takeUnmocked } from "./node";
 
 installMockServer({ afterEach, afterAll });
 
@@ -34,6 +34,18 @@ describe("Stripe", () => {
     expect(await json(`https://api.stripe.com/v1/coupons/${coupon.id}`, { method: "DELETE" })).toMatchObject({ deleted: true });
     const promo = await json("https://api.stripe.com/v1/promotion_codes", post(`coupon=${coupon.id}&code=SING20`, "application/x-www-form-urlencoded"));
     expect(promo).toMatchObject({ code: "SING20", active: true });
+  });
+
+  it("remembers a created promotion code's discount and offers codes Stripe would refuse", async () => {
+    const coupon = await json("https://api.stripe.com/v1/coupons", post("percent_off=100&duration=once", "application/x-www-form-urlencoded"));
+    const created = await json("https://api.stripe.com/v1/promotion_codes", post(`promotion[type]=coupon&promotion[coupon]=${coupon.id}&code=FREE`, "application/x-www-form-urlencoded"));
+    const promo = await json(`https://api.stripe.com/v1/promotion_codes/${created.id}?expand[]=promotion.coupon`);
+    expect(promo).toMatchObject({ code: "FREE", active: true, times_redeemed: 0, promotion: { coupon: { percent_off: 100, valid: true } } });
+
+    const expired = await json(`https://api.stripe.com/v1/promotion_codes/${FIXTURE_PROMOTION_CODES.expired.id}`);
+    expect(expired.expires_at * 1000).toBeLessThan(Date.now());
+    const usedUp = await json(`https://api.stripe.com/v1/promotion_codes/${FIXTURE_PROMOTION_CODES.fullyRedeemed.id}`);
+    expect(usedUp.times_redeemed).toBe(usedUp.max_redemptions);
   });
 });
 
