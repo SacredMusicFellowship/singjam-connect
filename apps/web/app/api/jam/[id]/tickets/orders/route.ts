@@ -19,6 +19,7 @@ type TicketRow = {
   ticket_orders: {
     id: string;
     status: string;
+    source: string;
     buyer_name: string | null;
     buyer_email: string | null;
     buyer_user_id: string | null;
@@ -62,7 +63,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         .select(
           `id, qr_token, holder_name, holder_email, checked_in_at,
            ticket_types(name),
-           ticket_orders!inner(id, status, buyer_name, buyer_email, buyer_user_id, amount_cents, currency, paid_at)`
+           ticket_orders!inner(id, status, source, buyer_name, buyer_email, buyer_user_id, amount_cents, currency, paid_at)`
         )
         .eq("jam_id", jamId)
         .eq("ticket_orders.status", "paid")
@@ -90,6 +91,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
+  // What each buyer paid is an order total, so every ticket row carries its
+  // order's total and how many tickets that order covered.
+  // Each ticket's place in its order ("ticket 2 of 2"), so a buyer's two
+  // tickets read as one purchase rather than a duplicate. tickets arrive sorted
+  // by id, so the numbering is stable across loads.
+  const ticketsPerOrder = new Map<string, number>();
+  const orderPosition = new Map<string, number>();
+  for (const t of tickets) {
+    const id = t.ticket_orders!.id;
+    const n = (ticketsPerOrder.get(id) ?? 0) + 1;
+    ticketsPerOrder.set(id, n);
+    orderPosition.set(t.id, n);
+  }
+
   const guests = tickets.map((t) => {
     const o = t.ticket_orders!;
     const name =
@@ -101,15 +116,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       code: t.qr_token.replace(/-/g, "").slice(0, 6).toUpperCase(),
       name: name || "Guest",
       email: t.holder_email ?? o.buyer_email ?? null,
-      tier: t.ticket_types?.name ?? "Ticket",
+      tier: o.source === "leader" ? "Leader" : t.ticket_types?.name ?? "Ticket",
       is_member: !!o.buyer_user_id,
+      is_leader: o.source === "leader",
       checked_in_at: t.checked_in_at,
       order_id: o.id,
       paid_at: o.paid_at,
+      order_amount_cents: o.amount_cents,
+      order_tickets: ticketsPerOrder.get(o.id) ?? 1,
+      order_position: orderPosition.get(t.id) ?? 1,
+      currency: o.currency,
     };
   });
 
-  guests.sort((a, b) => a.name.localeCompare(b.name) || a.ticket_id.localeCompare(b.ticket_id));
+  guests.sort(
+    (a, b) =>
+      a.name.localeCompare(b.name) ||
+      a.order_id.localeCompare(b.order_id) ||
+      a.order_position - b.order_position
+  );
 
   // Revenue is summed per order, not per ticket, or a multi-ticket order counts
   // its total once for every ticket in it.
@@ -134,10 +159,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   );
   const { feeCents, pending: feesPending } = await resolveStripeFees(admin, feeOrders);
 
+  // Leaders are on the door list but were never sold anything.
+  const sold = guests.filter((g) => !g.is_leader);
+
   return NextResponse.json({
     guests,
     summary: {
-      tickets_sold: guests.length,
+      tickets_sold: sold.length,
+      leaders: guests.length - sold.length,
       orders: orderTotals.size,
       gross_cents: grossCents,
       fee_cents: feeCents,

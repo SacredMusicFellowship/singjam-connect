@@ -2,8 +2,13 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
+  // Pages and components are .tsx, and tsconfig leaves JSX for Next to compile.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     environment: "node",
+    setupFiles: ["./vitest.setup.ts"],
+    // Playwright owns e2e/.
+    exclude: ["**/node_modules/**", "e2e/**"],
   },
   resolve: {
     alias: {

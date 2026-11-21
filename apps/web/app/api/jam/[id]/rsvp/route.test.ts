@@ -68,6 +68,7 @@ const HOST_ID = "host-1";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockAdminFrom.mockReturnValue(chain({ error: null }));
 });
 
 describe("POST /api/jam/[id]/rsvp", () => {
@@ -88,6 +89,20 @@ describe("POST /api/jam/[id]/rsvp", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "attending", waitlist_position: null });
     expect(mockRsvpToJam).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: JAM_ID }), USER_ID);
+  });
+
+  // An invitee who taps RSVP instead of Accept must still leave the host's pending list.
+  it("marks the caller's pending invite accepted", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { id: JAM_ID, host_user_id: HOST_ID, visibility: "private" } }));
+    mockRsvpToJam.mockResolvedValue({ status: "attending", waitlistPosition: null });
+
+    await POST(makeReq("POST"), { params: Promise.resolve({ id: JAM_ID }) });
+    expect(mockAdminFrom).toHaveBeenNthCalledWith(2, "jam_invites");
+    const inviteChain = mockAdminFrom.mock.results[1].value;
+    expect(inviteChain.update).toHaveBeenCalledWith({ status: "accepted" });
+    expect(inviteChain.eq).toHaveBeenCalledWith("invited_user_id", USER_ID);
+    expect(inviteChain.eq).toHaveBeenCalledWith("status", "pending");
   });
 
   it("returns the waitlist position the RSVP landed on", async () => {

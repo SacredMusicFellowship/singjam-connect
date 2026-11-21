@@ -51,14 +51,21 @@ function windowError(start: unknown, end: unknown): string | null {
 // "sold" and "held" are reported separately. The availability count includes
 // live holds — a checkout in progress must reserve its stock — but a hold is not
 // a sale, and labelling it as one showed hosts revenue they hadn't earned.
+//
+// The event-wide limit (jams.ticket_limit) is totalled from the same per-tier
+// counts — every ticket belongs to exactly one of the event's tiers — and each
+// tier's remaining is clamped to it, as jam_ticket_tiers does for listings.
 async function withAvailability(jamId: string) {
   const admin = supabaseAdmin();
-  const { data: types } = await admin
-    .from("ticket_types")
-    .select("id, name, description, price_cents, currency, quantity, sales_start_at, sales_end_at, sort_order")
-    .eq("jam_id", jamId)
-    .order("sort_order", { ascending: true })
-    .order("id", { ascending: true });
+  const [{ data: types }, { data: jam }] = await Promise.all([
+    admin
+      .from("ticket_types")
+      .select("id, name, description, price_cents, currency, quantity, sales_start_at, sales_end_at, sort_order")
+      .eq("jam_id", jamId)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true }),
+    admin.from("jams").select("ticket_limit").eq("id", jamId).maybeSingle(),
+  ]);
 
   const rows = types ?? [];
   const [counted, paid] = await Promise.all([
@@ -66,17 +73,34 @@ async function withAvailability(jamId: string) {
     Promise.all(rows.map((t) => admin.rpc("ticket_type_paid_count", { type_id: t.id }))),
   ]);
 
+  const againstStock = rows.map((_, i) => (counted[i].data as number) ?? 0);
+  const soldCounts = rows.map((_, i) => (paid[i].data as number) ?? 0);
+  const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
+
+  const limit: number | null = jam?.ticket_limit ?? null;
+  const ticketLimit =
+    limit === null
+      ? null
+      : {
+          quantity: limit,
+          sold: sum(soldCounts),
+          held: Math.max(0, sum(againstStock) - sum(soldCounts)),
+          remaining: Math.max(0, limit - sum(againstStock)),
+        };
+
   const now = Date.now();
-  return rows.map((t, i) => {
-    const againstStock = (counted[i].data as number) ?? 0;
-    const soldCount = (paid[i].data as number) ?? 0;
-    const heldCount = Math.max(0, againstStock - soldCount);
-    const remaining = t.quantity === null ? null : Math.max(0, t.quantity - againstStock);
+  const ticketTypes = rows.map((t, i) => {
+    const heldCount = Math.max(0, againstStock[i] - soldCounts[i]);
+    const tierRemaining = t.quantity === null ? null : Math.max(0, t.quantity - againstStock[i]);
+    const remaining =
+      ticketLimit === null
+        ? tierRemaining
+        : Math.min(tierRemaining ?? Infinity, ticketLimit.remaining);
     const notYetOpen = t.sales_start_at ? now < new Date(t.sales_start_at).getTime() : false;
     const closed = t.sales_end_at ? now > new Date(t.sales_end_at).getTime() : false;
     return {
       ...t,
-      sold: soldCount,
+      sold: soldCounts[i],
       held: heldCount,
       remaining,
       on_sale: !notYetOpen && !closed && remaining !== 0,
@@ -84,6 +108,8 @@ async function withAvailability(jamId: string) {
       closed,
     };
   });
+
+  return { ticket_types: ticketTypes, ticket_limit: ticketLimit };
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -95,7 +121,50 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { data: jam } = await supabase.from("jams").select("id").eq("id", jamId).maybeSingle();
   if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
 
-  return NextResponse.json({ ticket_types: await withAvailability(jamId) });
+  return NextResponse.json(await withAvailability(jamId));
+}
+
+// The event-wide limit. Body: { ticket_limit: number | null } — null removes it.
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: jamId } = await params;
+  const user = await getUser(req);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const auth = await canManage(jamId, user.id);
+  if (!auth.ok) {
+    return NextResponse.json(
+      { error: auth.status === 404 ? "Jam not found" : "Only the host can manage tickets" },
+      { status: auth.status }
+    );
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+  const limit = body?.ticket_limit ?? null;
+  if (limit !== null && (!Number.isInteger(limit) || limit < 1)) {
+    return NextResponse.json({ error: "Total tickets must be a positive whole number" }, { status: 400 });
+  }
+
+  const admin = supabaseAdmin();
+
+  // Same rule as a tier's cap: never below what is already sold or held.
+  if (limit !== null) {
+    const { data: sold } = await admin.rpc("jam_ticket_sold_count", { jam_id_param: jamId });
+    if ((sold as number) > limit) {
+      return NextResponse.json(
+        { error: `${sold} already sold — total cannot go below that` },
+        { status: 409 }
+      );
+    }
+  }
+
+  const { error } = await admin.from("jams").update({ ticket_limit: limit }).eq("id", jamId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

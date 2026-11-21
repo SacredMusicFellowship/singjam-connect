@@ -21,7 +21,7 @@ import { POST } from "./route";
 
 function chain(result: any) {
   const c: any = {};
-  for (const m of ["select", "eq", "insert", "order", "limit"]) c[m] = vi.fn().mockReturnValue(c);
+  for (const m of ["select", "eq", "insert", "update", "order", "limit"]) c[m] = vi.fn().mockReturnValue(c);
   c.maybeSingle = vi.fn().mockResolvedValue(result);
   c.then = (resolve: any) => Promise.resolve(result).then(resolve);
   return c;
@@ -38,14 +38,22 @@ const target = { starts_at: "2026-11-01T22:30:00.000Z", timezone: LA, visibility
 const source = { starts_at: "2026-10-04T21:30:00+00:00", timezone: LA, visibility: "official" };
 
 // Admin lookups in the order the route makes them.
-function setup({ existing = [] as any[], tiers = [] as any[], promos = [] as any[], tgt = target } = {}) {
+function setup({
+  existing = [] as any[],
+  tiers = [] as any[],
+  promos = [] as any[],
+  tgt = target,
+  src = source as Record<string, unknown>,
+  limitUpdate = chain({ error: null }),
+} = {}) {
   const insert = chain({ error: null });
   mockAdminFrom
     .mockReturnValueOnce(chain({ data: tgt }))
-    .mockReturnValueOnce(chain({ data: source }))
+    .mockReturnValueOnce(chain({ data: src }))
     .mockReturnValueOnce(chain({ data: existing }))
     .mockReturnValueOnce(chain({ data: tiers }));
   if (tiers.length > 0) mockAdminFrom.mockReturnValueOnce(insert);
+  if (src.ticket_limit) mockAdminFrom.mockReturnValueOnce(limitUpdate);
   mockAdminFrom.mockReturnValueOnce(chain({ data: promos }));
   return insert;
 }
@@ -76,6 +84,15 @@ describe("POST /api/jam/[id]/tickets/copy", () => {
         sales_end_at: "2026-11-01T06:59:59.000Z",
       }),
     ]);
+  });
+
+  it("carries the event's total ticket limit over", async () => {
+    const limitUpdate = chain({ error: null });
+    setup({ src: { ...source, ticket_limit: 100 }, limitUpdate });
+    const res = await POST(req({ from: OLD }), params);
+    expect(res.status).toBe(200);
+    expect(limitUpdate.update).toHaveBeenCalledWith({ ticket_limit: 100 });
+    expect(limitUpdate.eq).toHaveBeenCalledWith("id", NEW);
   });
 
   it("recreates promo codes with the new event's date suffix and the same discount", async () => {

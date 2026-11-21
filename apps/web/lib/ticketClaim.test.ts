@@ -24,6 +24,7 @@ describe("claimGuestTickets", () => {
       { data: [{ id: "order-1", jam_id: "jam-1" }] }, // unclaimed guest orders
       { error: null },                                 // orders -> buyer_user_id
       { error: null },                                 // tickets -> holder_user_id
+      { error: null },                                 // jam_leaders -> user_id
       { data: null },                                  // existing rsvp
       { error: null },                                 // rsvp insert
       { data: null },                                  // linked set — none
@@ -34,7 +35,8 @@ describe("claimGuestTickets", () => {
     expect(jams).toEqual(["jam-1"]);
     expect(admin.from.mock.results[1].value.update).toHaveBeenCalledWith({ buyer_user_id: "user-9" });
     expect(admin.from.mock.results[2].value.update).toHaveBeenCalledWith({ holder_user_id: "user-9" });
-    expect(admin.from.mock.results[4].value.insert).toHaveBeenCalledWith(
+    expect(admin.from.mock.results[3].value.update).toHaveBeenCalledWith({ user_id: "user-9", email: null, name: null });
+    expect(admin.from.mock.results[5].value.insert).toHaveBeenCalledWith(
       expect.objectContaining({ jam_id: "jam-1", user_id: "user-9", status: "attending" })
     );
   });
@@ -64,6 +66,7 @@ describe("claimGuestTickets", () => {
   it("deduplicates jams when one email bought several orders for the same event", async () => {
     const admin = adminWith([
       { data: [{ id: "o1", jam_id: "jam-1" }, { id: "o2", jam_id: "jam-1" }] },
+      { error: null },
       { error: null },
       { error: null },
       { data: null },

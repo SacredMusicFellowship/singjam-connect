@@ -18,6 +18,8 @@ export type PromoResolution =
       valid: true;
       code: string;
       label: string;
+      // Our ticket_promo_codes row, recorded on the order.
+      promoCodeId: string;
       promotionCodeId: string;
       discountCents: number;
       totalCents: number;
@@ -35,7 +37,7 @@ export async function resolvePromoCode(
   // created for one event would work on every other event's checkout.
   const { data: registered } = await admin
     .from("ticket_promo_codes")
-    .select("stripe_promotion_code_id")
+    .select("id, stripe_promotion_code_id")
     .eq("jam_id", jamId)
     .ilike("code", code)
     .maybeSingle();
@@ -100,6 +102,7 @@ export async function resolvePromoCode(
     valid: true,
     code: promo.code,
     label,
+    promoCodeId: registered.id,
     promotionCodeId: registered.stripe_promotion_code_id,
     discountCents,
     totalCents: Math.max(0, subtotalCents - discountCents),

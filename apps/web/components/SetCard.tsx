@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { setPath } from "@singjam/core";
 
 type SetCardProps = {
   set: {
     id: string;
+    short_code?: string | null;
     name: string;
     description: string | null;
     owner_user_id: string;
@@ -50,8 +52,7 @@ export default function SetCard({ set, songCount, isOwner, ownerName, ownerUsern
     setMenuOpen(false);
     const res = await fetch(`/api/sets/${set.id}/copy`, { method: "POST" });
     if (res.ok) {
-      const { id } = await res.json();
-      router.push(`/set/${id}`);
+      router.push(setPath(await res.json()));
     } else {
       setCopying(false);
     }
@@ -122,7 +123,7 @@ export default function SetCard({ set, songCount, isOwner, ownerName, ownerUsern
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); copySet(); }}
             disabled={copying}
-            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+            className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
           >
             {copying ? "Copying…" : "Copy"}
           </button>
@@ -132,16 +133,16 @@ export default function SetCard({ set, songCount, isOwner, ownerName, ownerUsern
   );
 
   if (!isOwner && !canCopy) {
-    return <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>;
+    return <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>;
   }
 
   if (canCopy) {
-    return <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>;
+    return <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>;
   }
 
   return (
     <div className="relative">
-      <Link href={`/set/${set.id}`} className="block">{cardBody}</Link>
+      <Link href={`/set/${set.short_code ?? set.id}`} className="block">{cardBody}</Link>
       <div className="absolute top-2 right-2" ref={menuRef}>
         <button
           onClick={() => { setMenuOpen((o) => !o); setConfirming(false); }}
@@ -184,14 +185,14 @@ export default function SetCard({ set, songCount, isOwner, ownerName, ownerUsern
               <button
                 onClick={() => setConfirming(false)}
                 disabled={deleting}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
                 Keep it
               </button>
               <button
                 onClick={deleteSet}
                 disabled={deleting}
-                className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Deleting…" : "Yes, delete"}
               </button>

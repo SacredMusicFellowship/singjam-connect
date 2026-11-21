@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { formatJamTime, googleMapsUrl } from '@singjam/core';
+import { attendeeRole, canEditJam, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -32,6 +32,11 @@ async function jamApiFetch(path: string, method: 'POST' | 'DELETE', body?: objec
 
 type GuestAttendee = { name: string; extra: number };
 
+// Music leaders on an official event, served by the web API: jam_leaders is
+// service_role-only because each row carries the leader's email and token.
+type JamLeader = { id: string; user_id: string | null; name: string; username: string | null; avatar_url: string | null };
+type MyLeaderSpot = { token: string; has_leader_ticket: boolean };
+
 type JamDetail = {
   id: string;
   name: string | null;
@@ -43,6 +48,7 @@ type JamDetail = {
   full_address: string | null;
   notes: string | null;
   image_url: string | null;
+  image_mobile_url: string | null;
   tickets_url: string | null;
   capacity: number | null;
   host_id: string | null;
@@ -56,6 +62,7 @@ type Attendee = {
   user_id: string;
   status: string;
   display_name: string | null;
+  last_name?: string | null;
   username: string | null;
   avatar_url: string | null;
 };
@@ -259,7 +266,7 @@ function MaybeMapsLink({ query, children }: { query: string | null; children: Re
   );
 }
 
-function AttendeeAvatar({ attendee, isMe, extra = 0 }: { attendee: Attendee; isMe: boolean; extra?: number }) {
+function AttendeeAvatar({ attendee, isMe, extra = 0, isLeader = false }: { attendee: Attendee; isMe: boolean; extra?: number; isLeader?: boolean }) {
   const name = attendee.display_name ?? attendee.username ?? '?';
   const initial = name[0]?.toUpperCase() ?? '?';
   return (
@@ -276,6 +283,7 @@ function AttendeeAvatar({ attendee, isMe, extra = 0 }: { attendee: Attendee; isM
           ? `${attendee.username ? `@${attendee.username}` : name} +${extra}`
           : attendee.username ? `@${attendee.username}` : name}
       </Text>
+      {isLeader ? <Text className="text-amber-700 text-xs font-medium">Leader</Text> : null}
     </View>
   );
 }
@@ -321,7 +329,11 @@ export default function JamDetailScreen() {
   // Kept so an optimistic RSVP can put you in the attendee list straight away
   // instead of waiting for a reload to learn your own name and avatar.
   const [me, setMe] = useState<Omit<Attendee, 'status'> | null>(null);
+  const [canHostOfficial, setCanHostOfficial] = useState(false);
   const [jamSets, setJamSets] = useState<JamSet[]>([]);
+  const [leaders, setLeaders] = useState<JamLeader[]>([]);
+  const [cohostIds, setCohostIds] = useState<Set<string>>(new Set());
+  const [myLeader, setMyLeader] = useState<MyLeaderSpot | null>(null);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rsvpLoading, setRsvpLoading] = useState(false);
@@ -336,14 +348,14 @@ export default function JamDetailScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     setMyUserId(user?.id ?? null);
 
-    const [jamResult, rsvpsResult, inviteResult, setsResult, meResult] = await Promise.all([
+    const [jamResult, rsvpsResult, inviteResult, setsResult, meResult, addressResult] = await Promise.all([
       supabase
         .from('jams')
         .select(`
           id, name, visibility, starts_at, ends_at, timezone,
-          neighborhood, full_address, notes, image_url, tickets_url, capacity, host_user_id,
+          neighborhood, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
           profiles!host_user_id ( display_name, username, avatar_url ),
-          jam_genres ( genres ( name ) )
+          jam_tags ( tags ( name, type ) )
         `)
         .eq('id', id)
         .single(),
@@ -352,7 +364,7 @@ export default function JamDetailScreen() {
       // unordered fetch would understate a full jam.
       supabase
         .from('jam_rsvps')
-        .select('status, user_id, profiles!user_id ( display_name, username, avatar_url )')
+        .select('status, user_id, profiles!user_id ( display_name, last_name, username, avatar_url )')
         .eq('jam_id', id)
         .in('status', ['attending', 'waitlist'])
         .order('created_at', { ascending: true }),
@@ -365,8 +377,11 @@ export default function JamDetailScreen() {
         .eq('jam_id', id)
         .limit(10),
       user
-        ? supabase.from('profiles').select('display_name, username, avatar_url').eq('id', user.id).single()
+        ? supabase.from('profiles').select('display_name, username, avatar_url, can_host_official').eq('id', user.id).single()
         : Promise.resolve({ data: null }),
+      // A public jam's street address is only for people who've RSVP'd
+      // (migration 173); the RSVP handlers reload, which fetches it.
+      supabase.rpc('jam_full_address', { jam_id_param: id }),
     ]);
 
     if (!jamResult.data) {
@@ -384,22 +399,25 @@ export default function JamDetailScreen() {
       ends_at: j.ends_at,
       timezone: j.timezone,
       neighborhood: j.neighborhood,
-      full_address: j.full_address,
+      full_address: (addressResult.data as string | null) ?? null,
       notes: j.notes,
       image_url: j.image_url,
+      image_mobile_url: j.image_mobile_url,
       tickets_url: j.tickets_url,
       capacity: j.capacity,
       host_id: j.host_user_id,
       host_display_name: j.profiles?.display_name ?? null,
       host_username: j.profiles?.username ?? null,
       host_avatar: j.profiles?.avatar_url ?? null,
-      genres: (j.jam_genres ?? []).map((jg: any) => jg.genres?.name).filter(Boolean),
+      // Every tag the jam has, genres first (the field predates the other tag types).
+      genres: [...jamTags(j.jam_tags, 'genre'), ...jamTags(j.jam_tags).filter((t) => t.type !== 'genre')].map((t) => t.name),
     });
 
     const rawRsvps: Attendee[] = (rsvpsResult.data ?? []).map((r: any) => ({
       user_id: r.user_id,
       status: r.status,
       display_name: r.profiles?.display_name ?? null,
+      last_name: r.profiles?.last_name ?? null,
       username: r.profiles?.username ?? null,
       avatar_url: r.profiles?.avatar_url ?? null,
     }));
@@ -409,6 +427,12 @@ export default function JamDetailScreen() {
     // Ticket buyers without an account. Served by the web API because tickets is
     // service_role-only, so the app's Supabase client cannot read them. Failing
     // quietly is right: a missing guest row shouldn't blank the whole screen.
+    supabase
+      .from('jam_cohosts')
+      .select('user_id')
+      .eq('jam_id', id)
+      .then(({ data }) => setCohostIds(new Set((data ?? []).map((c: any) => c.user_id as string))));
+
     fetch(`${WEB_URL}/api/jam/${id}/attendees/guests`)
       .then(r => (r.ok ? r.json() : { guests: [], members: [] }))
       .then(d => {
@@ -420,6 +444,19 @@ export default function JamDetailScreen() {
         );
       })
       .catch(() => { setGuestAttendees([]); setMemberExtras({}); });
+    if (j.visibility === 'official') {
+      const { data: { session } } = await supabase.auth.getSession();
+      fetch(`${WEB_URL}/api/jam/${id}/leaders`, {
+        headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+      })
+        .then(r => (r.ok ? r.json() : { leaders: [], me: null }))
+        .then(d => { setLeaders(d.leaders ?? []); setMyLeader(d.me ?? null); })
+        .catch(() => { setLeaders([]); setMyLeader(null); });
+    } else {
+      setLeaders([]);
+      setMyLeader(null);
+    }
+
     const myRsvp = user ? rawRsvps.find(r => r.user_id === user.id) : undefined;
     setMyRsvpStatus(myRsvp?.status ?? null);
     if (user) {
@@ -430,6 +467,7 @@ export default function JamDetailScreen() {
         username: p?.username ?? null,
         avatar_url: p?.avatar_url ?? null,
       });
+      setCanHostOfficial(p?.can_host_official === true);
     }
     setMyInviteStatus(inviteResult.data?.status ?? null);
     setJamSets((setsResult.data ?? []).map((s: any) => ({ id: s.id, name: s.name })));
@@ -446,7 +484,8 @@ export default function JamDetailScreen() {
   // a cancel can promote someone off the waitlist and only the server knows who.
   function predictedRsvpStatus(): 'attending' | 'waitlist' {
     if (!jam) return 'attending';
-    return jam.capacity !== null && attendees.length >= jam.capacity ? 'waitlist' : 'attending';
+    const capacityJam = { capacity: jam.capacity, host_user_id: jam.host_id, visibility: jam.visibility };
+    return jamIsFull(capacityJam, attendees.filter(a => a.user_id !== jam.host_id).length) ? 'waitlist' : 'attending';
   }
 
   async function handleRsvp() {
@@ -481,6 +520,37 @@ export default function JamDetailScreen() {
     if (confirmed && confirmed !== predicted) setMyRsvpStatus(confirmed);
     setRsvpLoading(false);
     load();
+  }
+
+  // Same endpoint web's "Can't make it?" uses.
+  async function leaderAction(action: 'withdraw') {
+    if (!myLeader) return false;
+    const res = await fetch(`${WEB_URL}/api/lead/${myLeader.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      Alert.alert('Error', 'Something went wrong.');
+      return false;
+    }
+    return true;
+  }
+
+  function handleLeaderWithdraw() {
+    const detail = myLeader?.has_leader_ticket
+      ? "Your ticket will be released and we'll let the host know."
+      : "We'll let the host know. The ticket you bought still stands.";
+    Alert.alert('Step down as a leader?', detail, [
+      {
+        text: 'Step down',
+        style: 'destructive',
+        onPress: async () => {
+          if (await leaderAction('withdraw')) load();
+        },
+      },
+      { text: 'Keep my spot', style: 'cancel' },
+    ]);
   }
 
   async function handleCancelRsvp() {
@@ -567,10 +637,20 @@ export default function JamDetailScreen() {
   }
 
   const isHosting = jam.host_id === myUserId;
-  const isFull = jam.capacity !== null && attendees.length >= jam.capacity;
+  const canEdit = !!myUserId && canEditJam({ host_user_id: jam.host_id, visibility: jam.visibility }, { id: myUserId, can_host_official: canHostOfficial });
+  // The host holds a seat but has no RSVP row; on web's list they are the
+  // first person going, and the capacity count includes them the same way.
+  const capacityJam = { capacity: jam.capacity, host_user_id: jam.host_id, visibility: jam.visibility };
+  // On an official event nobody is filtered: the creator's RSVP is an ordinary one.
+  const excludedUserId = jamSeatExcludedUserId(capacityJam);
+  const othersGoing = attendees.filter(a => a.user_id !== excludedUserId);
+  const seatsTaken = jamSeatsTaken(capacityJam, othersGoing.length);
+  const isFull = jamIsFull(capacityJam, othersGoing.length);
+  const going: Attendee[] = jam.host_id && jam.visibility !== 'official'
+    ? [{ user_id: jam.host_id, status: 'attending', display_name: jam.host_display_name, username: jam.host_username, avatar_url: jam.host_avatar }, ...othersGoing]
+    : othersGoing;
   const timeStr = formatJamTime(jam.starts_at, jam.timezone);
   const isPast = jam.starts_at ? new Date(jam.starts_at) < new Date() : false;
-  const hasFullAccess = isHosting || myRsvpStatus === 'attending' || myInviteStatus === 'accepted' || jam.visibility === 'official' || jam.visibility === 'private';
 
   const attendeeIds = new Set(attendees.map(a => a.user_id));
   // One order can cover several people under a single name, so heads and rows differ.
@@ -578,7 +658,23 @@ export default function JamDetailScreen() {
   // Only for attendees who have a row: inflating the total from someone nobody
   // can see is how a headcount stops being explainable. Mirrors web's
   // JamAttendeeList.
-  const memberHeadcount = attendees.reduce((n, a) => n + (memberExtras[a.user_id] ?? 0), 0);
+  const memberHeadcount = going.reduce((n, a) => n + (memberExtras[a.user_id] ?? 0), 0);
+  // Same order as web's Who's going: host, co-hosts, leaders, then everyone by
+  // name with guests mixed in. Only the first 20 show, so this decides who does.
+  const isLeaderId = (userId: string) => leaders.some(l => l.user_id === userId) || (!!myLeader && userId === myUserId);
+  const shownHostId = jam.host_id && jam.visibility !== 'official' ? jam.host_id : null;
+  const goingEntries = sortAttendees<{ kind: 'member'; a: Attendee } | { kind: 'guest'; g: GuestAttendee; key: string }>(
+    [
+      ...going.map(a => ({ kind: 'member' as const, a })),
+      ...guestAttendees.map((g, i) => ({ kind: 'guest' as const, g, key: `guest-${i}` })),
+    ],
+    e => e.kind === 'guest'
+      ? { role: 'going', name: e.g.name }
+      : {
+          role: attendeeRole({ host: e.a.user_id === shownHostId, cohost: cohostIds.has(e.a.user_id), leader: isLeaderId(e.a.user_id) }),
+          name: [e.a.display_name, e.a.last_name].filter(Boolean).join(' ') || e.a.username || '',
+        }
+  );
 
   return (
     <>
@@ -592,7 +688,7 @@ export default function JamDetailScreen() {
         options={{
           title: jam.name ?? 'Jam',
           headerTintColor: '#d97706',
-          headerRight: isHosting ? () => (
+          headerRight: canEdit ? () => (
             <View className="flex-row gap-4">
               <TouchableOpacity onPress={handleDuplicate} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="copy-outline" size={20} color="#71717a" />
@@ -612,10 +708,13 @@ export default function JamDetailScreen() {
 
         {/* Header image or date block */}
         {jam.image_url ? (
+          // The host's 3:2 mobile crop, the same one mobile web shows. Native
+          // Image has no object-position, so an event without one is
+          // centre-cropped rather than cropped around its focal point.
           <Image
-            source={{ uri: jam.image_url }}
+            source={{ uri: jamImageFor(jam, 'mobile')!.src }}
             className="w-full"
-            style={{ height: 200 }}
+            style={{ aspectRatio: 3 / 2 }}
             resizeMode="cover"
           />
         ) : jam.starts_at ? (
@@ -636,11 +735,9 @@ export default function JamDetailScreen() {
         <View className="px-4 pt-5 pb-2">
           <Text className="text-2xl font-bold text-zinc-900 mb-1">{jam.name ?? 'Jam Session'}</Text>
           <View className="flex-row flex-wrap gap-2">
-            {jam.visibility === 'official' ? (
-              <View className="bg-amber-100 rounded-full px-3 py-0.5">
-                <Text className="text-amber-700 text-xs font-semibold">Official SingJam Event</Text>
-              </View>
-            ) : jam.visibility === 'community' ? (
+            {/* No "Official SingJam Event" badge or "Hosted by SingJam" row on an
+                official event: the title and image already say so. Mirrors web. */}
+            {jam.visibility === 'community' ? (
               <View className="bg-zinc-100 rounded-full px-3 py-0.5">
                 <Text className="text-zinc-500 text-xs font-medium">Community</Text>
               </View>
@@ -663,18 +760,15 @@ export default function JamDetailScreen() {
 
           {jam.neighborhood || jam.full_address ? (
             <InfoRow icon="📍">
-              {/* Tapping the venue opens Maps, matching mobile web. Pointed at
-                  the most precise line this viewer is actually shown, so it
-                  cannot leak an address the screen withholds until RSVP. */}
-              <MaybeMapsLink
-                query={hasFullAccess ? jam.full_address ?? jam.neighborhood : jam.neighborhood}
-              >
+              {/* Tapping the venue opens Maps, matching mobile web. full_address
+                  is only loaded for viewers jam_full_address lets see it. */}
+              <MaybeMapsLink query={jam.full_address ?? jam.neighborhood}>
                 {jam.neighborhood ? (
-                  <Text className="text-zinc-700 font-medium">{jam.neighborhood}</Text>
+                  <Text className="text-zinc-700 font-medium">{dropUsCountry(jam.neighborhood)}</Text>
                 ) : null}
-                {jam.full_address && hasFullAccess ? (
-                  <Text className="text-zinc-400 text-sm mt-0.5">{jam.full_address}</Text>
-                ) : jam.full_address && !hasFullAccess ? (
+                {jam.full_address ? (
+                  <Text className="text-zinc-400 text-sm mt-0.5">{dropUsCountry(dropVenueRepeatedInTitle(jam.full_address, jam.name))}</Text>
+                ) : jam.visibility === 'community' && jam.neighborhood && jam.neighborhood !== 'TBD' ? (
                   <Text className="text-zinc-400 text-sm mt-0.5 italic">Full address shown after RSVP</Text>
                 ) : null}
               </MaybeMapsLink>
@@ -682,15 +776,9 @@ export default function JamDetailScreen() {
           ) : null}
 
           {/* Official events belong to SingJam, so whoever created the row is
-              never credited personally — mirrors web's JamCard. Shown to the
-              creator too, unlike the personal case below. */}
-          {jam.visibility === 'official' ? (
-            <InfoRow icon="🎤">
-              <Text className="text-zinc-700">
-                Hosted by <Text className="font-medium">SingJam</Text>
-              </Text>
-            </InfoRow>
-          ) : !isHosting && (jam.host_display_name || jam.host_username) ? (
+              never credited personally, and there is no "Hosted by SingJam" row
+              either — mirrors web's JamCard. */}
+          {jam.visibility !== 'official' && !isHosting && (jam.host_display_name || jam.host_username) ? (
             <InfoRow icon="🎤">
               <Text className="text-zinc-700">
                 Hosted by{' '}
@@ -717,13 +805,13 @@ export default function JamDetailScreen() {
           {jam.capacity !== null ? (
             <InfoRow icon="👥">
               <Text className="text-zinc-700">
-                {attendees.length}{jam.capacity ? ` of ${jam.capacity}` : ''} attending
+                {seatsTaken}{jam.capacity ? ` of ${jam.capacity}` : ''} attending
                 {isFull ? ' · Full — join waitlist' : ''}
               </Text>
             </InfoRow>
-          ) : attendees.length > 0 ? (
+          ) : othersGoing.length > 0 ? (
             <InfoRow icon="👥">
-              <Text className="text-zinc-700">{attendees.length} attending</Text>
+              <Text className="text-zinc-700">{seatsTaken} attending</Text>
             </InfoRow>
           ) : null}
         </View>
@@ -763,6 +851,14 @@ export default function JamDetailScreen() {
                   <Text className="text-zinc-600 font-semibold">Decline</Text>
                 </TouchableOpacity>
               </View>
+            ) : myLeader ? (
+              // A leader steps down rather than cancelling an RSVP, as on web.
+              <TouchableOpacity
+                onPress={handleLeaderWithdraw}
+                className="border border-zinc-200 rounded-xl py-3 items-center"
+              >
+                <Text className="text-zinc-600 font-semibold">✓ Going · Can't make it?</Text>
+              </TouchableOpacity>
             ) : myRsvpStatus === 'attending' || myInviteStatus === 'accepted' ? (
               <TouchableOpacity
                 onPress={handleCancelRsvp}
@@ -801,28 +897,28 @@ export default function JamDetailScreen() {
 
         {/* Attendees — members and guests together: no account is needed to be
             counted as coming, only to add songs to the set. */}
-        {attendees.length + guestAttendees.length > 0 ? (
+        {going.length + guestAttendees.length > 0 ? (
           <View className="px-4 mb-6">
             <Text className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
-              Attending ({attendees.length + guestHeadcount + memberHeadcount})
+              Attending ({going.length + guestHeadcount + memberHeadcount})
             </Text>
             <View className="flex-row flex-wrap">
-              {attendees.slice(0, 20).map(a => (
+              {goingEntries.slice(0, 20).map(e => e.kind === 'guest' ? (
+                <GuestAvatar key={e.key} guest={e.g} />
+              ) : (
                 <AttendeeAvatar
-                  key={a.user_id}
-                  attendee={a}
-                  isMe={a.user_id === myUserId}
-                  extra={memberExtras[a.user_id] ?? 0}
+                  key={e.a.user_id}
+                  attendee={e.a}
+                  isMe={e.a.user_id === myUserId}
+                  extra={memberExtras[e.a.user_id] ?? 0}
+                  isLeader={isLeaderId(e.a.user_id)}
                 />
               ))}
-              {guestAttendees.slice(0, Math.max(0, 20 - attendees.length)).map((g, i) => (
-                <GuestAvatar key={`guest-${i}`} guest={g} />
-              ))}
-              {attendees.length + guestAttendees.length > 20 ? (
+              {going.length + guestAttendees.length > 20 ? (
                 <View className="items-center mr-3 mb-3" style={{ width: 52 }}>
                   <View className="w-10 h-10 rounded-full bg-zinc-100 items-center justify-center mb-1">
                     <Text className="text-zinc-400 text-xs font-medium">
-                      +{attendees.length + guestAttendees.length - 20}
+                      +{going.length + guestAttendees.length - 20}
                     </Text>
                   </View>
                 </View>

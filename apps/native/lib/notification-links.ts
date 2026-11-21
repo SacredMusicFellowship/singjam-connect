@@ -1,3 +1,5 @@
+import { isUuid } from '@singjam/core';
+
 // Maps a notification's web link (e.g. /jam/abc) to a native route.
 // Used by both the in-app notifications list and push notification taps.
 export function hrefForNotificationLink(
@@ -8,6 +10,10 @@ export function hrefForNotificationLink(
   }
   if (link.startsWith('/set/')) {
     return { pathname: '/set/[id]', params: { id: link.replace('/set/', '') } };
+  }
+  if (link.startsWith('/songs/')) {
+    const id = link.replace('/songs/', '');
+    return isUuid(id) ? { pathname: '/song/[id]', params: { id } } : null;
   }
   return null;
 }

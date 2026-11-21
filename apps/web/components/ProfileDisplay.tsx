@@ -163,8 +163,8 @@ export default function ProfileDisplay({
               {sharedSongs.map((s) => (
                 <li key={s.song_id} className={`text-sm ${s.confidence === "lead" ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
                   <a href={`/songs/${s.slug ?? s.song_id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                    {titleCounts[s.title] > 1 && s.display_artist
-                      ? `${s.title} (${s.display_artist})`
+                    {titleCounts[s.title] > 1 && s.byline
+                      ? `${s.title} (${s.byline})`
                       : s.title}
                   </a>
                 </li>
@@ -185,7 +185,7 @@ export default function ProfileDisplay({
             {additionalSongs.map((s) => (
               <li key={s.song_id} className={`text-sm ${s.confidence === "lead" ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
                 <a href={`/songs/${s.slug ?? s.song_id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                  {s.title}{s.display_artist ? ` · ${s.display_artist}` : ""}
+                  {s.title}{s.byline ? ` · ${s.byline}` : ""}
                 </a>
               </li>
             ))}
@@ -203,7 +203,7 @@ export default function ProfileDisplay({
             {wantsToLearnSongs.map((s) => (
               <li key={s.song_id} className="text-sm text-zinc-700">
                 <a href={`/songs/${s.slug ?? s.song_id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                  {s.title}{s.display_artist ? ` · ${s.display_artist}` : ""}
+                  {s.title}{s.byline ? ` · ${s.byline}` : ""}
                 </a>
               </li>
             ))}
@@ -217,7 +217,7 @@ export default function ProfileDisplay({
           <>
             <Link
               href="/account"
-              className="flex-1 rounded-xl border border-zinc-200 px-4 py-2.5 text-center text-sm text-zinc-600 hover:bg-zinc-50 sm:flex-none"
+              className="flex-1 rounded-full border border-zinc-200 px-4 py-2.5 text-center text-sm text-zinc-600 hover:bg-zinc-50 sm:flex-none"
             >
               Edit profile
             </Link>

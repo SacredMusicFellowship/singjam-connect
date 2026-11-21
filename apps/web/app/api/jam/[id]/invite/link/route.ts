@@ -16,7 +16,7 @@ export async function POST(
 
   const { data: jam } = await admin
     .from("jams")
-    .select("id, name, starts_at, timezone, visibility, host_user_id, guests_can_invite")
+    .select("id, short_code, name, starts_at, timezone, visibility, host_user_id, guests_can_invite")
     .eq("id", jamId)
     .single();
   if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
@@ -51,7 +51,7 @@ export async function POST(
 
   const { id: inviteId, token } = inserted as any;
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://singjam.org";
-  const url = `${baseUrl}/jam/${jamId}?invite=${token}`;
+  const url = `${baseUrl}/jam/${(jam as any).short_code}?invite=${token}`;
 
   const jamName = jam.name ?? "a jam";
   const startsAt = formatJamTime(jam.starts_at, (jam as any).timezone);

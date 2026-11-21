@@ -17,14 +17,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-function SortableRow({ id, index, children }: { id: string; index: number; children: React.ReactNode }) {
+function SortableRow({ id, index, played, children }: { id: string; index: number; played?: boolean; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-      className="flex items-start gap-2 sm:gap-3 rounded-xl border border-zinc-200 bg-white px-2 sm:px-4 py-2.5 sm:py-3"
+      className={`flex items-start gap-2 sm:gap-3 rounded-xl border border-zinc-200 px-2 sm:px-4 py-2.5 sm:py-3 ${played ? "bg-zinc-50" : "bg-white"}`}
     >
       <div className="shrink-0 flex flex-col items-center gap-0.5 pt-0.5 w-6 sm:w-8">
         <span className="text-[10px] sm:text-xs leading-none font-semibold text-zinc-300">{index + 1}</span>
@@ -52,7 +52,7 @@ export default function SetSortableSongList({
   renderRow,
 }: {
   contextId: string;
-  items: { id: string }[];
+  items: { id: string; played?: boolean }[];
   onMove: (oldIndex: number, newIndex: number) => void;
   renderRow: (index: number) => React.ReactNode;
 }) {
@@ -73,7 +73,7 @@ export default function SetSortableSongList({
     <DndContext id={contextId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={items.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         {items.map((item, i) => (
-          <SortableRow key={item.id} id={item.id} index={i}>
+          <SortableRow key={item.id} id={item.id} index={i} played={item.played}>
             {renderRow(i)}
           </SortableRow>
         ))}
