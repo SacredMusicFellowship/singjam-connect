@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canManageJam } from "@/lib/jamAuthz";
+import { resolveStripeFees, type FeeOrder } from "@/lib/stripeFees";
 
 // The host's guest list and sales summary. Host or co-host only — this exposes
 // buyer names, emails and amounts paid.
@@ -18,6 +19,7 @@ type TicketRow = {
   ticket_orders: {
     id: string;
     status: string;
+    source: string;
     buyer_name: string | null;
     buyer_email: string | null;
     buyer_user_id: string | null;
@@ -61,7 +63,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         .select(
           `id, qr_token, holder_name, holder_email, checked_in_at,
            ticket_types(name),
-           ticket_orders!inner(id, status, buyer_name, buyer_email, buyer_user_id, amount_cents, currency, paid_at)`
+           ticket_orders!inner(id, status, source, buyer_name, buyer_email, buyer_user_id, amount_cents, currency, paid_at)`
         )
         .eq("jam_id", jamId)
         .eq("ticket_orders.status", "paid")
@@ -70,6 +72,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   );
 
   // Members bought without supplying a name, so resolve theirs from profiles.
+  // display_name holds the first name only, so last_name has to be joined on or
+  // a door list of regulars reads as "Ben", "Ben", "Sarah".
   const memberIds = [
     ...new Set(
       tickets.map((t) => t.ticket_orders?.buyer_user_id).filter((v): v is string => !!v)
@@ -79,11 +83,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (memberIds.length) {
     const { data: profiles } = await admin
       .from("profiles")
-      .select("id, display_name, username")
+      .select("id, display_name, last_name, username")
       .in("id", memberIds);
     for (const p of profiles ?? []) {
-      profileNames.set(p.id, (p as any).display_name ?? (p as any).username ?? "");
+      const full = [(p as any).display_name, (p as any).last_name].filter(Boolean).join(" ");
+      profileNames.set(p.id, full || (p as any).username || "");
     }
+  }
+
+  // What each buyer paid is an order total, so every ticket row carries its
+  // order's total and how many tickets that order covered.
+  // Each ticket's place in its order ("ticket 2 of 2"), so a buyer's two
+  // tickets read as one purchase rather than a duplicate. tickets arrive sorted
+  // by id, so the numbering is stable across loads.
+  const ticketsPerOrder = new Map<string, number>();
+  const orderPosition = new Map<string, number>();
+  for (const t of tickets) {
+    const id = t.ticket_orders!.id;
+    const n = (ticketsPerOrder.get(id) ?? 0) + 1;
+    ticketsPerOrder.set(id, n);
+    orderPosition.set(t.id, n);
   }
 
   const guests = tickets.map((t) => {
@@ -97,15 +116,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       code: t.qr_token.replace(/-/g, "").slice(0, 6).toUpperCase(),
       name: name || "Guest",
       email: t.holder_email ?? o.buyer_email ?? null,
-      tier: t.ticket_types?.name ?? "Ticket",
+      tier: o.source === "leader" ? "Leader" : t.ticket_types?.name ?? "Ticket",
       is_member: !!o.buyer_user_id,
+      is_leader: o.source === "leader",
       checked_in_at: t.checked_in_at,
       order_id: o.id,
       paid_at: o.paid_at,
+      order_amount_cents: o.amount_cents,
+      order_tickets: ticketsPerOrder.get(o.id) ?? 1,
+      order_position: orderPosition.get(t.id) ?? 1,
+      currency: o.currency,
     };
   });
 
-  guests.sort((a, b) => a.name.localeCompare(b.name) || a.ticket_id.localeCompare(b.ticket_id));
+  guests.sort(
+    (a, b) =>
+      a.name.localeCompare(b.name) ||
+      a.order_id.localeCompare(b.order_id) ||
+      a.order_position - b.order_position
+  );
 
   // Revenue is summed per order, not per ticket, or a multi-ticket order counts
   // its total once for every ticket in it.
@@ -116,12 +145,33 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
   const grossCents = [...orderTotals.values()].reduce((sum, o) => sum + o.amount, 0);
 
+  // Refunded orders count too: Stripe keeps its fee when a charge is refunded,
+  // so leaving them out would overstate the net.
+  const feeOrders = await fetchAllRows<FeeOrder>(
+    (from, to) =>
+      admin
+        .from("ticket_orders")
+        .select("id, stripe_payment_intent_id, stripe_fee_cents")
+        .eq("jam_id", jamId)
+        .in("status", ["paid", "refunded"])
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{ data: FeeOrder[] | null; error?: any }>
+  );
+  const { feeCents, pending: feesPending } = await resolveStripeFees(admin, feeOrders);
+
+  // Leaders are on the door list but were never sold anything.
+  const sold = guests.filter((g) => !g.is_leader);
+
   return NextResponse.json({
     guests,
     summary: {
-      tickets_sold: guests.length,
+      tickets_sold: sold.length,
+      leaders: guests.length - sold.length,
       orders: orderTotals.size,
       gross_cents: grossCents,
+      fee_cents: feeCents,
+      net_cents: grossCents - feeCents,
+      fees_pending: feesPending,
       currency: [...orderTotals.values()][0]?.currency ?? "usd",
       checked_in: guests.filter((g) => g.checked_in_at).length,
     },

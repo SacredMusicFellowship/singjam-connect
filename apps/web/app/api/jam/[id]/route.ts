@@ -1,59 +1,102 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { canManageJam } from "@/lib/jamAuthz";
+import { canEditJamById } from "@/lib/jamAuthz";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { createNotification } from "@/lib/notifications";
-import { resend, FROM_ADDRESS } from "@/lib/resend";
+import { FROM_ADDRESS } from "@/lib/resend";
+import { sendBulkEmail } from "@/lib/sendBulkEmail";
 import { jamCancelledHtml } from "@/emails/jam-cancelled";
 import { jamUpdatedHtml } from "@/emails/jam-updated";
 import { buildIcs } from "@/lib/ics";
+import { isValidTimeZone } from "@singjam/core";
+import { devRefusesVisibility, DEV_PRIVATE_JAMS_MESSAGE } from "@/lib/devSafety";
+import { jamTagIdsFromBody } from "@/lib/jamTagIds";
+
+// The web editor sends its baked per-layout crops along with the image. A
+// client that only sends image_url (the native editor) and changes it leaves
+// the old crops pointing at the previous image, so they are cleared and every
+// layout falls back to the new image.
+function imageCropFields(body: any, currentImageUrl: string | null) {
+  if (body.image_crops !== undefined) {
+    return {
+      image_desktop_url: body.image_desktop_url ?? null,
+      image_mobile_url: body.image_mobile_url ?? null,
+      image_list_url: body.image_list_url ?? null,
+      image_crops: body.image_crops,
+    };
+  }
+  if (body.image_url !== undefined && body.image_url !== currentImageUrl) {
+    return { image_desktop_url: null, image_mobile_url: null, image_list_url: null, image_crops: null };
+  }
+  return {};
+}
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  let user = (await supabase.auth.getUser()).data.user ?? null;
+  if (!user) {
+    // Native app authenticates with a bearer token instead of cookies
+    const bearer = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (bearer) user = (await supabaseFromBearer(bearer).auth.getUser()).data.user ?? null;
+  }
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = supabaseAdmin();
 
   const { data: currentJam } = await admin
     .from("jams")
-    .select("host_user_id, name, starts_at, ends_at, neighborhood, full_address, timezone")
+    .select("host_user_id, name, starts_at, ends_at, neighborhood, full_address, timezone, visibility, image_url")
     .eq("id", id)
     .maybeSingle();
 
   if (!currentJam) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  // Official events belong to the org, so anyone who can host one can run any
-  // of them — not only whoever created it. See lib/jamAuthz.ts.
-  if (!(await canManageJam(admin, id, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // The host, or for an official event anyone who can host one. Co-hosts help
+  // run a jam but cannot change or cancel it. See lib/jamAuthz.ts.
+  if (!(await canEditJamById(admin, id, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const {
     name, starts_at, ends_at, neighborhood, full_address, notes, visibility,
-    guests_can_invite, tickets_url, image_url, image_focal_point, capacity, timezone,
-    genre_ids, theme_ids,
+    guests_can_invite, tickets_url, image_url, image_focal_point, capacity,
+    genre_ids, theme_ids, tag_ids,
   } = body;
+  // The client converts the typed times using the venue's zone (from /api/timezone),
+  // so store that same zone; anything unusable keeps the event's existing one.
+  const timezone = isValidTimeZone(body.timezone) ? body.timezone : currentJam.timezone;
+
+  if (devRefusesVisibility(currentJam.visibility, visibility)) {
+    return NextResponse.json({ error: DEV_PRIVATE_JAMS_MESSAGE }, { status: 403 });
+  }
+
+  // The admin client skips the trigger that guards publishing official events
+  // (migration 156 lets service_role through), so apply the same rule here.
+  if (visibility === "official" && currentJam.visibility !== "official") {
+    const { data: profile } = await admin.from("profiles").select("role, can_host_official").eq("id", user.id).maybeSingle();
+    if ((profile as any)?.role !== "admin" && !(profile as any)?.can_host_official) {
+      return NextResponse.json({ error: "Only official hosts can make an event official" }, { status: 403 });
+    }
+  }
 
   const { error: updateError } = await admin.from("jams").update({
     name, starts_at, ends_at, neighborhood, full_address, notes, visibility,
     guests_can_invite: visibility !== "official" ? guests_can_invite : false,
     tickets_url: visibility === "official" ? tickets_url : null,
     image_url, image_focal_point, capacity, timezone,
+    ...imageCropFields(body, currentJam.image_url),
   }).eq("id", id);
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-  await Promise.all([
-    admin.from("jam_genres").delete().eq("jam_id", id),
-    admin.from("jam_themes").delete().eq("jam_id", id),
-  ]);
-  await Promise.all([
-    genre_ids?.length > 0 ? admin.from("jam_genres").insert(genre_ids.map((genre_id: string) => ({ jam_id: id, genre_id }))) : Promise.resolve(),
-    theme_ids?.length > 0 ? admin.from("jam_themes").insert(theme_ids.map((theme_id: string) => ({ jam_id: id, theme_id }))) : Promise.resolve(),
-  ]);
+  // A jam's tags are its genres and themes; the form sends both lists in full.
+  await admin.from("jam_tags").delete().eq("jam_id", id);
+  const tagIds = jamTagIdsFromBody({ tag_ids, genre_ids, theme_ids });
+  if (tagIds.length > 0) await admin.from("jam_tags").insert(tagIds.map((tag_id) => ({ jam_id: id, tag_id })));
 
-  const timeChanged = currentJam.starts_at !== starts_at || currentJam.ends_at !== ends_at;
+  // Postgres returns "+00:00" while clients send toISOString()'s ".000Z", so compare instants, not strings.
+  const sameInstant = (a: string | null, b: string | null) => (a && b ? Date.parse(a) === Date.parse(b) : a === b);
+  const timeChanged = !sameInstant(currentJam.starts_at, starts_at) || !sameInstant(currentJam.ends_at, ends_at);
   const locationChanged = currentJam.neighborhood !== neighborhood || currentJam.full_address !== full_address;
 
   if (!timeChanged && !locationChanged) return NextResponse.json({ ok: true });
@@ -88,33 +131,34 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const { data: profiles } = await admin.from("profiles").select("id, display_name, username").in("id", uniqueMemberIds);
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
-  await Promise.allSettled([
-    ...uniqueMemberIds.map(async (uid: string) => {
+  const memberEmails = await Promise.all(
+    uniqueMemberIds.map(async (uid: string) => {
       const profile = profileMap.get(uid);
-      const { data: authData } = await admin.auth.admin.getUserById(uid);
-      const email = authData.user?.email;
-      const recipientName = profile?.display_name ?? profile?.username ?? null;
-
-      await Promise.allSettled([
-        createNotification({ userId: uid, type: "jam_updated", title: `${jamName ?? "A jam"} has been updated`, link: `/jam/${id}` }),
-        email ? resend.emails.send({
-          from: FROM_ADDRESS,
-          to: email,
-          subject: `Update: ${jamName ?? "A jam you're attending"}`,
-          html: jamUpdatedHtml({ name: recipientName, jamName, jamUrl, timeChanged, locationChanged, newStartsAt: starts_at, newLocation, timezone }),
-          attachments: icsAttachment,
-        }) : Promise.resolve(),
+      const [{ data: authData }] = await Promise.all([
+        admin.auth.admin.getUserById(uid),
+        createNotification({ userId: uid, type: "jam_updated", title: `${jamName ?? "A jam"} has been updated`, link: `/jam/${id}` }).catch(() => {}),
       ]);
-    }),
-    ...nonMemberEmails.map((email: string) =>
-      resend.emails.send({
+      return { email: authData.user?.email, name: profile?.display_name ?? profile?.username ?? null };
+    })
+  );
+
+  await sendBulkEmail([
+    ...memberEmails
+      .filter((m) => m.email)
+      .map((m) => ({
         from: FROM_ADDRESS,
-        to: email,
-        subject: `Update: ${jamName ?? "A jam you're invited to"}`,
-        html: jamUpdatedHtml({ name: null, jamName, jamUrl, timeChanged, locationChanged, newStartsAt: starts_at, newLocation, timezone }),
+        to: m.email!,
+        subject: `Update: ${jamName ?? "A jam you're attending"}`,
+        html: jamUpdatedHtml({ name: m.name, jamName, jamUrl, timeChanged, locationChanged, newStartsAt: starts_at, newLocation, timezone }),
         attachments: icsAttachment,
-      })
-    ),
+      })),
+    ...nonMemberEmails.map((email: string) => ({
+      from: FROM_ADDRESS,
+      to: email,
+      subject: `Update: ${jamName ?? "A jam you're invited to"}`,
+      html: jamUpdatedHtml({ name: null, jamName, jamUrl, timeChanged, locationChanged, newStartsAt: starts_at, newLocation, timezone }),
+      attachments: icsAttachment,
+    })),
   ]);
 
   return NextResponse.json({ ok: true });
@@ -122,16 +166,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  let supabase = await supabaseServer();
+  const supabase = await supabaseServer();
   let user = (await supabase.auth.getUser()).data.user ?? null;
   if (!user) {
     // Native app authenticates with a bearer token instead of cookies
     const bearer = req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (bearer) {
-      const bearerClient = supabaseFromBearer(bearer);
-      user = (await bearerClient.auth.getUser()).data.user ?? null;
-      if (user) supabase = bearerClient as typeof supabase;
-    }
+    if (bearer) user = (await supabaseFromBearer(bearer).auth.getUser()).data.user ?? null;
   }
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -144,9 +184,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     .maybeSingle();
 
   if (!jam) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  // Official events belong to the org, so anyone who can host one can run any
-  // of them — not only whoever created it. See lib/jamAuthz.ts.
-  if (!(await canManageJam(admin, id, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // The host, or for an official event anyone who can host one. Co-hosts help
+  // run a jam but cannot change or cancel it. See lib/jamAuthz.ts.
+  if (!(await canEditJamById(admin, id, user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Fetch all attendees and waitlisted users before deleting
   const { data: rsvps } = await admin
@@ -157,7 +197,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const attendeeIds = (rsvps ?? []).map((r: any) => r.user_id).filter((uid: string) => uid !== user.id);
 
-  await supabase.from("jams").delete().eq("id", id);
+  // Through the admin client: RLS only lets the creator delete, so an official
+  // host's cancel would otherwise remove nothing yet still email everyone.
+  const { error: deleteError } = await admin.from("jams").delete().eq("id", id);
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
 
   // Notify attendees + host in parallel — fire and forget errors
   const allNotifyIds = [...attendeeIds, user.id];
@@ -168,28 +211,30 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
-  await Promise.allSettled(allNotifyIds.map(async (uid: string) => {
+  const recipients = await Promise.all(allNotifyIds.map(async (uid: string) => {
     const isHost = uid === user.id;
     const profile = profileMap.get(uid);
-    const { data: authData } = await admin.auth.admin.getUserById(uid);
-    const email = authData.user?.email;
-    const name = profile?.display_name ?? profile?.username ?? null;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://singjam.org";
-
-    await Promise.allSettled([
+    const [{ data: authData }] = await Promise.all([
+      admin.auth.admin.getUserById(uid),
       isHost ? Promise.resolve() : createNotification({
         userId: uid,
         type: "jam_cancelled",
         title: `${jam.name ?? "A jam you were attending"} has been cancelled`,
-      }),
-      email ? resend.emails.send({
-        from: FROM_ADDRESS,
-        to: email,
-        subject: `${jam.name ?? "A jam"} has been cancelled`,
-        html: jamCancelledHtml({ name, jamName: jam.name, startsAt: jam.starts_at, timezone: (jam as any).timezone, isHost }),
-      }) : Promise.resolve(),
+      }).catch(() => {}),
     ]);
+    return { email: authData.user?.email, name: profile?.display_name ?? profile?.username ?? null, isHost };
   }));
+
+  await sendBulkEmail(
+    recipients
+      .filter((r) => r.email)
+      .map((r) => ({
+        from: FROM_ADDRESS,
+        to: r.email!,
+        subject: `${jam.name ?? "A jam"} has been cancelled`,
+        html: jamCancelledHtml({ name: r.name, jamName: jam.name, startsAt: jam.starts_at, timezone: (jam as any).timezone, isHost: r.isHost }),
+      }))
+  );
 
   return NextResponse.json({ ok: true });
 }

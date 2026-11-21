@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { jamCreatedHtml } from "@/emails/jam-created";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function POST(req: Request) {
   const supabase = await supabaseServer();
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
       html: jamCreatedHtml({
         name: (profile as any)?.display_name ?? (profile as any)?.username,
         jamName: jam.name,
-        jamUrl: `${siteUrl}/jam/${jamId}`,
+        jamUrl: `${siteUrl}${await jamPathById(jamId)}`,
         startsAt: jam.starts_at,
         timezone: (jam as any).timezone,
       }),

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { createNotification } from "@/lib/notifications";
+import { rsvpToJam, RSVP_JAM_COLUMNS } from "@/lib/jamRsvp";
 
 export async function POST(
   req: Request,
@@ -34,100 +35,41 @@ export async function POST(
 
   if (!invite) return NextResponse.json({ error: "Invite not found" }, { status: 404 });
 
-  await admin.from("jam_invites").update({ status: response }).eq("id", invite.id);
+  // Answering the same way twice changes nothing, so it tells nobody anything.
+  // Conditional so two overlapping answers can't both count as the change.
+  const { data: changed } = await admin
+    .from("jam_invites")
+    .update({ status: response })
+    .eq("id", invite.id)
+    .neq("status", response)
+    .select("id");
+  const alreadyAnswered = !changed?.length;
+  let rsvpStatus: "attending" | "waitlist" | null = null;
 
   if (response === "accepted") {
-    // Auto-RSVP — reuse RSVP logic: check capacity
-    const { data: jam } = await admin.from("jams").select("capacity, name, host_user_id").eq("id", jamId).single();
+    const { data: jam } = await admin.from("jams").select(RSVP_JAM_COLUMNS).eq("id", jamId).single();
     if (jam?.host_user_id === user.id) {
       return NextResponse.json({ error: "You can't RSVP to your own jam" }, { status: 400 });
     }
-    const { count: attendingCount } = await admin
-      .from("jam_rsvps")
-      .select("id", { count: "exact", head: true })
-      .eq("jam_id", jamId)
-      .eq("status", "attending");
+    if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
 
-    const isFull = jam?.capacity != null && (attendingCount ?? 0) >= jam.capacity;
-    let waitlistPosition: number | null = null;
+    // Tells the host, and sends the confirmation email, only on a real change.
+    ({ status: rsvpStatus } = await rsvpToJam(admin, jam, user.id));
 
-    if (isFull) {
-      const { count: waitlistCount } = await admin
-        .from("jam_rsvps")
-        .select("id", { count: "exact", head: true })
-        .eq("jam_id", jamId)
-        .eq("status", "waitlist");
-      waitlistPosition = (waitlistCount ?? 0) + 1;
+    // The host already heard through the RSVP, so only a separate inviter is told here.
+    if (!alreadyAnswered && invite.invited_by && invite.invited_by !== jam.host_user_id) {
+      const { data: profile } = await admin.from("profiles").select("display_name, username").eq("id", user.id).single();
+      const accepterName = (profile as any)?.display_name ?? (profile as any)?.username ?? "Someone";
+      await createNotification({
+        userId: invite.invited_by,
+        type: "invite_accepted",
+        title: `${accepterName} accepted your invite to ${jam.name ?? "your jam"}`,
+        link: `/jam/${jamId}`,
+      });
     }
-
-    const { data: existingRsvp } = await admin
-      .from("jam_rsvps")
-      .select("id")
-      .eq("jam_id", jamId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    const rsvpStatus = isFull ? "waitlist" : "attending";
-
-    if (existingRsvp) {
-      await admin.from("jam_rsvps").update({ status: rsvpStatus, waitlist_position: waitlistPosition }).eq("id", existingRsvp.id);
-    } else {
-      await admin.from("jam_rsvps").insert({ jam_id: jamId, user_id: user.id, status: rsvpStatus, waitlist_position: waitlistPosition });
-    }
-
-    // Add to linked set list if the jam has one and the RSVP is confirmed
-    if (rsvpStatus === "attending") {
-      const { data: linkedSet } = await admin
-        .from("sets")
-        .select("id, owner_user_id")
-        .eq("jam_id", jamId)
-        .maybeSingle();
-
-      if (linkedSet && linkedSet.owner_user_id !== user.id) {
-        const { data: existingCollab } = await admin
-          .from("set_collaborators")
-          .select("id")
-          .eq("set_id", linkedSet.id)
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (!existingCollab) {
-          await admin.from("set_collaborators").insert({
-            set_id: linkedSet.id,
-            user_id: user.id,
-            invited_by: linkedSet.owner_user_id,
-            status: "accepted",
-          });
-        }
-      }
-    }
-
-    const { data: profile } = await admin.from("profiles").select("display_name, username").eq("id", user.id).single();
-    const accepterName = (profile as any)?.display_name ?? (profile as any)?.username ?? "Someone";
-
-    await Promise.all([
-      // Notify the person who sent the invite (if not the host — host gets their own notification below)
-      invite.invited_by && invite.invited_by !== (jam as any)?.host_user_id
-        ? createNotification({
-            userId: invite.invited_by,
-            type: "invite_accepted",
-            title: `${accepterName} accepted your invite to ${jam?.name ?? "your jam"}`,
-            link: `/jam/${jamId}`,
-          })
-        : Promise.resolve(),
-      // Notify the host
-      (jam as any)?.host_user_id && (jam as any).host_user_id !== user.id
-        ? createNotification({
-            userId: (jam as any).host_user_id,
-            type: "jam_rsvp",
-            title: `${accepterName} is going to ${jam?.name ?? "your jam"}`,
-            link: `/jam/${jamId}`,
-          })
-        : Promise.resolve(),
-    ]);
   }
 
-  if (response === "declined" && invite.invited_by) {
+  if (response === "declined" && !alreadyAnswered && invite.invited_by) {
     const [{ data: profile }, { data: jam }] = await Promise.all([
       admin.from("profiles").select("display_name, username").eq("id", user.id).single(),
       admin.from("jams").select("name").eq("id", jamId).single(),
@@ -141,5 +83,5 @@ export async function POST(
     });
   }
 
-  return NextResponse.json({ ok: true, rsvpStatus: response === "accepted" ? "attending" : null });
+  return NextResponse.json({ ok: true, rsvpStatus });
 }

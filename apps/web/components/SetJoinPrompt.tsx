@@ -2,11 +2,13 @@ import Link from "next/link";
 
 export default function SetJoinPrompt({
   setId,
+  shortCode,
   setName,
   ownerName,
   mode = "join",
 }: {
   setId: string;
+  shortCode?: string | null;
   setName: string;
   ownerName: string | null;
   mode?: "join" | "view";
@@ -48,14 +50,14 @@ export default function SetJoinPrompt({
 
         <div className="flex flex-col gap-2.5">
           <Link
-            href={`/auth?next=/set/${setId}`}
-            className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+            href={`/auth?next=/set/${shortCode || setId}`}
+            className="rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             Sign in
           </Link>
           <Link
-            href={`/auth?mode=signup&next=/set/${setId}`}
-            className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+            href={`/auth?mode=signup&next=/set/${shortCode || setId}`}
+            className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
           >
             Create a free account
           </Link>

@@ -3,7 +3,10 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { resolvePromoCode } from "@/lib/promoCode";
+import { coverageFeeCents } from "@/lib/ticketFees";
 import { fulfilPendingOrder } from "@/lib/ticketFulfilment";
+import { ticketingBlocked } from "@/lib/devSafety";
+import { buildCheckoutPreview, previewUrl } from "@/lib/ticketCheckoutPreview";
 import {
   stripe,
   SITE_URL,
@@ -47,12 +50,18 @@ export async function POST(
   let guestEmail = "";
   let guestName = "";
   let promoCode = "";
+  let coverFees = false;
+  let marketingOptIn = false;
   try {
     const body = await req.json();
     items = Array.isArray(body?.items) ? body.items : [];
     guestEmail = typeof body?.email === "string" ? body.email.trim() : "";
     guestName = typeof body?.name === "string" ? body.name.trim() : "";
     promoCode = typeof body?.promo_code === "string" ? body.promo_code.trim() : "";
+    // Both default to false here, not true. The checkbox defaults to ticked in
+    // the UI, but a request that says nothing must not be read as consent.
+    coverFees = body?.cover_fees === true;
+    marketingOptIn = body?.marketing_opt_in === true;
   } catch {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
@@ -83,6 +92,16 @@ export async function POST(
     return NextResponse.json({ error: "This event does not sell tickets" }, { status: 400 });
   }
 
+  // `next dev` stops here, before the reservation, and walks the rest of the flow
+  // as a preview built from the selection: the payment page for a charged order,
+  // straight to the confirmation for a free one, as the real flow does.
+  if (ticketingBlocked(`ticket checkout for jam ${jamId}`)) {
+    const preview = await buildCheckoutPreview(admin, jamId, jam.name ?? null, items, promoCode, coverFees);
+    if ("error" in preview) return NextResponse.json({ error: preview.error }, { status: 400 });
+    const step = preview.amountCents === 0 ? "complete" : "pay";
+    return NextResponse.json({ preview_url: previewUrl(jamId, step, items, promoCode, coverFees) });
+  }
+
   // Reserve stock first. Doing this before creating the Stripe session is what
   // stops us collecting money for a sold-out tier — the reverse order would
   // hand the buyer a payable session against stock that may already be gone.
@@ -101,6 +120,12 @@ export async function POST(
       { error: reserveError?.message ?? "Could not reserve tickets" },
       { status: 409 }
     );
+  }
+
+  // Only guests are asked, so a signed-in buyer can never be recorded as having
+  // opted in here — their subscription came from creating an account.
+  if (marketingOptIn && !user) {
+    await admin.from("ticket_orders").update({ marketing_opt_in: true }).eq("id", orderId);
   }
 
   const { data: order } = await admin
@@ -129,6 +154,7 @@ export async function POST(
   // built-in code field, so the code is resolved here and attached to the
   // session; allow_promotion_codes only applies to Stripe-rendered checkout.
   let discounts: { promotion_code: string }[] | undefined;
+  let promoCodeId: string | null = null;
   let totalCents = order!.amount_cents;
   if (promoCode) {
     // Shared with the preview so the two can't disagree — and because the free
@@ -145,8 +171,16 @@ export async function POST(
       return NextResponse.json({ error: resolved.reason }, { status: 400 });
     }
     discounts = [{ promotion_code: resolved.promotionCodeId }];
+    promoCodeId = resolved.promoCodeId;
     totalCents = resolved.totalCents;
   }
+
+  // Computed after any discount, so a buyer covering fees on a discounted
+  // ticket covers the fee on what they actually pay. A percentage promotion
+  // code does also discount this line in Stripe, so the organisation recovers
+  // slightly less than the whole fee on that combination — cents, and only when
+  // both are in play.
+  const feeCents = coverFees ? coverageFeeCents(totalCents) : 0;
 
   // Nothing to charge, so don't ask. Stripe would happily make a zero-amount
   // session, but the Payment Element still renders a card form against it and
@@ -154,6 +188,7 @@ export async function POST(
   // isn't a payment, so it skips the processor entirely and is fulfilled here,
   // through the same code the webhook uses for a charged order.
   if (totalCents === 0) {
+    if (promoCodeId) await recordPromoCode(admin, order!.id, promoCodeId);
     const paid = await fulfilPendingOrder(admin, order!.id, { amountCents: 0 });
     if (!paid) {
       await releaseHold(admin, order!.id);
@@ -200,14 +235,30 @@ export async function POST(
       // 30 minutes is Stripe's floor for expires_at, and is deliberately shorter
       // than the database hold so the session always dies first. See lib/stripe.ts.
       expires_at: Math.floor(Date.now() / 1000) + SESSION_EXPIRY_MINUTES * 60,
-      line_items: [...byType.values()].map((l) => ({
-        quantity: l.qty,
-        price_data: {
-          currency: l.currency,
-          unit_amount: l.price_cents,
-          product_data: { name: `${jam.name ?? "Event"} — ${l.name}` },
-        },
-      })),
+      line_items: [
+        ...[...byType.values()].map((l) => ({
+          quantity: l.qty,
+          price_data: {
+            currency: l.currency,
+            unit_amount: l.price_cents,
+            product_data: { name: `${jam.name ?? "Event"} — ${l.name}` },
+          },
+        })),
+        // Its own line so the buyer sees what the ticket costs and what the
+        // processing costs, rather than one inflated ticket price.
+        ...(feeCents > 0
+          ? [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: order!.currency,
+                  unit_amount: feeCents,
+                  product_data: { name: "Processing fee" },
+                },
+              },
+            ]
+          : []),
+      ],
     };
 
     // A payment method configuration belongs to one Stripe mode. Point a test
@@ -238,6 +289,7 @@ export async function POST(
       .from("ticket_orders")
       .update({ stripe_checkout_session_id: session.id, updated_at: new Date().toISOString() })
       .eq("id", order!.id);
+    if (promoCodeId) await recordPromoCode(admin, order!.id, promoCodeId);
 
     return NextResponse.json({
       order_id: order!.id,
@@ -253,5 +305,18 @@ export async function POST(
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", order!.id);
     return NextResponse.json({ error: "Could not start checkout" }, { status: 502 });
+  }
+}
+
+// Which code the order used, so the ticket manager can count uses Stripe never
+// sees (a code that makes the order free). Its own write, and never fatal: the
+// count is bookkeeping, and checkout must not fail over it — including before
+// migration 166 adds the column.
+async function recordPromoCode(admin: ReturnType<typeof supabaseAdmin>, orderId: string, promoCodeId: string) {
+  try {
+    const { error } = await admin.from("ticket_orders").update({ promo_code_id: promoCodeId }).eq("id", orderId);
+    if (error) console.error("[tickets] could not record the promo code on the order", error);
+  } catch (e) {
+    console.error("[tickets] could not record the promo code on the order", e);
   }
 }

@@ -3,6 +3,9 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications";
 
+// Only a community jam's host appoints co-hosts. Official events have none
+// (migration 185): the org's official hosts already run every one of them.
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: jamId } = await params;
   const supabase = await supabaseServer();
@@ -14,9 +17,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const admin = supabaseAdmin();
 
-  const { data: jam } = await admin.from("jams").select("host_user_id, name").eq("id", jamId).single();
+  const { data: jam } = await admin.from("jams").select("host_user_id, name, visibility").eq("id", jamId).single();
   if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
   if (jam.host_user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (jam.visibility === "official") {
+    return NextResponse.json({ error: "Official events don't have co-hosts" }, { status: 400 });
+  }
 
   const { data: rsvp } = await admin
     .from("jam_rsvps")

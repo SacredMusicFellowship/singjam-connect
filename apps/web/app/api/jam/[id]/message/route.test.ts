@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetUser, mockEmailSend, mockFrom, mockGetUserById, mockCanManage } = vi.hoisted(() => ({
+const { mockGetUser, mockEmailSend, mockBatchSend, mockFrom, mockGetUserById, mockCanManage } = vi.hoisted(() => ({
+  mockBatchSend: vi.fn(),
   mockCanManage: vi.fn(),
   mockGetUser: vi.fn(),
   mockEmailSend: vi.fn().mockResolvedValue({ id: "email-id" }),
@@ -15,8 +16,14 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/resend", () => ({
-  resend: { emails: { send: mockEmailSend } },
+  resend: {
+    emails: { send: mockEmailSend },
+    batch: {
+      send: (emails: object[]) => mockBatchSend(emails),
+    },
+  },
   FROM_ADDRESS: "SingJam <hello@singjam.org>",
+  EVENTS_FROM_ADDRESS: "SingJam <events@singjam.org>",
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
@@ -27,6 +34,10 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 vi.mock("@/lib/jamAuthz", () => ({ canManageJam: mockCanManage }));
+vi.mock("@/lib/shortRef", () => ({
+  jamPathById: async (id: string) => `/jam/${id}`,
+  setPathById: async (id: string) => `/set/${id}`,
+}));
 
 import { POST } from "./route";
 
@@ -42,6 +53,10 @@ const params = Promise.resolve({ id: "test-jam-id" });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockBatchSend.mockImplementation(async (emails: object[]) => {
+    emails.forEach((e) => mockEmailSend(e));
+    return { data: { data: emails.map(() => ({ id: "email-id" })) }, error: null };
+  });
   mockCanManage.mockResolvedValue(true);
 });
 
@@ -196,6 +211,46 @@ describe("POST /api/jam/[id]/message", () => {
     expect(body.sent).toBe(1);
     expect(mockEmailSend).toHaveBeenCalledTimes(1);
   });
+
+  it("includes guest ticket buyers, one email per buyer, alongside RSVPs", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "host-id" } } });
+    mockGetUserById.mockResolvedValue({ data: { user: { email: "Member@Example.com" } } });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "jams") return jamRow("host-id");
+      if (table === "profiles") return profileRow("Alice");
+      if (table === "jam_rsvps") return rsvpRows([{ user_id: "member-1" }]);
+      if (table === "tickets") {
+        return ticketRows([
+          guestTicket("guest@example.com", "Gina"),
+          guestTicket("Guest@Example.com", "Gina"),
+          guestTicket("member@example.com", "Member"),
+        ]);
+      }
+      return emptyTable();
+    });
+
+    const res = await POST(makeRequest({ subject: "Hey", message: "Hi", audience: "attending" }), { params });
+    const body = await res.json();
+
+    expect(body.sent).toBe(2);
+    const recipients = mockEmailSend.mock.calls.map((c) => c[0].to).sort();
+    expect(recipients).toEqual(["guest@example.com", "member@example.com"]);
+  });
+
+  it("reports an error instead of success when every send fails", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "host-id" } } });
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "jams") return jamRow("host-id");
+      if (table === "profiles") return profileRow("Alice");
+      if (table === "tickets") return ticketRows([guestTicket("guest@example.com", "Gina")]);
+      return emptyTable();
+    });
+    mockBatchSend.mockResolvedValueOnce({ data: null, error: { name: "application_error", message: "down" } });
+
+    const res = await POST(makeRequest({ subject: "Hey", message: "Hi" }), { params });
+    expect(res.status).toBe(502);
+  });
 });
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -219,7 +274,20 @@ function rsvpRows(rows: { user_id: string }[]) {
 }
 
 function emptyTable() {
-  return { select: () => ({ eq: () => ({ eq: () => ({ data: [] }) }) }) };
+  return ticketRows([]);
+}
+
+// Chainable for any filter sequence; resolves to `rows` at the end of the chain
+// (whether read as `.data` or via fetchAllRows' `.range()`).
+function ticketRows(rows: object[]) {
+  const q: any = { data: rows, error: null };
+  q.select = q.eq = q.is = q.order = () => q;
+  q.range = (from: number) => Promise.resolve({ data: from === 0 ? rows : [], error: null });
+  return q;
+}
+
+function guestTicket(email: string, name: string) {
+  return { holder_email: email, holder_name: name, ticket_orders: { buyer_email: email, buyer_name: name } };
 }
 
 function cohostLookup(data: { user_id: string } | null) {

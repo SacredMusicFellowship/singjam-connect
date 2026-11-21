@@ -18,15 +18,31 @@ updates:
     commit-message:
       prefix: chore
       include: scope
-    # One PR for the routine drift rather than thirty. Majors are deliberately
-    # left out of the group so they arrive alone and get read properly.
+    # PATCH ONLY, deliberately. Grouping minors here produced PR #290: one
+    # request carrying react-native 0.85.3 -> 0.87.1 alongside Stripe, Supabase
+    # auth, Resend and the PDF renderer. React Native's 0.x minors are platform
+    # moves, not drift, and the root lockfile covers apps/native too — so a
+    # "minor" group here can reach straight into the Expo-pinned set. Minors now
+    # arrive one at a time and get judged on their own.
     groups:
-      root-minor-and-patch:
+      root-patch:
         patterns:
           - "*"
         update-types:
-          - minor
           - patch
+    # The root lockfile resolves apps/native's manifest too — that is precisely
+    # how #290 came to be moving react-native from a "root" update. The
+    # Expo-pinned set has to be excluded on both entries or it leaks in here.
+    ignore:
+      - dependency-name: expo
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: react-native
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: react-native-reanimated
+      - dependency-name: react-native-worklets
+      - dependency-name: react-native-screens
+      - dependency-name: react-native-safe-area-context
+      - dependency-name: react-native-css-interop
 
   - package-ecosystem: npm
     directory: "/apps/native"
@@ -40,19 +56,43 @@ updates:
       prefix: chore
       include: scope
     groups:
-      native-minor-and-patch:
+      native-patch:
         patterns:
           - "*"
         update-types:
-          - minor
           - patch
     ignore:
       # An Expo SDK move is a migration performed with `expo install`, not a
       # dependency bump — a PR that edits these by hand builds a broken app.
+      # Minors are ignored too, not just majors: react-native 0.85 -> 0.87 is a
+      # semver *minor* and would have sailed through a majors-only rule.
       - dependency-name: expo
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: react-native
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # Version-locked by the Expo SDK the same way. These are what #290 tried
+      # to move underneath it.
+      - dependency-name: react-native-reanimated
+      - dependency-name: react-native-worklets
+      - dependency-name: react-native-screens
+      - dependency-name: react-native-safe-area-context
       # Pinned by the root `overrides` and a postinstall symlink; bumping it
       # from here has broken the native build before.
       - dependency-name: react-native-css-interop
+
+  # Workflow actions are pinned to commit SHAs; this keeps the pins (and their tag comments) current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns:
+          - "*"

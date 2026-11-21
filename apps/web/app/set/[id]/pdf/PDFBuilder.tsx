@@ -24,7 +24,7 @@ type Field = "artist" | "key" | "tonality" | "songwriters" | "leader";
 type Layout = "list" | "twoColumn";
 
 const FIELD_LABELS: Record<Field, string> = {
-  artist: "Artist",
+  artist: "Subtitle",
   key: "Key",
   tonality: "Tonality",
   songwriters: "Songwriters",
@@ -147,7 +147,7 @@ function ListColHeaders({ fields, includeNumber, showKey, keyColLabel, p }: {
     <div className="flex gap-2 font-semibold uppercase text-zinc-400 border-b border-zinc-200 pb-1.5 mb-1" style={{ fontSize: p.label }}>
       {includeNumber && <span className="w-5 shrink-0">#</span>}
       <span className="flex-1">Title</span>
-      {fields.has("artist") && <span className="w-36 shrink-0">Artist</span>}
+      {fields.has("artist") && <span className="w-36 shrink-0">Subtitle</span>}
       {showKey && <span className="w-24 shrink-0">{keyColLabel}</span>}
     </div>
   );
@@ -354,7 +354,7 @@ function SetListDoc({
             <View style={s.colRow}>
               {includeNumber && <Text style={{ ...s.colLabel, width: 16 }}>#</Text>}
               <Text style={{ ...s.colLabel, flex: 1 }}>Title</Text>
-              {showArtist && <Text style={{ ...s.colLabel, width: 110 }}>Artist</Text>}
+              {showArtist && <Text style={{ ...s.colLabel, width: 110 }}>Subtitle</Text>}
               {showKey && <Text style={{ ...s.colLabel, width: 72 }}>{keyLabel}</Text>}
             </View>
             {songs.map((song) => (
@@ -532,7 +532,7 @@ export default function PDFBuilder({ setName, songs }: { setName: string; songs:
             href={pdfInstance.url ?? "#"}
             download={`${setName}.pdf`}
             onClick={(e) => { if (!pdfInstance.url) e.preventDefault(); }}
-            className={`w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors ${pdfInstance.url && !pdfInstance.loading ? "hover:bg-amber-400" : "opacity-50 pointer-events-none"}`}
+            className={`w-full flex items-center justify-center gap-2 rounded-full bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors ${pdfInstance.url && !pdfInstance.loading ? "hover:bg-amber-400" : "opacity-50 pointer-events-none"}`}
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -546,7 +546,7 @@ export default function PDFBuilder({ setName, songs }: { setName: string; songs:
               win?.addEventListener("load", () => win.print());
             }}
             disabled={!pdfInstance.url || pdfInstance.loading}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-30 transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-30 transition-colors"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />

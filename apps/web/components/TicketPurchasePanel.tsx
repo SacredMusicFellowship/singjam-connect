@@ -1,13 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
-import { CheckoutElementsProvider } from "@stripe/react-stripe-js/checkout";
-import TicketCheckoutForm from "./TicketCheckoutForm";
-
-// Loaded once at module scope, not per render — re-calling loadStripe on every
-// render refetches Stripe.js and drops the mounted Element.
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "");
+import { ticketTierAvailability as availability } from "@singjam/core";
+import { coverageFeeCents } from "@/lib/ticketFees";
 
 export type TicketType = {
   id: string;
@@ -17,6 +12,8 @@ export type TicketType = {
   currency: string;
   quantity: number | null;
   remaining: number | null;
+  sales_start_at: string | null;
+  sales_end_at: string | null;
   on_sale: boolean;
   not_yet_open: boolean;
   closed: boolean;
@@ -24,6 +21,13 @@ export type TicketType = {
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
+
+// Every tier row and the button live in one narrow column rather than the
+// page's full 896px: a full-width Buy button reads as a banner, not a button.
+// From sm up the event page's right-hand column is already that narrow, so it
+// fills it.
+const COLUMN = "w-full";
+
 
 // Buyers can't take the whole allocation in one order by accident, and it keeps
 // the stepper bounded when a tier is uncapped.
@@ -47,7 +51,7 @@ function Stepper({
         aria-label={`Remove one ${label}`}
         onClick={() => onChange(Math.max(0, value - 1))}
         disabled={value === 0}
-        className="h-8 w-8 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+        className="h-8 w-8 rounded-full border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
       >
         −
       </button>
@@ -57,7 +61,7 @@ function Stepper({
         aria-label={`Add one ${label}`}
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
-        className="h-8 w-8 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+        className="h-8 w-8 rounded-full border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
       >
         +
       </button>
@@ -67,7 +71,7 @@ function Stepper({
 
 export function TicketPurchaseSkeleton() {
   return (
-    <div className="space-y-3" aria-busy="true">
+    <div className={`space-y-3 ${COLUMN}`} aria-busy="true">
       <div className="h-4 w-24 animate-pulse rounded bg-zinc-200" />
       {[0, 1].map((i) => (
         <div key={i} className="flex items-center justify-between rounded-xl border border-zinc-200 p-3">
@@ -85,19 +89,30 @@ export function TicketPurchaseSkeleton() {
 
 export default function TicketPurchasePanel({
   jamId,
+  eventPath,
   isSignedIn,
+  timezone,
 }: {
   jamId: string;
+  /** The event page's short path, for returning here after signing in. */
+  eventPath?: string;
   isSignedIn: boolean;
+  /** The event's timezone, for dating a tier that hasn't opened yet. */
+  timezone?: string | null;
 }) {
   const [types, setTypes] = useState<TicketType[] | null>(null);
+  // What the whole event has left under its total limit; null when it has none.
+  const [eventRemaining, setEventRemaining] = useState<number | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guestEmail, setGuestEmail] = useState("");
   const [guestName, setGuestName] = useState("");
   const [promoCode, setPromoCode] = useState("");
+  // Both start ticked, per the product call: covering fees is the norm, and a
+  // buyer who does not want either can untick in one tap.
+  const [coverFees, setCoverFees] = useState(true);
+  const [marketingOptIn, setMarketingOptIn] = useState(true);
   const [showPromo, setShowPromo] = useState(false);
   const [promoBusy, setPromoBusy] = useState(false);
   // The applied discount, as previewed by the server. Cleared whenever the
@@ -115,7 +130,9 @@ export default function TicketPurchasePanel({
     fetch(`/api/jam/${jamId}/tickets/types`)
       .then((r) => r.json())
       .then((j) => {
-        if (!cancelled) setTypes(j.ticket_types ?? []);
+        if (cancelled) return;
+        setTypes(j.ticket_types ?? []);
+        setEventRemaining(j.ticket_limit?.remaining ?? null);
       })
       .catch(() => {
         if (!cancelled) setTypes([]);
@@ -156,6 +173,9 @@ export default function TicketPurchasePanel({
         // Only an applied (server-validated) code is sent, so checkout can't
         // fail on a code the buyer never successfully applied.
         ...(applied ? { promo_code: applied.code } : {}),
+        cover_fees: coverFees,
+        // Members are never asked — creating an account already subscribed them.
+        ...(isSignedIn ? {} : { marketing_opt_in: marketingOptIn }),
       }),
     });
     const json = await res.json();
@@ -167,7 +187,15 @@ export default function TicketPurchasePanel({
       // Stock moved under us, so refresh what's actually left.
       fetch(`/api/jam/${jamId}/tickets/types`)
         .then((r) => r.json())
-        .then((j) => setTypes(j.ticket_types ?? []));
+        .then((j) => {
+          setTypes(j.ticket_types ?? []);
+          setEventRemaining(j.ticket_limit?.remaining ?? null);
+        });
+      return;
+    }
+    // Local dev only: a preview of the next step, with no order behind it.
+    if (json.preview_url) {
+      window.location.href = json.preview_url;
       return;
     }
     // A fully-discounted order is already fulfilled server-side — there is no
@@ -176,7 +204,10 @@ export default function TicketPurchasePanel({
       window.location.href = `/jam/${jamId}/tickets/complete?order_id=${json.order_id}`;
       return;
     }
-    setClientSecret(json.client_secret);
+    // Card entry has its own page. Only the order id travels — the secret is
+    // retrieved there, server-side, which is what makes that page reloadable
+    // and keeps the secret out of the URL and out of history.
+    window.location.href = `/jam/${jamId}/tickets/pay?order_id=${json.order_id}`;
   }
 
   async function applyPromo() {
@@ -216,50 +247,45 @@ export default function TicketPurchasePanel({
   // Mirrors the server's check so the button state matches what the API accepts.
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim());
 
+  const subtotal = applied ? applied.total_cents : total;
+  const feeCents = coverFees ? coverageFeeCents(subtotal) : 0;
+  const payable = subtotal + feeCents;
+
   if (types === null) return <TicketPurchaseSkeleton />;
   if (types.length === 0) return null;
 
-  if (clientSecret) {
-    return (
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold tracking-wide text-zinc-700">Payment</h3>
-        <CheckoutElementsProvider stripe={stripePromise} options={{ clientSecret }}>
-          <TicketCheckoutForm onBack={() => setClientSecret(null)} />
-        </CheckoutElementsProvider>
-        <p className="text-xs text-zinc-400">
-          Your tickets are held while you pay. Payments are processed by Stripe.
-        </p>
-      </div>
-    );
-  }
-
-  const soldOut = types.every((t) => !t.on_sale);
+  // Nothing buyable right now. Kept apart from "sold out" because a tier that
+  // is merely outside its sales window still has stock, and telling a buyer an
+  // event sold out when it hasn't costs a sale.
+  const nothingOnSale = types.every((t) => !t.on_sale);
+  const soldOut = nothingOnSale && types.every((t) => t.remaining === 0);
 
   return (
-    <div className="space-y-3">
+    <div className={`space-y-3 ${COLUMN}`}>
       <h3 className="text-sm font-semibold tracking-wide text-zinc-700">Tickets</h3>
 
       {types.map((t) => {
-        const max = Math.min(MAX_PER_TIER, t.remaining ?? MAX_PER_TIER);
+        // The event's total is shared across tiers, so what this tier can add
+        // is whatever the other tiers' selections haven't already claimed.
+        const sharedLeft =
+          eventRemaining === null ? Infinity : eventRemaining - (count - (qty[t.id] ?? 0));
+        const max = Math.min(MAX_PER_TIER, t.remaining ?? MAX_PER_TIER, sharedLeft);
+        const note = availability(t, timezone);
         return (
           <div
             key={t.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 p-3"
+            // Dimmed when it can't be bought, so the tiers that can be read as
+            // the live ones at a glance.
+            className={`flex items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3 py-2 sm:py-3 ${
+              t.on_sale ? "" : "opacity-60"
+            }`}
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-zinc-900">{t.name}</p>
               {t.description && <p className="truncate text-xs text-zinc-500">{t.description}</p>}
               <p className="text-xs text-zinc-500">
                 {money(t.price_cents, t.currency)}
-                {t.not_yet_open
-                  ? " · Not on sale yet"
-                  : t.closed
-                  ? " · Sales closed"
-                  : t.remaining === 0
-                  ? " · Sold out"
-                  : t.remaining !== null && t.remaining <= 10
-                  ? ` · ${t.remaining} left`
-                  : ""}
+                {note ? ` · ${note}` : ""}
               </p>
             </div>
 
@@ -303,7 +329,7 @@ export default function TicketPurchasePanel({
             autoComplete="name"
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             placeholder="Your name"
           />
           <label className="block text-xs font-medium text-zinc-600" htmlFor="guest-email">
@@ -316,16 +342,29 @@ export default function TicketPurchasePanel({
             required
             value={guestEmail}
             onChange={(e) => setGuestEmail(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             placeholder="you@example.com"
           />
           <p className="text-xs text-zinc-400">
             We&apos;ll send your ticket here.{" "}
-            <a href={`/auth?next=${encodeURIComponent(`/jam/${jamId}`)}`} className="underline hover:text-zinc-600">
+            <a href={`/auth?next=${encodeURIComponent(eventPath ?? `/jam/${jamId}`)}`} className="underline hover:text-zinc-600">
               Or sign in
             </a>
             .
           </p>
+
+          {/* Asked here rather than by the Buy button because it is a question
+              about the address just typed, not about the payment. Guests only —
+              a member subscribed when they created their account. */}
+          <label className="flex cursor-pointer items-start gap-2.5 border-t border-zinc-100 pt-2.5 text-sm text-zinc-600">
+            <input
+              type="checkbox"
+              checked={marketingOptIn}
+              onChange={(e) => setMarketingOptIn(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-amber-500"
+            />
+            <span>Email me about future SingJam events</span>
+          </label>
         </div>
       )}
 
@@ -371,13 +410,13 @@ export default function TicketPurchasePanel({
                 }}
                 placeholder="Promo code"
                 autoCapitalize="characters"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
+                className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={applyPromo}
                 disabled={promoBusy || !promoCode.trim()}
-                className="shrink-0 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+                className="shrink-0 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
               >
                 {promoBusy ? "Checking…" : "Apply"}
               </button>
@@ -392,30 +431,47 @@ export default function TicketPurchasePanel({
           <button
             type="button"
             onClick={() => setShowPromo(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-xs font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+            className="flex w-full items-center justify-center gap-1.5 rounded-full border border-dashed border-zinc-300 px-3 py-2 text-[0.85rem] font-medium text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
           >
-            <span aria-hidden="true">＋</span> Add a promo code
+            <span aria-hidden="true">＋</span> Promo Code
           </button>
         )
       )}
 
+      {/* Last thing before paying, and deliberately after the promo block: the
+          amount depends on the discounted total, so it has to be read where the
+          buyer can already see what they are actually paying. */}
+      {count > 0 && !nothingOnSale && (
+        <label className="flex cursor-pointer items-start gap-2.5 text-sm text-zinc-600">
+          <input
+            type="checkbox"
+            checked={coverFees}
+            onChange={(e) => setCoverFees(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-amber-500"
+          />
+          <span>
+            Cover the {money(coverageFeeCents(subtotal), currency)} processing fee so all of my
+            ticket goes to SingJam
+          </span>
+        </label>
+      )}
+
       <button
         onClick={startCheckout}
-        disabled={busy || count === 0 || soldOut || (!isSignedIn && !emailLooksValid)}
-        className="w-full rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+        disabled={busy || count === 0 || nothingOnSale || (!isSignedIn && !emailLooksValid)}
+        className="w-full rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
       >
         {soldOut
           ? "Sold out"
+          : nothingOnSale
+          ? "Sales closed"
           : busy
           ? "Starting checkout…"
           : count === 0
           ? "Select tickets"
           : !isSignedIn && !emailLooksValid
           ? "Enter your email"
-          : `Buy ${count} ticket${count === 1 ? "" : "s"} · ${money(
-              applied ? applied.total_cents : total,
-              currency
-            )}`}
+          : `Buy ${count} ticket${count === 1 ? "" : "s"} · ${money(payable, currency)}`}
       </button>
     </div>
   );

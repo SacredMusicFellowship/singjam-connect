@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canManageJam } from "@/lib/jamAuthz";
 import TicketTierManager from "@/components/TicketTierManager";
+import { jamPathById } from "@/lib/shortRef";
 
 // Ticket management lives per-event rather than under /admin: hosts own their
 // own events, and routing this through site-admin would make one person a
@@ -19,7 +20,7 @@ export default async function ManageTicketsPage({ params }: { params: Promise<{ 
   const admin = supabaseAdmin();
   const { data: jam } = await admin
     .from("jams")
-    .select("id, name, visibility, host_user_id")
+    .select("id, name, visibility, host_user_id, timezone")
     .eq("id", id)
     .maybeSingle();
 
@@ -34,7 +35,7 @@ export default async function ManageTicketsPage({ params }: { params: Promise<{ 
   return (
     <div className="space-y-4">
       <div>
-        <Link href={`/jam/${id}`} className="text-xs text-zinc-500 hover:text-zinc-700">
+        <Link href={await jamPathById(id)} className="text-xs text-zinc-500 hover:text-zinc-700">
           ← {jam.name ?? "Back to jam"}
         </Link>
         <h1 className="mt-1 text-xl font-semibold text-zinc-900">Tickets</h1>
@@ -51,7 +52,8 @@ export default async function ManageTicketsPage({ params }: { params: Promise<{ 
         </p>
       )}
 
-      <TicketTierManager jamId={id} />
+      {/* Sales windows are entered in the event's timezone, not the host's. */}
+      <TicketTierManager jamId={id} jamName={jam.name} timezone={jam.timezone} />
     </div>
   );
 }

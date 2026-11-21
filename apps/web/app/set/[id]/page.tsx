@@ -1,10 +1,15 @@
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { attachSongCards, fetchAllRows } from "@singjam/core";
 import { getServerSupabase, getServerUser } from "@/lib/supabase/cached";
 import SetDetail from "@/components/SetDetail";
+import type { SongKnowledge } from "@/components/setDetailShared";
 import SetRequestAccess from "@/components/SetRequestAccess";
 import SetJoinPrompt from "@/components/SetJoinPrompt";
+import SetGuestPrompt from "@/components/SetGuestPrompt";
+import ShortUrl from "@/components/ShortUrl";
+import { resolveSetId } from "@/lib/shortRef";
 
 function supabaseAdmin() {
   return createClient(
@@ -18,7 +23,7 @@ const getSet = cache(async (id: string) => {
   const supabase = await getServerSupabase();
   const { data } = await supabase
     .from("sets")
-    .select("id, name, description, owner_user_id, jam_id, link_sharing, youtube_playlist_id, youtube_playlist_fingerprint, spotify_playlist_id, spotify_playlist_fingerprint, ultimate_guitar_playlist_url, profiles(display_name, last_name, username, avatar_url)")
+    .select("id, short_code, name, description, owner_user_id, jam_id, link_sharing, youtube_playlist_id, youtube_playlist_fingerprint, spotify_playlist_id, spotify_playlist_fingerprint, ultimate_guitar_playlist_url, profiles(display_name, last_name, username, avatar_url)")
     .eq("id", id)
     .single();
   return data as any;
@@ -26,16 +31,21 @@ const getSet = cache(async (id: string) => {
 
 const getSetSongs = cache(async (id: string) => {
   const supabase = await getServerSupabase();
-  const { data } = await supabase
-    .from("set_songs")
-    .select("id, song_id, position, key_note, played, leader_user_ids, songs(title, display_artist, slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_cultures(cultures(name), context), song_genres(genres(name)), song_themes(themes(name)), song_recording_artists(position, youtube_url, spotify_url))")
-    .eq("set_id", id)
-    .order("position", { ascending: true });
-  return (data ?? []) as any[];
+  // Cards come alongside the rows, not after them (one round trip; migration 235).
+  const [{ data }, { data: cards }] = await Promise.all([
+    supabase
+      .from("set_songs")
+      .select("id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), slug, chord_chart_url, youtube_url, tonality, year, meter, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(name, type)), song_recording_artists(position, youtube_url, spotify_url))")
+      .eq("set_id", id)
+      .order("position", { ascending: true }),
+    supabase.rpc("set_song_cards", { p_set_id: id }),
+  ]);
+  return attachSongCards((data ?? []) as any[], cards);
 });
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const id = await resolveSetId((await params).id);
+  if (!id) return { title: "Set" };
   const [set, songs] = await Promise.all([getSet(id), getSetSongs(id)]);
   if (!set) return { title: "Set" };
   const name = set.name ?? "Set";
@@ -49,7 +59,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: name,
     description,
-    openGraph: { title: name, description },
+    alternates: { canonical: `/set/${set.short_code}` },
+    openGraph: { title: name, description, url: `/set/${set.short_code}` },
   };
 }
 
@@ -60,11 +71,20 @@ export default async function SetPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }) {
-  const { id } = await params;
-  const { invite: inviteToken } = await searchParams;
+  const [id, user, { invite: inviteToken }] = await Promise.all([
+    resolveSetId((await params).id),
+    getServerUser(),
+    searchParams,
+  ]);
+  if (!id) notFound();
   const supabase = await getServerSupabase();
 
-  const user = await getServerUser();
+  // RLS decides whether the viewer can see the linked jam; when they can, the
+  // same read gives the short code for the "Back to jam" link. Started now so
+  // it overlaps the reads below rather than following them.
+  const linkedJamPromise = getSet(id).then(async (s) =>
+    s?.jam_id ? (await supabase.from("jams").select("id, short_code").eq("id", s.jam_id).maybeSingle()).data : null
+  );
 
   const [set, songs, collabRes, requestsRes, profileRes] = await Promise.all([
     getSet(id),
@@ -150,7 +170,7 @@ export default async function SetPage({
       if (invite && (!(invite as any).user_id || (invite as any).user_id === user.id)) {
         const { data: claimed } = await admin
           .from("set_collaborators")
-          .update({ user_id: user.id, status: "accepted" })
+          .update({ user_id: user.id, status: "accepted", invitee_email: null })
           .eq("id", (invite as any).id)
           .select("id, user_id, status, role, profiles!user_id(display_name, last_name, username, avatar_url)")
           .single();
@@ -169,13 +189,14 @@ export default async function SetPage({
   // Gate by visibility mode
   if (!isOwner && !isCollaborator && !isAdmin && !isSongEditor) {
     if (set.link_sharing === "private") {
-      return <SetRequestAccess setId={set.id} setName={set.name} isLoggedIn={!!user} inviteToken={inviteToken} />;
+      return <SetRequestAccess setId={set.id} shortCode={set.short_code} setName={set.name} isLoggedIn={!!user} inviteToken={inviteToken} />;
     }
     if (set.link_sharing === "link" && !user) {
       // Open-join sets require a SingJam account to auto-join
       return (
         <SetJoinPrompt
           setId={set.id}
+          shortCode={set.short_code}
           setName={set.name}
           ownerName={set.profiles?.display_name ?? set.profiles?.username ?? null}
           mode="join"
@@ -191,22 +212,27 @@ export default async function SetPage({
   const participantIds = [set.owner_user_id, ...collaborators.map((c: any) => c.user_id)].filter(Boolean) as string[];
 
   // Fetch all knowledge levels for every participant × song combination
-  const songKnowledge = songIds.length > 0 && participantIds.length > 0
-    ? ((await supabase
-        .from("user_songs")
-        .select("user_id, song_id, confidence")
-        .in("user_id", participantIds)
-        .in("song_id", songIds)
-        .in("confidence", ["lead", "support", "learn"])
-      ).data ?? []) as { user_id: string; song_id: string; confidence: string }[]
-    : [];
-
-  const canAccessJam = set.jam_id
-    ? await supabase.from("jams").select("id").eq("id", set.jam_id).maybeSingle().then(r => r.data !== null)
-    : false;
+  const [songKnowledge, linkedJam] = await Promise.all([
+    songIds.length > 0 && participantIds.length > 0
+      ? fetchAllRows<SongKnowledge>((from, to) =>
+          supabase
+            .from("user_songs")
+            .select("user_id, song_id, confidence, key_note")
+            .in("user_id", participantIds)
+            .in("song_id", songIds)
+            .in("confidence", ["lead", "support", "learn"])
+            .order("user_id")
+            .order("song_id")
+            .range(from, to)
+        )
+      : Promise.resolve([] as SongKnowledge[]),
+    linkedJamPromise,
+  ]);
+  const canAccessJam = linkedJam !== null;
 
   return (
     <Suspense>
+      <ShortUrl base="set" id={set.id} shortCode={set.short_code} />
       <SetDetail
         set={set}
         initialSongs={songs}
@@ -218,11 +244,13 @@ export default async function SetPage({
         isOwner={isOwner}
         canManage={canManage}
         isAdmin={isAdmin}
-        isSongEditor={isSongEditor}
         isPublicViewer={isPublicViewer}
         songKnowledge={songKnowledge}
         canAccessJam={canAccessJam}
+        jamShortCode={(linkedJam as any)?.short_code ?? null}
+        renderId={crypto.randomUUID()}
       />
+      {!user && <SetGuestPrompt setId={set.id} shortCode={set.short_code} forEvent={!!set.jam_id} />}
     </Suspense>
   );
 }

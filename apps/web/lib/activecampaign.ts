@@ -1,4 +1,5 @@
 import { resend, FROM_ADDRESS } from "@/lib/resend";
+import { sideEffectsBlocked } from "@/lib/devSafety";
 
 const AC_API_URL = process.env.AC_API_URL;
 const AC_API_KEY = process.env.AC_API_KEY;
@@ -65,22 +66,28 @@ const GENRE_MAP: Record<string, string> = {
   "Spiritual": "Non-denominational sacred music",
 };
 
+// AC occasionally rejects a single call with a 429 or 5xx in the middle of an
+// otherwise healthy sync, so those are retried before being reported as failures.
+const RETRY_DELAYS_MS = [1000, 3000];
+
 async function acFetch(path: string, options: RequestInit) {
   if (!AC_API_URL || !AC_API_KEY) return null;
-  const res = await fetch(`${AC_API_URL}/api/3${path}`, {
-    ...options,
-    headers: {
-      "Api-Token": AC_API_KEY,
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-  });
-  const text = await res.text();
-  if (!res.ok) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${AC_API_URL}/api/3${path}`, {
+      ...options,
+      headers: {
+        "Api-Token": AC_API_KEY,
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+      },
+    });
+    const text = await res.text();
+    if (res.ok) return text ? JSON.parse(text) : {};
+    const retryable = res.status === 429 || res.status >= 500;
     console.error(`[ActiveCampaign] ${options.method ?? "GET"} ${path} → ${res.status}`, text);
-    return null;
+    if (!retryable || attempt >= RETRY_DELAYS_MS.length) return null;
+    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
   }
-  return text ? JSON.parse(text) : {};
 }
 
 export interface ContactProfile {
@@ -94,9 +101,17 @@ export interface ContactProfile {
 
 // Upserts the contact, subscribes to all lists, applies the SingJam App User tag,
 // and syncs any profile fields provided. Safe to call on every signup and profile save.
+// Pass `tag: false` for people without an account (guest ticket buyers who opted
+// in) — the tag means "has a SingJam account".
 // Returns an array of failure descriptions — empty means fully successful.
-export async function syncContact(email: string, profile: ContactProfile = {}): Promise<string[]> {
+export async function syncContact(
+  email: string,
+  profile: ContactProfile = {},
+  { tag = true }: { tag?: boolean } = {}
+): Promise<string[]> {
   if (!AC_API_URL || !AC_API_KEY) return [];
+  // Treated like an unconfigured key, so callers don't record a sync failure.
+  if (sideEffectsBlocked(`ActiveCampaign sync for ${email}`)) return [];
 
   const fieldValues: { field: string; value: string }[] = [];
 
@@ -174,7 +189,9 @@ export async function syncContact(email: string, profile: ContactProfile = {}): 
     subscribeIfAllowed("1"),
     subscribeIfAllowed("4"),
     subscribeIfAllowed("9"),
-    acFetch("/contactTags", { method: "POST", body: JSON.stringify({ contactTag: { contact: contactId, tag: TAG_ID } }) }),
+    tag
+      ? acFetch("/contactTags", { method: "POST", body: JSON.stringify({ contactTag: { contact: contactId, tag: TAG_ID } }) })
+      : Promise.resolve(true),
   ]);
 
   const failed = [
@@ -191,10 +208,33 @@ export async function syncContact(email: string, profile: ContactProfile = {}): 
   return failed;
 }
 
+const FIRST_TIME_ATTENDEE_TAG_ID = "37"; // SingJam First-Time Attendee
+
+// Applies the first-time attendee tag. Upserts by email only, so it never
+// changes lists or overwrites names. Returns false if AC rejected either step.
+export async function tagFirstTimeAttendee(email: string): Promise<boolean> {
+  if (!AC_API_URL || !AC_API_KEY) return false;
+  if (sideEffectsBlocked(`ActiveCampaign first-time attendee tag for ${email}`)) return false;
+
+  const contactData = await acFetch("/contact/sync", {
+    method: "POST",
+    body: JSON.stringify({ contact: { email } }),
+  });
+  const contactId: string | undefined = contactData?.contact?.id;
+  if (!contactId) return false;
+
+  const result = await acFetch("/contactTags", {
+    method: "POST",
+    body: JSON.stringify({ contactTag: { contact: contactId, tag: FIRST_TIME_ATTENDEE_TAG_ID } }),
+  });
+  return result !== null;
+}
+
 // Permanently removes the contact from ActiveCampaign. Safe to call for
 // emails with no matching contact — treated as already-deleted, not a failure.
 export async function deleteContact(email: string): Promise<boolean> {
   if (!AC_API_URL || !AC_API_KEY) return true;
+  if (sideEffectsBlocked(`ActiveCampaign delete for ${email}`)) return true;
 
   const found = await acFetch(`/contacts?email=${encodeURIComponent(email)}`, { method: "GET" });
   const contactId: string | undefined = found?.contacts?.[0]?.id;

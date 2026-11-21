@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const {
   mockGetUser, mockBearerGetUser, mockAdminFrom, mockRpc, mockSessionsCreate,
@@ -40,7 +40,7 @@ import { POST } from "./route";
 
 function chain(result: any) {
   const c: any = {};
-  for (const m of ["select", "eq", "ilike", "update", "insert", "order", "limit"]) {
+  for (const m of ["select", "eq", "in", "ilike", "update", "insert", "order", "limit"]) {
     c[m] = vi.fn().mockReturnValue(c);
   }
   c.single = vi.fn().mockResolvedValue(result);
@@ -99,8 +99,61 @@ beforeEach(() => {
   mockAdminFrom.mockReset();
   mockRpc.mockReset();
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("POST /api/jam/[id]/tickets/checkout", () => {
+  it("previews the payment page under next dev, with no order, hold or Stripe session", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ALLOW_DEV_SIDE_EFFECTS", "");
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Winter Sing", visibility: "official" } }))
+      .mockReturnValueOnce(chain({ data: [{ id: TYPE_ID, name: "General", price_cents: 1500, currency: "usd" }] }));
+
+    const res = await POST(makeReq({ items: [{ ticket_type_id: TYPE_ID, quantity: 2 }], cover_fees: true }), params);
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).preview_url).toBe(`/jam/${JAM_ID}/tickets/pay?preview=${TYPE_ID}%3A2&cover=1`);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+    expect(mockFulfil).not.toHaveBeenCalled();
+  });
+
+  it("sends a free order under next dev straight to the confirmation preview, reserving nothing", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ALLOW_DEV_SIDE_EFFECTS", "");
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Winter Sing", visibility: "official" } }))
+      .mockReturnValueOnce(chain({ data: [{ id: TYPE_ID, name: "General", price_cents: 1500, currency: "usd" }] }));
+    mockResolvePromo.mockResolvedValue({
+      valid: true, code: "COMP100", label: "100% off", promoCodeId: "pc-free",
+      promotionCodeId: "promo_free", discountCents: 1500, totalCents: 0,
+    });
+
+    const res = await POST(makeReq({ ...ONE_TICKET, promo_code: "COMP100" }), params);
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).preview_url).toBe(`/jam/${JAM_ID}/tickets/complete?preview=${TYPE_ID}%3A1&promo=COMP100`);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockFulfil).not.toHaveBeenCalled();
+  });
+
+  it("never reserves under next dev, even with ALLOW_DEV_SIDE_EFFECTS=true", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ALLOW_DEV_SIDE_EFFECTS", "true");
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { id: JAM_ID, name: "Winter Sing", visibility: "official" } }))
+      .mockReturnValueOnce(chain({ data: [{ id: TYPE_ID, name: "General", price_cents: 1500, currency: "usd" }] }));
+
+    const res = await POST(makeReq(ONE_TICKET), params);
+
+    expect((await res.json()).preview_url).toMatch(/\/tickets\/pay\?/);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+  });
+
   it("rejects an anonymous buyer with no email, rather than 401ing them", async () => {
     // Guest checkout is allowed, so the gate is a usable email, not an account.
     mockGetUser.mockResolvedValue({ data: { user: null } });
@@ -316,6 +369,35 @@ describe("POST /api/jam/[id]/tickets/checkout", () => {
     expect(mockSessionsCreate.mock.calls[0][0].discounts).toEqual([{ promotion_code: "promo_123" }]);
   });
 
+  it("records which promo code a charged order used", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    happyPathDb();
+    mockAdminFrom.mockReturnValueOnce(chain({ error: null })); // promo_code_id update
+    mockResolvePromo.mockResolvedValue({
+      valid: true, code: "EARLYBIRD", label: "10% off", promoCodeId: "pc-1",
+      promotionCodeId: "promo_123", discountCents: 300, totalCents: 2700,
+    });
+    mockSessionsCreate.mockResolvedValue({ id: "cs_1", client_secret: "cs_secret" });
+
+    expect((await POST(makeReq({ ...ONE_TICKET, promo_code: "EARLYBIRD" }), params)).status).toBe(200);
+    expect(mockAdminFrom.mock.results[TRAILING + 1].value.update).toHaveBeenCalledWith({ promo_code_id: "pc-1" });
+  });
+
+  it("still starts checkout when the promo code can't be recorded", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    happyPathDb();
+    mockAdminFrom.mockReturnValueOnce(chain({ error: { message: "column does not exist" } }));
+    mockResolvePromo.mockResolvedValue({
+      valid: true, code: "EARLYBIRD", label: "10% off", promoCodeId: "pc-1",
+      promotionCodeId: "promo_123", discountCents: 300, totalCents: 2700,
+    });
+    mockSessionsCreate.mockResolvedValue({ id: "cs_1", client_secret: "cs_secret" });
+
+    const res = await POST(makeReq({ ...ONE_TICKET, promo_code: "EARLYBIRD" }), params);
+    expect(res.status).toBe(200);
+    expect((await res.json()).client_secret).toBe("cs_secret");
+  });
+
   it("refuses a code not registered for this event and releases the stock", async () => {
     // Codes are account-wide in Stripe, so this is what stops one event's
     // discount being redeemed on another event's checkout.
@@ -348,7 +430,7 @@ describe("POST /api/jam/[id]/tickets/checkout", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
     happyPathDb();
     mockResolvePromo.mockResolvedValue({
-      valid: true, code: "COMP100", label: "100% off",
+      valid: true, code: "COMP100", label: "100% off", promoCodeId: "pc-free",
       promotionCodeId: "promo_free", discountCents: 3000, totalCents: 0,
     });
     mockFulfil.mockResolvedValue({ id: ORDER_ID });
@@ -362,6 +444,8 @@ describe("POST /api/jam/[id]/tickets/checkout", () => {
     expect(mockSessionsCreate).not.toHaveBeenCalled();
     // Fulfilled through the same path a charged order takes, recording $0.
     expect(mockFulfil).toHaveBeenCalledWith(expect.anything(), ORDER_ID, { amountCents: 0 });
+    // Stripe never sees this use, so the order carries the code for the count.
+    expect(mockAdminFrom.mock.results[TRAILING].value.update).toHaveBeenCalledWith({ promo_code_id: "pc-free" });
   });
 
   it("releases the stock if a free order can no longer be fulfilled", async () => {
@@ -408,5 +492,90 @@ describe("POST /api/jam/[id]/tickets/checkout", () => {
     expect(res.status).toBe(502);
     const updateChain = mockAdminFrom.mock.results[3].value;
     expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }));
+  });
+});
+
+describe("cover fees", () => {
+  // The route reads the flag off the body and defaults it to false, so a
+  // request that says nothing is never charged extra.
+  async function post(body: any) {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    happyPathDb();
+    mockSessionsCreate.mockResolvedValue({ client_secret: "cs_secret" });
+    return POST(makeReq({ ...ONE_TICKET, email: "guest@example.com", ...body }), params as any);
+  }
+  const lineItems = () => mockSessionsCreate.mock.calls[0][0].line_items;
+
+  it("adds a processing fee line item when the buyer covers it", async () => {
+    await post({ cover_fees: true });
+    const fee = lineItems().find((l: any) => l.price_data.product_data.name === "Processing fee");
+    // $30.00 order: (3000 + 30) / 0.971 = 3120.5 -> 3121, so 121c.
+    expect(fee).toBeTruthy();
+    expect(fee.quantity).toBe(1);
+    expect(fee.price_data.unit_amount).toBe(121);
+  });
+
+  it("charges only the ticket when the buyer unticks it", async () => {
+    await post({ cover_fees: false });
+    expect(lineItems().some((l: any) => l.price_data.product_data.name === "Processing fee")).toBe(false);
+  });
+
+  it("adds nothing when the request does not mention fees", async () => {
+    await post({});
+    expect(lineItems()).toHaveLength(1);
+  });
+
+  it("keeps the fee as its own line rather than inflating the ticket price", async () => {
+    await post({ cover_fees: true });
+    const ticket = lineItems().find((l: any) => l.price_data.product_data.name !== "Processing fee");
+    expect(ticket.price_data.unit_amount).toBe(1500);
+  });
+});
+
+describe("mailing list opt-in", () => {
+  it("records a guest's opt-in against the order", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    happyPathDb();
+    // The opt-in write is an extra ticket_orders chain ahead of the rest.
+    mockAdminFrom.mockReturnValueOnce(chain({ error: null }));
+    mockSessionsCreate.mockResolvedValue({ client_secret: "cs_secret" });
+
+    await POST(
+      makeReq({ ...ONE_TICKET, email: "guest@example.com", marketing_opt_in: true }),
+      params as any
+    );
+
+    const updates = mockAdminFrom.mock.results
+      .map((r: any) => r.value.update)
+      .filter((u: any) => u && u.mock.calls.length);
+    expect(updates.some((u: any) => u.mock.calls.some((c: any) => c[0]?.marketing_opt_in === true))).toBe(true);
+  });
+
+  it("does not record an opt-in that was never given", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    happyPathDb();
+    mockSessionsCreate.mockResolvedValue({ client_secret: "cs_secret" });
+
+    await POST(makeReq({ ...ONE_TICKET, email: "guest@example.com" }), params as any);
+
+    const updates = mockAdminFrom.mock.results
+      .map((r: any) => r.value.update)
+      .filter((u: any) => u && u.mock.calls.length);
+    expect(updates.some((u: any) => u.mock.calls.some((c: any) => c[0]?.marketing_opt_in === true))).toBe(false);
+  });
+
+  it("ignores the flag for a signed-in member, who is never asked", async () => {
+    // Members subscribe by creating an account; a member order claiming an
+    // opt-in did not come from a checkbox we showed.
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "member@singjam.org" } } });
+    happyPathDb();
+    mockSessionsCreate.mockResolvedValue({ client_secret: "cs_secret" });
+
+    await POST(makeReq({ ...ONE_TICKET, marketing_opt_in: true }), params as any);
+
+    const updates = mockAdminFrom.mock.results
+      .map((r: any) => r.value.update)
+      .filter((u: any) => u && u.mock.calls.length);
+    expect(updates.some((u: any) => u.mock.calls.some((c: any) => c[0]?.marketing_opt_in === true))).toBe(false);
   });
 });

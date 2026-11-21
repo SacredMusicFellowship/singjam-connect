@@ -4,11 +4,16 @@ import { supabase } from '@/lib/supabase';
 // "Copy event" (which prefills /jam/new?copy=). Returns the new jam id, or null
 // on failure. Genres carry over; official events become community copies.
 export async function duplicateJam(jamId: string, userId: string): Promise<string | null> {
-  const { data: jam } = await supabase
-    .from('jams')
-    .select('name, starts_at, ends_at, neighborhood, full_address, notes, visibility, capacity, timezone')
-    .eq('id', jamId)
-    .maybeSingle();
+  // The address comes through jam_full_address (migration 173), so copying a
+  // public jam you haven't RSVP'd to doesn't hand you it.
+  const [{ data: jam }, { data: fullAddress }] = await Promise.all([
+    supabase
+      .from('jams')
+      .select('name, starts_at, ends_at, neighborhood, notes, visibility, capacity, timezone')
+      .eq('id', jamId)
+      .maybeSingle(),
+    supabase.rpc('jam_full_address', { jam_id_param: jamId }),
+  ]);
   if (!jam) return null;
 
   const j = jam as any;
@@ -18,7 +23,7 @@ export async function duplicateJam(jamId: string, userId: string): Promise<strin
     starts_at: j.starts_at,
     ends_at: j.ends_at,
     neighborhood: j.neighborhood,
-    full_address: j.full_address,
+    full_address: (fullAddress as string | null) ?? null,
     notes: j.notes,
     visibility: j.visibility === 'official' ? 'community' : j.visibility,
     capacity: j.capacity,
@@ -27,13 +32,13 @@ export async function duplicateJam(jamId: string, userId: string): Promise<strin
   }).select('id').single();
   if (error || !data?.id) return null;
 
-  const { data: genreRows } = await supabase
-    .from('jam_genres')
-    .select('genre_id')
+  const { data: tagRows } = await supabase
+    .from('jam_tags')
+    .select('tag_id')
     .eq('jam_id', jamId);
-  if (genreRows && genreRows.length > 0) {
-    await supabase.from('jam_genres').insert(
-      genreRows.map((g: any) => ({ jam_id: data.id, genre_id: g.genre_id }))
+  if (tagRows && tagRows.length > 0) {
+    await supabase.from('jam_tags').insert(
+      tagRows.map((t: any) => ({ jam_id: data.id, tag_id: t.tag_id }))
     );
   }
   return data.id;

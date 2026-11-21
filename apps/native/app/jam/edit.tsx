@@ -8,11 +8,15 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import JamTagPicker, { jamTagSummary, loadJamTagOptions, type JamTagOption } from '@/components/JamTagPicker';
+import { useAddressTimezone } from '@/lib/useAddressTimezone';
+import {
+  JAM_IMAGE_TYPE_ERROR, isJamImageType, isoToZonedInput, jamTags, zonedInputToIso, zonedInputToPickerDate, pickersToZonedInput, zoneAbbreviation, resolvePlaceAddress,
+} from '@singjam/core';
 
 const PLACES_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
-type LookupItem = { id: string; name: string };
 type PlaceSuggestion = { description: string; neighborhood: string; placeId: string };
 
 const VISIBILITY_OPTIONS: { value: 'community' | 'private'; label: string }[] = [
@@ -110,7 +114,16 @@ function LocationModal({
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
-                onPress={() => { onSelect(item.description, item.neighborhood); onClose(); }}
+                onPress={async () => {
+                  onClose();
+                  const address = await resolvePlaceAddress({
+                    placeId: item.placeId,
+                    mainText: item.neighborhood,
+                    fallback: item.description,
+                    apiKey: PLACES_KEY,
+                  });
+                  onSelect(address, item.neighborhood);
+                }}
                 className="px-4 py-3 border-b border-zinc-100"
               >
                 <Text className="text-zinc-900" numberOfLines={2}>📍 {item.description}</Text>
@@ -121,7 +134,7 @@ function LocationModal({
                 <View className="items-center pt-12">
                   <Text className="text-zinc-400">No results</Text>
                 </View>
-              ) : null
+              ) : undefined
             }
           />
         )}
@@ -132,52 +145,6 @@ function LocationModal({
 
 // ── Genre/Theme multi-select modal ────────────────────────────────────────────
 
-function MultiSelectModal({
-  visible,
-  title,
-  items,
-  selected,
-  onClose,
-  onToggle,
-}: {
-  visible: boolean;
-  title: string;
-  items: LookupItem[];
-  selected: string[];
-  onClose: () => void;
-  onToggle: (id: string) => void;
-}) {
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View className="flex-1 bg-white">
-        <View className="flex-row items-center px-4 pt-4 pb-3 border-b border-zinc-100">
-          <View style={{ width: 48 }} />
-          <Text className="flex-1 text-center font-semibold text-zinc-900">{title}</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text className="text-amber-600 font-medium">Done</Text>
-          </TouchableOpacity>
-        </View>
-        <FlatList
-          data={items}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => {
-            const checked = selected.includes(item.id);
-            return (
-              <TouchableOpacity
-                onPress={() => onToggle(item.id)}
-                className={`px-4 py-3 border-b border-zinc-100 flex-row items-center justify-between ${checked ? 'bg-amber-50' : ''}`}
-              >
-                <Text className={`${checked ? 'text-amber-800 font-semibold' : 'text-zinc-900'}`}>{item.name}</Text>
-                {checked && <Ionicons name="checkmark" size={16} color="#d97706" />}
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </View>
-    </Modal>
-  );
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDateDisplay(d: Date): string {
@@ -186,10 +153,6 @@ function formatDateDisplay(d: Date): string {
 
 function formatTimeDisplay(d: Date): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function isoToDate(iso: string | null): Date {
-  return iso ? new Date(iso) : new Date();
 }
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -203,7 +166,7 @@ export default function EditJamScreen() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [visibility, setVisibility] = useState<'community' | 'private'>('community');
+  const [visibility, setVisibility] = useState<'community' | 'private' | 'official'>('community');
   const [capacity, setCapacity] = useState('');
   const [guestsCanInvite, setGuestsCanInvite] = useState(false);
 
@@ -213,84 +176,83 @@ export default function EditJamScreen() {
   const [locationTbd, setLocationTbd] = useState(false);
   const [fullAddress, setFullAddress] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
+  const [savedLocation, setSavedLocation] = useState<{ address: string | null; timezone: string | null }>({ address: null, timezone: null });
+  const { timezone, resolving: resolvingTimezone } = useAddressTimezone(
+    locationTbd ? null : fullAddress, savedLocation.address, savedLocation.timezone
+  );
 
-  const [genres, setGenres] = useState<LookupItem[]>([]);
-  const [themes, setThemes] = useState<LookupItem[]>([]);
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [allTags, setAllTags] = useState<JamTagOption[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [startPickerVisible, setStartPickerVisible] = useState(false);
   const [endPickerVisible, setEndPickerVisible] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
-  const [genreModalVisible, setGenreModalVisible] = useState(false);
-  const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [tagModalVisible, setTagModalVisible] = useState(false);
 
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [coverAsset, setCoverAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [imageRemoved, setImageRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     async function load() {
-      const [jamResult, genreResult, themeResult, jamGenresResult, jamThemesResult] = await Promise.all([
-        supabase.from('jams').select('*').eq('id', id).single(),
-        supabase.from('genres').select('id, name').order('name'),
-        supabase.from('themes').select('id, name').order('name'),
-        supabase.from('jam_genres').select('genre_id').eq('jam_id', id),
-        supabase.from('jam_themes').select('theme_id').eq('jam_id', id),
+      const [jamResult, tagOptions, jamTagsResult, addressResult] = await Promise.all([
+        supabase
+          .from('jams')
+          .select('name, notes, visibility, capacity, guests_can_invite, timezone, starts_at, ends_at, neighborhood, image_url')
+          .eq('id', id)
+          .single(),
+        loadJamTagOptions().catch(() => [] as JamTagOption[]),
+        supabase.from('jam_tags').select('tags(id, name, type)').eq('jam_id', id),
+        supabase.rpc('jam_full_address', { jam_id_param: id }),
       ]);
 
       if (!jamResult.data) { setNotFound(true); setLoadingJam(false); return; }
 
-      const j = jamResult.data as any;
+      const j = { ...(jamResult.data as any), full_address: (addressResult.data as string | null) ?? null };
       setName(j.name ?? '');
       setDescription(j.notes ?? '');
-      setVisibility(j.visibility === 'private' ? 'private' : 'community');
+      setVisibility(j.visibility);
       setCapacity(j.capacity?.toString() ?? '');
       setGuestsCanInvite(j.guests_can_invite ?? false);
 
-      const startsAt = j.starts_at ? new Date(j.starts_at) : new Date();
-      const endsAt = j.ends_at ? new Date(j.ends_at) : null;
+      // The pickers show the venue's wall clock, not the device's.
+      const tz = j.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const startsAt = zonedInputToPickerDate(isoToZonedInput(j.starts_at, tz)) ?? new Date();
+      const endsAt = zonedInputToPickerDate(isoToZonedInput(j.ends_at, tz));
       setDate(startsAt);
       setStartTime(startsAt);
       setEndTime(endsAt);
 
       const isTbd = j.neighborhood === 'TBD' && !j.full_address;
+      const address = isTbd ? '' : (j.full_address ?? j.neighborhood ?? '');
       setLocationTbd(isTbd);
-      setFullAddress(isTbd ? '' : (j.full_address ?? j.neighborhood ?? ''));
+      setFullAddress(address);
       setNeighborhood(isTbd ? '' : (j.neighborhood ?? ''));
+      setSavedLocation({ address: isTbd ? null : address, timezone: tz });
 
       setExistingImageUrl(j.image_url ?? null);
-      setGenres((genreResult.data as LookupItem[]) ?? []);
-      setThemes((themeResult.data as LookupItem[]) ?? []);
-      setSelectedGenres((jamGenresResult.data ?? []).map((r: any) => r.genre_id));
-      setSelectedThemes((jamThemesResult.data ?? []).map((r: any) => r.theme_id));
+      setAllTags(tagOptions);
+      setSelectedTags(jamTags(jamTagsResult.data as any).map((t) => t.id as string));
       setLoadingJam(false);
     }
     load();
   }, [id]);
 
-  function toggleGenre(itemId: string) {
-    setSelectedGenres(prev => prev.includes(itemId) ? prev.filter(x => x !== itemId) : [...prev, itemId]);
+  function toggleTag(itemId: string) {
+    setSelectedTags(prev => prev.includes(itemId) ? prev.filter(x => x !== itemId) : [...prev, itemId]);
   }
 
-  function toggleTheme(itemId: string) {
-    setSelectedThemes(prev => prev.includes(itemId) ? prev.filter(x => x !== itemId) : [...prev, itemId]);
-  }
-
-  function buildStartsAt(): string {
-    const d = new Date(date);
-    d.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
-    return d.toISOString();
+  function buildStartsAt(): string | null {
+    return zonedInputToIso(pickersToZonedInput(date, startTime), timezone);
   }
 
   function buildEndsAt(): string | null {
     if (!endTime) return null;
-    const d = new Date(date);
-    d.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
-    return d.toISOString();
+    return zonedInputToIso(pickersToZonedInput(date, endTime), timezone);
   }
 
   async function handleSave() {
@@ -298,46 +260,60 @@ export default function EditJamScreen() {
     if (!locationTbd && !fullAddress) { setError('Add a location or mark it as TBD.'); return; }
 
     setSaving(true);
-    const { error: updateError } = await supabase.from('jams').update({
-      name: name.trim() || null,
-      starts_at: buildStartsAt(),
-      ends_at: buildEndsAt(),
-      neighborhood: locationTbd ? 'TBD' : (neighborhood || fullAddress || null),
-      full_address: locationTbd ? null : (fullAddress || null),
-      notes: description.trim() || null,
-      visibility,
-      guests_can_invite: guestsCanInvite,
-      capacity: capacity ? parseInt(capacity, 10) : null,
-    }).eq('id', id);
 
-    if (updateError) { setError(updateError.message); setSaving(false); return; }
-
-    await Promise.all([
-      supabase.from('jam_genres').delete().eq('jam_id', id),
-      supabase.from('jam_themes').delete().eq('jam_id', id),
-    ]);
-
-    await Promise.all([
-      selectedGenres.length > 0
-        ? supabase.from('jam_genres').insert(selectedGenres.map(genre_id => ({ jam_id: id, genre_id })))
-        : Promise.resolve(),
-      selectedThemes.length > 0
-        ? supabase.from('jam_themes').insert(selectedThemes.map(theme_id => ({ jam_id: id, theme_id })))
-        : Promise.resolve(),
-    ]);
-
+    // The image goes through the save below too: a direct write to jams is
+    // limited by RLS to the creator, so it silently did nothing for an official
+    // host editing someone else's event. Undefined leaves the stored image alone.
+    let imageUrl: string | null | undefined = imageRemoved ? null : undefined;
     if (coverAsset) {
       const ext = coverAsset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-      const path = `${id}.${ext}`;
+      // A fresh name per upload, as web does: the file now goes up before the
+      // save, so overwriting the old one would change the live image even if
+      // the save were then refused.
+      const path = `${id}-${Date.now()}.${ext}`;
       const response = await fetch(coverAsset.uri);
       const blob = await response.blob();
       const { error: uploadError } = await supabase.storage
         .from('jam-images')
-        .upload(path, blob, { contentType: coverAsset.mimeType ?? 'image/jpeg', upsert: true });
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from('jam-images').getPublicUrl(path);
-        await supabase.from('jams').update({ image_url: publicUrl }).eq('id', id);
+        .upload(path, blob, { contentType: coverAsset.mimeType ?? 'image/jpeg', upsert: false });
+      if (uploadError) {
+        setError(`Image upload failed: ${uploadError.message}`);
+        setSaving(false);
+        return;
       }
+      imageUrl = supabase.storage.from('jam-images').getPublicUrl(path).data.publicUrl;
+    }
+
+    // Saved through the web API (as web's EditJamForm does) so attendees are
+    // notified of a time or location change and the rules live in one place.
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${WEB_URL}/api/jam/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
+        name: name.trim() || null,
+        starts_at: buildStartsAt(),
+        ends_at: buildEndsAt(),
+        neighborhood: locationTbd ? 'TBD' : (neighborhood || fullAddress || null),
+        full_address: locationTbd ? null : (fullAddress || null),
+        notes: description.trim() || null,
+        visibility,
+        guests_can_invite: guestsCanInvite,
+        capacity: capacity ? parseInt(capacity, 10) : null,
+        timezone,
+        tag_ids: selectedTags,
+        image_url: imageUrl,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      setError(body?.error ?? 'Something went wrong saving this jam.');
+      setSaving(false);
+      return;
     }
 
     setSaving(false);
@@ -381,17 +357,22 @@ export default function EditJamScreen() {
       aspect: [16, 9],
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]) setCoverAsset(result.assets[0]);
+    const asset = result.canceled ? null : result.assets[0];
+    if (!asset) return;
+    if (!isJamImageType(asset.mimeType, asset.fileName ?? asset.uri)) {
+      Alert.alert('Unsupported image', JAM_IMAGE_TYPE_ERROR);
+      return;
+    }
+    setCoverAsset(asset);
   }
 
-  async function removeCoverImage() {
-    await supabase.from('jams').update({ image_url: null }).eq('id', id);
+  function removeCoverImage() {
     setExistingImageUrl(null);
     setCoverAsset(null);
+    setImageRemoved(true);
   }
 
-  const selectedGenreNames = selectedGenres.map(gid => genres.find(g => g.id === gid)?.name).filter(Boolean).join(', ');
-  const selectedThemeNames = selectedThemes.map(tid => themes.find(t => t.id === tid)?.name).filter(Boolean).join(', ');
+  const selectedTagNames = jamTagSummary(allTags, selectedTags);
 
   if (loadingJam) {
     return (
@@ -424,21 +405,12 @@ export default function EditJamScreen() {
         onClose={() => setLocationModalVisible(false)}
         onSelect={(addr, nbhd) => { setFullAddress(addr); setNeighborhood(nbhd); }}
       />
-      <MultiSelectModal
-        visible={genreModalVisible}
-        title="Genres"
-        items={genres}
-        selected={selectedGenres}
-        onClose={() => setGenreModalVisible(false)}
-        onToggle={toggleGenre}
-      />
-      <MultiSelectModal
-        visible={themeModalVisible}
-        title="Themes"
-        items={themes}
-        selected={selectedThemes}
-        onClose={() => setThemeModalVisible(false)}
-        onToggle={toggleTheme}
+      <JamTagPicker
+        visible={tagModalVisible}
+        options={allTags}
+        selected={selectedTags}
+        onClose={() => setTagModalVisible(false)}
+        onToggle={toggleTag}
       />
 
       {datePickerVisible && (
@@ -579,6 +551,11 @@ export default function EditJamScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+              <Text className="px-4 pb-3 text-xs text-zinc-400">
+                {resolvingTimezone
+                  ? "Checking the venue's time zone…"
+                  : `Times are in ${zoneAbbreviation(timezone, new Date(buildStartsAt() ?? Date.now()))}`}
+              </Text>
             </View>
 
             {/* Location */}
@@ -608,6 +585,9 @@ export default function EditJamScreen() {
             <View className="bg-white rounded-xl border border-zinc-100 overflow-hidden mb-4">
               <View className="px-4 py-3 border-b border-zinc-100">
                 <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-3">Visibility</Text>
+                {visibility === 'official' ? (
+                  <Text className="text-sm font-semibold text-amber-600">Official SingJam event</Text>
+                ) : (
                 <View className="flex-row gap-2">
                   {VISIBILITY_OPTIONS.map(opt => (
                     <TouchableOpacity
@@ -619,6 +599,7 @@ export default function EditJamScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                )}
               </View>
               <View className="px-4 py-3 border-b border-zinc-100">
                 <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-1.5">Capacity (optional)</Text>
@@ -645,24 +626,15 @@ export default function EditJamScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Genres & Themes */}
+            {/* Tags */}
             <View className="bg-white rounded-xl border border-zinc-100 overflow-hidden mb-6">
               <TouchableOpacity
-                onPress={() => setGenreModalVisible(true)}
-                className="px-4 py-3 border-b border-zinc-100 flex-row items-center justify-between"
-              >
-                <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Genres</Text>
-                <Text className={`font-medium flex-1 text-right ml-4 ${selectedGenreNames ? 'text-zinc-900' : 'text-zinc-400'}`} numberOfLines={1}>
-                  {selectedGenreNames || 'None selected'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setThemeModalVisible(true)}
+                onPress={() => setTagModalVisible(true)}
                 className="px-4 py-3 flex-row items-center justify-between"
               >
-                <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Themes</Text>
-                <Text className={`font-medium flex-1 text-right ml-4 ${selectedThemeNames ? 'text-zinc-900' : 'text-zinc-400'}`} numberOfLines={1}>
-                  {selectedThemeNames || 'None selected'}
+                <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Tags</Text>
+                <Text className={`font-medium flex-1 text-right ml-4 ${selectedTagNames ? 'text-zinc-900' : 'text-zinc-400'}`} numberOfLines={1}>
+                  {selectedTagNames || 'None selected'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -675,8 +647,8 @@ export default function EditJamScreen() {
 
             <TouchableOpacity
               onPress={handleSave}
-              disabled={saving}
-              className="bg-amber-500 rounded-xl py-4 items-center mb-3"
+              disabled={saving || resolvingTimezone}
+              className={`bg-amber-500 rounded-xl py-4 items-center mb-3 ${resolvingTimezone ? 'opacity-50' : ''}`}
             >
               {saving ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-semibold text-base">Save changes</Text>}
             </TouchableOpacity>

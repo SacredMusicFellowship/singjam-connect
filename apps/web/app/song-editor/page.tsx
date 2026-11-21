@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
-import SongEditorTable from "./SongEditorTable";
+import AdminSongsTable from "@/app/admin/songs/AdminSongsTable";
+import SubmitSongForm from "@/components/SubmitSongForm";
 
 export const metadata: Metadata = {
-  title: "Song Links",
+  title: "Songs",
 };
 
-export default function SongEditorPage() {
+export default async function SongEditorPage({ searchParams }: { searchParams: Promise<{ added_by?: string }> }) {
+  const { added_by } = await searchParams;
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-900">Song Links</h1>
-      <SongEditorTable />
+      <h1 className="text-xl font-semibold text-slate-900">Songs</h1>
+      <SubmitSongForm />
+      <AdminSongsTable basePath="/song-editor/songs" isAdmin={false} addedBy={added_by ?? ""} />
     </div>
   );
 }

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { createNotification } from "@/lib/notifications";
 import { memberInviteHtml, nonMemberInviteHtml } from "@/emails/jam-invite";
+import { findAuthUserByEmail } from "@/lib/authUsers";
 import { formatJamTime } from "@/lib/formatJamTime";
 import { isJamCohost } from "@/lib/jamCohosts";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function POST(
   req: Request,
@@ -13,10 +16,18 @@ export async function POST(
 ) {
   const { id: jamId } = await params;
   const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  let user = (await supabase.auth.getUser()).data.user ?? null;
+  if (!user) {
+    // Native app authenticates with a bearer token instead of cookies
+    const bearer = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (bearer) user = (await supabaseFromBearer(bearer).auth.getUser()).data.user ?? null;
+  }
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { inviteeUserId, inviteeEmail } = await req.json();
+  const body = await req.json();
+  const inviteeUserId = body.inviteeUserId;
+  // Stored lowercase so the duplicate check and the sign-in claim compare like with like.
+  const inviteeEmail = typeof body.inviteeEmail === "string" ? body.inviteeEmail.trim().toLowerCase() : body.inviteeEmail;
   if (!inviteeUserId && !inviteeEmail) {
     return NextResponse.json({ error: "Provide inviteeUserId or inviteeEmail" }, { status: 400 });
   }
@@ -113,7 +124,7 @@ export async function POST(
     const { data: inviteeProfile } = await admin.from("profiles").select("display_name, username").eq("id", inviteeUserId).single();
     const inviteeName = (inviteeProfile as any)?.display_name ?? (inviteeProfile as any)?.username ?? null;
 
-    const jamUrl = `${baseUrl}/jam/${jamId}?invite=${token}`;
+    const jamUrl = `${baseUrl}${await jamPathById(jamId)}?invite=${token}`;
 
     if (email) {
       await resend.emails.send({
@@ -139,8 +150,7 @@ export async function POST(
   // Non-member email invite
   if (inviteeEmail) {
     // Check if this email is already a member
-    const { data: existingUser } = await admin.auth.admin.listUsers();
-    const match = existingUser?.users?.find((u) => u.email?.toLowerCase() === inviteeEmail.toLowerCase());
+    const match = await findAuthUserByEmail(admin.auth.admin, inviteeEmail);
 
     if (match) {
       // Redirect caller to use the member flow
@@ -167,7 +177,7 @@ export async function POST(
     }).select("token").single();
     const token = (inserted as any).token;
 
-    const signupUrl = `${baseUrl}/jam/${jamId}?invite=${token}`;
+    const signupUrl = `${baseUrl}${await jamPathById(jamId)}?invite=${token}`;
 
     await resend.emails.send({
       from: FROM_ADDRESS,

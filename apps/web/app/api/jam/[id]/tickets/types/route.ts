@@ -30,20 +30,42 @@ async function canManage(jamId: string, userId: string) {
     : { ok: false as const, status: 403 };
 }
 
+// Sales windows. The table has a check constraint that an end must follow its
+// start, but a violated constraint reaches the host as a raw Postgres string —
+// so the same rule is stated here, where it can be a sentence. A null on either
+// side means "no limit" and is always valid.
+function windowError(start: unknown, end: unknown): string | null {
+  for (const [label, v] of [["start", start], ["end", end]] as const) {
+    if (v == null) continue;
+    if (typeof v !== "string" || Number.isNaN(new Date(v).getTime())) {
+      return `Sales ${label} isn't a valid date and time`;
+    }
+  }
+  if (typeof start !== "string" || typeof end !== "string") return null;
+  return new Date(end) > new Date(start) ? null : "Sales must end after they start";
+}
+
 // Availability uses the same function the reservation path uses, so what a buyer
 // is offered matches what the oversell guard will actually allow.
 //
 // "sold" and "held" are reported separately. The availability count includes
 // live holds — a checkout in progress must reserve its stock — but a hold is not
 // a sale, and labelling it as one showed hosts revenue they hadn't earned.
+//
+// The event-wide limit (jams.ticket_limit) is totalled from the same per-tier
+// counts — every ticket belongs to exactly one of the event's tiers — and each
+// tier's remaining is clamped to it, as jam_ticket_tiers does for listings.
 async function withAvailability(jamId: string) {
   const admin = supabaseAdmin();
-  const { data: types } = await admin
-    .from("ticket_types")
-    .select("id, name, description, price_cents, currency, quantity, sales_start_at, sales_end_at, sort_order")
-    .eq("jam_id", jamId)
-    .order("sort_order", { ascending: true })
-    .order("id", { ascending: true });
+  const [{ data: types }, { data: jam }] = await Promise.all([
+    admin
+      .from("ticket_types")
+      .select("id, name, description, price_cents, currency, quantity, sales_start_at, sales_end_at, sort_order")
+      .eq("jam_id", jamId)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true }),
+    admin.from("jams").select("ticket_limit").eq("id", jamId).maybeSingle(),
+  ]);
 
   const rows = types ?? [];
   const [counted, paid] = await Promise.all([
@@ -51,17 +73,34 @@ async function withAvailability(jamId: string) {
     Promise.all(rows.map((t) => admin.rpc("ticket_type_paid_count", { type_id: t.id }))),
   ]);
 
+  const againstStock = rows.map((_, i) => (counted[i].data as number) ?? 0);
+  const soldCounts = rows.map((_, i) => (paid[i].data as number) ?? 0);
+  const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
+
+  const limit: number | null = jam?.ticket_limit ?? null;
+  const ticketLimit =
+    limit === null
+      ? null
+      : {
+          quantity: limit,
+          sold: sum(soldCounts),
+          held: Math.max(0, sum(againstStock) - sum(soldCounts)),
+          remaining: Math.max(0, limit - sum(againstStock)),
+        };
+
   const now = Date.now();
-  return rows.map((t, i) => {
-    const againstStock = (counted[i].data as number) ?? 0;
-    const soldCount = (paid[i].data as number) ?? 0;
-    const heldCount = Math.max(0, againstStock - soldCount);
-    const remaining = t.quantity === null ? null : Math.max(0, t.quantity - againstStock);
+  const ticketTypes = rows.map((t, i) => {
+    const heldCount = Math.max(0, againstStock[i] - soldCounts[i]);
+    const tierRemaining = t.quantity === null ? null : Math.max(0, t.quantity - againstStock[i]);
+    const remaining =
+      ticketLimit === null
+        ? tierRemaining
+        : Math.min(tierRemaining ?? Infinity, ticketLimit.remaining);
     const notYetOpen = t.sales_start_at ? now < new Date(t.sales_start_at).getTime() : false;
     const closed = t.sales_end_at ? now > new Date(t.sales_end_at).getTime() : false;
     return {
       ...t,
-      sold: soldCount,
+      sold: soldCounts[i],
       held: heldCount,
       remaining,
       on_sale: !notYetOpen && !closed && remaining !== 0,
@@ -69,6 +108,8 @@ async function withAvailability(jamId: string) {
       closed,
     };
   });
+
+  return { ticket_types: ticketTypes, ticket_limit: ticketLimit };
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -80,7 +121,50 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { data: jam } = await supabase.from("jams").select("id").eq("id", jamId).maybeSingle();
   if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
 
-  return NextResponse.json({ ticket_types: await withAvailability(jamId) });
+  return NextResponse.json(await withAvailability(jamId));
+}
+
+// The event-wide limit. Body: { ticket_limit: number | null } — null removes it.
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: jamId } = await params;
+  const user = await getUser(req);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const auth = await canManage(jamId, user.id);
+  if (!auth.ok) {
+    return NextResponse.json(
+      { error: auth.status === 404 ? "Jam not found" : "Only the host can manage tickets" },
+      { status: auth.status }
+    );
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+  const limit = body?.ticket_limit ?? null;
+  if (limit !== null && (!Number.isInteger(limit) || limit < 1)) {
+    return NextResponse.json({ error: "Total tickets must be a positive whole number" }, { status: 400 });
+  }
+
+  const admin = supabaseAdmin();
+
+  // Same rule as a tier's cap: never below what is already sold or held.
+  if (limit !== null) {
+    const { data: sold } = await admin.rpc("jam_ticket_sold_count", { jam_id_param: jamId });
+    if ((sold as number) > limit) {
+      return NextResponse.json(
+        { error: `${sold} already sold — total cannot go below that` },
+        { status: 409 }
+      );
+    }
+  }
+
+  const { error } = await admin.from("jams").update({ ticket_limit: limit }).eq("id", jamId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -113,6 +197,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (body?.quantity != null && (!Number.isInteger(body.quantity) || body.quantity < 1)) {
     return NextResponse.json({ error: "Quantity must be a positive whole number" }, { status: 400 });
   }
+
+  const badWindow = windowError(body?.sales_start_at || null, body?.sales_end_at || null);
+  if (badWindow) return NextResponse.json({ error: badWindow }, { status: 400 });
 
   const admin = supabaseAdmin();
   const { data, error } = await admin
@@ -172,6 +259,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const patch: Record<string, unknown> = {};
   for (const f of ["name", "description", "price_cents", "quantity", "sales_start_at", "sales_end_at", "sort_order"]) {
     if (f in body) patch[f] = body[f];
+  }
+
+  if (typeof patch.name === "string") {
+    patch.name = patch.name.trim();
+    if (!patch.name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  }
+  if ("price_cents" in patch && (!Number.isInteger(patch.price_cents) || (patch.price_cents as number) < 0)) {
+    return NextResponse.json({ error: "Price must be a whole number of cents" }, { status: 400 });
+  }
+
+  // A partial update has to be checked against what the row already holds:
+  // moving only the start can still put it past a stored end.
+  if ("sales_start_at" in patch || "sales_end_at" in patch) {
+    const { data: current } = await admin
+      .from("ticket_types")
+      .select("sales_start_at, sales_end_at")
+      .eq("id", body.id)
+      .eq("jam_id", jamId)
+      .maybeSingle();
+    const effective = { ...(current ?? {}), ...patch } as Record<string, unknown>;
+    const badWindow = windowError(effective.sales_start_at ?? null, effective.sales_end_at ?? null);
+    if (badWindow) return NextResponse.json({ error: badWindow }, { status: 400 });
   }
 
   const { error } = await admin

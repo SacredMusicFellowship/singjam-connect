@@ -2,17 +2,22 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { attendeeRole, attendeeSummaryParts, sortAttendees } from "@singjam/core";
 import { SINGING_LABEL, voiceBadgeClass } from "@/lib/singingVoice";
 
 type GuestAttendee = { name: string; extra: number };
+/** Tickets an account holder bought beyond their own seat. */
+type MemberExtra = { user_id: string; extra: number };
 
 type AttendeeData = {
   profileMap: Map<string, any>;
   attending: any[];
   waitlist: any[];
   guests: GuestAttendee[];
+  memberExtras: Map<string, number>;
   totalGoing: number;
   cohostIds: Set<string>;
 };
@@ -32,8 +37,28 @@ function parseTags(profile: any): { label: string; voice: "lead" | "backup" | nu
   return tags;
 }
 
-function AttendeeRow({ profile, badge, action }: { profile: any; badge: ReactNode; action?: ReactNode }) {
-  const fullName = [profile?.display_name, profile?.last_name].filter(Boolean).join(" ") || profile?.username || "Unknown";
+function displayName(profile: any): string {
+  return [profile?.display_name, profile?.last_name].filter(Boolean).join(" ") || profile?.username || "Unknown";
+}
+
+type ListEntry =
+  | { kind: "host"; userId: string }
+  | { kind: "member"; userId: string }
+  | { kind: "guest"; guest: GuestAttendee; key: string };
+
+function AttendeeRow({
+  profile,
+  badge,
+  action,
+  extra = 0,
+}: {
+  profile: any;
+  badge: ReactNode;
+  action?: ReactNode;
+  /** Seats this person bought beyond their own, shown as "+2". */
+  extra?: number;
+}) {
+  const fullName = displayName(profile);
   const tags = parseTags(profile);
   return (
     <li className="py-3">
@@ -45,6 +70,11 @@ function AttendeeRow({ profile, badge, action }: { profile: any; badge: ReactNod
           </Link>
         ) : (
           <p className="text-sm font-medium text-zinc-900">{fullName}</p>
+        )}
+        {extra > 0 && (
+          <span className="text-xs font-normal text-zinc-400" title={`Bought ${extra + 1} tickets`}>
+            +{extra}
+          </span>
         )}
         <div className="flex shrink-0 items-center gap-2">
           {badge}
@@ -67,70 +97,118 @@ function AttendeeRow({ profile, badge, action }: { profile: any; badge: ReactNod
   );
 }
 
-export default function JamAttendeeList({ jamId, hostId, isHost }: { jamId: string; hostId: string; isHost: boolean }) {
+async function loadAttendees(
+  supabase: ReturnType<typeof supabaseBrowser>,
+  jamId: string,
+  hostId: string | null
+): Promise<AttendeeData> {
+  const [rsvpsRes, hostRes, cohostsRes, guestsRes] = await Promise.all([
+    supabase
+      .from("jam_rsvps")
+      .select("user_id, waitlist_position, status")
+      .eq("jam_id", jamId)
+      .in("status", ["attending", "waitlist"])
+      .order("created_at", { ascending: true }),
+    hostId
+      ? supabase
+          .from("profiles")
+          .select("id, display_name, last_name, username, avatar_url, singing_voice, instrument_levels")
+          .eq("id", hostId)
+          .single()
+      : Promise.resolve({ data: null }),
+    supabase.from("jam_cohosts").select("user_id").eq("jam_id", jamId),
+    // Ticket buyers without an account. Served by an API route because
+    // tickets is service_role-only, so the browser client can't see them.
+    fetch(`/api/jam/${jamId}/attendees/guests`)
+      .then((r) => (r.ok ? r.json() : { guests: [], members: [] }))
+      .catch(() => ({ guests: [], members: [] })),
+  ]);
+
+  const rsvps = rsvpsRes.data ?? [];
+  const hostProfile = hostRes.data;
+  const cohostIds = new Set<string>(((cohostsRes.data ?? []) as any[]).map((c: any) => c.user_id));
+  const attendeeIds = (rsvps as any[])
+    .map((r: any) => r.user_id)
+    .filter((uid: string) => uid !== hostId);
+
+  const profileMap = new Map<string, any>();
+  if (hostId && hostProfile) profileMap.set(hostId, hostProfile);
+
+  if (attendeeIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name, last_name, username, avatar_url, singing_voice, instrument_levels")
+      .in("id", attendeeIds);
+    for (const p of (profiles ?? []) as any[]) {
+      profileMap.set(p.id, p);
+    }
+  }
+
+  const attending = (rsvps as any[]).filter((r: any) => r.status === "attending" && r.user_id !== hostId);
+  const waitlist = (rsvps as any[]).filter((r: any) => r.status === "waitlist");
+
+  const guests: GuestAttendee[] = (guestsRes as any)?.guests ?? [];
+  const guestHeads = guests.reduce((n, g) => n + 1 + g.extra, 0);
+
+  // A member's RSVP row counts them once however many tickets they hold, so
+  // the seats they bought for other people were counted nowhere — a couple
+  // buying two registered as one person going while a guest buying two
+  // registered as two.
+  const memberExtras = new Map<string, number>(
+    (((guestsRes as any)?.members ?? []) as MemberExtra[]).map((m) => [m.user_id, m.extra])
+  );
+  // Counted only for the people actually on screen, so the number can never
+  // disagree with the list: a buyer whose RSVP is missing has no row to
+  // hang "+2" on, and inflating the total from a row nobody can see is how
+  // a headcount stops being explainable.
+  const shown = [...(hostId ? [hostId] : []), ...attending.map((r: any) => r.user_id)];
+  const memberHeads = shown.reduce((n, id) => n + (memberExtras.get(id) ?? 0), 0);
+
+  return {
+    profileMap,
+    attending,
+    waitlist,
+    guests,
+    memberExtras,
+    // The host counts as going only when there is a host to count.
+    totalGoing: (hostId ? 1 : 0) + attending.length + guestHeads + memberHeads,
+    cohostIds,
+  };
+}
+
+/**
+ * `hostId` is null on official events: those belong to SingJam, so whoever
+ * created the row is not credited as host and is not counted as attending.
+ * They still appear as an ordinary "Going" row if they actually RSVP'd or
+ * bought a ticket. jams.host_user_id keeps driving authorization either way.
+ */
+export default function JamAttendeeList({
+  jamId,
+  hostId,
+  canAppointCohosts,
+  leaderIds = [],
+  myLeader = null,
+  version = 0,
+}: {
+  jamId: string;
+  hostId: string | null;
+  /** A community jam's host. Official events have no co-hosts (migration 185). */
+  canAppointCohosts: boolean;
+  /** Members leading the music who are listed publicly. */
+  leaderIds?: string[];
+  /** Set when the viewer leads this event: their row says Leader even if they aren't listed publicly. */
+  myLeader?: { userId: string } | null;
+  /** Bumped when the host changes who is coming from this page, to reload the list. */
+  version?: number;
+}) {
   const [data, setData] = useState<AttendeeData | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const supabase = supabaseBrowser();
 
   useEffect(() => {
-    (async () => {
-      const [rsvpsRes, hostRes, cohostsRes, guestsRes] = await Promise.all([
-        supabase
-          .from("jam_rsvps")
-          .select("user_id, waitlist_position, status")
-          .eq("jam_id", jamId)
-          .in("status", ["attending", "waitlist"])
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("profiles")
-          .select("id, display_name, last_name, username, singing_voice, instrument_levels")
-          .eq("id", hostId)
-          .single(),
-        supabase.from("jam_cohosts").select("user_id").eq("jam_id", jamId),
-        // Ticket buyers without an account. Served by an API route because
-        // tickets is service_role-only, so the browser client can't see them.
-        fetch(`/api/jam/${jamId}/attendees/guests`)
-          .then((r) => (r.ok ? r.json() : { guests: [] }))
-          .catch(() => ({ guests: [] })),
-      ]);
-
-      const rsvps = rsvpsRes.data ?? [];
-      const hostProfile = hostRes.data;
-      const cohostIds = new Set<string>(((cohostsRes.data ?? []) as any[]).map((c: any) => c.user_id));
-      const attendeeIds = (rsvps as any[])
-        .map((r: any) => r.user_id)
-        .filter((uid: string) => uid !== hostId);
-
-      const profileMap = new Map<string, any>();
-      if (hostProfile) profileMap.set(hostId, hostProfile);
-
-      if (attendeeIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, display_name, last_name, username, singing_voice, instrument_levels")
-          .in("id", attendeeIds);
-        for (const p of (profiles ?? []) as any[]) {
-          profileMap.set(p.id, p);
-        }
-      }
-
-      const attending = (rsvps as any[]).filter((r: any) => r.status === "attending" && r.user_id !== hostId);
-      const waitlist = (rsvps as any[]).filter((r: any) => r.status === "waitlist");
-
-      const guests: GuestAttendee[] = (guestsRes as any)?.guests ?? [];
-      const guestHeads = guests.reduce((n, g) => n + 1 + g.extra, 0);
-
-      setData({
-        profileMap,
-        attending,
-        waitlist,
-        guests,
-        totalGoing: 1 + attending.length + guestHeads,
-        cohostIds,
-      });
-    })();
+    loadAttendees(supabase, jamId, hostId).then(setData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jamId, hostId]);
+  }, [jamId, hostId, version]);
 
   async function toggleCohost(userId: string, makeCohost: boolean) {
     setPending(userId);
@@ -152,33 +230,86 @@ export default function JamAttendeeList({ jamId, hostId, isHost }: { jamId: stri
   }
 
   if (!data) return null;
-  const { profileMap, attending, waitlist, guests, totalGoing, cohostIds } = data;
+  const { profileMap, attending, waitlist, guests, memberExtras, totalGoing, cohostIds } = data;
+
+  const isLeader = (userId: string) => myLeader?.userId === userId || leaderIds.includes(userId);
+  const entries = sortAttendees<ListEntry>(
+    [
+      ...(hostId ? [{ kind: "host" as const, userId: hostId }] : []),
+      ...attending.map((r: any) => ({ kind: "member" as const, userId: r.user_id as string })),
+      ...guests.map((guest, i) => ({ kind: "guest" as const, guest, key: `guest-${i}` })),
+    ],
+    (e) =>
+      e.kind === "guest"
+        ? { role: "going", name: e.guest.name }
+        : {
+            role: e.kind === "host" ? "host" : attendeeRole({ cohost: cohostIds.has(e.userId), leader: isLeader(e.userId) }),
+            name: displayName(profileMap.get(e.userId)),
+          }
+  );
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-1">
+    <div id="whos-going" className="scroll-mt-24 rounded-2xl border border-zinc-200 bg-white p-5 space-y-1">
       <h2 className="text-base font-semibold mb-2">
         Who's going <span className="text-sm font-normal text-zinc-400">({totalGoing})</span>
       </h2>
       <ul className="divide-y divide-zinc-100">
-        <AttendeeRow
-          profile={profileMap.get(hostId)}
-          badge={
-            <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-              Host
-            </span>
+        {/* Host, co-hosts and leaders first, then everyone else by name, guests
+            without an account included: no account is needed to be counted as
+            coming. Guests carry no profile, so no link and no tags. */}
+        {entries.map((e) => {
+          if (e.kind === "host") {
+            return (
+              <AttendeeRow
+                key={e.userId}
+                profile={profileMap.get(e.userId)}
+                extra={memberExtras.get(e.userId) ?? 0}
+                badge={
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                    Host
+                  </span>
+                }
+              />
+            );
           }
-        />
-        {attending.map((r: any) => {
-          const isCohost = cohostIds.has(r.user_id);
+          if (e.kind === "guest") {
+            return (
+              <li key={e.key} className="py-3">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                  <p className="text-sm font-medium text-zinc-900">
+                    {e.guest.name}
+                    {e.guest.extra > 0 && (
+                      <span className="ml-1.5 text-xs font-normal text-zinc-400">+{e.guest.extra}</span>
+                    )}
+                  </p>
+                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                    Going
+                  </span>
+                </div>
+              </li>
+            );
+          }
+          const isCohost = cohostIds.has(e.userId);
+          const leads = isLeader(e.userId);
           return (
             <AttendeeRow
-              key={r.user_id}
-              profile={profileMap.get(r.user_id)}
+              key={e.userId}
+              profile={profileMap.get(e.userId)}
+              extra={memberExtras.get(e.userId) ?? 0}
               badge={
-                isCohost ? (
-                  <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700">
-                    Co-host
-                  </span>
+                leads || isCohost ? (
+                  <>
+                    {leads && (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                        Leader
+                      </span>
+                    )}
+                    {isCohost && (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                        Co-host
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
                     Going
@@ -186,10 +317,10 @@ export default function JamAttendeeList({ jamId, hostId, isHost }: { jamId: stri
                 )
               }
               action={
-                isHost && (
+                canAppointCohosts && (
                   <button
-                    onClick={() => toggleCohost(r.user_id, !isCohost)}
-                    disabled={pending === r.user_id}
+                    onClick={() => toggleCohost(e.userId, !isCohost)}
+                    disabled={pending === e.userId}
                     className="rounded-full border border-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
                   >
                     {isCohost ? "Remove co-host" : "Make co-host"}
@@ -199,23 +330,11 @@ export default function JamAttendeeList({ jamId, hostId, isHost }: { jamId: stri
             />
           );
         })}
-        {/* Guests sit with everyone else who is going — no account is needed to
-            be counted as coming. They carry no profile, so no link and no tags. */}
-        {guests.map((g, i) => (
-          <li key={`guest-${i}`} className="py-3">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-              <p className="text-sm font-medium text-zinc-900">
-                {g.name}
-                {g.extra > 0 && (
-                  <span className="ml-1.5 text-xs font-normal text-zinc-400">+{g.extra}</span>
-                )}
-              </p>
-              <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                Going
-              </span>
-            </div>
-          </li>
-        ))}
+        {/* Reachable only since official events stopped seating their creator
+            as host — before that, row one always existed. */}
+        {totalGoing === 0 && waitlist.length === 0 && (
+          <li className="py-3 text-sm text-zinc-400">No one yet — be the first.</li>
+        )}
         {waitlist.map((r: any) => (
           <AttendeeRow
             key={r.user_id}
@@ -228,6 +347,76 @@ export default function JamAttendeeList({ jamId, hostId, isHost }: { jamId: stri
           />
         ))}
       </ul>
+    </div>
+  );
+}
+
+const SUMMARY_AVATARS = 6;
+
+/**
+ * The compact "who's going" for the ticketed event page's side column, after
+ * Luma: overlapping avatars, a couple of names and a count, the count linking
+ * down to the full list. Fetches on its own rather than sharing the list's state so
+ * either can render without the other; the rules live in loadAttendees.
+ */
+export function JamAttendeeSummary({ jamId, hostId, version = 0 }: { jamId: string; hostId: string | null; version?: number }) {
+  const [data, setData] = useState<AttendeeData | null>(null);
+  const supabase = supabaseBrowser();
+
+  useEffect(() => {
+    loadAttendees(supabase, jamId, hostId).then(setData);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jamId, hostId, version]);
+
+  if (!data || data.totalGoing === 0) return null;
+  const { profileMap, attending, guests, totalGoing } = data;
+
+  const people: { key: string; name: string; avatarUrl: string | null }[] = [
+    ...[...(hostId ? [hostId] : []), ...attending.map((r: any) => r.user_id as string)].map((id) => {
+      const p = profileMap.get(id);
+      return {
+        key: id,
+        name: [p?.display_name, p?.last_name].filter(Boolean).join(" ") || p?.username || "Unknown",
+        avatarUrl: p?.avatar_url ?? null,
+      };
+    }),
+    ...guests.map((g, i) => ({ key: `guest-${i}`, name: g.name, avatarUrl: null })),
+  ];
+
+  const summary = attendeeSummaryParts(people.map((p) => p.name), totalGoing);
+
+  return (
+    <div>
+      <h2 className="border-b border-zinc-200 pb-2 text-sm font-semibold text-zinc-700">
+        {totalGoing} going
+      </h2>
+      <div className="mt-3 flex -space-x-2">
+        {people.slice(0, SUMMARY_AVATARS).map((p) => (
+          <span
+            key={p.key}
+            className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 text-xs font-medium text-amber-700 ring-2 ring-white"
+          >
+            {p.avatarUrl ? (
+              <Image src={p.avatarUrl} alt="" fill sizes="32px" className="object-cover" />
+            ) : (
+              p.name[0]?.toUpperCase()
+            )}
+          </span>
+        ))}
+      </div>
+      {/* "14 others" doubles as the way down to the full list — in the text's
+          own colour, so it doesn't compete with the amber Buy button. */}
+      <p className="mt-2 text-sm text-zinc-600">
+        {summary.named}
+        {summary.others && (
+          <>
+            {" and "}
+            <a href="#whos-going" className="hover:underline">
+              {summary.others}
+            </a>
+          </>
+        )}
+      </p>
     </div>
   );
 }

@@ -5,17 +5,19 @@ import Link from "next/link";
 
 export default function SetRequestAccess({
   setId,
+  shortCode,
   setName,
   isLoggedIn,
   inviteToken,
 }: {
   setId: string;
+  shortCode?: string | null;
   setName: string;
   isLoggedIn: boolean;
   inviteToken?: string;
 }) {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const setPath = `/set/${setId}${inviteToken ? `?invite=${inviteToken}` : ""}`;
+  const setPath = `/set/${shortCode || setId}${inviteToken ? `?invite=${inviteToken}` : ""}`;
 
   async function handleRequest() {
     setStatus("sending");
@@ -48,7 +50,7 @@ export default function SetRequestAccess({
         {!isLoggedIn ? (
           <Link
             href={`/auth?next=${encodeURIComponent(setPath)}`}
-            className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+            className="inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
           >
             {inviteToken ? "Sign in" : "Sign in to request access"}
           </Link>
@@ -62,7 +64,7 @@ export default function SetRequestAccess({
           <button
             onClick={handleRequest}
             disabled={status === "sending"}
-            className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {status === "sending" ? "Requesting…" : "Request access"}
           </button>
