@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, Modal, FlatList, TextInput,
-  KeyboardAvoidingView, Platform, Linking, AppState,
+  KeyboardAvoidingView, Platform, Linking, AppState, Share,
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,6 +20,7 @@ import UgBackTip from '@/components/UgBackTip';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import SongRowTitle, { type SongRowCard } from '@/components/SongRowTitle';
 import SetSongRow, { type Participant, type SetSong } from '@/components/SetSongRow';
+import SetQrModal from '@/components/SetQrModal';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -229,6 +230,8 @@ function SetSettingsModal({
   onCollaboratorAdded,
   onCollaboratorRemoved,
   onCollaboratorRoleChanged,
+  onShowQr,
+  onDismiss,
 }: {
   visible: boolean;
   setId: string;
@@ -241,6 +244,8 @@ function SetSettingsModal({
   onCollaboratorAdded: (c: Collaborator) => void;
   onCollaboratorRemoved: (id: string) => void;
   onCollaboratorRoleChanged: (id: string, role: string) => void;
+  onShowQr: (uri: string) => void;
+  onDismiss: () => void;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ id: string; display_name: string | null; last_name: string | null; username: string | null }[]>([]);
@@ -248,6 +253,8 @@ function SetSettingsModal({
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer' | 'co-owner'>('editor');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [linkRole, setLinkRole] = useState<'editor' | 'viewer'>('editor');
+  const [linkBusy, setLinkBusy] = useState<'share' | 'qr' | null>(null);
 
   // Co-owner may only be granted to a named user, and only by the owner.
   const inviteRoleOptions: ('editor' | 'viewer' | 'co-owner')[] = isOwner ? ['editor', 'viewer', 'co-owner'] : ['editor', 'viewer'];
@@ -331,6 +338,33 @@ function SetSettingsModal({
     });
   }
 
+  // As on web: each share or QR mints its own invite link (/set/<code>?invite=…) at the chosen role.
+  async function createInviteLink(kind: 'share' | 'qr') {
+    setLinkBusy(kind);
+    const { ok, json } = await setApi(`/api/sets/${setId}/invite/link`, 'POST', { role: linkRole });
+    setLinkBusy(null);
+    if (!ok) { Alert.alert('Error', json?.error ?? 'Could not create the invite link.'); return null; }
+    return json as { inviteId: string; url: string; message: string };
+  }
+
+  async function shareInvite() {
+    const invite = await createInviteLink('share');
+    if (!invite) return;
+    const result = await Share.share({ message: invite.message }).catch(() => null);
+    // Web cancels the link when the share sheet is closed without sharing; iOS says so, Android can't.
+    if (result?.action === Share.dismissedAction) {
+      setApi(`/api/sets/${setId}/invite/link`, 'DELETE', { inviteId: invite.inviteId }).catch(() => {});
+    }
+  }
+
+  async function showQr() {
+    const invite = await createInviteLink('qr');
+    if (!invite) return;
+    // React Native's URL has no searchParams.
+    const token = invite.url.match(/[?&]invite=([^&#]+)/)?.[1] ?? '';
+    onShowQr(`${WEB_URL}/api/sets/${setId}/qr?invite=${token}`);
+  }
+
   // Owner manages everyone; a co-owner manages only non-co-owner collaborators.
   const canManageCollaborator = (c: Collaborator) => isOwner || (canManage && c.role !== 'co-owner');
 
@@ -341,7 +375,7 @@ function SetSettingsModal({
   ];
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onDismiss={onDismiss}>
       <KeyboardAvoidingView className="flex-1 bg-white" behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View className="flex-row items-center px-4 pt-4 pb-3 border-b border-zinc-100">
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -459,6 +493,40 @@ function SetSettingsModal({
               </View>
             )}
           </View>
+
+          <View className="px-4 pb-10">
+            <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-3">Invite link</Text>
+            <View className="flex-row gap-2 mb-2">
+              {(['editor', 'viewer'] as const).map(r => (
+                <TouchableOpacity
+                  key={r}
+                  onPress={() => setLinkRole(r)}
+                  className={`px-3 py-1 rounded-full border ${linkRole === r ? 'bg-amber-500 border-amber-500' : 'bg-white border-zinc-200'}`}
+                >
+                  <Text className={`text-xs font-medium ${linkRole === r ? 'text-white' : 'text-zinc-600'}`}>{ROLE_LABELS[r]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text className="text-xs text-zinc-400 mb-3">{SET_ROLE_DESCRIPTIONS[linkRole]}</Text>
+            <View className="flex-row gap-2">
+              <TouchableOpacity
+                onPress={shareInvite}
+                disabled={!!linkBusy}
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5"
+              >
+                <Ionicons name="share-outline" size={16} color="#3f3f46" />
+                <Text className="text-sm font-medium text-zinc-700">{linkBusy === 'share' ? 'Opening…' : 'Share invite'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={showQr}
+                disabled={!!linkBusy}
+                className="flex-row items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5"
+              >
+                <Ionicons name="qr-code-outline" size={16} color="#3f3f46" />
+                <Text className="text-sm font-medium text-zinc-700">{linkBusy === 'qr' ? 'Generating…' : 'QR code'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -480,6 +548,10 @@ export default function SetDetailScreen() {
   const [blocked, setBlocked] = useState<'private' | 'join' | null>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [qrUri, setQrUri] = useState<string | null>(null);
+  // iOS won't present the full-screen QR over the invite sheet, so the sheet closes first and the
+  // QR opens once it has gone (onDismiss is iOS-only; Android shows it straight away).
+  const pendingQrRef = useRef<string | null>(null);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   // As on web: order, key, played and leader saves go out one at a time per
   // song (the order per set), latest tap winning, and live updates for a field
@@ -1106,7 +1178,17 @@ export default function SetDetailScreen() {
         onCollaboratorAdded={(c) => setCollaborators(prev => prev.some(x => x.id === c.id) ? prev : [...prev, c])}
         onCollaboratorRemoved={(cid) => setCollaborators(prev => prev.filter(c => c.id !== cid))}
         onCollaboratorRoleChanged={(cid, role) => setCollaborators(prev => prev.map(c => c.id === cid ? { ...c, role } : c))}
+        onShowQr={(uri) => {
+          setSettingsVisible(false);
+          if (Platform.OS === 'ios') pendingQrRef.current = uri;
+          else setQrUri(uri);
+        }}
+        onDismiss={() => {
+          if (pendingQrRef.current) setQrUri(pendingQrRef.current);
+          pendingQrRef.current = null;
+        }}
       />
+      <SetQrModal uri={qrUri} onClose={() => setQrUri(null)} />
 
       <ContentContainer style={{ backgroundColor: 'white' }}>
       <View className="flex-1 bg-white">

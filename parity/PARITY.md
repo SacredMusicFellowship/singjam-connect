@@ -80,6 +80,7 @@ Legend: ✅ at parity · ⚠️ partial / known diff · ❌ missing · 🚫 desk
 | Add song to set — shows songs already in set | ✅ | `existingIds` → "Added". Add now via `POST /songs`. |
 | Spotify export | ✅ | Bearer route. |
 | Collaborators / sharing | ✅ | Set-settings modal: owner + co-owners manage sharing, add/remove collaborators, and change roles (co-owner assignment is owner-only), all through the web API. Editors still can't invite from native (web allows it — minor follow-up). |
+| Share invite link + QR screen | ✅ | 2026-11-20. The "Invite people" sheet has web's invite-link block: Editor / Viewer, "Share invite" (the system share sheet with web's "Join my set list!" message and the short `/set/<code>?invite=…` link; closing the sheet without sharing cancels the link, as web does on abort — iOS only, Android doesn't report it) and "QR code", a full-screen view in web's look ("Welcome to SingJam!" / "Scan to see today's songs"). Both mint the link through `POST /api/sets/[id]/invite/link`. The QR image comes from **`GET /api/sets/[id]/qr`** (PNG from the `qrcode` package, `?invite=` checked against the set), so native has no QR dependency; web still draws its own QR in the browser. Native has no "Copy link": the share sheet has Copy. |
 
 ### Add-to-set (from repertoire) — `AddToSetModal`
 | Feature | Status | Notes |
