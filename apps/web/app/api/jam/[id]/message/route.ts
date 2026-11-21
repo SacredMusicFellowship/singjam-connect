@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canManageJam } from "@/lib/jamAuthz";
-import { FROM_ADDRESS } from "@/lib/resend";
+import { EVENTS_FROM_ADDRESS } from "@/lib/resend";
 import { sendBulkEmail } from "@/lib/sendBulkEmail";
 import { jamHostMessageHtml } from "@/emails/jam-host-message";
 import { isJamCohost } from "@/lib/jamCohosts";
 import { guestTicketBuyers } from "@/lib/jamGuestBuyers";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function POST(
   req: Request,
@@ -50,7 +51,7 @@ export async function POST(
     .single();
   const hostName = (hostProfile as any)?.display_name ?? (hostProfile as any)?.username ?? "Your host";
 
-  const jamUrl = `https://singjam.org/jam/${jamId}`;
+  const jamUrl = `https://singjam.org${await jamPathById(jamId)}`;
   const jamName = jam.name ?? "Your jam";
 
   // Collect recipients — keyed by email to deduplicate
@@ -109,11 +110,11 @@ export async function POST(
   }
 
   const { sent, failed } = await sendBulkEmail(
-    Array.from(recipientMap.entries()).map(([email, name]) => ({
-      from: FROM_ADDRESS,
+    Array.from(recipientMap.keys()).map((email) => ({
+      from: EVENTS_FROM_ADDRESS,
       to: email,
       subject: `[${jamName}] ${subject}`,
-      html: jamHostMessageHtml({ recipientName: name, hostName, jamName, jamUrl, subject, body: message }),
+      html: jamHostMessageHtml({ hostName, jamName, jamUrl, subject, body: message }),
     }))
   );
 

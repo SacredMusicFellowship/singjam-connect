@@ -4,6 +4,7 @@ import { SITE_URL, stripe } from "@/lib/stripe";
 import { fulfilPendingOrder, sendTicketEmail, type PaidOrder } from "@/lib/ticketFulfilment";
 import { markAttending } from "@/lib/jamAttendance";
 import { ticketDeliveryFailedEmailHtml, type FailedTicketDelivery } from "@/emails/ticket-delivery-failed";
+import { jamPath } from "@singjam/core";
 
 // The failure Stripe cannot see. It watches for our endpoint erroring, not for
 // it returning 200 while the ticket never went out — which is exactly what
@@ -80,12 +81,14 @@ async function alertUndelivered(admin: SupabaseClient, failures: FailedTicketDel
   if (!hasNewOrder && Date.now() - lastAlertAt < ALERT_COOLDOWN_MS) return false;
 
   const now = new Date().toISOString();
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: ALERT_TO,
     subject: `Action required: ${failures.length} paid ticket${failures.length === 1 ? "" : "s"} not delivered`,
     html: ticketDeliveryFailedEmailHtml(failures),
   });
+  // Unsent means unrecorded, so the next sweep tries the alert again.
+  if (error) return false;
   await admin.from("system_flags").upsert({
     key: ALERT_FLAG,
     value: JSON.stringify({ at: now, ids: failures.map((f) => f.orderId) }),
@@ -101,6 +104,9 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
     .from("ticket_orders")
     .select(ORDER_COLS)
     .eq("status", "paid")
+    // A leader's comp has its own email (lib/jamLeaders.ts); the purchase
+    // receipt would tell them they paid $0.00.
+    .eq("source", "purchase")
     .is("ticket_email_sent_at", null)
     .order("paid_at", { ascending: true })
     .order("id", { ascending: true })
@@ -117,7 +123,7 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
   // One lookup for the whole batch: the alert is useless without event names.
   const { data: jams } = await admin
     .from("jams")
-    .select("id, name, timezone")
+    .select("id, short_code, name, timezone")
     .in("id", [...new Set(orders.map((o) => o.jam_id))]);
   const jamsById = new Map((jams ?? []).map((j: any) => [j.id, j]));
 
@@ -129,7 +135,7 @@ export async function sweepUndeliveredTickets(admin: SupabaseClient): Promise<Ti
     const describe = (reason: string): FailedTicketDelivery => ({
       orderId: order.id,
       jamName: jam?.name ?? "an event",
-      jamUrl: `${SITE_URL}/jam/${order.jam_id}`,
+      jamUrl: `${SITE_URL}${jamPath({ id: order.jam_id, short_code: jam?.short_code })}`,
       buyerEmail: order.buyer_email,
       amountLabel: formatAmount(order.amount_cents, order.currency),
       paidLabel: formatPaidAt(order.paid_at, jam?.timezone ?? null),

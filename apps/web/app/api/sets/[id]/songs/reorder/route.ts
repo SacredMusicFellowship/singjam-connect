@@ -17,17 +17,17 @@ export async function PATCH(
 
   const [ownerRes, collabRes] = await Promise.all([
     admin.from("sets").select("id").eq("id", setId).eq("owner_user_id", user.id).maybeSingle(),
-    admin.from("set_collaborators").select("id").eq("set_id", setId).eq("user_id", user.id).eq("status", "accepted").in("role", ["editor", "co-owner"]).maybeSingle(),
+    admin.from("set_collaborators").select("id").eq("set_id", setId).eq("user_id", user.id).eq("status", "accepted").eq("role", "co-owner").maybeSingle(),
   ]);
   if (!ownerRes.data && !collabRes.data) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await Promise.all(
-    order.map(({ id, position }: { id: string; position: number }) =>
-      admin.from("set_songs").update({ position }).eq("id", id).eq("set_id", setId)
-    )
-  );
+  const { error } = await admin.rpc("reorder_set_songs", {
+    p_set_id: setId,
+    p_order: order.map(({ id, position }: { id: string; position: number }) => ({ id, position })),
+  });
+  if (error) return NextResponse.json({ error: "Could not reorder the set" }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

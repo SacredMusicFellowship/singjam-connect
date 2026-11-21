@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { PaymentElement, useCheckoutElements } from "@stripe/react-stripe-js/checkout";
+import { BILLING_COUNTRY, TICKET_PAYMENT_ELEMENT_OPTIONS } from "@/lib/ticketPaymentElement";
 
-export default function TicketCheckoutForm({ onBack }: { onBack: () => void }) {
+export default function TicketCheckoutForm() {
   const checkoutState = useCheckoutElements();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,12 +27,7 @@ export default function TicketCheckoutForm({ onBack }: { onBack: () => void }) {
 
   if (checkoutState.type === "error") {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-red-600">{checkoutState.error.message}</p>
-        <button onClick={onBack} className="text-xs text-zinc-500 hover:text-zinc-700">
-          Back to tickets
-        </button>
-      </div>
+      <p className="text-sm text-red-600">{checkoutState.error.message}</p>
     );
   }
 
@@ -42,7 +38,8 @@ export default function TicketCheckoutForm({ onBack }: { onBack: () => void }) {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const result = await checkout.confirm();
+    // The Payment Element doesn't ask for country, so Stripe needs it here.
+    const result = await checkout.confirm({ billingAddress: { address: { country: BILLING_COUNTRY } } });
     // On success the browser is redirected to return_url, so reaching here with
     // a result generally means it failed. Fulfilment is never done from this
     // callback — the webhook is the source of truth.
@@ -51,8 +48,13 @@ export default function TicketCheckoutForm({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <form onSubmit={pay} className="space-y-4">
-      <PaymentElement options={{ layout: "accordion" }} />
+    <form onSubmit={pay} className="space-y-3">
+      {/* Link is off: its "save my info" step adds email and phone fields to a
+          form that should ask only for the card. Wallets stay on. Tabs rather
+          than an accordion: the card form is open straight away, and the other
+          methods sit in one row above it instead of stacking between the card
+          fields and the Pay button. */}
+      <PaymentElement options={TICKET_PAYMENT_ELEMENT_OPTIONS} />
 
       {error && (
         <p role="alert" className="text-sm text-red-600">
@@ -72,15 +74,6 @@ export default function TicketCheckoutForm({ onBack }: { onBack: () => void }) {
         className="w-full rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
       >
         {busy ? "Processing…" : total ? `Pay ${total}` : "Pay"}
-      </button>
-
-      <button
-        type="button"
-        onClick={onBack}
-        disabled={busy}
-        className="w-full text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-50"
-      >
-        Back to tickets
       </button>
     </form>
   );

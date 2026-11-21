@@ -12,12 +12,14 @@ vi.mock("@/lib/notifications", () => ({ createNotification: mockCreateNotificati
 vi.mock("@/lib/jamAttendance", () => ({ joinJamSetList: mockJoinJamSetList }));
 
 import { rsvpToJam, type RsvpJam } from "./jamRsvp";
+import { jamRsvpConfirmedHtml } from "@/emails/jam-rsvp-confirmed";
 
 const JAM: RsvpJam = {
   id: "jam-1",
   name: "Leaders jam",
   capacity: null,
   host_user_id: "host-1",
+  visibility: "community",
   starts_at: "2026-10-01T02:00:00Z",
   ends_at: null,
   timezone: "America/Los_Angeles",
@@ -65,6 +67,8 @@ describe("rsvpToJam", () => {
     );
     expect(mockJoinJamSetList).toHaveBeenCalledWith(admin, "jam-1", USER_ID);
     expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ to: "me@example.com" }));
+    // The RSVP's id is what lets the email's .ics link carry the full address.
+    expect(jamRsvpConfirmedHtml).toHaveBeenCalledWith(expect.objectContaining({ rsvpId: "r1" }));
     expect(mockCreateNotification).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "host-1", type: "jam_rsvp", title: "Scott is going to Leaders jam" })
     );
@@ -114,6 +118,43 @@ describe("rsvpToJam", () => {
     expect(mockCreateNotification).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Nina is on the waitlist for Leaders jam" })
     );
+  });
+
+  it("counts the host's own seat toward capacity", async () => {
+    // Capacity 9 with 7 other people going is 8 in the room: one seat left, not two.
+    const { admin, chains } = fakeAdmin({
+      jam_rsvps: [{ data: null }, { count: 8 }, { count: 0 }, { data: [{ id: "r1" }] }],
+      profiles: [{ data: { display_name: "Nina" } }],
+    });
+
+    const result = await rsvpToJam(admin, { ...JAM, capacity: 9 }, USER_ID);
+
+    expect(chains.jam_rsvps[1].neq).toHaveBeenCalledWith("user_id", "host-1");
+    expect(result).toEqual({ status: "waitlist", waitlistPosition: 1 });
+  });
+
+  it("counts an official event's creator as an ordinary attendee", async () => {
+    // No host seat is added on official events, so leaving the creator's RSVP
+    // out of the count would make every official headcount one short.
+    const { admin, chains } = fakeAdmin({
+      jam_rsvps: [{ data: null }, { count: 7 }, { data: [{ id: "r1" }] }],
+      profiles: [{ data: { display_name: "Nina" } }],
+    });
+
+    await rsvpToJam(admin, { ...JAM, visibility: "official", capacity: 9 }, USER_ID);
+
+    expect(chains.jam_rsvps[1].neq).not.toHaveBeenCalled();
+  });
+
+  it("seats the last open spot once the host is counted", async () => {
+    const { admin } = fakeAdmin({
+      jam_rsvps: [{ data: null }, { count: 7 }, { data: [{ id: "r1" }] }],
+      profiles: [{ data: { display_name: "Nina" } }],
+    });
+
+    const result = await rsvpToJam(admin, { ...JAM, capacity: 9 }, USER_ID);
+
+    expect(result).toEqual({ status: "attending", waitlistPosition: null });
   });
 
   it("brings back a cancelled RSVP only if it is still cancelled", async () => {

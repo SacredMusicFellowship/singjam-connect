@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { jamWaitlistPromotedHtml } from "@/emails/jam-waitlist-promoted";
 import { rsvpToJam, RSVP_JAM_COLUMNS } from "@/lib/jamRsvp";
+import { jamPath } from "@singjam/core";
 
 export async function POST(
   req: Request,
@@ -22,11 +23,19 @@ export async function POST(
 
   const admin = supabaseAdmin();
 
-  const { data: jam } = await admin.from("jams").select(`${RSVP_JAM_COLUMNS}, visibility`).eq("id", jamId).single();
+  const { data: jam } = await admin.from("jams").select(RSVP_JAM_COLUMNS).eq("id", jamId).single();
   if (!jam) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
   if (jam.visibility === "official") return NextResponse.json({ error: "Official events use external ticketing" }, { status: 400 });
 
   const { status, waitlistPosition } = await rsvpToJam(admin, jam, user.id);
+
+  // RSVPing is an answer to their invite, so it leaves the host's pending list.
+  await admin
+    .from("jam_invites")
+    .update({ status: "accepted" })
+    .eq("jam_id", jamId)
+    .eq("invited_user_id", user.id)
+    .eq("status", "pending");
 
   return NextResponse.json({ status, waitlist_position: waitlistPosition });
 }
@@ -77,7 +86,7 @@ export async function DELETE(
       const [{ data: profile }, { data: authData }, { data: jam }] = await Promise.all([
         admin.from("profiles").select("display_name, username").eq("id", next.user_id).single(),
         admin.auth.admin.getUserById(next.user_id),
-        admin.from("jams").select("name, starts_at, timezone").eq("id", jamId).single(),
+        admin.from("jams").select("name, short_code, starts_at, timezone").eq("id", jamId).single(),
       ]);
 
       const email = authData.user?.email;
@@ -89,7 +98,7 @@ export async function DELETE(
           html: jamWaitlistPromotedHtml({
             name: (profile as any)?.display_name ?? (profile as any)?.username,
             jamName: jam?.name,
-            jamUrl: `https://singjam.org/jam/${jamId}`,
+            jamUrl: `https://singjam.org${jamPath({ id: jamId, short_code: (jam as any)?.short_code })}`,
             startsAt: jam?.starts_at,
             timezone: (jam as any)?.timezone,
           }),

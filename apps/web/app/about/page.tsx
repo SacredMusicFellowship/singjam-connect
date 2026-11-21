@@ -16,7 +16,7 @@ export default function AboutPage() {
         <li>Post a jam invite or message someone directly.</li>
       </ol>
       <p className="text-sm text-zinc-600">
-        Safety-first: exact addresses stay hidden until an invite is accepted.
+        Safety-first: a public jam's exact address is only shared with people who RSVP.
       </p>
     </div>
   );

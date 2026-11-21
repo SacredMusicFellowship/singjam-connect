@@ -62,7 +62,7 @@ export default function BrandHeader() {
               <TouchableOpacity
                 key={link.path}
                 onPress={() => router.navigate(link.path as any)}
-                className="rounded-lg px-3 py-1.5"
+                className="rounded-full px-3 py-1.5"
               >
                 <Text className={`text-sm ${active ? 'text-white font-semibold' : 'text-slate-300'}`}>
                   {link.label}
@@ -73,7 +73,7 @@ export default function BrandHeader() {
           {wide && <View className="mx-2 h-4 w-px bg-slate-700" />}
           <TouchableOpacity
             onPress={() => router.push('/songs' as any)}
-            className="h-9 w-9 items-center justify-center rounded-lg"
+            className="h-9 w-9 items-center justify-center rounded-full"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             accessibilityLabel="Search songs"
           >
@@ -84,7 +84,7 @@ export default function BrandHeader() {
             <>
             <TouchableOpacity
               onPress={() => router.push('/notifications' as any)}
-              className="h-9 w-9 items-center justify-center rounded-lg"
+              className="h-9 w-9 items-center justify-center rounded-full"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               accessibilityLabel="Notifications"
             >
@@ -114,7 +114,7 @@ export default function BrandHeader() {
           ) : (
             <TouchableOpacity
               onPress={() => router.push('/(auth)/sign-in' as any)}
-              className="rounded-lg bg-amber-500 px-3 py-1.5"
+              className="rounded-full bg-amber-500 px-3 py-1.5"
             >
               <Text className="text-xs font-semibold text-white">Sign in</Text>
             </TouchableOpacity>

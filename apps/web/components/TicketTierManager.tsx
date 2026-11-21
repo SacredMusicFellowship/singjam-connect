@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { isoToZonedInput, zonedInputToIso, zoneAbbreviation } from "@singjam/core";
 import { guestListToCsv, guestListFilename } from "@/lib/guestListCsv";
+import { promoUses } from "@/lib/promoUses";
+import Select from "@/components/Select";
 
 type Tier = {
   id: string;
@@ -41,6 +43,9 @@ function draftFromTier(t: Tier, zone: string): TierDraft {
   };
 }
 
+/** The event-wide cap across every tier (jams.ticket_limit). */
+type TicketLimit = { quantity: number; sold: number; held: number; remaining: number };
+
 type Guest = {
   ticket_id: string;
   code: string;
@@ -48,15 +53,39 @@ type Guest = {
   email: string | null;
   tier: string;
   is_member: boolean;
+  is_leader?: boolean;
   checked_in_at: string | null;
   // Returned by the orders route all along; the type just never said so.
   paid_at: string | null;
+  order_amount_cents: number;
+  order_tickets: number;
+  order_position: number;
+  currency: string;
 };
+
+// What the buyer paid for the order this ticket is part of — on the order's
+// first ticket only, so a two-ticket order doesn't read as two purchases.
+function paidLabel(g: Guest) {
+  if (g.order_position > 1 || g.is_leader) return "";
+  const amount = money(g.order_amount_cents, g.currency);
+  return g.order_tickets > 1 ? `${amount} for ${g.order_tickets} tickets` : amount;
+}
+
+// "ticket 2 of 2" beside a name that would otherwise appear twice.
+function OrderPosition({ guest }: { guest: Guest }) {
+  if (guest.order_tickets < 2) return null;
+  return (
+    <span className="shrink-0 text-xs text-zinc-400">
+      ticket {guest.order_position} of {guest.order_tickets}
+    </span>
+  );
+}
 
 type PromoCode = { id: string; code: string; label: string; redeemed: number | null };
 
 type Summary = {
   tickets_sold: number;
+  leaders?: number;
   orders: number;
   gross_cents: number;
   fee_cents: number;
@@ -82,7 +111,7 @@ function CheckInButton({
       onClick={() => onToggle(guest)}
       aria-pressed={inHouse}
       title={inHouse ? "Tap to undo" : "Check in"}
-      className={`min-h-[44px] w-[5.5rem] shrink-0 rounded-lg px-3 text-xs font-medium transition-colors sm:min-h-0 sm:w-auto sm:py-1.5 ${
+      className={`min-h-[44px] w-[5.5rem] shrink-0 rounded-full px-3 text-xs font-medium transition-colors sm:min-h-0 sm:w-auto sm:py-1.5 ${
         inHouse
           ? "bg-green-100 text-green-700 hover:bg-green-200"
           : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
@@ -240,6 +269,8 @@ export default function TicketTierManager({
   const zone = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const [tiers, setTiers] = useState<Tier[] | null>(null);
+  const [ticketLimit, setTicketLimit] = useState<TicketLimit | null>(null);
+  const [limitDraft, setLimitDraft] = useState("");
   const [guests, setGuests] = useState<Guest[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -263,6 +294,8 @@ export default function TicketTierManager({
       fetch(`/api/jam/${jamId}/tickets/promos`).then((r) => r.json()),
     ]);
     setTiers(tRes.ticket_types ?? []);
+    setTicketLimit(tRes.ticket_limit ?? null);
+    setLimitDraft(tRes.ticket_limit ? String(tRes.ticket_limit.quantity) : "");
     setGuests(oRes.guests ?? []);
     setSummary(oRes.summary ?? null);
     setPromos(pRes.promo_codes ?? []);
@@ -272,7 +305,7 @@ export default function TicketTierManager({
     load();
   }, [load]);
 
-  async function send(method: "POST" | "PATCH" | "DELETE", body?: unknown, qs = "") {
+  async function send(method: "POST" | "PATCH" | "PUT" | "DELETE", body?: unknown, qs = "") {
     setError(null);
     setBusy(true);
     const res = await fetch(`/api/jam/${jamId}/tickets/types${qs}`, {
@@ -325,6 +358,11 @@ export default function TicketTierManager({
     if (!editingId) return;
     const ok = await send("PATCH", { id: editingId, ...tierFields(editDraft) });
     if (ok) setEditingId(null);
+  }
+
+  async function saveLimit(e: React.FormEvent) {
+    e.preventDefault();
+    await send("PUT", { ticket_limit: limitDraft.trim() === "" ? null : Number(limitDraft) });
   }
 
   async function addPromo(e: React.FormEvent) {
@@ -428,7 +466,7 @@ export default function TicketTierManager({
           <div className={STAT_GRID}>
             {[
               { label: "Tickets sold", value: String(summary.tickets_sold) },
-              { label: "Checked in", value: `${summary.checked_in}/${summary.tickets_sold}` },
+              { label: "Checked in", value: `${summary.checked_in}/${summary.tickets_sold + (summary.leaders ?? 0)}` },
               { label: "Gross", value: money(summary.gross_cents, summary.currency) },
               { label: "Stripe fees", value: money(summary.fee_cents, summary.currency) },
               { label: "Net", value: money(summary.net_cents, summary.currency) },
@@ -466,6 +504,36 @@ export default function TicketTierManager({
           that minute.
         </p>
 
+        <form onSubmit={saveLimit} className="space-y-2 rounded-xl border border-zinc-200 p-3">
+          <label htmlFor="ticket-limit" className="block text-xs font-medium text-zinc-600">
+            Total tickets for the event
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="ticket-limit"
+              value={limitDraft}
+              onChange={(e) => setLimitDraft(e.target.value)}
+              placeholder="Blank = no total limit"
+              inputMode="numeric"
+              className={`${INPUT_CLASS} min-w-0 flex-1`}
+            />
+            <button
+              type="submit"
+              disabled={busy || limitDraft.trim() === (ticketLimit ? String(ticketLimit.quantity) : "")}
+              className="shrink-0 rounded-full border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+            >
+              Save
+            </button>
+          </div>
+          <p className="text-xs text-zinc-500">
+            {ticketLimit
+              ? `${ticketLimit.sold} sold${ticketLimit.held > 0 ? ` · ${ticketLimit.held} held` : ""} of ${
+                  ticketLimit.quantity
+                } · ${ticketLimit.remaining === 0 ? "sold out" : `${ticketLimit.remaining} left`}`
+              : "Shared by every tier. A tier's own quantity still applies inside it."}
+          </p>
+        </form>
+
         {tiers.length === 0 && (
           <p className="text-sm text-zinc-500">
             No tiers yet. Add one below and it appears on the event page immediately.
@@ -488,14 +556,14 @@ export default function TicketTierManager({
                 <button
                   type="submit"
                   disabled={busy || !editDraft.name.trim() || editDraft.price.trim() === ""}
-                  className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+                  className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
                 >
                   {busy ? "Saving…" : "Save"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditingId(null)}
-                  className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -537,7 +605,7 @@ export default function TicketTierManager({
                   onClick={() => startEditing(t)}
                   disabled={busy}
                   title="Edit name, price, cap and sales window"
-                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+                  className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
                 >
                   Edit
                 </button>
@@ -551,7 +619,7 @@ export default function TicketTierManager({
                       ? "Someone is checking out — this may fail until their hold clears"
                       : "Delete tier"
                   }
-                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+                  className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
                 >
                   Delete
                 </button>
@@ -569,7 +637,7 @@ export default function TicketTierManager({
           <button
             type="submit"
             disabled={busy || !draft.name.trim() || draft.price.trim() === ""}
-            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             Add tier
           </button>
@@ -596,15 +664,14 @@ export default function TicketTierManager({
             <div className="min-w-0">
               <p className="truncate font-mono text-sm font-medium tracking-wider text-zinc-900">{p.code}</p>
               <p className="text-xs text-zinc-500">
-                {p.label}
-                {p.redeemed !== null ? ` · used ${p.redeemed}\u00d7` : ""}
+                {p.label} · <span className="font-medium text-zinc-700">{promoUses(p.redeemed)}</span>
               </p>
             </div>
             <button
               onClick={() => removePromo(p.id)}
               disabled={busy}
               title="Stops new redemptions. Existing orders keep their discount."
-              className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+              className="shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
             >
               Remove
             </button>
@@ -619,17 +686,17 @@ export default function TicketTierManager({
               onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
               placeholder="EARLYBIRD"
               required
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm uppercase tracking-wider focus:border-amber-400 focus:outline-none"
             />
-            <select
+            <Select
               aria-label="Discount type"
               value={promoKind}
               onChange={(e) => setPromoKind(e.target.value as "percent" | "amount")}
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+              wrapperClassName="shrink-0"
             >
               <option value="percent">% off</option>
               <option value="amount">$ off</option>
-            </select>
+            </Select>
             <input
               aria-label={promoKind === "percent" ? "Percent off" : "Amount off in dollars"}
               value={promoValue}
@@ -637,13 +704,13 @@ export default function TicketTierManager({
               placeholder={promoKind === "percent" ? "25" : "5.00"}
               inputMode="decimal"
               required
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             />
           </div>
           <button
             type="submit"
             disabled={busy || !promoCode.trim() || promoValue.trim() === ""}
-            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             Add code
           </button>
@@ -667,7 +734,7 @@ export default function TicketTierManager({
           {guests.length > 0 && (
             <button
               onClick={downloadCsv}
-              className="hidden shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 sm:inline-flex"
+              className="hidden shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 sm:inline-flex"
             >
               Download CSV
             </button>
@@ -696,7 +763,7 @@ export default function TicketTierManager({
                 autoCorrect="off"
                 spellCheck={false}
                 enterKeyHint="search"
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
               />
             </div>
             {/* A phone showed the Name column and nothing else — tier, door
@@ -713,17 +780,29 @@ export default function TicketTierManager({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-medium text-zinc-900">{g.name}</p>
+                      {g.is_leader && (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                          leader
+                        </span>
+                      )}
                       {!g.is_member && (
                         <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
                           guest
                         </span>
                       )}
+                      <OrderPosition guest={g} />
                     </div>
                     {g.email && <p className="truncate text-xs text-zinc-400">{g.email}</p>}
                     <p className="mt-1 truncate text-xs text-zinc-500">
                       <span className="font-mono tracking-wider text-zinc-700">{g.code}</span>
                       <span className="text-zinc-300"> · </span>
                       {g.tier}
+                      {paidLabel(g) && (
+                        <>
+                          <span className="text-zinc-300"> · </span>
+                          {paidLabel(g)}
+                        </>
+                      )}
                       {g.checked_in_at && (
                         <>
                           <span className="text-zinc-300"> · </span>
@@ -744,6 +823,7 @@ export default function TicketTierManager({
                     <th className="py-2 pr-3 font-medium">Name</th>
                     <th className="py-2 pr-3 font-medium">Tier</th>
                     <th className="py-2 pr-3 font-medium">Code</th>
+                    <th className="py-2 pr-3 font-medium">Paid</th>
                     <th className="py-2 font-medium text-right">Door</th>
                   </tr>
                 </thead>
@@ -752,15 +832,26 @@ export default function TicketTierManager({
                     <tr key={g.ticket_id} className="border-t border-zinc-100">
                       <td className="py-2 pr-3">
                         <span className="text-zinc-900">{g.name}</span>
+                        {g.is_leader && (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                            leader
+                          </span>
+                        )}
                         {!g.is_member && (
                           <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
                             guest
+                          </span>
+                        )}
+                        {g.order_tickets > 1 && (
+                          <span className="ml-2">
+                            <OrderPosition guest={g} />
                           </span>
                         )}
                         {g.email && <p className="text-xs text-zinc-400">{g.email}</p>}
                       </td>
                       <td className="py-2 pr-3 text-zinc-600">{g.tier}</td>
                       <td className="py-2 pr-3 font-mono text-xs tracking-wider text-zinc-500">{g.code}</td>
+                      <td className="py-2 pr-3 text-zinc-600">{paidLabel(g)}</td>
                       <td className="py-2 text-right">
                         <CheckInButton guest={g} onToggle={toggleCheckIn} />
                       </td>

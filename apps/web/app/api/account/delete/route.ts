@@ -21,6 +21,17 @@ export async function DELETE(req: NextRequest) {
       await deleteContact(user.email).catch(() => {});
     }
 
+    // Attendance is keyed by email, not the account, so deleting the user would
+    // leave their history behind as a nameless guest.
+    const attendanceDeletes = [admin.from("event_attendance").delete().eq("user_id", user.id)];
+    if (user.email) {
+      attendanceDeletes.push(admin.from("event_attendance").delete().eq("email", user.email.toLowerCase()));
+    }
+    const attendanceError = (await Promise.all(attendanceDeletes)).find((r) => r.error)?.error;
+    if (attendanceError) {
+      return NextResponse.json({ error: attendanceError.message }, { status: 500 });
+    }
+
     const { error } = await admin.auth.admin.deleteUser(user.id);
 
     if (error) {
