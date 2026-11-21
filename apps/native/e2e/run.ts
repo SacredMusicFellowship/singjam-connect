@@ -159,6 +159,7 @@ function runFlows(platform: Platform, device: string, metroUrl: string, maestroE
     MEMBER_EMAIL: refs.members.member.auth.email,
     NEWCOMER_EMAIL: refs.members.newcomer.auth.email,
     OFFICIAL_JAM: refs.jams.officialNext.name,
+    OFFICIAL_LATER_JAM: refs.jams.officialLater.name,
     COMMUNITY_JAM: refs.jams.communityUpcoming.name,
     PRIVATE_JAM: refs.jams.privateUpcoming.name,
     HOST_NAME: `${refs.members.host.profile.display_name} ${refs.members.host.profile.last_name}`,

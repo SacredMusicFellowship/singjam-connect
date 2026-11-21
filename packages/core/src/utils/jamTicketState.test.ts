@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   jamTicketCta,
+  ticketedEventAttendance,
   jamTicketState,
   summarizeTicketTiers,
   type JamTicketSummary,
@@ -275,5 +276,32 @@ describe('jamTicketCta with an external seller', () => {
     for (const s of [summary(), summary({ sold_out: true }), null]) {
       expect(jamTicketCta(null, s, { now: NOW }).externalUrl).toBeNull();
     }
+  });
+});
+
+describe('ticketedEventAttendance', () => {
+  const base = { hasTicketTiers: false, ticketsUrl: null, rsvpStatus: null, isLeader: false };
+
+  it('sells tickets through our own tiers or an outside link', () => {
+    expect(ticketedEventAttendance({ ...base, hasTicketTiers: true }).sellsTickets).toBe(true);
+    expect(ticketedEventAttendance({ ...base, ticketsUrl: 'https://tickets.example.test/e' }).sellsTickets).toBe(true);
+    expect(ticketedEventAttendance(base).sellsTickets).toBe(false);
+  });
+
+  it('counts an attending ticket holder as going', () => {
+    expect(ticketedEventAttendance({ ...base, hasTicketTiers: true, rsvpStatus: 'attending' }).goingOnTicket).toBe(true);
+  });
+
+  it("doesn't count a waitlist row or no row as going", () => {
+    expect(ticketedEventAttendance({ ...base, hasTicketTiers: true, rsvpStatus: 'waitlist' }).goingOnTicket).toBe(false);
+    expect(ticketedEventAttendance({ ...base, hasTicketTiers: true }).goingOnTicket).toBe(false);
+  });
+
+  it('leaves an RSVP on an event without tickets to the RSVP flow', () => {
+    expect(ticketedEventAttendance({ ...base, rsvpStatus: 'attending' }).goingOnTicket).toBe(false);
+  });
+
+  it('counts a music leader as going whether or not tickets are on sale', () => {
+    expect(ticketedEventAttendance({ ...base, isLeader: true }).goingOnTicket).toBe(true);
   });
 });

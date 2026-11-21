@@ -6,7 +6,8 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { attendeeRole, canEditJam, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
+import * as WebBrowser from 'expo-web-browser';
+import { attendeeRole, canEditJam, jamPath, ticketedEventAttendance, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -50,6 +51,7 @@ type JamDetail = {
   image_url: string | null;
   image_mobile_url: string | null;
   tickets_url: string | null;
+  short_code: string | null;
   capacity: number | null;
   host_id: string | null;
   host_display_name: string | null;
@@ -334,6 +336,9 @@ export default function JamDetailScreen() {
   const [leaders, setLeaders] = useState<JamLeader[]>([]);
   const [cohostIds, setCohostIds] = useState<Set<string>>(new Set());
   const [myLeader, setMyLeader] = useState<MyLeaderSpot | null>(null);
+  // Official events sell tickets on the web event page (or an outside link)
+  // instead of taking RSVPs, as on web.
+  const [hasTicketTiers, setHasTicketTiers] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rsvpLoading, setRsvpLoading] = useState(false);
@@ -353,7 +358,7 @@ export default function JamDetailScreen() {
         .from('jams')
         .select(`
           id, name, visibility, starts_at, ends_at, timezone,
-          neighborhood, notes, image_url, image_mobile_url, tickets_url, capacity, host_user_id,
+          neighborhood, notes, image_url, image_mobile_url, tickets_url, short_code, capacity, host_user_id,
           profiles!host_user_id ( display_name, username, avatar_url ),
           jam_tags ( tags ( name, type ) )
         `)
@@ -404,6 +409,7 @@ export default function JamDetailScreen() {
       image_url: j.image_url,
       image_mobile_url: j.image_mobile_url,
       tickets_url: j.tickets_url,
+      short_code: j.short_code ?? null,
       capacity: j.capacity,
       host_id: j.host_user_id,
       host_display_name: j.profiles?.display_name ?? null,
@@ -445,6 +451,11 @@ export default function JamDetailScreen() {
       })
       .catch(() => { setGuestAttendees([]); setMemberExtras({}); });
     if (j.visibility === 'official') {
+      supabase
+        .from('ticket_types')
+        .select('id', { count: 'exact', head: true })
+        .eq('jam_id', id)
+        .then(({ count }) => setHasTicketTiers((count ?? 0) > 0));
       const { data: { session } } = await supabase.auth.getSession();
       fetch(`${WEB_URL}/api/jam/${id}/leaders`, {
         headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
@@ -453,6 +464,7 @@ export default function JamDetailScreen() {
         .then(d => { setLeaders(d.leaders ?? []); setMyLeader(d.me ?? null); })
         .catch(() => { setLeaders([]); setMyLeader(null); });
     } else {
+      setHasTicketTiers(false);
       setLeaders([]);
       setMyLeader(null);
     }
@@ -488,13 +500,22 @@ export default function JamDetailScreen() {
     return jamIsFull(capacityJam, attendees.filter(a => a.user_id !== jam.host_id).length) ? 'waitlist' : 'attending';
   }
 
+  // Checkout runs on the web event page in an in-app browser, which has no app
+  // session, so a member buys as a guest. When the browser closes, the claim
+  // route attaches guest tickets bought under the member's email (the same
+  // claim web runs on sign-in), and the reload shows "You're going".
+  async function handleGetTickets() {
+    if (!jam) return;
+    const url = hasTicketTiers ? `${WEB_URL}${jamPath({ id: jam.id, short_code: jam.short_code })}` : jam.tickets_url;
+    if (!url) return;
+    await WebBrowser.openBrowserAsync(url);
+    if (myUserId) await jamApiFetch('/api/tickets/claim', 'POST').catch(() => null);
+    load();
+  }
+
   async function handleRsvp() {
     if (!jam) return;
     if (!myUserId) { router.push('/(auth)/sign-in' as any); return; }
-    if (jam.visibility === 'official') {
-      Alert.alert('External ticketing', 'Official SingJam events use external ticketing.');
-      return;
-    }
 
     const previousStatus = myRsvpStatus;
     const previousAttendees = attendees;
@@ -637,6 +658,13 @@ export default function JamDetailScreen() {
   }
 
   const isHosting = jam.host_id === myUserId;
+  const isOfficial = jam.visibility === 'official';
+  const { sellsTickets, goingOnTicket } = ticketedEventAttendance({
+    hasTicketTiers,
+    ticketsUrl: jam.tickets_url,
+    rsvpStatus: myRsvpStatus,
+    isLeader: !!myLeader,
+  });
   const canEdit = !!myUserId && canEditJam({ host_user_id: jam.host_id, visibility: jam.visibility }, { id: myUserId, can_host_official: canHostOfficial });
   // The host holds a seat but has no RSVP row; on web's list they are the
   // first person going, and the capacity count includes them the same way.
@@ -817,7 +845,37 @@ export default function JamDetailScreen() {
         </View>
 
         {/* RSVP action */}
-        {!isPast ? (
+        {!isPast && isOfficial ? (
+          // Official events sell tickets instead of taking RSVPs, as on web: a
+          // ticket holder sees "You're going" (no Cancel; a ticket isn't given
+          // back from here) and a leader can step down.
+          myLeader ? (
+            <View className="px-4 mb-6">
+              <TouchableOpacity
+                onPress={handleLeaderWithdraw}
+                className="border border-zinc-200 rounded-xl py-3 items-center"
+              >
+                <Text className="text-zinc-600 font-semibold">✓ Going · Can't make it?</Text>
+              </TouchableOpacity>
+            </View>
+          ) : goingOnTicket ? (
+            <View className="px-4 mb-6">
+              <View className="bg-green-50 rounded-xl py-3 items-center border border-green-200">
+                <Text className="text-green-700 font-semibold">✓ You're going</Text>
+              </View>
+            </View>
+          ) : sellsTickets ? (
+            <View className="px-4 mb-6">
+              <TouchableOpacity
+                onPress={handleGetTickets}
+                className="bg-amber-500 rounded-xl py-3 items-center"
+                accessibilityRole="button"
+              >
+                <Text className="text-white font-semibold">Get tickets</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
+        ) : !isPast ? (
           <View className="px-4 mb-6">
             {isHosting ? (
               <View className="gap-2">

@@ -1,0 +1,37 @@
+appId: org.singjam.app
+name: Official events sell tickets instead of taking RSVPs, and a ticket holder sees they're going
+---
+# The newcomer has no ticket for the later official event: it offers Get tickets, which opens the
+# web event page (where the tiers are sold) in an in-app browser.
+- runFlow: common/start.yaml
+- runFlow:
+    file: common/sign-in.yaml
+    env:
+      EMAIL: ${NEWCOMER_EMAIL}
+- tapOn: "Jams(, tab.*)?"
+- scrollUntilVisible:
+    element: ".*${OFFICIAL_LATER_JAM}.*"
+- tapOn: ".*${OFFICIAL_LATER_JAM}.*"
+- scrollUntilVisible:
+    element: "Get tickets"
+- assertNotVisible: "RSVP"
+- takeScreenshot: official-get-tickets
+- tapOn: "Get tickets"
+- extendedWaitUntil:
+    visible: ".*General admission.*"
+    timeout: 60000
+- takeScreenshot: official-ticket-page
+- tapOn: "Done"
+- assertVisible: "Get tickets"
+# The member holds tickets for the next official event.
+- runFlow: common/start.yaml
+- runFlow:
+    file: common/sign-in.yaml
+    env:
+      EMAIL: ${MEMBER_EMAIL}
+- tapOn: "Jams(, tab.*)?"
+- tapOn: ".*${OFFICIAL_JAM}.*"
+- scrollUntilVisible:
+    element: "✓ You're going"
+- assertNotVisible: "Get tickets"
+- takeScreenshot: official-going

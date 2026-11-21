@@ -186,3 +186,20 @@ export function jamTicketCta(
   }
   return { label: "Details and tickets", hasTickets: true, externalUrl: null };
 }
+
+/**
+ * On an event's detail page: whether it sells tickets (our own tiers or an
+ * outside link) and whether the viewer is already going on one. Buying holds
+ * back the RSVP-style actions until you're attending, through a ticket you
+ * bought or a music leader spot, and then shows "You're going" instead.
+ */
+export function ticketedEventAttendance(opts: {
+  hasTicketTiers: boolean;
+  ticketsUrl: string | null | undefined;
+  rsvpStatus: string | null | undefined;
+  isLeader: boolean;
+}): { sellsTickets: boolean; goingOnTicket: boolean } {
+  const sellsTickets = opts.hasTicketTiers || !!opts.ticketsUrl;
+  const goingOnTicket = (sellsTickets && opts.rsvpStatus === "attending") || opts.isLeader;
+  return { sellsTickets, goingOnTicket };
+}
