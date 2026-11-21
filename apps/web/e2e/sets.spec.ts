@@ -24,3 +24,28 @@ test("a member creates a set, adds a song and deletes the set", async ({ page, f
   await expect(page).toHaveURL(/\/sets/, { timeout: 15_000 });
   await expect.poll(async () => (await admin.from("sets").select("id").eq("id", set!.id)).data?.length).toBe(0);
 });
+
+test("a set's QR code encodes its invite link, and that link opens the set", async ({ page, freshMember }) => {
+  const { data: set } = await admin
+    .from("sets")
+    .insert({ name: "Front porch songs", owner_user_id: freshMember.id, link_sharing: "private" })
+    .select("id, short_code")
+    .single();
+
+  await openPage(page, "/sets");
+  const link = await page.request.post(`/api/sets/${set!.id}/invite/link`, { data: { role: "viewer" } });
+  expect(link.ok()).toBe(true);
+  const { url } = await link.json();
+  expect(new URL(url).pathname).toBe(`/set/${set!.short_code}`);
+  const token = new URL(url).searchParams.get("invite")!;
+
+  const qr = await page.request.get(`/api/sets/${set!.id}/qr?invite=${token}`);
+  expect(qr.status()).toBe(200);
+  expect(qr.headers()["content-type"]).toBe("image/png");
+  expect((await qr.body()).subarray(1, 4).toString()).toBe("PNG");
+  expect((await page.request.get(`/api/sets/${set!.id}/qr?invite=not-a-token`)).status()).toBe(404);
+
+  await openPage(page, `/set/${set!.short_code}?invite=${token}`);
+  await expect(page.getByRole("heading", { name: "Front porch songs", level: 1 })).toBeVisible();
+  await admin.from("sets").delete().eq("id", set!.id);
+});

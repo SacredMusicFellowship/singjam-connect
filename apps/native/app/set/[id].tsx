@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, Modal, FlatList, TextInput,
-  KeyboardAvoidingView, Platform, Linking, AppState,
+  KeyboardAvoidingView, Platform, Linking, AppState, Share,
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,6 +20,7 @@ import UgBackTip from '@/components/UgBackTip';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 import SongRowTitle, { type SongRowCard } from '@/components/SongRowTitle';
 import SetSongRow, { type Participant, type SetSong } from '@/components/SetSongRow';
+import SetQrModal from '@/components/SetQrModal';
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -248,6 +249,9 @@ function SetSettingsModal({
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer' | 'co-owner'>('editor');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [linkRole, setLinkRole] = useState<'editor' | 'viewer'>('editor');
+  const [linkBusy, setLinkBusy] = useState<'share' | 'qr' | null>(null);
+  const [qrUri, setQrUri] = useState<string | null>(null);
 
   // Co-owner may only be granted to a named user, and only by the owner.
   const inviteRoleOptions: ('editor' | 'viewer' | 'co-owner')[] = isOwner ? ['editor', 'viewer', 'co-owner'] : ['editor', 'viewer'];
@@ -329,6 +333,33 @@ function SetSettingsModal({
       anchor: anchorFrom(event),
       options: inviteRoleOptions.map(r => ({ label: ROLE_LABELS[r], onPress: () => apply(r) })),
     });
+  }
+
+  // As on web: each share or QR mints its own invite link (/set/<code>?invite=…) at the chosen role.
+  async function createInviteLink(kind: 'share' | 'qr') {
+    setLinkBusy(kind);
+    const { ok, json } = await setApi(`/api/sets/${setId}/invite/link`, 'POST', { role: linkRole });
+    setLinkBusy(null);
+    if (!ok) { Alert.alert('Error', json?.error ?? 'Could not create the invite link.'); return null; }
+    return json as { inviteId: string; url: string; message: string };
+  }
+
+  async function shareInvite() {
+    const invite = await createInviteLink('share');
+    if (!invite) return;
+    const result = await Share.share({ message: invite.message }).catch(() => null);
+    // Web cancels the link when the share sheet is closed without sharing; iOS says so, Android can't.
+    if (result?.action === Share.dismissedAction) {
+      setApi(`/api/sets/${setId}/invite/link`, 'DELETE', { inviteId: invite.inviteId }).catch(() => {});
+    }
+  }
+
+  async function showQr() {
+    const invite = await createInviteLink('qr');
+    if (!invite) return;
+    // React Native's URL has no searchParams.
+    const token = invite.url.match(/[?&]invite=([^&#]+)/)?.[1] ?? '';
+    setQrUri(`${WEB_URL}/api/sets/${setId}/qr?invite=${token}`);
   }
 
   // Owner manages everyone; a co-owner manages only non-co-owner collaborators.
@@ -459,8 +490,43 @@ function SetSettingsModal({
               </View>
             )}
           </View>
+
+          <View className="px-4 pb-10">
+            <Text className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-3">Invite link</Text>
+            <View className="flex-row gap-2 mb-2">
+              {(['editor', 'viewer'] as const).map(r => (
+                <TouchableOpacity
+                  key={r}
+                  onPress={() => setLinkRole(r)}
+                  className={`px-3 py-1 rounded-full border ${linkRole === r ? 'bg-amber-500 border-amber-500' : 'bg-white border-zinc-200'}`}
+                >
+                  <Text className={`text-xs font-medium ${linkRole === r ? 'text-white' : 'text-zinc-600'}`}>{ROLE_LABELS[r]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text className="text-xs text-zinc-400 mb-3">{SET_ROLE_DESCRIPTIONS[linkRole]}</Text>
+            <View className="flex-row gap-2">
+              <TouchableOpacity
+                onPress={shareInvite}
+                disabled={!!linkBusy}
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5"
+              >
+                <Ionicons name="share-outline" size={16} color="#3f3f46" />
+                <Text className="text-sm font-medium text-zinc-700">{linkBusy === 'share' ? 'Opening…' : 'Share invite'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={showQr}
+                disabled={!!linkBusy}
+                className="flex-row items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2.5"
+              >
+                <Ionicons name="qr-code-outline" size={16} color="#3f3f46" />
+                <Text className="text-sm font-medium text-zinc-700">{linkBusy === 'qr' ? 'Generating…' : 'QR code'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <SetQrModal uri={qrUri} onClose={() => setQrUri(null)} />
     </Modal>
   );
 }
