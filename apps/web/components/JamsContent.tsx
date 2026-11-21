@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { fetchAllRows, jamTicketCta, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
+import { canEditJam, fetchAllRows, jamImageFor, jamTags, jamTicketCta, OLDER_PAST_JAMS_PAGE, pastJamsOrFilter, pastJamsWindowStart, summarizeTicketTiers, type JamTicketSummary, type JamTicketTier } from "@singjam/core";
 import { FormattedDate, FormattedTime } from "@/components/FormattedTime";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -13,6 +13,7 @@ type JamsData = {
   userId: string | null;
   invitesEnabled: boolean;
   isAdmin: boolean;
+  canHostOfficial: boolean;
   allJams: any[];
   rsvpByJam: Map<string, any>;
   inviteByJam: Map<string, any>;
@@ -24,10 +25,36 @@ type JamsData = {
 
 const CACHE_KEY = "cache:/jams";
 
+const JAM_LIST_SELECT = "id, short_code, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, image_focal_point, image_list_url, visibility, host_user_id, jam_tags(tags(name, type)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)";
+
+type OlderPast = { cutoff: string; filter: string; loaded: number; hasMore: boolean; loading: boolean };
+
+function indexJams(
+  jams: any[],
+  genresByJam: Map<string, string[]>,
+  themesByJam: Map<string, string[]>,
+  profileById: Map<string, { label: string; username: string | null }>,
+) {
+  for (const j of jams) {
+    const genres = jamTags(j.jam_tags, "genre").map((t) => t.name);
+    if (genres.length > 0) genresByJam.set(j.id, genres);
+    // Everything a jam is tagged with besides genres: occasions, communities, forms, languages, themes.
+    const themes = jamTags(j.jam_tags).filter((t) => t.type !== "genre").map((t) => t.name);
+    if (themes.length > 0) themesByJam.set(j.id, themes);
+    if (j.host_user_id && j.host && !profileById.has(j.host_user_id)) {
+      profileById.set(j.host_user_id, {
+        label: [j.host.display_name, j.host.last_name].filter(Boolean).join(" ") || j.host.username || null,
+        username: j.host.username ?? null,
+      });
+    }
+  }
+}
+
 type JamsCache = {
   uid: string | null;
   invitesEnabled: boolean;
   isAdmin: boolean;
+  canHostOfficial: boolean;
   allJams: any[];
   rsvpByJam: [string, any][];
   inviteByJam: [string, any][];
@@ -51,16 +78,17 @@ function RsvpBadge({ status, waitlistPosition }: { status: RsvpStatus; waitlistP
   return null;
 }
 
-function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSummary, rsvp, isInvited, isHosting, onDeleted }: {
+function JamListCard({ jam, tags, hostLabel, isOfficial, ticketSummary, rsvp, isInvited, isHosting, canEdit, onDeleted }: {
   jam: any;
   tags: string[];
   hostLabel?: string | null;
-  hostUsername?: string | null;
   isOfficial: boolean;
   ticketSummary?: JamTicketSummary | null;
   rsvp?: { status: RsvpStatus; waitlist_position?: number | null } | null;
   isInvited?: boolean;
   isHosting?: boolean;
+  /** Shows the Edit / Copy / Cancel menu — see canEditJam in @singjam/core. */
+  canEdit?: boolean;
   onDeleted?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -75,9 +103,14 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
   const cta = isOfficial && !isPast
     ? jamTicketCta(jam.tickets_url, ticketSummary, { timezone: jam.timezone })
     : null;
+  const thumb = jamImageFor(jam, "list");
+  // Every card ends on one more row after the place, so they all fill the
+  // same fixed height: the ticket link, else the tags, else "Details →". Only
+  // one fits, so an official card keeps its ticket link over its tags.
+  const showTags = tags.length > 0 && !cta;
 
   useEffect(() => {
-    if (!isHosting) return;
+    if (!canEdit) return;
     function onClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
@@ -85,7 +118,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [isHosting]);
+  }, [canEdit]);
 
   async function deleteJam() {
     setDeleting(true);
@@ -99,13 +132,20 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
   }
 
   const cardBody = (
-    <div className={`group relative flex overflow-hidden rounded-2xl border bg-white transition-colors ${isOfficial ? "border-amber-200 hover:border-amber-300" : "border-zinc-200 hover:border-zinc-300"}`}>
-      {jam.image_url ? (
-        <div className="relative shrink-0 w-24 sm:w-32 overflow-hidden bg-black">
-          <Image src={jam.image_url} alt={jam.name ?? "Event"} fill className="object-contain" sizes="128px" />
+    <div className={`group relative flex h-32 overflow-hidden rounded-2xl border sm:h-36 bg-white transition-colors ${isOfficial ? "border-amber-200 hover:border-amber-300" : "border-zinc-200 hover:border-zinc-300"}`}>
+      {thumb ? (
+        <div className="relative aspect-square h-full shrink-0 overflow-hidden bg-black">
+          <Image
+            src={thumb.src}
+            alt={jam.name ?? "Event"}
+            fill
+            className="object-cover object-[var(--pos)]"
+            style={{ "--pos": thumb.position } as CSSProperties}
+            sizes="144px"
+          />
         </div>
       ) : jam.starts_at ? (
-        <div className={`shrink-0 w-20 flex flex-col items-center justify-center border-r px-2 py-4 ${isOfficial ? "bg-amber-50 border-amber-200" : "bg-zinc-50 border-zinc-100"}`}>
+        <div className={`shrink-0 w-20 flex flex-col items-center justify-center border-r px-2 ${isOfficial ? "bg-amber-50 border-amber-200" : "bg-zinc-50 border-zinc-100"}`}>
           <span className={`text-xs font-semibold uppercase tracking-wide ${isOfficial ? "text-amber-500" : "text-zinc-400"}`}>
             <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "short" }} />
           </span>
@@ -118,7 +158,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
         </div>
       ) : null}
 
-      <div className="flex-1 min-w-0 p-4">
+      <div className="flex min-w-0 flex-1 flex-col justify-center p-3 sm:p-4">
         {isOfficial && (
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-500 mb-0.5">Official SingJam event</p>
         )}
@@ -143,33 +183,36 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
           {rsvp && <RsvpBadge status={rsvp.status} waitlistPosition={rsvp.waitlist_position} />}
         </div>
         {jam.starts_at && (
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="truncate text-xs text-zinc-500 mt-0.5">
             <FormattedDate iso={jam.starts_at} timezone={jam.timezone} options={{ weekday: "short", month: "short", day: "numeric" }} />
             {" · "}
-            <FormattedTime iso={jam.starts_at} timezone={jam.timezone} />
+            <FormattedTime iso={jam.starts_at} timezone={jam.timezone} options={jam.ends_at ? { timeZoneName: undefined } : undefined} />
             {jam.ends_at && <> – <FormattedTime iso={jam.ends_at} timezone={jam.timezone} /></>}
           </p>
         )}
-        {jam.neighborhood && <p className="text-xs text-zinc-400 mt-0.5">{jam.neighborhood}</p>}
-        {tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
+        {/* The host shares the place's line, and tags get one row, so every
+            card fits the fixed height that keeps its thumbnail square. An
+            official event's eyebrow and border already say it is SingJam's. */}
+        {(jam.neighborhood || (!isOfficial && !isHosting && hostLabel)) && (
+          <p className="truncate text-xs text-zinc-400 mt-0.5">
+            {jam.neighborhood}
+            {jam.neighborhood && !isOfficial && !isHosting && hostLabel && " · "}
+            {!isOfficial && !isHosting && hostLabel && (
+              <>
+                Hosted by <span className="font-medium text-zinc-500">{hostLabel}</span>
+              </>
+            )}
+          </p>
+        )}
+        {showTags && (
+          <div className="mt-1 flex h-5 flex-wrap gap-1 overflow-hidden">
             {tags.map((t) => (
               <span key={t} className={`rounded-full px-2 py-0.5 text-xs ${isOfficial ? "bg-amber-50 text-amber-700" : "bg-zinc-100 text-zinc-600"}`}>{t}</span>
             ))}
           </div>
         )}
-        {isOfficial ? (
-          <p className="mt-2 text-xs text-zinc-400">
-            Hosted by <span className="font-medium text-zinc-500">SingJam</span>
-          </p>
-        ) : (!isHosting && hostLabel && (
-          <p className="mt-2 text-xs text-zinc-400">
-            Hosted by <span className="font-medium text-zinc-500">{hostLabel}</span>
-            {hostUsername && <span className="ml-1">@{hostUsername}</span>}
-          </p>
-        ))}
-        {cta && (
-          <div className="mt-2 flex flex-wrap gap-3">
+        {cta ? (
+          <div className="mt-1.5 flex flex-wrap gap-3">
             <span className={`text-xs font-medium ${cta.hasTickets && !cta.externalUrl ? "text-amber-600 group-hover:text-amber-500" : "text-zinc-500 group-hover:text-zinc-700"}`}>
               {cta.label} →
             </span>
@@ -184,6 +227,8 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
               </a>
             )}
           </div>
+        ) : !showTags && (
+          <p className="mt-1.5 text-xs font-medium text-zinc-500 group-hover:text-zinc-700">Details →</p>
         )}
       </div>
       {/* Stretched link rather than a wrapping <a>: the whole card goes to the
@@ -191,7 +236,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
           in the DOM so it paints over the poster image, which needs its own
           `relative` for next/image fill. */}
       <Link
-        href={`/jam/${jam.id}`}
+        href={`/jam/${jam.short_code ?? jam.id}`}
         className="absolute inset-0 z-0"
         aria-label={jam.name ?? (isOfficial ? "SingJam event" : "Community jam")}
       />
@@ -200,7 +245,7 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
 
   const wrapped = cardBody;
 
-  if (!isHosting) return wrapped;
+  if (!canEdit) return wrapped;
 
   return (
     <div className="relative">
@@ -246,14 +291,14 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
               <button
                 onClick={() => setConfirming(false)}
                 disabled={deleting}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
                 Keep it
               </button>
               <button
                 onClick={deleteJam}
                 disabled={deleting}
-                className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Cancelling…" : "Yes, cancel"}
               </button>
@@ -267,6 +312,8 @@ function JamListCard({ jam, tags, hostLabel, hostUsername, isOfficial, ticketSum
 
 export default function JamsContent() {
   const [data, setData] = useState<JamsData | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [olderPast, setOlderPast] = useState<OlderPast | null>(null);
   const supabase = supabaseBrowser();
   const hydratedUidRef = useRef<string | null | undefined>(undefined);
 
@@ -283,6 +330,7 @@ export default function JamsContent() {
         userId: c.uid,
         invitesEnabled: c.invitesEnabled,
         isAdmin: c.isAdmin,
+        canHostOfficial: c.canHostOfficial ?? false,
         allJams: c.allJams,
         rsvpByJam: new Map(c.rsvpByJam),
         inviteByJam: new Map(c.inviteByJam),
@@ -305,16 +353,19 @@ export default function JamsContent() {
       setData(null);
     }
 
+    const pastCutoff = pastJamsWindowStart();
+    setOlderPast(null);
+
     const [flagRes, adminRes, jamsRes, rsvpsRes, invitesRes] = await Promise.all([
       supabase.from("feature_flags").select("enabled").eq("key", "jam_invites").maybeSingle(),
       userId
-        ? supabase.from("profiles").select("role").eq("id", userId).single()
+        ? supabase.from("profiles").select("role, can_host_official").eq("id", userId).single()
         : Promise.resolve({ data: null }),
       fetchAllRows<any>((from, to) =>
         supabase
           .from("jams")
-          .select("id, name, starts_at, ends_at, timezone, neighborhood, tickets_url, image_url, visibility, host_user_id, jam_genres(genres(name)), jam_themes(themes(name)), host:profiles!jams_host_user_id_fkey(display_name, last_name, username)")
-          .gte("starts_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+          .select(JAM_LIST_SELECT)
+          .gte("starts_at", pastCutoff)
           .order("starts_at", { ascending: true, nullsFirst: false })
           .order("id")
           .range(from, to)
@@ -341,21 +392,11 @@ export default function JamsContent() {
     const themesByJam = new Map<string, string[]>();
     const profileById = new Map<string, { label: string; username: string | null }>();
 
-    for (const j of allJams) {
-      const genres = ((j.jam_genres ?? []) as any[]).map((r) => r.genres?.name).filter(Boolean);
-      if (genres.length > 0) genresByJam.set(j.id, genres);
-      const themes = ((j.jam_themes ?? []) as any[]).map((r) => r.themes?.name).filter(Boolean);
-      if (themes.length > 0) themesByJam.set(j.id, themes);
-      if (j.host_user_id && j.host && !profileById.has(j.host_user_id)) {
-        profileById.set(j.host_user_id, {
-          label: [j.host.display_name, j.host.last_name].filter(Boolean).join(" ") || j.host.username || null,
-          username: j.host.username ?? null,
-        });
-      }
-    }
+    indexJams(allJams, genresByJam, themesByJam, profileById);
 
     const invitesEnabled = flagRes.data?.enabled ?? true;
     const isAdmin = (adminRes.data as any)?.role === "admin";
+    const canHostOfficial = (adminRes.data as any)?.can_host_official === true;
 
     // Ticket state is only shown on upcoming official events, so the summary
     // call is scoped to those — one round trip for the section, not per tier.
@@ -363,15 +404,21 @@ export default function JamsContent() {
     const officialIds = allJams
       .filter((j) => j.visibility === "official" && (j.ends_at ?? j.starts_at) >= listNow)
       .map((j) => j.id);
-    const { data: tiers } = officialIds.length
-      ? await supabase.rpc("jam_ticket_tiers", { jam_ids: officialIds })
-      : { data: [] };
+    const pastFilter = pastJamsOrFilter(userId, (rsvpsRes.data ?? []) as any[], (invitesRes.data ?? []) as any[]);
+    const [{ data: tiers }, { data: olderProbe }] = await Promise.all([
+      officialIds.length
+        ? supabase.rpc("jam_ticket_tiers", { jam_ids: officialIds })
+        : Promise.resolve({ data: [] }),
+      supabase.from("jams").select("id").lt("starts_at", pastCutoff).or(pastFilter).limit(1),
+    ]);
+    setOlderPast({ cutoff: pastCutoff, filter: pastFilter, loaded: 0, hasMore: (olderProbe ?? []).length > 0, loading: false });
     const ticketSummaryByJam = summarizeTicketTiers(tiers as JamTicketTier[] | null);
 
     setData({
       userId,
       invitesEnabled,
       isAdmin,
+      canHostOfficial,
       allJams,
       rsvpByJam,
       inviteByJam,
@@ -386,6 +433,7 @@ export default function JamsContent() {
         uid: userId,
         invitesEnabled,
         isAdmin,
+        canHostOfficial,
         allJams,
         rsvpByJam: Array.from(rsvpByJam.entries()),
         inviteByJam: Array.from(inviteByJam.entries()),
@@ -396,6 +444,39 @@ export default function JamsContent() {
       };
       sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
     } catch {}
+  }
+
+  async function loadOlderPast() {
+    if (!olderPast || olderPast.loading) return;
+    const { cutoff, filter, loaded } = olderPast;
+    setOlderPast({ ...olderPast, loading: true });
+    const { data: rows, error } = await supabase
+      .from("jams")
+      .select(JAM_LIST_SELECT)
+      .lt("starts_at", cutoff)
+      .or(filter)
+      .order("starts_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(loaded, loaded + OLDER_PAST_JAMS_PAGE);
+    if (error) {
+      console.error(`[jams] could not load older events: ${error.message}`);
+      setOlderPast((prev) => (prev && prev.cutoff === cutoff ? { ...prev, loading: false } : prev));
+      return;
+    }
+    const page = (rows ?? []).slice(0, OLDER_PAST_JAMS_PAGE);
+    setData((prev) => {
+      if (!prev) return prev;
+      const genresByJam = new Map(prev.genresByJam);
+      const themesByJam = new Map(prev.themesByJam);
+      const profileById = new Map(prev.profileById);
+      indexJams(page, genresByJam, themesByJam, profileById);
+      return { ...prev, allJams: [...[...page].reverse(), ...prev.allJams], genresByJam, themesByJam, profileById };
+    });
+    setOlderPast((prev) =>
+      prev && prev.cutoff === cutoff
+        ? { ...prev, loaded: loaded + page.length, hasMore: (rows ?? []).length > OLDER_PAST_JAMS_PAGE, loading: false }
+        : prev
+    );
   }
 
   useEffect(() => {
@@ -429,17 +510,24 @@ export default function JamsContent() {
     );
   }
 
-  const { userId, invitesEnabled, isAdmin, allJams, rsvpByJam, inviteByJam, genresByJam, themesByJam, profileById, ticketSummaryByJam } = data;
+  const { userId, invitesEnabled, isAdmin, canHostOfficial, allJams: everyJam, rsvpByJam, inviteByJam, genresByJam, themesByJam, profileById, ticketSummaryByJam } = data;
+  // Filter every section by one tag; the row offers the tags upcoming jams use.
+  const tagsOf = (id: string) => [...(genresByJam.get(id) ?? []), ...(themesByJam.get(id) ?? [])];
+  const nowIso = new Date().toISOString();
+  const tagCounts = new Map<string, number>();
+  for (const j of everyJam) if ((j.ends_at ?? j.starts_at) >= nowIso) for (const t of tagsOf(j.id)) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  const filterTags = [...tagCounts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([t]) => t);
+  const allJams = tagFilter ? everyJam.filter((j) => tagsOf(j.id).includes(tagFilter)) : everyJam;
 
   function cardProps(jam: any, opts: { isOfficial?: boolean; isHosting?: boolean } = {}) {
     return {
       jam,
       tags: [...(genresByJam.get(jam.id) ?? []), ...(themesByJam.get(jam.id) ?? [])],
       hostLabel: profileById.get(jam.host_user_id)?.label ?? null,
-      hostUsername: profileById.get(jam.host_user_id)?.username ?? null,
       isOfficial: opts.isOfficial ?? false,
       ticketSummary: ticketSummaryByJam.get(jam.id) ?? null,
       isHosting: opts.isHosting ?? (!!userId && jam.host_user_id === userId),
+      canEdit: canEditJam(jam, userId ? { id: userId, can_host_official: canHostOfficial } : null),
       rsvp: (rsvpByJam.get(jam.id) as any) ?? null,
       isInvited: (inviteByJam.get(jam.id) as any)?.status === "pending",
     };
@@ -498,6 +586,7 @@ export default function JamsContent() {
   const isEmpty =
     upcomingOfficialJams.length === 0 &&
     pastJams.length === 0 &&
+    !olderPast?.hasMore &&
     pendingInviteJams.length === 0 &&
     hostingJams.length === 0 &&
     communityJams.length === 0 &&
@@ -509,6 +598,26 @@ export default function JamsContent() {
         <h1 className="text-xl font-semibold">Jams</h1>
         <p className="text-sm text-zinc-500">Browse open jams or post your own.</p>
       </div>
+
+      {(filterTags.length > 1 || tagFilter) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {filterTags.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTagFilter((cur) => (cur === t ? null : t))}
+              aria-pressed={tagFilter === t}
+              className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                tagFilter === t ? "border-amber-400 bg-amber-50 text-amber-700" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+          {tagFilter && (
+            <button onClick={() => setTagFilter(null)} className="px-1.5 text-xs font-medium text-zinc-500 hover:text-red-600">Show all jams</button>
+          )}
+        </div>
+      )}
 
       {userId && (invitesEnabled || isAdmin) && (
         <section className="space-y-3">
@@ -532,7 +641,7 @@ export default function JamsContent() {
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Upcoming SingJam events</h2>
           <div className="grid grid-cols-1 gap-3">
-            {upcomingOfficialJams.map((jam) => <JamListCard key={jam.id} {...cardProps(jam, { isOfficial: true })} />)}
+            {upcomingOfficialJams.map((jam) => <JamListCard key={jam.id} {...cardProps(jam, { isOfficial: true })} onDeleted={fetchData} />)}
           </div>
         </section>
       )}
@@ -564,7 +673,7 @@ export default function JamsContent() {
         </section>
       )}
 
-      {pastJams.length > 0 && (
+      {(pastJams.length > 0 || olderPast?.hasMore) && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Past events</h2>
           <div className="grid grid-cols-1 gap-3">
@@ -578,6 +687,16 @@ export default function JamsContent() {
                 onDeleted={fetchData}
               />
             ))}
+            {olderPast?.hasMore && (
+              <button
+                type="button"
+                onClick={loadOlderPast}
+                disabled={olderPast.loading}
+                className="rounded-full border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 hover:border-amber-300 hover:text-amber-600 disabled:opacity-60 transition-colors"
+              >
+                {olderPast.loading ? "Loading…" : "Load more"}
+              </button>
+            )}
           </div>
         </section>
       )}

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { sideEffectsBlocked } from "@/lib/devSafety";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
@@ -21,6 +22,9 @@ export async function createNotification({
   body?: string;
   link?: string;
 }) {
+  // Both halves reach real people: the row shows in their inbox in the app,
+  // and the push lands on their phone.
+  if (sideEffectsBlocked(`notification to ${userId}`)) return;
   const admin = supabaseAdmin();
   await admin.from("notifications").insert({ user_id: userId, type, title, body, link });
   await sendPush(admin, { userId, title, body, link });

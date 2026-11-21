@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import JamMessageAttendeesModal from "@/components/JamMessageAttendeesModal";
 
-export default function JamHostActions({ jamId, isHost, isOfficial, attendingCount, pendingInviteCount }: { jamId: string; isHost: boolean; isOfficial: boolean; attendingCount: number; pendingInviteCount: number }) {
+export default function JamHostActions({ jamId, canEdit, isOfficial, attendingCount, pendingInviteCount }: { jamId: string; canEdit: boolean; isOfficial: boolean; attendingCount: number; pendingInviteCount: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -43,7 +43,7 @@ export default function JamHostActions({ jamId, isHost, isOfficial, attendingCou
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">Manage jam</h2>
-          {isHost && (
+          {canEdit && (
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => { setOpen((o) => !o); setConfirming(false); }}
@@ -89,7 +89,7 @@ export default function JamHostActions({ jamId, isHost, isOfficial, attendingCou
         {isOfficial && (
           <Link
             href={`/jam/${jamId}/tickets/manage`}
-            className="block w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors text-left"
+            className="block w-full rounded-full border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors text-left"
           >
             Tickets &amp; guest list
           </Link>
@@ -98,7 +98,7 @@ export default function JamHostActions({ jamId, isHost, isOfficial, attendingCou
         <button
           onClick={() => setShowMessageModal(true)}
           disabled={attendingCount === 0 && pendingInviteCount === 0}
-          className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-left"
+          className="w-full rounded-full border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-left"
         >
           Message attendees
           {attendingCount > 0 && (
@@ -113,14 +113,14 @@ export default function JamHostActions({ jamId, isHost, isOfficial, attendingCou
               <button
                 onClick={() => setConfirming(false)}
                 disabled={deleting}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
               >
                 Keep it
               </button>
               <button
                 onClick={deleteJam}
                 disabled={deleting}
-                className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Cancelling…" : "Yes, cancel"}
               </button>

@@ -1,15 +1,25 @@
-export const MUSICAL_KEYS = ["A", "Bb", "B", "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab"];
+import type { SongTagRow } from "@singjam/core";
+import type { SongRowCard } from "@/components/SongRowTitle";
+export { MUSICAL_KEYS } from "@singjam/core";
+
+// A participant's role for a set song, plus the key they play it in.
+export type SongKnowledge = { user_id: string; song_id: string; confidence: string; key_note: string | null };
 
 export type Song = {
   id: string;
   song_id: string;
   position: number;
   key_note: string | null;
+  notes: string | null;
   played: boolean;
   leader_user_ids: string[];
+  added_by_user_id?: string | null;
   songs: {
     title: string;
     display_artist: string | null;
+    byline?: string | null;
+    // The same card data as every other song list (songs.card, migration 234); absent on a row just added.
+    card?: SongRowCard | null;
     slug: string | null;
     chord_chart_url: string | null;
     youtube_url: string | null;
@@ -18,10 +28,9 @@ export type Song = {
     meter: string | null;
     song_composers: { people: { name: string } | null }[];
     song_lyricists: { people: { name: string } | null }[];
-    song_cultures: { cultures: { name: string } | null; context: string | null }[];
-    song_genres: { genres: { name: string } | null }[];
-    song_themes: { themes: { name: string } | null }[];
+    song_tags: SongTagRow[];
     song_recording_artists: { position: number; youtube_url: string | null; spotify_url: string | null }[];
+    song_productions?: { productions: { name: string } | null }[];
   };
 };
 

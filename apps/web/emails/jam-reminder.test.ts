@@ -53,4 +53,22 @@ describe("jamReminderHtml", () => {
     const html = jamReminderHtml({ jamName: "Tuesday Night Jam", jamUrl: "https://singjam.org/jam/1", startsAt: null });
     expect(html).not.toContain("When");
   });
+
+  it("links the set list and invites adding songs when the reader can add", () => {
+    const html = jamReminderHtml({ jamName: "Tuesday Night Jam", jamUrl: "https://singjam.org/jam/1", setUrl: "https://singjam.org/set/s1", canAddSongs: true });
+    expect(html).toContain("https://singjam.org/set/s1");
+    expect(html).toContain("See the set list");
+    expect(html).toContain("Add it to the set list");
+  });
+
+  it("only links the set list for a reader who can't add", () => {
+    const html = jamReminderHtml({ jamName: "Tuesday Night Jam", jamUrl: "https://singjam.org/jam/1", setUrl: "https://singjam.org/set/s1" });
+    expect(html).toContain("See the set list");
+    expect(html).not.toContain("Add it to the set list");
+  });
+
+  it("has no set list section without a set", () => {
+    const html = jamReminderHtml({ jamName: "Tuesday Night Jam", jamUrl: "https://singjam.org/jam/1" });
+    expect(html).not.toContain("Set list");
+  });
 });

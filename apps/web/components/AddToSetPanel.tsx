@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { popoverSideFor } from "@/lib/popoverSide";
 
 type SetInfo = { id: string; name: string };
+
+// The button keeps one size open or closed (smaller on phones), so it doesn't jump when tapped.
+const BUTTON_SIZE = "rounded-full border px-3 py-1 text-xs sm:py-1.5 sm:text-sm transition-colors";
 
 export default function AddToSetPanel({
   songId,
   sets,
   inSets,
-  direction = "up",
   onOpen,
   onAdded,
   onSetCreated,
@@ -16,12 +19,13 @@ export default function AddToSetPanel({
   songId: string;
   sets: SetInfo[] | null;
   inSets: Set<string> | undefined;
-  direction?: "up" | "down";
   onOpen?: () => void;
   onAdded?: (setId: string) => void;
   onSetCreated?: (set: SetInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Down unless the list would run off the bottom of the screen, decided as it opens.
+  const [side, setSide] = useState<"up" | "down">("down");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -81,8 +85,13 @@ export default function AddToSetPanel({
   if (!open) {
     return (
       <button
-        onClick={() => { setOpen(true); onOpen?.(); }}
-        className="rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs sm:px-3 sm:text-sm text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+        onClick={(e) => {
+          // Each set is a ~45px row, plus "+ New set…"; the list scrolls past 224px.
+          setSide(popoverSideFor(e.currentTarget, Math.min(45 * ((sets?.length ?? 2) + 1), 270) + 8));
+          setOpen(true);
+          onOpen?.();
+        }}
+        className={`${BUTTON_SIZE} border-zinc-200 text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700`}
       >
         Add to set
       </button>
@@ -107,7 +116,7 @@ export default function AddToSetPanel({
         <button
           onClick={() => { if (newName.trim()) createSetAndAdd(newName.trim()); }}
           disabled={!newName.trim()}
-          className="rounded-xl border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
+          className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40"
         >
           Create
         </button>
@@ -122,14 +131,14 @@ export default function AddToSetPanel({
   }
 
   return (
-    <div ref={panelRef}>
+    <div ref={panelRef} data-popover-open>
       <button
         onClick={() => setOpen(false)}
-        className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition-colors"
+        className={`${BUTTON_SIZE} border-amber-300 bg-amber-50 text-amber-700`}
       >
         Add to set
       </button>
-      <div className={`absolute left-0 z-20 w-72 rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden ${direction === "up" ? "bottom-full mb-1" : "top-full mt-1"}`}>
+      <div className={`absolute left-0 z-20 w-72 rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden ${side === "up" ? "bottom-full mb-1" : "top-full mt-1"}`}>
         <ul className="divide-y divide-zinc-100 max-h-56 overflow-y-auto">
           {(sets ?? []).map((s) => {
             const inSet = inSets?.has(s.id);
@@ -139,7 +148,7 @@ export default function AddToSetPanel({
                 <button
                   disabled={inSet}
                   onClick={() => addToSet(s.id)}
-                  className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${inSet ? "bg-green-100 text-green-700 cursor-default" : "bg-amber-500 text-white hover:bg-amber-400"}`}
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${inSet ? "bg-green-100 text-green-700 cursor-default" : "bg-amber-500 text-white hover:bg-amber-400"}`}
                 >
                   {inSet ? "Added" : "Add"}
                 </button>

@@ -1,6 +1,8 @@
 import { schedule } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { syncContact, ContactProfile } from "../../lib/activecampaign";
+import { fetchAllAuthUsers } from "../../lib/authUsers";
+import { fetchAllRows } from "@singjam/core";
 
 export const handler = schedule("0 3 * * *", async () => {
   const admin = createClient(
@@ -9,15 +11,18 @@ export const handler = schedule("0 3 * * *", async () => {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  const [{ data: sbAuthData }, profilesResult] = await Promise.all([
-    admin.auth.admin.listUsers({ perPage: 1000 }),
-    admin.from("profiles").select("id,display_name,last_name,neighborhood,instrument_levels,favorite_genres,singing_voice"),
+  const [users, profilesResult] = await Promise.all([
+    fetchAllAuthUsers(admin.auth.admin),
+    fetchAllRows<Record<string, unknown> & { id: string }>((from, to) =>
+      admin
+        .from("profiles")
+        .select("id,display_name,last_name,neighborhood,instrument_levels,favorite_genres,singing_voice")
+        .order("id")
+        .range(from, to) as any
+    ),
   ]);
 
-  const users = sbAuthData?.users ?? [];
-  const profileById = new Map(
-    (profilesResult.data ?? []).map((p) => [p.id, p])
-  );
+  const profileById = new Map(profilesResult.map((p) => [p.id, p]));
 
   let synced = 0;
   let failed = 0;

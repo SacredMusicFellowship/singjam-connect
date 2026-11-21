@@ -35,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const admin = supabaseAdmin();
   const [{ data: target }, { data: source }] = await Promise.all([
     admin.from("jams").select("starts_at, timezone, visibility").eq("id", jamId).maybeSingle(),
-    admin.from("jams").select("starts_at, timezone, visibility").eq("id", fromId).maybeSingle(),
+    admin.from("jams").select("starts_at, timezone, visibility, ticket_limit").eq("id", fromId).maybeSingle(),
   ]);
   if (!target || !source) return NextResponse.json({ error: "Jam not found" }, { status: 404 });
   if (target.visibility !== "official" || source.visibility !== "official") {
@@ -75,6 +75,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         sales_end_at: shiftSalesTime(t.sales_end_at, from, to),
       }))
     );
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  if (source.ticket_limit) {
+    const { error } = await admin.from("jams").update({ ticket_limit: source.ticket_limit }).eq("id", jamId);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   }
 

@@ -23,6 +23,7 @@ vi.mock("@/lib/resend", () => ({
     },
   },
   FROM_ADDRESS: "SingJam <hello@singjam.org>",
+  EVENTS_FROM_ADDRESS: "SingJam <events@singjam.org>",
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
@@ -33,6 +34,10 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 vi.mock("@/lib/jamAuthz", () => ({ canManageJam: mockCanManage }));
+vi.mock("@/lib/shortRef", () => ({
+  jamPathById: async (id: string) => `/jam/${id}`,
+  setPathById: async (id: string) => `/set/${id}`,
+}));
 
 import { POST } from "./route";
 

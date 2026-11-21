@@ -10,7 +10,7 @@ describe("formatComposersLong", () => {
 
   it("names the first culture alongside Traditional", () => {
     expect(formatComposersLong(["Traditional"], ["Nigerian", "Ghanaian"])).toBe(
-      "Traditional - Nigerian"
+      "Traditional · Nigerian"
     );
   });
 
@@ -20,7 +20,7 @@ describe("formatComposersLong", () => {
 
   it("puts Traditional first and keeps the named writers after it", () => {
     expect(formatComposersLong(["Paul Simon", "traditional"], ["Zulu"])).toBe(
-      "Traditional - Zulu, Paul Simon"
+      "Traditional · Zulu, Paul Simon"
     );
   });
 

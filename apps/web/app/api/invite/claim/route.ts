@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { claimJamInvite } from "@/lib/claimJamInvite";
 import { supabaseServer } from "@/lib/supabase/server";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function POST(req: Request) {
   const supabase = await supabaseServer();
@@ -12,5 +13,5 @@ export async function POST(req: Request) {
 
   const jamId = await claimJamInvite(token, user.id);
 
-  return NextResponse.json({ ok: true, jamId });
+  return NextResponse.json({ ok: true, jamId, jamPath: jamId ? await jamPathById(jamId) : null });
 }

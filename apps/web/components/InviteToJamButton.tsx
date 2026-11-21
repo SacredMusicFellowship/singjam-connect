@@ -105,7 +105,7 @@ export default function InviteToJamButton({ inviteeUserId, disabled = false }: {
     <button
       onClick={disabled ? undefined : toggle}
       disabled={disabled}
-      className={`w-full rounded-xl border px-3 py-2.5 text-center text-sm transition-colors ${
+      className={`w-full rounded-full border px-3 py-2.5 text-center text-sm transition-colors ${
         disabled
           ? "border-zinc-100 bg-zinc-50 text-zinc-300 cursor-not-allowed"
           : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"
@@ -143,7 +143,7 @@ export default function InviteToJamButton({ inviteeUserId, disabled = false }: {
                     <button
                       onClick={() => invite(j.id)}
                       disabled={isSent || sending === j.id}
-                      className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                         isSent
                           ? "bg-green-100 text-green-700 cursor-default"
                           : "bg-amber-500 text-white hover:bg-amber-400 disabled:opacity-50"

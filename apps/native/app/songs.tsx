@@ -1,18 +1,24 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity,
-  Alert, Platform, KeyboardAvoidingView,
+  Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { songMatchesFilters, deriveFilterOptions, countActiveFilters, type SongFilterState } from '@singjam/core';
+import { searchBrowseEntities, searchCountLabel, songMatchesFilters, songSortOptions, type SongSortBy, type BrowseEntityRow, type CardIdentity, type SongFilterState, type ProductionCredit, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { readCache, writeCache } from '@/lib/cache';
 import ContentContainer from '@/components/ContentContainer';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
+import { useMySongTools } from '@/lib/useMySongTools';
+import { useMySongs } from '@/lib/useMySongs';
+import { useFilterFacets } from '@/lib/useFilterFacets';
 import SuggestionCard from '@/components/SuggestionCard';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
+import { nativeBrowseHref } from '@/lib/browseLinks';
 import InlineDropdown from '@/components/InlineDropdown';
+import FiltersButton from '@/components/FiltersButton';
+import HideMySongsToggle from '@/components/HideMySongsToggle';
 
 // A superset of SuggestionCard's `Suggestion`, so catalog rows render in the
 // same card web uses while still carrying the fields the filters need.
@@ -20,6 +26,8 @@ type SongMeta = {
   song_id: string;
   title: string;
   display_artist: string | null;
+  byline: string | null;
+  card_identity?: CardIdentity;
   first_line: string | null;
   slug: string | null;
   composers: string[];
@@ -29,21 +37,22 @@ type SongMeta = {
   cultures: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   vibe: string | null;
   tonality: string | null;
   meter: string | null;
   year: number | null;
   youtube_id: string | null;
   spotify_track_id: string | null;
+  recording_artists?: RecordingArtistCredit[] | null;
+  production_credits?: ProductionCredit[] | null;
 };
 
-type SortBy = 'popularity' | 'title_asc' | 'title_desc';
+type SortBy = SongSortBy;
 
-const SORT_OPTIONS: { key: SortBy; label: string }[] = [
-  { key: 'popularity', label: 'Popular' },
-  { key: 'title_asc', label: 'A → Z' },
-  { key: 'title_desc', label: 'Z → A' },
-];
+const SORT_OPTIONS = songSortOptions(['popularity', 'title_asc', 'title_desc']).map(({ value, label }) => ({ key: value, label }));
 
 function SkeletonCard() {
   return (
@@ -83,10 +92,14 @@ function toSongMeta(r: any): SongMeta {
     song_id: r.song_id,
     title: r.title ?? '',
     display_artist: r.display_artist ?? null,
+    byline: r.byline ?? null,
+    card_identity: r.card_identity ?? null,
     first_line: r.first_line ?? null,
     slug: r.slug ?? null,
     youtube_id: r.youtube_id ?? null,
     spotify_track_id: r.spotify_track_id ?? null,
+    recording_artists: r.recording_artists ?? null,
+    production_credits: r.production_credits ?? null,
     composers: r.composers ?? [],
     productions: r.productions ?? [],
     popularity: Number(r.popularity ?? 0),
@@ -94,6 +107,9 @@ function toSongMeta(r: any): SongMeta {
     cultures: r.cultures ?? [],
     languages: r.languages ?? [],
     themes: r.themes ?? [],
+    forms: r.forms ?? [],
+    occasions: r.occasions ?? [],
+    communities: r.communities ?? [],
     vibe: r.vibe ?? null,
     tonality: r.tonality ?? null,
     meter: r.meter ?? null,
@@ -108,12 +124,6 @@ const CATALOG_CACHE_KEY = '/songs';
 // public data, identical for everyone, so one 501 KB entry serves every account
 // on the device plus the signed-out guest view. Nothing personal is in it.
 const CATALOG_CACHE_UID = null;
-
-// Which songs you own, cached alongside it and user-scoped. Without this the
-// warm catalog renders before ownership is known, so songs already in your
-// repertoire briefly offer "+ Add to repertoire" — and tapping that upserts,
-// silently overwriting the role you had.
-const OWNED_CACHE_KEY = '/songs:owned';
 
 // The catalog comes from browse_songs — the same RPC web /search browses — so
 // popularity and the media ids have a single source instead of being re-derived
@@ -153,12 +163,17 @@ export default function SongLibraryScreen() {
   const [query, setQuery] = useState('');
   const [allSongs, setAllSongs] = useState<SongMeta[]>([]);
   const [searchResults, setSearchResults] = useState<SongMeta[]>([]);
-  const [myConfidence, setMyConfidence] = useState<Map<string, string>>(new Map());
-  const [loadingAll, setLoadingAll] = useState(true);
+  const [entityRows, setEntityRows] = useState<BrowseEntityRow[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  // "Show all" loads every match for the current query; a new query starts at 100 again.
+  const [showAllFor, setShowAllFor] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [singingVoice, setSingingVoice] = useState<string | null>(null);
-  const canLead = !!singingVoice && singingVoice !== 'none';
+  // Your songs come from the session's My-songs store. The list waits until
+  // they're known, or songs already yours would briefly offer "I know this
+  // song!" and a fast tap would overwrite your role.
+  const { userId, loaded: ownershipKnown, myConfidence, addSong } = useMySongs();
+  const loadingAll = catalogLoading || !ownershipKnown;
   const [filters, setFilters] = useState<Filters>(emptyFilters());
   const [hideMySongs, setHideMySongs] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -166,64 +181,41 @@ export default function SongLibraryScreen() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Show the cached catalog straight away, then revalidate — same
+    // stale-while-revalidate pattern as Repertoire and Jams. Reaching this
+    // screen is a nav push, so without this every visit waits on the full
+    // catalog fetch again.
     async function init() {
-      // Show the cached catalog straight away, then revalidate — same
-      // stale-while-revalidate pattern as Repertoire and Jams. Reaching this
-      // screen is a nav push, so without this every visit waits on the full
-      // catalog fetch again.
-      const { data: { session } } = await supabase.auth.getSession();
-      const cachedUid = session?.user.id ?? null;
-      const [cached, cachedOwned] = await Promise.all([
-        readCache<SongMeta[]>(CATALOG_CACHE_KEY, CATALOG_CACHE_UID),
-        readCache<[string, string][]>(OWNED_CACHE_KEY, cachedUid),
-      ]);
-      // Only render early once ownership is known too, otherwise owned songs
-      // would offer "+ Add to repertoire" and a fast tap would overwrite the
-      // role. A guest has no ownership to know, so it's already safe there;
-      // a signed-in user needs a cache entry matching their own id.
-      const ownershipKnown = cachedUid === null || cachedOwned !== null;
-      if (cached?.length && ownershipKnown) {
-        if (cachedOwned) setMyConfidence(new Map(cachedOwned));
+      const cached = await readCache<SongMeta[]>(CATALOG_CACHE_KEY, CATALOG_CACHE_UID);
+      if (cached?.length) {
         setAllSongs(cached);
-        setLoadingAll(false);
+        setCatalogLoading(false);
       }
-
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id ?? null);
-
-      const [songs, myRes, profileRes] = await Promise.all([
-        fetchCatalog(),
-        user
-          ? supabase.from('user_songs').select('song_id, confidence').eq('user_id', user.id)
-          : Promise.resolve({ data: null }),
-        user
-          ? supabase.from('profiles').select('singing_voice').eq('id', user.id).single()
-          : Promise.resolve({ data: null }),
-      ]);
-
-      const owned: [string, string][] = ((myRes.data ?? []) as any[]).map(r => [r.song_id, r.confidence ?? 'learn']);
-      setMyConfidence(new Map(owned));
-      setSingingVoice((profileRes.data as any)?.singing_voice ?? null);
+      const songs = await fetchCatalog();
       setAllSongs(songs);
-      setLoadingAll(false);
+      setCatalogLoading(false);
       writeCache(CATALOG_CACHE_KEY, CATALOG_CACHE_UID, songs);
-      if (user) writeCache(OWNED_CACHE_KEY, user.id, owned);
     }
-    init().catch(() => setLoadingAll(false));
+    init().catch(() => setCatalogLoading(false));
   }, []);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     const q = query.trim();
-    if (!q) { setSearchResults([]); setSearchLoading(false); return; }
+    if (!q) { setSearchResults([]); setEntityRows([]); setSearchTotal(0); setSearchLoading(false); return; }
     setSearchLoading(true);
     setSubmitOpen(false);
     timer.current = setTimeout(async () => {
-      const { data } = await supabase.rpc('search_songs', { q, limit_n: 100 });
+      const [{ data }, rows] = await Promise.all([
+        supabase.rpc('search_songs', { q, limit_n: showAllFor === q ? 2000 : 100 }),
+        searchBrowseEntities(supabase, q).catch(() => [] as BrowseEntityRow[]),
+      ]);
       setSearchResults(((data ?? []) as any[]).map(toSongMeta));
+      setSearchTotal(Number((data as any[] | null)?.[0]?.total_count ?? 0));
+      setEntityRows(rows);
       setSearchLoading(false);
     }, 250);
-  }, [query]);
+  }, [query, showAllFor]);
 
   // Derive each filter dimension's options from songs passing the OTHER active
   // filters, so choosing one facet narrows the rest (cascading, like web).
@@ -234,62 +226,40 @@ export default function SongLibraryScreen() {
   // option lists every time you changed the sort order. Likewise `myConfidence`
   // only reaches the pool while "Hide my songs" is on, so ordinary repertoire
   // edits shouldn't rebuild them either.
-  const { genres, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax } = filters;
+  const { genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax } = filters;
   const hiddenIds = hideMySongs ? myConfidence : null;
-  const options = useMemo(() => {
-    const pool = hiddenIds ? allSongs.filter(s => !hiddenIds.has(s.song_id)) : allSongs;
-    return deriveFilterOptions(pool, { genres, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax });
-  }, [allSongs, hiddenIds, genres, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax]);
-
-  const yearBounds = useMemo(() => {
-    const years = allSongs.map(s => s.year).filter((y): y is number => y != null);
-    return years.length ? { min: Math.min(...years), max: Math.max(...years) } : { min: null, max: null };
-  }, [allSongs]);
+  const dims = useMemo(
+    () => ({ genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax }),
+    [genres, forms, occasions, communities, cultures, languages, themes, vibe, tonality, meter, yearMin, yearMax]
+  );
+  const pool = useMemo(() => (hiddenIds ? allSongs.filter(s => !hiddenIds.has(s.song_id)) : allSongs), [allSongs, hiddenIds]);
+  const { hierarchy, expanded: expandedDims, options, facets, yearBounds, activeCount: activeFilterCount } = useFilterFacets(pool, dims);
 
   const displayedSongs = useMemo(() => {
     const base = query.trim() ? searchResults : allSongs;
     const filtered = base.filter(s =>
-      (!hideMySongs || !myConfidence.has(s.song_id)) && songMatchesFilters(s, filters)
+      (!hideMySongs || !myConfidence.has(s.song_id)) && songMatchesFilters(s, expandedDims)
     );
     return applySort(filtered, filters.sortBy);
-  }, [query, allSongs, searchResults, filters, hideMySongs, myConfidence]);
-
-  // Read through a ref so the row callbacks below can stay referentially stable.
-  // Depending on the Map directly would rebuild them on every repertoire edit,
-  // which re-renders every visible row instead of just the one that changed.
-  const myConfidenceRef = useRef(myConfidence);
-  myConfidenceRef.current = myConfidence;
-
-  // Adding and changing the role are the same upsert, exactly as on web.
-  const addSong = useCallback(async (song: { song_id: string }, confidence: string) => {
-    if (!userId) { router.push('/(auth)/sign-in' as any); return; }
-    const previous = myConfidenceRef.current;
-    setMyConfidence(prev => new Map(prev).set(song.song_id, confidence));
-    const { error } = await supabase.from('user_songs').upsert(
-      { user_id: userId, song_id: song.song_id, confidence, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id,song_id' }
-    );
-    if (error) {
-      Alert.alert('Error', error.message);
-      setMyConfidence(previous);
-    }
-  }, [userId, router]);
+  }, [query, allSongs, searchResults, filters, expandedDims, hideMySongs, myConfidence]);
 
   const viewSong = useCallback((song: { song_id: string }) => {
     router.push(`/song/${song.song_id}` as any);
   }, [router]);
+  const openBrowse = useCallback((webPath: string) => router.push(nativeBrowseHref(webPath) as any), [router]);
+  const { tools, modals: mySongModals } = useMySongTools();
 
   const renderItem = useCallback(({ item }: { item: SongMeta }) => (
     <SuggestionCard
       song={item}
-      canLead={canLead}
       confidence={myConfidence.get(item.song_id) ?? null}
       onAdd={addSong}
       onView={viewSong}
+      onOpenBrowse={openBrowse}
+      tools={tools}
     />
-  ), [myConfidence, canLead, addSong, viewSong]);
+  ), [myConfidence, addSong, viewSong, openBrowse, tools]);
 
-  const activeFilterCount = countActiveFilters(filters);
   const searching = query.trim().length > 0;
 
   const listHeader = (
@@ -315,10 +285,30 @@ export default function SongLibraryScreen() {
         </View>
         {searching && (
           <Text className="text-xs text-zinc-500 mt-2">
-            {searchLoading ? 'Searching…' : `${displayedSongs.length} song(s)`}
+            {searchLoading ? 'Searching…' : searchCountLabel({ shown: displayedSongs.length, loaded: searchResults.length, total: searchTotal })}
           </Text>
         )}
       </View>
+
+      {/* Browse pages whose names match, as on web */}
+      {searching && entityRows.length > 0 && (
+        <View accessibilityLabel="Matching pages" className={`mx-4 mt-3 ${searchLoading ? 'opacity-60' : ''}`}>
+          {entityRows.map((r, i) => (
+            <TouchableOpacity
+              key={r.id}
+              onPress={() => openBrowse(r.href)}
+              accessibilityRole="link"
+              className={`flex-row items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 ${i > 0 ? 'mt-2' : ''}`}
+            >
+              <View className="flex-1 mr-3">
+                <Text className="text-sm font-medium text-zinc-900" numberOfLines={1}>{r.name}</Text>
+                <Text className="text-xs text-zinc-500">{r.detail}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#a1a1aa" />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Sort / filters / hide-my-songs, then the catalog total — web's order */}
       <View className="mx-4 mt-3 flex-row items-center px-1" style={{ gap: 8 }}>
@@ -328,29 +318,9 @@ export default function SongLibraryScreen() {
           onChange={(sortBy) => setFilters(f => ({ ...f, sortBy }))}
           accessibilityLabel="Sort"
         />
-        <TouchableOpacity
-          onPress={() => setFilterModalVisible(true)}
-          className={`h-7 flex-row items-center gap-1.5 rounded-lg border px-3 ${
-            activeFilterCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200'
-          }`}
-        >
-          <Ionicons name="filter" size={12} color={activeFilterCount > 0 ? '#b45309' : '#71717a'} />
-          <Text className={`text-xs font-medium ${activeFilterCount > 0 ? 'text-amber-700' : 'text-zinc-500'}`}>
-            Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
-          </Text>
-        </TouchableOpacity>
+        <FiltersButton count={activeFilterCount} onPress={() => setFilterModalVisible(true)} />
         {userId && myConfidence.size > 0 && (
-          <TouchableOpacity
-            onPress={() => setHideMySongs(v => !v)}
-            className="h-7 flex-row items-center gap-1.5 rounded-lg border border-zinc-200 px-3"
-          >
-            <Ionicons
-              name={hideMySongs ? 'checkbox' : 'square-outline'}
-              size={13}
-              color={hideMySongs ? '#d97706' : '#d4d4d8'}
-            />
-            <Text className="text-xs font-medium text-zinc-500">Hide my songs</Text>
-          </TouchableOpacity>
+          <HideMySongsToggle checked={hideMySongs} onPress={() => setHideMySongs(v => !v)} />
         )}
       </View>
       {!searching && (
@@ -366,6 +336,14 @@ export default function SongLibraryScreen() {
   // because the expanded form is a lot of vertical space for a rare action.
   const listFooter = searching && !searchLoading ? (
     <View className="mx-4 mt-2">
+      {searchResults.length < searchTotal && (
+        <TouchableOpacity
+          onPress={() => setShowAllFor(query.trim())}
+          className="mb-3 self-start rounded-full border border-zinc-200 bg-white px-4 py-2"
+        >
+          <Text className="text-sm font-medium text-zinc-700">Show all {searchTotal} songs</Text>
+        </TouchableOpacity>
+      )}
       {submitOpen ? (
         <SubmitMissingSong
           defaultTitle={query.trim()}
@@ -376,22 +354,34 @@ export default function SongLibraryScreen() {
           <Text className="text-sm text-zinc-500">Can't find your song?</Text>
           <TouchableOpacity
             onPress={() => setSubmitOpen(true)}
-            className="mt-3 rounded-xl bg-zinc-800 px-4 py-2.5"
+            className="mt-3 rounded-full bg-zinc-800 px-4 py-2.5"
           >
             <Text className="text-sm font-semibold text-white">Add a missing song</Text>
           </TouchableOpacity>
         </View>
       )}
     </View>
-  ) : null;
+  ) : undefined;
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Song Library', headerTintColor: '#d97706' }} />
+      <Stack.Screen
+        options={{
+          title: 'Song Library',
+          headerTintColor: '#d97706',
+          headerRight: () => (
+            <TouchableOpacity onPress={() => router.push('/browse' as any)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text className="text-amber-600 font-medium">Browse</Text>
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <SongFilterSheet
         visible={filterModalVisible}
         filters={filters}
         options={options}
+        facets={facets}
+        hierarchy={hierarchy}
         yearBounds={yearBounds}
         onChange={setFilters}
         onClose={() => setFilterModalVisible(false)}
@@ -413,7 +403,7 @@ export default function SongLibraryScreen() {
             ListFooterComponent={listFooter}
             contentContainerStyle={{ paddingBottom: 32 }}
             ListEmptyComponent={
-              searchLoading ? null : (
+              searchLoading ? undefined : (
                 <View className="mx-4 rounded-2xl border border-zinc-200 bg-white p-5">
                   <Text className="text-sm text-zinc-600">
                     {!searching
@@ -434,6 +424,7 @@ export default function SongLibraryScreen() {
         )}
       </KeyboardAvoidingView>
       </ContentContainer>
+      {mySongModals}
     </>
   );
 }

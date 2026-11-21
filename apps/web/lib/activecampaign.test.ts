@@ -9,11 +9,12 @@ vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } }, FROM_ADD
 // time, so env vars must be stubbed before the (dynamic) import happens.
 let deleteContact: typeof import("./activecampaign").deleteContact;
 let syncContact: typeof import("./activecampaign").syncContact;
+let tagFirstTimeAttendee: typeof import("./activecampaign").tagFirstTimeAttendee;
 
 beforeAll(async () => {
   vi.stubEnv("AC_API_URL", "https://example.activehosted.com");
   vi.stubEnv("AC_API_KEY", "test-key");
-  ({ deleteContact, syncContact } = await import("./activecampaign"));
+  ({ deleteContact, syncContact, tagFirstTimeAttendee } = await import("./activecampaign"));
 });
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -144,5 +145,28 @@ describe("deleteContact", () => {
     const result = await deleteContact("singer@example.com");
 
     expect(result).toBe(false);
+  });
+});
+
+describe("tagFirstTimeAttendee", () => {
+  it("upserts by email alone and applies the first-time attendee tag", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url.endsWith("/contact/sync") ? jsonResponse({ contact: { id: "7" } }) : jsonResponse({})
+    );
+
+    expect(await tagFirstTimeAttendee("singer@example.com")).toBe(true);
+    const [, syncInit] = callsTo("/contact/sync")[0];
+    expect(JSON.parse(syncInit.body)).toEqual({ contact: { email: "singer@example.com" } });
+    const [, tagInit] = callsTo("/contactTags")[0];
+    expect(JSON.parse(tagInit.body)).toEqual({ contactTag: { contact: "7", tag: "37" } });
+    expect(callsTo("/contactLists")).toHaveLength(0);
+  });
+
+  it("returns false when the tag call is rejected", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url.endsWith("/contact/sync") ? jsonResponse({ contact: { id: "7" } }) : jsonResponse({ error: "no" }, false, 422)
+    );
+
+    expect(await tagFirstTimeAttendee("singer@example.com")).toBe(false);
   });
 });

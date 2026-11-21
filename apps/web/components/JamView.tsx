@@ -2,15 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import JamCard, { JamDescription, JamMap, type JamCardData } from "@/components/JamCard";
+import { useRouter } from "next/navigation";
+import JamCard, { JamMap, JamPoster, JamSplit, type JamCardData } from "@/components/JamCard";
 import JamRsvpButton from "@/components/JamRsvpButton";
 import JamInvitePanel, { type NewInviteEntry } from "@/components/JamInvitePanel";
 import JamInviteResponse from "@/components/JamInviteResponse";
 import JamInviteList from "@/components/JamInviteList";
 import JamHostActions from "@/components/JamHostActions";
-import JamAttendeeList from "@/components/JamAttendeeList";
+import JamAttendeeList, { JamAttendeeSummary } from "@/components/JamAttendeeList";
 import JamSetList from "@/components/JamSetList";
 import TicketPurchasePanel from "@/components/TicketPurchasePanel";
+import JamLeaderManager from "@/components/JamLeaderManager";
+import LeaderSpotControls from "@/components/LeaderSpotControls";
+import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
+import { jamPath } from "@singjam/core";
 
 export type InviteEntry = {
   id: string;
@@ -29,10 +34,16 @@ export type JamViewData = {
     host_user_id: string;
   };
   jamCardData: JamCardData;
+  /** The jam's short code, for links back to this page (migration 169). */
+  shortCode?: string | null;
   userId: string | null;
   rsvpStatus: "attending" | "waitlist" | "cancelled" | null;
   waitlistPosition: number | null;
   attendingCount: number;
+  /** Who counts against capacity: the attending RSVPs plus the host's own seat. */
+  seatsTaken: number;
+  /** Who "Message attendees" reaches: attending RSVPs other than the viewer, plus guest buyers. */
+  messageRecipientCount: number;
   /** Ticket buyers without an account; only computed for those who can manage. */
   guestBuyerCount: number;
   pendingInvite: boolean;
@@ -43,11 +54,19 @@ export type JamViewData = {
   isCoHost: boolean;
   hasFullAccess: boolean;
   canManage: boolean;
+  /** Edit, copy and cancel — narrower than canManage, which co-hosts also get. */
+  canEdit: boolean;
   showRsvp: boolean;
   canInvite: boolean;
   invitesEnabled: boolean;
   inviteList: InviteEntry[];
   alreadyInvitedIds: string[];
+  /** Music leaders listed publicly, marked in Who's going (official events only). */
+  leaders: PublicJamLeader[];
+  /** Set when the viewer is one of this event's leaders. */
+  myLeader: { userId: string; token: string; hasLeaderTicket: boolean } | null;
+  /** The full leader list with emails, for whoever can manage the event. */
+  managedLeaders: ManagedJamLeader[] | null;
 };
 
 export default function JamView({
@@ -62,20 +81,26 @@ export default function JamView({
   const {
     jam,
     jamCardData,
+    shortCode,
     userId,
     waitlistPosition,
     attendingCount,
-    guestBuyerCount,
+    seatsTaken,
+    messageRecipientCount,
     pendingInvite,
     isOfficial,
     hasTicketTiers,
     isHost,
     isCoHost,
     canManage,
+    canEdit,
     showRsvp,
     canInvite,
     invitesEnabled,
     alreadyInvitedIds,
+    leaders,
+    myLeader,
+    managedLeaders,
   } = data;
 
   // An official event with no on-site tiers sells through an external link, so
@@ -92,13 +117,12 @@ export default function JamView({
   const attendanceLandsHere = !isOfficial || hasTicketTiers;
   const showAttendees = attendanceLandsHere || attendingCount > 0;
 
-  // Whether the ticket panel renders. Drives three placements: the panel row
-  // itself, the map (beside it rather than in the card), and the description
-  // (below it rather than above).
   const showTicketPanel = isOfficial && hasTicketTiers;
 
   // Either route to a ticket counts: on our own tiers or off to someone else's
-  // checkout, you still don't have one yet.
+  // checkout, you still don't have one yet. Buying holds back nothing but "Add
+  // to calendar", so once you're attending — a ticket bought, or added as a
+  // leader — you get it back.
   const sellsTickets = hasTicketTiers || !!jamCardData.tickets_url;
 
   // Passed as undefined rather than an empty fragment when there is nothing to
@@ -106,98 +130,105 @@ export default function JamView({
   // at all, and a fragment is truthy even when it renders nothing — which would
   // leave an empty row and its gap behind on a ticketed event, where the
   // calendar button was the row's only occupant.
-  const hasActions = showRsvp || (!userId && !isOfficial);
+  // A ticket holder or leader gets the same "You're going" as an RSVP. A ticket
+  // isn't given back from here, so there's no Cancel; a leader gets "Can't make
+  // it?" instead, which steps them down.
+  const goingOnTicket = (sellsTickets && data.rsvpStatus === "attending") || !!myLeader;
+  const hasActions = showRsvp || (!userId && !isOfficial) || goingOnTicket;
 
+  const router = useRouter();
+  const [attendeesVersion, setAttendeesVersion] = useState(0);
   const [rsvpStatus, setRsvpStatus] = useState(data.rsvpStatus);
   const [hasFullAccess, setHasFullAccess] = useState(data.hasFullAccess);
   const [inviteList, setInviteList] = useState(data.inviteList);
 
-  return (
-    <div className="space-y-4">
-      {pendingInvite && rsvpStatus !== "attending" && !isHost && <JamInviteResponse jamId={jamId} />}
-      <JamCard
-        jam={jamCardData}
-        sellsTickets={sellsTickets}
-        // When no panel follows — a community or private jam, or an official
-        // event selling through tickets_url — the description and the map both
-        // stay inside the card exactly where they have always been: there is no
-        // purchase path here for either of them to have been in the way of.
-        ticketPanelFollows={showTicketPanel}
-        actions={
-          hasActions ? (
-          <>
-            {showRsvp && (
-              <JamRsvpButton
-                jamId={jamId}
-                initialStatus={rsvpStatus}
-                initialWaitlistPosition={waitlistPosition}
-                attendingCount={attendingCount}
-                capacity={jam.capacity}
-                onStatusChange={(newStatus) => {
-                  setRsvpStatus(newStatus);
-                  setHasFullAccess(isOfficial || newStatus === "attending" || canManage);
-                }}
-              />
-            )}
-            {!userId && !isOfficial && (
-              <Link
-                href={`/auth?next=/jam/${jamId}${inviteToken ? `&invite=${inviteToken}` : ""}`}
-                className="inline-block rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
-              >
-                Sign in to RSVP
-              </Link>
-            )}
-          </>
-          ) : undefined
-        }
-      />
-      {/* Official events sell tickets instead of taking RSVPs — showRsvp is
-          false for them. The panel sits directly under the date/location strip
-          either way, so the tier list and its prices get the first screenful.
-          Around it the map and the description trade places by breakpoint:
+  const inviteResponse =
+    pendingInvite && rsvpStatus !== "attending" && !isHost ? <JamInviteResponse jamId={jamId} /> : null;
 
-            wide    tickets | map        narrow   tickets
-                    description                   description
-                                                  map
+  // The set list sits in the left column, under who's going.
+  const setList = hasFullAccess ? <JamSetList jamId={jamId} jamName={jam.name} canManage={canManage} /> : null;
 
-          The split is at md, not sm: at 640px the map got squeezed to 192px
-          beside the 384px panel, too narrow to show any context.
-
-          One flex container with per-breakpoint `order` does that with a single
-          map in the DOM. Rendering it twice and hiding one would be simpler to
-          read and would cost a second Google Maps load on every desktop view,
-          which is billed. DOM order is the wide one; `order` rewrites it below
-          md. The panel carries no order class, so its implicit 0 keeps it first
-          in both. `basis-full` is what breaks the description onto its own
-          line when the row is wrapping. */}
-      {showTicketPanel && (
-        <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-stretch">
+  const card = (
+    <JamCard
+      jam={jamCardData}
+      sellsTickets={sellsTickets && !goingOnTicket}
+      // Official events sell tickets instead of taking RSVPs — showRsvp is
+      // false for them. The map is rendered last on the page for every jam
+      // type, below.
+      ticketPanel={
+        showTicketPanel ? (
           <TicketPurchasePanel
             jamId={jamId}
+            eventPath={jamPath({ id: jamId, short_code: shortCode })}
             isSignedIn={!!userId}
             timezone={jamCardData.timezone}
           />
-          {/* mt-8 clears the "Tickets" heading (20px line-height + the panel's
-              12px space-y-3) so the frame starts level with the first tier
-              rather than the heading, which labels only the ticket column;
-              items-stretch then takes that margin back off the height, so it
-              still ends level with the Buy button. */}
-          <JamMap
-            jam={jamCardData}
-            className="order-3 h-[260px] w-full md:order-2 md:mt-8 md:h-auto md:min-h-52 md:w-auto md:flex-1"
-          />
-          <JamDescription jam={jamCardData} className="order-2 md:order-3 md:basis-full" />
-        </div>
-      )}
-      {hasFullAccess && <JamSetList jamId={jamId} jamName={jam.name} canManage={canManage} />}
-      {/* Official events that sell here show who's going too. Ticket buyers get
-          an attending RSVP from the Stripe webhook, so the list is populated the
-          same way — guests without an account are the one gap, which is what the
-          sign-up nudge on the completion page is for. See showAttendees above for
-          why an externally-ticketed event gets no list at all. */}
-      {showAttendees && (
-        <JamAttendeeList jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} isHost={isHost} />
-      )}
+        ) : undefined
+      }
+      showMap={false}
+      actions={
+        hasActions ? (
+        <>
+          {showRsvp && (
+            <JamRsvpButton
+              jamId={jamId}
+              initialStatus={rsvpStatus}
+              initialWaitlistPosition={waitlistPosition}
+              attendingCount={seatsTaken}
+              capacity={jam.capacity}
+              onStatusChange={(newStatus) => {
+                setRsvpStatus(newStatus);
+                setHasFullAccess(isOfficial || newStatus === "attending" || canManage);
+                // The full address only comes from the server once you're attending.
+                router.refresh();
+              }}
+            />
+          )}
+          {goingOnTicket && (
+            <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
+              ✓ You&apos;re going
+            </span>
+          )}
+          {myLeader && (
+            <LeaderSpotControls
+              token={myLeader.token}
+              hasLeaderTicket={myLeader.hasLeaderTicket}
+              onWithdrawn={() => router.refresh()}
+            />
+          )}
+          {!userId && !isOfficial && (
+            <Link
+              href={`/auth?next=${jamPath({ id: jamId, short_code: shortCode })}${inviteToken ? `&invite=${inviteToken}` : ""}`}
+              className="inline-block rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+            >
+              Sign in to RSVP
+            </Link>
+          )}
+        </>
+        ) : undefined
+      }
+    />
+  );
+
+
+  // Official events that sell here show who's going too. Ticket buyers get an
+  // attending RSVP from the Stripe webhook, so the list is populated the same
+  // way — guests without an account are the one gap, which is what the sign-up
+  // nudge on the completion page is for. See showAttendees above for why an
+  // externally-ticketed event gets no list at all.
+  const attendees = showAttendees ? (
+    <JamAttendeeList
+      jamId={jamId}
+      hostId={isOfficial ? null : jam.host_user_id}
+      canAppointCohosts={isHost && !isOfficial}
+      leaderIds={leaders.map((l) => l.user_id).filter((id): id is string => !!id)}
+      myLeader={myLeader}
+      version={attendeesVersion}
+    />
+  ) : null;
+
+  const hostTools = (
+    <>
       {canInvite && invitesEnabled && (
         <JamInvitePanel
           jamId={jamId}
@@ -208,7 +239,56 @@ export default function JamView({
         />
       )}
       {canManage && <JamInviteList jamId={jamId} invites={inviteList} />}
-      {canManage && <JamHostActions jamId={jamId} isHost={isHost} isOfficial={isOfficial} attendingCount={attendingCount + guestBuyerCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
+      {managedLeaders && (
+        <JamLeaderManager
+          jamId={jamId}
+          initialLeaders={managedLeaders}
+          onChange={() => {
+            setAttendeesVersion((v) => v + 1);
+            router.refresh();
+          }}
+        />
+      )}
+      {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={messageRecipientCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
+    </>
+  );
+
+  // Two columns from sm up, after Luma: the image (or a date tile) and a
+  // compact who's going on the left; title, date and place, tickets and
+  // description on the right. Everything after that runs full width below
+  // both. The summary is desktop-only, since on a phone the full list is a
+  // scroll away. A ticketed event puts the host's admin tools last, under the
+  // map.
+  return (
+    <div className="space-y-4">
+      {inviteResponse}
+      <JamSplit
+        aside={
+          <>
+            <JamPoster jam={jamCardData} />
+            {showAttendees && (
+              <div className="hidden sm:block">
+                <JamAttendeeSummary jamId={jamId} hostId={isOfficial ? null : jam.host_user_id} version={attendeesVersion} />
+              </div>
+            )}
+          </>
+        }
+        asideBelow={setList}
+      >
+        {card}
+      </JamSplit>
+      {attendees}
+      {showTicketPanel ? (
+        <>
+          <JamMap jam={jamCardData} />
+          {hostTools}
+        </>
+      ) : (
+        <>
+          {hostTools}
+          <JamMap jam={jamCardData} />
+        </>
+      )}
     </div>
   );
 }

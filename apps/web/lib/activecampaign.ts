@@ -1,4 +1,5 @@
 import { resend, FROM_ADDRESS } from "@/lib/resend";
+import { sideEffectsBlocked } from "@/lib/devSafety";
 
 const AC_API_URL = process.env.AC_API_URL;
 const AC_API_KEY = process.env.AC_API_KEY;
@@ -109,6 +110,8 @@ export async function syncContact(
   { tag = true }: { tag?: boolean } = {}
 ): Promise<string[]> {
   if (!AC_API_URL || !AC_API_KEY) return [];
+  // Treated like an unconfigured key, so callers don't record a sync failure.
+  if (sideEffectsBlocked(`ActiveCampaign sync for ${email}`)) return [];
 
   const fieldValues: { field: string; value: string }[] = [];
 
@@ -205,10 +208,33 @@ export async function syncContact(
   return failed;
 }
 
+const FIRST_TIME_ATTENDEE_TAG_ID = "37"; // SingJam First-Time Attendee
+
+// Applies the first-time attendee tag. Upserts by email only, so it never
+// changes lists or overwrites names. Returns false if AC rejected either step.
+export async function tagFirstTimeAttendee(email: string): Promise<boolean> {
+  if (!AC_API_URL || !AC_API_KEY) return false;
+  if (sideEffectsBlocked(`ActiveCampaign first-time attendee tag for ${email}`)) return false;
+
+  const contactData = await acFetch("/contact/sync", {
+    method: "POST",
+    body: JSON.stringify({ contact: { email } }),
+  });
+  const contactId: string | undefined = contactData?.contact?.id;
+  if (!contactId) return false;
+
+  const result = await acFetch("/contactTags", {
+    method: "POST",
+    body: JSON.stringify({ contactTag: { contact: contactId, tag: FIRST_TIME_ATTENDEE_TAG_ID } }),
+  });
+  return result !== null;
+}
+
 // Permanently removes the contact from ActiveCampaign. Safe to call for
 // emails with no matching contact — treated as already-deleted, not a failure.
 export async function deleteContact(email: string): Promise<boolean> {
   if (!AC_API_URL || !AC_API_KEY) return true;
+  if (sideEffectsBlocked(`ActiveCampaign delete for ${email}`)) return true;
 
   const found = await acFetch(`/contacts?email=${encodeURIComponent(email)}`, { method: "GET" });
   const contactId: string | undefined = found?.contacts?.[0]?.id;

@@ -5,6 +5,7 @@ import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { memberInviteHtml, nonMemberInviteHtml } from "@/emails/jam-invite";
 import { formatJamTime } from "@/lib/formatJamTime";
 import { isJamCohost } from "@/lib/jamCohosts";
+import { jamPathById } from "@/lib/shortRef";
 
 export async function POST(
   req: Request,
@@ -65,7 +66,7 @@ export async function POST(
     if (!email) return NextResponse.json({ error: "No email for invitee" }, { status: 400 });
 
     const inviteeName = (inviteeProfile as any)?.display_name ?? (inviteeProfile as any)?.username ?? null;
-    const jamUrl = `${baseUrl}/jam/${jamId}?invite=${invite.token}`;
+    const jamUrl = `${baseUrl}${await jamPathById(jamId)}?invite=${invite.token}`;
 
     await resend.emails.send({
       from: FROM_ADDRESS,
@@ -74,7 +75,7 @@ export async function POST(
       html: memberInviteHtml({ inviterName: hostName, inviteeName, jamName, startsAt, jamUrl }),
     });
   } else if (invite.invitee_email) {
-    const signupUrl = `${baseUrl}/jam/${jamId}?invite=${invite.token}`;
+    const signupUrl = `${baseUrl}${await jamPathById(jamId)}?invite=${invite.token}`;
 
     await resend.emails.send({
       from: FROM_ADDRESS,

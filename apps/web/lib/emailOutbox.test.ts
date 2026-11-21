@@ -71,6 +71,13 @@ describe("enqueueWelcomeEmail", () => {
     expect(updates).toHaveLength(0);
   });
 
+  it("leaves the row untouched when the dev-safety guard blocks the send", async () => {
+    const { admin, updates } = makeAdmin({ upsertResult: { data: [row()], error: null } });
+    const blocked = { emails: { send: vi.fn().mockResolvedValue({ error: { name: "dev_side_effects_blocked", message: "blocked" } }) } } as any;
+    await enqueueWelcomeEmail(admin, blocked, { userId: "u1", email: "a@b.com" });
+    expect(updates).toHaveLength(0);
+  });
+
   it("leaves the row pending with the error recorded when the send fails", async () => {
     const { admin, updates } = makeAdmin({ upsertResult: { data: [row()], error: null } });
     await enqueueWelcomeEmail(admin, errResend("smtp down"), { userId: "u1", email: "a@b.com" });

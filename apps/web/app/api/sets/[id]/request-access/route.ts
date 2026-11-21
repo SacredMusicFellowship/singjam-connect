@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { createNotification } from "@/lib/notifications";
 import { setAccessRequestHtml } from "@/emails/set-access-request";
+import { setPathById } from "@/lib/shortRef";
 
 export async function POST(
   _req: Request,
@@ -57,7 +58,7 @@ export async function POST(
 
   const setName = (set as any).name;
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://singjam.org";
-  const setUrl = `${baseUrl}/set/${setId}`;
+  const setUrl = `${baseUrl}${await setPathById(setId)}`;
   const ownerId = (set as any).owner_user_id;
 
   await createNotification({

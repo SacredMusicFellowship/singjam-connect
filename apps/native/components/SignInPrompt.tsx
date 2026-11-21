@@ -15,7 +15,7 @@ export default function SignInPrompt({ message }: { message: string }) {
         Sign in or create an account to continue.
       </Text>
       <TouchableOpacity
-        className="bg-amber-500 rounded-xl px-6 py-3"
+        className="bg-amber-500 rounded-full px-6 py-3"
         onPress={() => router.push('/(auth)/sign-in' as any)}
       >
         <Text className="text-white font-semibold">Sign in</Text>

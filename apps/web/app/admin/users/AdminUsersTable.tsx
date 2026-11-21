@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import SearchInput from "@/components/SearchInput";
+import PillSelect, { StackedLabels } from "@/components/PillSelect";
+import Select from "@/components/Select";
 import { matchesSearch } from "@/lib/normalizeSearch";
 import { ROLE_LABELS, USER_ROLES, isUserRole, roleLabel, type UserRole } from "@/lib/userRoles";
 
@@ -17,19 +19,23 @@ export type AdminUser = {
   created_at: string | null;
   email: string | null;
   role: string;
+  events: number;
+  songsAdded: number;
 };
 
-type SortCol = "name" | "email" | "neighborhood" | "joined" | "role";
+type SortCol = "name" | "email" | "neighborhood" | "joined" | "events" | "songs" | "role";
 type SortDir = "asc" | "desc";
 
 // The page container is max-w-4xl, so the desktop table is laid out on fixed
 // percentages rather than letting long emails push the role picker off the edge.
 const COLUMNS: { key: SortCol; label: string; width: string }[] = [
-  { key: "name", label: "User", width: "26%" },
-  { key: "email", label: "Email", width: "24%" },
-  { key: "neighborhood", label: "Neighborhood", width: "17%" },
-  { key: "joined", label: "Joined", width: "14%" },
-  { key: "role", label: "Role", width: "19%" },
+  { key: "name", label: "User", width: "21%" },
+  { key: "email", label: "Email", width: "18%" },
+  { key: "neighborhood", label: "Neighborhood", width: "12%" },
+  { key: "joined", label: "Joined", width: "12%" },
+  { key: "events", label: "Events", width: "8%" },
+  { key: "songs", label: "Songs added", width: "9%" },
+  { key: "role", label: "Role", width: "20%" },
 ];
 
 function fullName(u: AdminUser) {
@@ -43,6 +49,10 @@ function profileHref(u: AdminUser) {
 function formatDate(iso: string | null) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function attendanceHref(u: AdminUser) {
+  return `/admin/attendance?email=${encodeURIComponent(u.email ?? "")}`;
 }
 
 function Avatar({ user }: { user: AdminUser }) {
@@ -94,13 +104,20 @@ function RoleSelect({
 }) {
   return (
     <div>
-      <select
+      <PillSelect
+        face={
+          <StackedLabels
+            labels={[...(isUserRole(role) ? [] : [{ key: role, label: roleLabel(role) }]), ...USER_ROLES.map((r) => ({ key: r, label: ROLE_LABELS[r] }))]}
+            current={role}
+          />
+        }
+        chevron
+        pillClassName={`border px-3 py-1 text-sm ${isSelf || saving ? "border-slate-200 bg-slate-50 text-slate-400" : "border-zinc-300 bg-white text-zinc-700"}`}
         value={role}
         onChange={(e) => onChange(e.target.value as UserRole)}
         disabled={isSelf || saving}
         aria-label={`Role for ${fullName(user)}`}
         title={isSelf ? "You can't change your own role — ask another admin." : undefined}
-        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
       >
         {/* A role outside the grantable set (e.g. a retired enum label) still needs an option to show */}
         {!isUserRole(role) && <option value={role}>{roleLabel(role)}</option>}
@@ -109,7 +126,7 @@ function RoleSelect({
             {ROLE_LABELS[r]}
           </option>
         ))}
-      </select>
+      </PillSelect>
       {saving && <p className="mt-1 text-xs text-slate-400">Saving…</p>}
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
@@ -169,7 +186,7 @@ export default function AdminUsersTable({
     setSort((prev) =>
       prev.col === col
         ? { col, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { col, dir: col === "joined" ? "desc" : "asc" }
+        : { col, dir: col === "joined" || col === "events" || col === "songs" ? "desc" : "asc" }
     );
   }
 
@@ -193,6 +210,8 @@ export default function AdminUsersTable({
       else if (col === "email") cmp = (a.email ?? "").localeCompare(b.email ?? "");
       else if (col === "neighborhood") cmp = (a.neighborhood ?? "").localeCompare(b.neighborhood ?? "");
       else if (col === "joined") cmp = (a.created_at ?? "").localeCompare(b.created_at ?? "");
+      else if (col === "events") cmp = a.events - b.events;
+      else if (col === "songs") cmp = a.songsAdded - b.songsAdded;
       else if (col === "role")
         cmp = USER_ROLES.indexOf(roles[a.id] as UserRole) - USER_ROLES.indexOf(roles[b.id] as UserRole);
       return cmp * mul || fullName(a).localeCompare(fullName(b));
@@ -225,21 +244,23 @@ export default function AdminUsersTable({
         <label htmlFor="admin-users-sort" className="text-xs font-medium text-slate-500">
           Sort by
         </label>
-        <select
+        <Select
           id="admin-users-sort"
           value={sort.col}
           onChange={(e) => toggleSort(e.target.value as SortCol)}
-          className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-700"
+          shape="pill"
+          size="sm"
+          wrapperClassName="flex-1"
         >
           {COLUMNS.map((col) => (
             <option key={col.key} value={col.key}>
               {col.label}
             </option>
           ))}
-        </select>
+        </Select>
         <button
           onClick={() => setSort((prev) => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
-          className="rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-500"
+          className="rounded-full border border-slate-200 px-2 py-1 text-sm text-slate-500"
           aria-label={sort.dir === "asc" ? "Sort ascending" : "Sort descending"}
         >
           {sort.dir === "asc" ? "↑" : "↓"}
@@ -262,6 +283,22 @@ export default function AdminUsersTable({
             )}
             <div className="mt-1.5 truncate text-xs text-slate-500">
               {[u.neighborhood, `Joined ${formatDate(u.created_at)}`].filter(Boolean).join(" · ")}
+              {u.events > 0 && (
+                <>
+                  {" · "}
+                  <Link href={attendanceHref(u)} className="hover:text-amber-600 hover:underline">
+                    {u.events} {u.events === 1 ? "event" : "events"}
+                  </Link>
+                </>
+              )}
+              {u.songsAdded > 0 && (
+                <>
+                  {" · "}
+                  <Link href={`/admin/songs?added_by=${u.id}`} className="hover:text-amber-600 hover:underline">
+                    {u.songsAdded} {u.songsAdded === 1 ? "song" : "songs"} added
+                  </Link>
+                </>
+              )}
             </div>
             <div className="mt-2">
               <RoleSelect
@@ -334,7 +371,25 @@ export default function AdminUsersTable({
                   )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">{formatDate(u.created_at)}</td>
-                <td className="px-4 py-2.5">
+                <td className="px-4 py-2.5 text-slate-500">
+                  {u.events > 0 ? (
+                    <Link href={attendanceHref(u)} className="hover:text-amber-600 hover:underline">
+                      {u.events}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-slate-500">
+                  {u.songsAdded > 0 ? (
+                    <Link href={`/admin/songs?added_by=${u.id}`} className="hover:text-amber-600 hover:underline">
+                      {u.songsAdded}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="py-2.5 pl-2 pr-4">
                   <RoleSelect
                     user={u}
                     role={roles[u.id]}

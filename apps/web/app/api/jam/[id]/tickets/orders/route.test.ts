@@ -118,6 +118,58 @@ describe("GET /api/jam/[id]/tickets/orders", () => {
     expect(json.summary.gross_cents).toBe(3000);
   });
 
+  it("lists a leader's comp on the door list without counting it as a sale", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: HOST } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { host_user_id: HOST } }));
+    mockFetchAllRows.mockResolvedValueOnce([
+      ticket({ id: "t1", order_id: "o1", order: { source: "purchase" } }),
+      { ...ticket({ id: "t2", order_id: "o2", order: { source: "leader", amount_cents: 0, buyer_name: "Sam Leader" } }), ticket_types: null },
+    ]);
+
+    const json = await (await GET(req(), params)).json();
+    const leader = json.guests.find((g: any) => g.name === "Sam Leader");
+    expect(leader).toMatchObject({ is_leader: true, tier: "Leader" });
+    expect(json.summary.tickets_sold).toBe(1);
+    expect(json.summary.leaders).toBe(1);
+    expect(json.summary.gross_cents).toBe(3000);
+  });
+
+  it("gives every ticket row what its buyer paid for the whole order", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: HOST } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { host_user_id: HOST } }));
+    mockFetchAllRows.mockResolvedValue([
+      ticket({ id: "t1", order_id: "o1" }),
+      ticket({ id: "t2", order_id: "o1" }),
+      ticket({ id: "t3", order_id: "o2" }),
+    ]);
+
+    const json = await (await GET(req(), params)).json();
+    const byTicket = Object.fromEntries(json.guests.map((g: any) => [g.ticket_id, g]));
+    expect(byTicket.t1).toMatchObject({ order_amount_cents: 3000, order_tickets: 2 });
+    expect(byTicket.t2).toMatchObject({ order_amount_cents: 3000, order_tickets: 2 });
+    expect(byTicket.t3).toMatchObject({ order_tickets: 1 });
+  });
+
+  it("numbers each ticket within its order and keeps an order's tickets together", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: HOST } } });
+    mockAdminFrom.mockReturnValueOnce(chain({ data: { host_user_id: HOST } }));
+    // Same buyer name on two orders: each order's tickets must stay adjacent.
+    mockFetchAllRows.mockResolvedValue([
+      ticket({ id: "t1", order_id: "o2" }),
+      ticket({ id: "t2", order_id: "o1" }),
+      ticket({ id: "t3", order_id: "o2" }),
+      ticket({ id: "t4", order_id: "o1" }),
+    ]);
+
+    const json = await (await GET(req(), params)).json();
+    expect(json.guests.map((g: any) => [g.ticket_id, g.order_position, g.order_tickets])).toEqual([
+      ["t2", 1, 2],
+      ["t4", 2, 2],
+      ["t1", 1, 2],
+      ["t3", 2, 2],
+    ]);
+  });
+
   it("labels guests and resolves member names from their profile", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: HOST } } });
     mockAdminFrom

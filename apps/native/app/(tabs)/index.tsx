@@ -1,29 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, RefreshControl, Alert, Platform, ActivityIndicator } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { mergeSuggestionsById, songMatchesFilters, deriveFilterOptions, countActiveFilters, sortRepertoireSearchResults, type UserSong, type SongFilterState } from '@singjam/core';
+import { createRefetchGate, mergeSuggestionsById, songMatchesFilters, countActiveFilters, sortRepertoireSearchResults, songSortOptions, type SongSortBy, type UserSong, type SongFilterState, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
+import { ensureLeadVoice } from '@/lib/leadVoice';
 import { readCache, writeCache } from '@/lib/cache';
 import { useAuth } from '@/lib/auth-context';
 import SongFilterSheet, { emptyFilterDimensions } from '@/components/SongFilterSheet';
+import { useFilterFacets } from '@/lib/useFilterFacets';
+import { noteMySong } from '@/lib/mySongsStore';
 import InlineDropdown from '@/components/InlineDropdown';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RepertoireCard from '@/components/RepertoireCard';
+import KeyPicker from '@/components/KeyPicker';
 import SuggestionCard, { type Suggestion } from '@/components/SuggestionCard';
 import SubmitMissingSong from '@/components/SubmitMissingSong';
 import AddToSetModal from '@/components/AddToSetModal';
 import BrandHeader from '@/components/BrandHeader';
 import ContentContainer from '@/components/ContentContainer';
 import PromptCard from '@/components/PromptCard';
+import FiltersButton from '@/components/FiltersButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RichUserSong = UserSong & {
+  byline?: string | null;
+  card_identity?: CardIdentity;
+  recording_artists?: RecordingArtistCredit[] | null;
+  chord_chart_url?: string | null;
   genres: string[];
   languages: string[];
   themes: string[];
+  forms: string[];
+  occasions: string[];
+  communities: string[];
   productions: string[];
   vibe: string | null;
   tonality: string | null;
@@ -33,7 +45,7 @@ type RichUserSong = UserSong & {
 };
 
 type ConfidenceFilter = 'all' | 'lead' | 'support' | 'learn';
-type SortOrder = 'title_asc' | 'title_desc' | 'popularity';
+type SortOrder = SongSortBy;
 
 // ── Constants (mirror web repertoire/page.tsx) ────────────────────────────────
 
@@ -43,11 +55,7 @@ const CONFIDENCE_LEVELS: { key: Exclude<ConfidenceFilter, 'all'>; label: string 
   { key: 'learn', label: 'Learn' },
 ];
 
-const SORT_OPTIONS: { key: SortOrder; label: string }[] = [
-  { key: 'title_asc', label: 'A → Z' },
-  { key: 'title_desc', label: 'Z → A' },
-  { key: 'popularity', label: 'Popular' },
-];
+const SORT_OPTIONS = songSortOptions(['title_asc', 'title_desc', 'popularity']).map(({ value, label }) => ({ key: value, label }));
 
 // Used for the selection set, not filters — the filter sheet toggles its own.
 function toggleSet(set: Set<string>, value: string): Set<string> {
@@ -83,20 +91,28 @@ async function fetchRichUserSongs(): Promise<RichUserSong[]> {
     song_id: row.song_id,
     slug: row.slug ?? null,
     confidence: row.confidence ?? 'learn',
+    key_note: row.key_note ?? null,
     updated_at: row.updated_at,
     title: row.title ?? '',
     display_artist: row.display_artist ?? null,
+    byline: row.byline ?? null,
+    card_identity: row.card_identity ?? null,
+    recording_artists: row.recording_artists ?? [],
     composers: row.composers ?? [],
     cultures: row.cultures ?? [],
     genres: row.genres ?? [],
     languages: row.languages ?? [],
     themes: row.themes ?? [],
+    forms: row.forms ?? [],
+    occasions: row.occasions ?? [],
+    communities: row.communities ?? [],
     productions: row.productions ?? [],
     vibe: row.vibe ?? null,
     tonality: row.tonality ?? null,
     meter: row.meter ?? null,
     year: row.year ?? null,
     popularity: Number(row.popularity ?? 0),
+    chord_chart_url: row.chord_chart_url ?? null,
   }));
 }
 
@@ -111,6 +127,7 @@ export default function RepertoireScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all');
+  const [keyPickerSongId, setKeyPickerSongId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOrder>('title_asc');
   const [extFilters, setExtFilters] = useState<SongFilterState>(emptyFilterDimensions());
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -125,7 +142,22 @@ export default function RepertoireScreen() {
   const [suggestionsLoadingMore, setSuggestionsLoadingMore] = useState(false);
   const loadingMoreRef = useRef(false);
 
-  const canLead = !!singingVoice && singingVoice !== 'none';
+
+  // Coming back to the tab (from a song, a set, another app) re-reads your
+  // songs, so a part or key changed elsewhere shows here, as on the set screen
+  // and the other tabs. Suggestions are left as they are, so their scroll stays.
+  const refetchGateRef = useRef(createRefetchGate());
+  const focusedOnceRef = useRef(false);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+  useFocusEffect(useCallback(() => {
+    if (focusedOnceRef.current && refetchGateRef.current()) {
+      fetchRichUserSongs()
+        .then((data) => { setSongs(data); if (userIdRef.current) writeCache('/repertoire', userIdRef.current, data); })
+        .catch(() => {});
+    }
+    focusedOnceRef.current = true;
+  }, []));
 
   async function load(showRefresh = false) {
     if (showRefresh) setRefreshing(true);
@@ -171,14 +203,7 @@ export default function RepertoireScreen() {
     })();
   }, []);
 
-  // Derive each filter dimension's options from songs passing the OTHER active
-  // filters, so choosing one facet narrows the rest (cascading, like web).
-  const options = useMemo(() => deriveFilterOptions(songs, extFilters), [songs, extFilters]);
-
-  const yearBounds = useMemo(() => {
-    const years = songs.map(s => s.year).filter((y): y is number => y != null);
-    return years.length ? { min: Math.min(...years), max: Math.max(...years) } : { min: null, max: null };
-  }, [songs]);
+  const { hierarchy, expanded: expandedFilters, options, facets, yearBounds } = useFilterFacets(songs, extFilters);
 
   // Typing searches the whole catalogue, matching web: results include songs you
   // already own (rendered with their role controls) as well as ones you don't.
@@ -208,12 +233,12 @@ export default function RepertoireScreen() {
       result = result.filter(s => s.confidence === confidenceFilter);
     }
 
-    result = result.filter(s => songMatchesFilters(s, extFilters));
+    result = result.filter(s => songMatchesFilters(s, expandedFilters));
 
     if (sortBy === 'title_desc') return [...result].sort((a, b) => b.title.localeCompare(a.title));
     if (sortBy === 'popularity') return [...result].sort((a, b) => b.popularity - a.popularity || a.title.localeCompare(b.title));
     return result;
-  }, [songs, confidenceFilter, extFilters, sortBy]);
+  }, [songs, confidenceFilter, expandedFilters, sortBy]);
 
   const existingIds = useMemo(() => new Set(songs.map(s => s.song_id)), [songs]);
   const songsById = useMemo(() => new Map(songs.map(s => [s.song_id, s])), [songs]);
@@ -236,20 +261,20 @@ export default function RepertoireScreen() {
   latest.current = { songs, suggestions, load };
 
   const handleConfidenceChange = useCallback(async (song: { song_id: string }, confidence: string) => {
+    if (!(await ensureLeadVoice(confidence, singingVoice, userId, setSingingVoice))) return;
     const songId = song.song_id;
     setSongs(prev => prev.map(s => s.song_id === songId ? { ...s, confidence } : s));
     const { error } = await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
-    if (error) { Alert.alert('Error', error.message); latest.current.load(); }
+    if (error) { Alert.alert('Error', error.message); latest.current.load(); } else noteMySong(songId, { confidence });
+  }, [userId, singingVoice]);
+
+  const handleKeyChange = useCallback(async (songId: string, key_note: string | null) => {
+    setSongs(prev => prev.map(s => s.song_id === songId ? { ...s, key_note } : s));
+    const { error } = await supabase.from('user_songs').update({ key_note }).eq('user_id', userId).eq('song_id', songId);
+    if (error) { Alert.alert('Error', error.message); latest.current.load(); } else noteMySong(songId, { key: key_note });
   }, [userId]);
 
-  const handleRemove = useCallback(async (song: { song_id: string }) => {
-    const songId = song.song_id;
-    setSongs(prev => prev.filter(s => s.song_id !== songId));
-    setSelectedIds(prev => { const next = new Set(prev); next.delete(songId); return next; });
-    const { error } = await supabase.from('user_songs').delete().eq('user_id', userId).eq('song_id', songId);
-    if (error) { Alert.alert('Error', error.message); latest.current.load(); }
-  }, [userId]);
-
+  const handleKeyTap = useCallback((song: { song_id: string }) => setKeyPickerSongId(song.song_id), []);
 
   const loadMoreSuggestions = useCallback(async () => {
     if (!suggestionsHasMore || loadingMoreRef.current || !userId) return;
@@ -274,6 +299,7 @@ export default function RepertoireScreen() {
   // suggestion and insert it into the repertoire, reverting both on error.
   const addFromSuggestion = useCallback(async (s: Suggestion, confidence: string) => {
     if (!userId) return;
+    if (!(await ensureLeadVoice(confidence, singingVoice, userId, setSingingVoice))) return;
     const prevSongs = latest.current.songs;
     const prevSuggestions = latest.current.suggestions;
     setSuggestions(prev => prev.filter(x => x.song_id !== s.song_id));
@@ -285,14 +311,21 @@ export default function RepertoireScreen() {
         song_id: s.song_id,
         slug: s.slug,
         confidence,
+        key_note: null,
         updated_at: new Date().toISOString(),
         title: s.title,
         display_artist: s.display_artist,
+        byline: s.byline ?? null,
+        card_identity: s.card_identity ?? null,
+        recording_artists: s.recording_artists ?? [],
         composers: s.composers,
         cultures: s.cultures,
         genres: s.genres,
         languages: s.languages,
         themes: [],
+        forms: [],
+        occasions: [],
+        communities: s.communities ?? [],
         productions: s.productions,
         vibe: null,
         tonality: null,
@@ -310,8 +343,8 @@ export default function RepertoireScreen() {
       Alert.alert('Error', error.message);
       setSongs(prevSongs);
       setSuggestions(prevSuggestions);
-    }
-  }, [userId]);
+    } else noteMySong(s.song_id, { confidence });
+  }, [userId, singingVoice]);
 
   const toggleSelect = useCallback((song: { song_id: string }) => {
     setSelectedIds(prev => toggleSet(prev, song.song_id));
@@ -339,18 +372,18 @@ export default function RepertoireScreen() {
   function handleBulkConfidence(event: GestureResponderEvent) {
     const ids = Array.from(selectedIds);
     async function apply(confidence: string) {
+      if (!(await ensureLeadVoice(confidence, singingVoice, userId, setSingingVoice))) return;
       setSongs(prev => prev.map(s => selectedIds.has(s.song_id) ? { ...s, confidence } : s));
       setSelectedIds(new Set());
       for (const songId of ids) {
-        await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
+        const { error } = await supabase.from('user_songs').update({ confidence }).eq('user_id', userId).eq('song_id', songId);
+        if (!error) noteMySong(songId, { confidence });
       }
     }
     showOptionsSheet({
       title: `Change role for ${ids.length} ${ids.length === 1 ? 'song' : 'songs'}`,
       anchor: anchorFrom(event),
-      options: CONFIDENCE_LEVELS
-        .filter(l => l.key !== 'lead' || canLead)
-        .map(l => ({ label: l.label, onPress: () => { apply(l.key); } })),
+      options: CONFIDENCE_LEVELS.map(l => ({ label: l.label, onPress: () => { apply(l.key); } })),
     });
   }
 
@@ -367,7 +400,8 @@ export default function RepertoireScreen() {
             setSongs(prev => prev.filter(s => !selectedIds.has(s.song_id)));
             setSelectedIds(new Set());
             for (const songId of ids) {
-              await supabase.from('user_songs').delete().eq('user_id', userId).eq('song_id', songId);
+              const { error } = await supabase.from('user_songs').delete().eq('user_id', userId).eq('song_id', songId);
+              if (!error) noteMySong(songId, null);
             }
           },
         },
@@ -381,16 +415,15 @@ export default function RepertoireScreen() {
       <RepertoireCard
         song={item}
         selected={selectedIds.has(item.song_id)}
-        canLead={canLead}
         isLast={index === filtered.length - 1}
         onToggleSelect={toggleSelect}
         onConfidenceChange={handleConfidenceChange}
+        onKeyTap={handleKeyTap}
         onAddToSet={addOneToSet}
         onView={viewSong}
-        onRemove={handleRemove}
       />
     ),
-    [selectedIds, canLead, filtered.length, toggleSelect, handleConfidenceChange, addOneToSet, viewSong, handleRemove]
+    [selectedIds, filtered.length, toggleSelect, handleConfidenceChange, handleKeyTap, addOneToSet, viewSong]
   );
 
   // Search results reuse the same two cards web does: owned songs keep their role
@@ -403,27 +436,25 @@ export default function RepertoireScreen() {
           <RepertoireCard
             song={owned}
             selected={selectedIds.has(owned.song_id)}
-            canLead={canLead}
-            isLast={index === sortedSearchResults.length - 1}
+              isLast={index === sortedSearchResults.length - 1}
             onToggleSelect={toggleSelect}
             onConfidenceChange={handleConfidenceChange}
+            onKeyTap={handleKeyTap}
             onAddToSet={addOneToSet}
             onView={viewSong}
-            onRemove={handleRemove}
           />
         );
       }
       return (
         <SuggestionCard
           song={item}
-          canLead={canLead}
           onAdd={addFromSuggestion}
           onView={viewSong}
         />
       );
     },
-    [songsById, selectedIds, canLead, sortedSearchResults.length, toggleSelect,
-     handleConfidenceChange, addOneToSet, viewSong, handleRemove, addFromSuggestion]
+    [songsById, selectedIds, sortedSearchResults.length, toggleSelect,
+     handleConfidenceChange, handleKeyTap, addOneToSet, viewSong, addFromSuggestion]
   );
 
 
@@ -481,17 +512,7 @@ export default function RepertoireScreen() {
             onChange={setSortBy}
             accessibilityLabel="Sort"
           />
-          <TouchableOpacity
-            onPress={() => setFilterModalVisible(true)}
-            className={`h-7 flex-row items-center gap-1.5 rounded-lg border px-3 ${
-              extFilterCount > 0 ? 'border-amber-400 bg-amber-50' : 'border-zinc-200'
-            }`}
-          >
-            <Ionicons name="filter" size={12} color={extFilterCount > 0 ? '#b45309' : '#71717a'} />
-            <Text className={`text-xs font-medium ${extFilterCount > 0 ? 'text-amber-700' : 'text-zinc-500'}`}>
-              Filters{extFilterCount > 0 ? ` · ${extFilterCount}` : ''}
-            </Text>
-          </TouchableOpacity>
+          <FiltersButton count={extFilterCount} onPress={() => setFilterModalVisible(true)} />
         </View>
       </View>
 
@@ -503,13 +524,13 @@ export default function RepertoireScreen() {
             <Text className="text-xs text-amber-700 underline">Deselect all</Text>
           </TouchableOpacity>
           <View className="flex-row items-center gap-2 ml-auto">
-            <TouchableOpacity onPress={handleBulkAddToSet} className="rounded-xl border border-zinc-300 bg-white px-2 py-1.5">
+            <TouchableOpacity onPress={handleBulkAddToSet} className="rounded-full border border-zinc-300 bg-white px-2 py-1.5">
               <Text className="text-xs text-zinc-700">Add to set…</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleBulkConfidence} className="rounded-xl border border-zinc-300 bg-white px-2 py-1.5">
+            <TouchableOpacity onPress={handleBulkConfidence} className="rounded-full border border-zinc-300 bg-white px-2 py-1.5">
               <Text className="text-xs text-zinc-700">Change role…</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleBulkRemove} className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5">
+            <TouchableOpacity onPress={handleBulkRemove} className="rounded-full border border-zinc-200 bg-white px-3 py-1.5">
               <Text className="text-xs text-zinc-500">Remove</Text>
             </TouchableOpacity>
           </View>
@@ -542,7 +563,7 @@ export default function RepertoireScreen() {
   // every sort or filter change is the main reason Repertoire felt heavier
   // than Search for the same interaction.
   const listFooter = useMemo(() => searching ? (
-    searchLoading ? null : (
+    searchLoading ? undefined : (
       <View className="mx-4 mt-4">
         {/* Collapsed behind a button like web's SubmitSongForm — the expanded
             form is a lot of vertical space for a rare action. */}
@@ -556,7 +577,7 @@ export default function RepertoireScreen() {
             <Text className="text-sm text-zinc-500">Can't find your song?</Text>
             <TouchableOpacity
               onPress={() => setSubmitOpen(true)}
-              className="mt-3 rounded-xl bg-zinc-800 px-4 py-2.5"
+              className="mt-3 rounded-full bg-zinc-800 px-4 py-2.5"
             >
               <Text className="text-sm font-semibold text-white">Add a missing song</Text>
             </TouchableOpacity>
@@ -573,7 +594,6 @@ export default function RepertoireScreen() {
         <SuggestionCard
           key={s.song_id}
           song={s}
-          canLead={canLead}
           onAdd={addFromSuggestion}
           onView={viewSong}
         />
@@ -584,9 +604,9 @@ export default function RepertoireScreen() {
         </View>
       )}
     </View>
-  ) : null, [
+  ) : undefined, [
     searching, searchLoading, submitOpen, query, router,
-    showSuggestions, suggestions, canLead, addFromSuggestion, viewSong,
+    showSuggestions, suggestions, addFromSuggestion, viewSong,
     suggestionsLoadingMore,
   ]);
 
@@ -622,6 +642,8 @@ export default function RepertoireScreen() {
         visible={filterModalVisible}
         filters={extFilters}
         options={options}
+        facets={facets}
+        hierarchy={hierarchy}
         yearBounds={yearBounds}
         emptyHint={{
           title: 'No filter options available yet.',
@@ -662,7 +684,7 @@ export default function RepertoireScreen() {
           ListEmptyComponent={
             // While searching, the result count and the "add a missing song" panel
             // already cover the no-results case, as they do on web.
-            searching ? null : (
+            searching ? undefined : (
               <View className="mx-4 mt-4 rounded-2xl border border-zinc-200 bg-white p-6 items-center">
                 {confidenceFilter !== 'all' || extFilterCount > 0 ? (
                   <>
@@ -691,6 +713,14 @@ export default function RepertoireScreen() {
         />
       )}
       </ContentContainer>
+
+      <KeyPicker
+        visible={!!keyPickerSongId}
+        title="My key"
+        current={songs.find(s => s.song_id === keyPickerSongId)?.key_note ?? null}
+        onClose={() => setKeyPickerSongId(null)}
+        onSelect={(key) => { if (keyPickerSongId) handleKeyChange(keyPickerSongId, key); }}
+      />
 
       {addToSetSongs && (
         <AddToSetModal

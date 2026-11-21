@@ -42,6 +42,14 @@
       "expo-font",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "SingJam uses your photos so you can choose a profile picture or a cover image for a jam you host.",
+          "cameraPermission": "SingJam uses your camera so you can take a profile picture.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.557301235221-ddalr5lli87u06df4s3gh5vd2se1k1m9"

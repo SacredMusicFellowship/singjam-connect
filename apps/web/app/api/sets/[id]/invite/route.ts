@@ -4,6 +4,8 @@ import { resolveApiUser } from "@/lib/supabase/apiUser";
 import { resend, FROM_ADDRESS } from "@/lib/resend";
 import { createNotification } from "@/lib/notifications";
 import { setCollaboratorInviteHtml, setCollaboratorNonMemberInviteHtml } from "@/emails/set-invite";
+import { setPathById } from "@/lib/shortRef";
+import { findAuthUserByEmail } from "@/lib/authUsers";
 
 export async function POST(
   req: Request,
@@ -13,7 +15,10 @@ export async function POST(
   const user = await resolveApiUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { inviteeUserId, inviteeEmail, role } = await req.json();
+  const body = await req.json();
+  const { inviteeUserId, role } = body;
+  // Stored lowercase so sign-in can claim it by the authenticated address.
+  const inviteeEmail = typeof body.inviteeEmail === "string" ? body.inviteeEmail.trim().toLowerCase() : body.inviteeEmail;
   if (!inviteeUserId && !inviteeEmail) {
     return NextResponse.json({ error: "Provide inviteeUserId or inviteeEmail" }, { status: 400 });
   }
@@ -55,7 +60,7 @@ export async function POST(
 
   const setName = (set as any).name ?? "a set";
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://singjam.org";
-  const setUrl = `${baseUrl}/set/${setId}`;
+  const setUrl = `${baseUrl}${await setPathById(setId)}`;
 
   if (inviteeUserId) {
     const { data: existing } = await admin
@@ -104,8 +109,7 @@ export async function POST(
 
   // Email invite
   if (inviteeEmail) {
-    const { data: existingUsers } = await admin.auth.admin.listUsers();
-    const match = existingUsers?.users?.find((u) => u.email?.toLowerCase() === inviteeEmail.toLowerCase());
+    const match = await findAuthUserByEmail(admin.auth.admin, inviteeEmail);
 
     if (match) {
       // Redirect caller to use the user ID flow
@@ -115,11 +119,11 @@ export async function POST(
     // Non-member: generate a link invite and email it
     const { data: inserted } = await admin
       .from("set_collaborators")
-      .insert({ set_id: setId, invited_by: user.id, role: collaboratorRole })
+      .insert({ set_id: setId, invited_by: user.id, role: collaboratorRole, invitee_email: inviteeEmail })
       .select("token")
       .single();
     const token = (inserted as any).token;
-    const signupUrl = `${baseUrl}/set/${setId}?invite=${token}`;
+    const signupUrl = `${baseUrl}${await setPathById(setId)}?invite=${token}`;
 
     await resend.emails.send({
       from: FROM_ADDRESS,

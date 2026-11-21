@@ -372,7 +372,7 @@ export default function FriendsScreen() {
               <Text className="px-4 pb-2 text-sm text-zinc-500">
                 Matches are ranked by shared songs and genre overlap.
               </Text>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={
             !hasRepertoire ? (

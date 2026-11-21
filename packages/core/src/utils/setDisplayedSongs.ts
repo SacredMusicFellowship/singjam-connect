@@ -1,3 +1,5 @@
+import type { CardIdentity } from "./songSubtitle";
+
 export type SharedSong = {
   song_id: string;
   slug: string;
@@ -9,6 +11,14 @@ export type SharedSong = {
   who_else_leads: string[];
   in_set: boolean;
   popularity?: number;
+  // What a song card shows (migration 218): line under the title, writers, cultures, recordings, identity.
+  card?: {
+    byline?: string | null;
+    composers?: string[] | null;
+    cultures?: string[] | null;
+    recording_artists?: { name: string; year: number | null }[] | null;
+    card_identity?: CardIdentity;
+  } | null;
 };
 
 export type SortMode = "popular" | "alpha" | "za" | "leader";

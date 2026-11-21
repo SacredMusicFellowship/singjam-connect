@@ -92,13 +92,13 @@ export default function FeedbackPage() {
           <button
             onClick={submit}
             disabled={busy || !description.trim()}
-            className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {busy ? "Sending…" : "Send report"}
           </button>
           <button
             onClick={() => history.back()}
-            className="rounded-xl border border-zinc-200 px-5 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
+            className="rounded-full border border-zinc-200 px-5 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
           >
             Cancel
           </button>
