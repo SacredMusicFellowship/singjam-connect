@@ -77,19 +77,19 @@ describe("buildDbMemoryReport", () => {
     expect(report.facts.find(([k]) => k === "Swap used now")?.[1]).toBe("450 MB (+0 MB on the week)");
   });
 
-  it("suggests Pro when swap grows through the week", () => {
+  it("suggests a resize when swap grows through the week", () => {
     const report = buildDbMemoryReport(series(7, (h) => ({ swap_used_mb: 450 + (168 - h) / 2 })), NOW);
-    expect(report.verdict).toBe("consider_pro");
+    expect(report.verdict).toBe("consider_resize");
     expect(report.reasons[0]).toMatch(/^Swap grew by \d+ MB/);
   });
 
-  it("suggests Pro when free RAM nearly runs out", () => {
+  it("suggests a resize when free RAM nearly runs out", () => {
     const report = buildDbMemoryReport(series(7, (h) => ({ mem_available_mb: h === 24 ? 30 : 120 })), NOW);
-    expect(report.verdict).toBe("consider_pro");
+    expect(report.verdict).toBe("consider_resize");
     expect(report.reasons).toContain("Free RAM dropped to 30 MB at one point, close to running out.");
   });
 
-  it("suggests Pro when swap reads are heavy", () => {
+  it("suggests a resize when swap reads are heavy", () => {
     const heavy = series(7, (h) => ({ swap_in_pages: (168 - h) * 1_000_000 }));
     expect(buildDbMemoryReport(heavy, NOW).reasons.some((r) => r.startsWith("Swap reading averaged"))).toBe(true);
   });
@@ -103,7 +103,7 @@ describe("buildDbMemoryReport", () => {
 describe("renderDbMemoryEmail", () => {
   it("puts the verdict in the subject", () => {
     const { subject, html } = renderDbMemoryEmail(buildDbMemoryReport(series(7, () => ({})), NOW));
-    expect(subject).toBe("Supabase weekly: OK on Free");
+    expect(subject).toBe("Supabase weekly: OK as is");
     expect(html).toContain("No action needed this week.");
   });
 });
