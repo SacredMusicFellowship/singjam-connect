@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { attendeeRole, attendeeSummaryParts, sortAttendees } from "@singjam/core";
+import { JAM_LEAD_ROLE_LABEL, attendeeRole, attendeeSummaryParts, sortAttendees, type JamLeadRole } from "@singjam/core";
 import { SINGING_LABEL, voiceBadgeClass } from "@/lib/singingVoice";
 
 type GuestAttendee = { name: string; extra: number };
@@ -187,6 +187,7 @@ export default function JamAttendeeList({
   hostId,
   canAppointCohosts,
   leaderIds = [],
+  weaverIds = [],
   myLeader = null,
   version = 0,
 }: {
@@ -196,8 +197,10 @@ export default function JamAttendeeList({
   canAppointCohosts: boolean;
   /** Members leading the music who are listed publicly. */
   leaderIds?: string[];
-  /** Set when the viewer leads this event: their row says Leader even if they aren't listed publicly. */
-  myLeader?: { userId: string } | null;
+  /** Community Weavers listed publicly. */
+  weaverIds?: string[];
+  /** Set when the viewer leads or weaves at this event: their row is badged even if they aren't listed publicly. */
+  myLeader?: { userId: string; role: JamLeadRole } | null;
   /** Bumped when the host changes who is coming from this page, to reload the list. */
   version?: number;
 }) {
@@ -232,7 +235,14 @@ export default function JamAttendeeList({
   if (!data) return null;
   const { profileMap, attending, waitlist, guests, memberExtras, totalGoing, cohostIds } = data;
 
-  const isLeader = (userId: string) => myLeader?.userId === userId || leaderIds.includes(userId);
+  const leadRole = (userId: string): JamLeadRole | null =>
+    myLeader?.userId === userId
+      ? myLeader.role
+      : leaderIds.includes(userId)
+        ? "leader"
+        : weaverIds.includes(userId)
+          ? "weaver"
+          : null;
   const entries = sortAttendees<ListEntry>(
     [
       ...(hostId ? [{ kind: "host" as const, userId: hostId }] : []),
@@ -243,7 +253,7 @@ export default function JamAttendeeList({
       e.kind === "guest"
         ? { role: "going", name: e.guest.name }
         : {
-            role: e.kind === "host" ? "host" : attendeeRole({ cohost: cohostIds.has(e.userId), leader: isLeader(e.userId) }),
+            role: e.kind === "host" ? "host" : attendeeRole({ cohost: cohostIds.has(e.userId), leader: leadRole(e.userId) === "leader", weaver: leadRole(e.userId) === "weaver" }),
             name: displayName(profileMap.get(e.userId)),
           }
   );
@@ -254,7 +264,7 @@ export default function JamAttendeeList({
         Who's going <span className="text-sm font-normal text-zinc-400">({totalGoing})</span>
       </h2>
       <ul className="divide-y divide-zinc-100">
-        {/* Host, co-hosts and leaders first, then everyone else by name, guests
+        {/* Host, co-hosts, leaders and Community Weavers first, then everyone else by name, guests
             without an account included: no account is needed to be counted as
             coming. Guests carry no profile, so no link and no tags. */}
         {entries.map((e) => {
@@ -290,7 +300,7 @@ export default function JamAttendeeList({
             );
           }
           const isCohost = cohostIds.has(e.userId);
-          const leads = isLeader(e.userId);
+          const leads = leadRole(e.userId);
           return (
             <AttendeeRow
               key={e.userId}
@@ -301,7 +311,7 @@ export default function JamAttendeeList({
                   <>
                     {leads && (
                       <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                        Leader
+                        {JAM_LEAD_ROLE_LABEL[leads]}
                       </span>
                     )}
                     {isCohost && (

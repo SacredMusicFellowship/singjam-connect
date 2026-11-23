@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import SearchInput from "@/components/SearchInput";
+import { JAM_LEAD_ROLE_LABEL, type JamLeadRole } from "@singjam/core";
 import type { ManagedJamLeader } from "@/lib/jamLeaders";
 
 const formatCents = (cents: number) =>
@@ -16,20 +17,32 @@ type UserResult = {
   avatar_url: string | null;
 };
 
-// The host's side of music leaders. Adding someone confirms them — they have
-// already said yes — so they are emailed straight away, with a free ticket
-// unless they already got one, and can step down from the event page.
+const COPY: Record<JamLeadRole, { heading: string; added: string; badge: string }> = {
+  leader: { heading: "Music leaders", added: "is leading", badge: "Leading" },
+  weaver: { heading: "Community Weavers", added: "is a Community Weaver", badge: "Weaver" },
+};
+
+// The host's side of music leaders and Community Weavers, one panel per role.
+// Adding someone confirms them — they have already said yes — so they are
+// emailed straight away, with a free ticket unless they already got one, and
+// can step down from the event page.
 export default function JamLeaderManager({
   jamId,
+  role,
   initialLeaders,
   onChange,
 }: {
   jamId: string;
+  role: JamLeadRole;
+  /** Everyone in either role: someone holds only one role per event. */
   initialLeaders: ManagedJamLeader[];
   /** Adding or removing a leader seats or unseats them, so the page's lists reload. */
   onChange?: () => void;
 }) {
-  const [leaders, setLeaders] = useState(initialLeaders);
+  const copy = COPY[role];
+  const [leaders, setLeaders] = useState(() => initialLeaders.filter((l) => l.role === role));
+  // The other panel's people, from the page's latest refresh.
+  const otherRole = initialLeaders.filter((l) => l.role !== role);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -70,18 +83,18 @@ export default function JamLeaderManager({
       res = await fetch(`/api/jam/${jamId}/leaders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, role }),
       });
       body = await res.json().catch(() => ({}));
     } catch {
-      setFeedback({ msg: "Couldn't add leader", ok: false });
+      setFeedback({ msg: "Couldn't add them", ok: false });
       return;
     } finally {
       addingRef.current = false;
       setBusy(null);
     }
     if (!res.ok) {
-      setFeedback({ msg: body.error ?? "Couldn't add leader", ok: false });
+      setFeedback({ msg: body.error ?? "Couldn't add them", ok: false });
       return;
     }
     setLeaders((prev) => [...prev, body.leader]);
@@ -93,10 +106,10 @@ export default function JamLeaderManager({
     const l: ManagedJamLeader = body.leader;
     setFeedback(
       !body.emailed
-        ? { msg: `${l.name} is leading, but their email didn't send. Let them know directly.`, ok: false }
+        ? { msg: `${l.name} ${copy.added}, but their email didn't send. Let them know directly.`, ok: false }
         : l.own_ticket_cents !== null
-          ? { msg: `${l.name} is leading — they already have a ticket, so we didn't issue another.`, ok: true }
-          : { msg: `${l.name} is leading — we've emailed their ticket.`, ok: true }
+          ? { msg: `${l.name} ${copy.added} — they already have a ticket, so we didn't issue another.`, ok: true }
+          : { msg: `${l.name} ${copy.added} — we've emailed their ticket.`, ok: true }
     );
   }
 
@@ -110,23 +123,25 @@ export default function JamLeaderManager({
     });
     setBusy(null);
     if (!res.ok) {
-      setFeedback({ msg: "Couldn't remove leader", ok: false });
+      setFeedback({ msg: "Couldn't remove them", ok: false });
       return;
     }
     setLeaders((prev) => prev.filter((l) => l.id !== leader.id));
     onChange?.();
   }
 
-  const leadingIds = new Set(leaders.map((l) => l.user_id).filter(Boolean));
-  const guestAlreadyLeading = leaders.some((l) => !l.user_id && l.email?.toLowerCase() === email.trim().toLowerCase());
+  const roleOf = new Map<string, JamLeadRole>();
+  for (const l of [...otherRole, ...leaders]) if (l.user_id) roleOf.set(l.user_id, l.role);
+  const typedEmail = email.trim().toLowerCase();
+  const guestTaken = [...otherRole, ...leaders].find((l) => !l.user_id && l.email?.toLowerCase() === typedEmail);
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
       <div>
-        <h2 className="text-base font-semibold">Music leaders</h2>
+        <h2 className="text-base font-semibold">{copy.heading}</h2>
         <p className="mt-1 text-sm text-zinc-500">
           For people who&apos;ve already said yes. They&apos;re emailed a free ticket (unless they already have one),
-          marked as leading in Who&apos;s going, and can step down from the event page.
+          marked as {JAM_LEAD_ROLE_LABEL[role]} in Who&apos;s going, and can step down from the event page.
         </p>
       </div>
 
@@ -172,7 +187,7 @@ export default function JamLeaderManager({
           <ul className="mt-2 divide-y divide-zinc-100 rounded-xl border border-zinc-200 overflow-hidden">
             {results.map((u) => {
               const label = [u.display_name, u.last_name].filter(Boolean).join(" ") || u.username || "Unknown";
-              const leading = leadingIds.has(u.id);
+              const taken = roleOf.get(u.id);
               return (
                 <li key={u.id} className="flex items-center gap-3 px-3 py-2.5">
                   <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full bg-zinc-200">
@@ -190,10 +205,10 @@ export default function JamLeaderManager({
                   </div>
                   <button
                     onClick={() => add({ userId: u.id }, u.id)}
-                    disabled={leading || busy === u.id}
+                    disabled={!!taken || busy === u.id}
                     className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:bg-zinc-200 disabled:text-zinc-500 transition-colors"
                   >
-                    {leading ? "Leading" : busy === u.id ? "Adding…" : "Add"}
+                    {taken ? COPY[taken].badge : busy === u.id ? "Adding…" : "Add"}
                   </button>
                 </li>
               );
@@ -226,13 +241,17 @@ export default function JamLeaderManager({
           />
           <button
             type="submit"
-            disabled={!name.trim() || !email.trim() || guestAlreadyLeading || busy === "guest"}
+            disabled={!name.trim() || !email.trim() || !!guestTaken || busy === "guest"}
             className="shrink-0 rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {busy === "guest" ? "Adding…" : "Add"}
           </button>
         </div>
-        {guestAlreadyLeading && <p className="text-xs text-zinc-500">That email is already leading this event.</p>}
+        {guestTaken && (
+          <p className="text-xs text-zinc-500">
+            That email is already {guestTaken.role === "weaver" ? "a Community Weaver at" : "leading"} this event.
+          </p>
+        )}
       </form>
 
       {feedback && <p className={`text-xs ${feedback.ok ? "text-green-700" : "text-red-600"}`}>{feedback.msg}</p>}

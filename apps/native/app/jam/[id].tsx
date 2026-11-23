@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { attendeeRole, canEditJam, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
+import { JAM_LEAD_ROLE_LABEL, type JamLeadRole, attendeeRole, canEditJam, dropUsCountry, jamTags, sortAttendees, jamImageFor, dropVenueRepeatedInTitle, formatJamTime, googleMapsUrl, jamIsFull, jamSeatExcludedUserId, jamSeatsTaken } from '@singjam/core';
 import { supabase } from '@/lib/supabase';
 import { duplicateJam } from '@/lib/jams';
 import ContentContainer from '@/components/ContentContainer';
@@ -32,10 +32,10 @@ async function jamApiFetch(path: string, method: 'POST' | 'DELETE', body?: objec
 
 type GuestAttendee = { name: string; extra: number };
 
-// Music leaders on an official event, served by the web API: jam_leaders is
-// service_role-only because each row carries the leader's email and token.
-type JamLeader = { id: string; user_id: string | null; name: string; username: string | null; avatar_url: string | null };
-type MyLeaderSpot = { token: string; has_leader_ticket: boolean };
+// Music leaders and Community Weavers on an official event, served by the web
+// API: jam_leaders is service_role-only because each row carries the email and token.
+type JamLeader = { id: string; user_id: string | null; role: JamLeadRole; name: string; username: string | null; avatar_url: string | null };
+type MyLeaderSpot = { token: string; role: JamLeadRole; has_leader_ticket: boolean };
 
 type JamDetail = {
   id: string;
@@ -266,7 +266,7 @@ function MaybeMapsLink({ query, children }: { query: string | null; children: Re
   );
 }
 
-function AttendeeAvatar({ attendee, isMe, extra = 0, isLeader = false }: { attendee: Attendee; isMe: boolean; extra?: number; isLeader?: boolean }) {
+function AttendeeAvatar({ attendee, isMe, extra = 0, leadRole = null }: { attendee: Attendee; isMe: boolean; extra?: number; leadRole?: JamLeadRole | null }) {
   const name = attendee.display_name ?? attendee.username ?? '?';
   const initial = name[0]?.toUpperCase() ?? '?';
   return (
@@ -283,7 +283,11 @@ function AttendeeAvatar({ attendee, isMe, extra = 0, isLeader = false }: { atten
           ? `${attendee.username ? `@${attendee.username}` : name} +${extra}`
           : attendee.username ? `@${attendee.username}` : name}
       </Text>
-      {isLeader ? <Text className="text-amber-700 text-xs font-medium">Leader</Text> : null}
+      {leadRole ? (
+        <Text className="text-amber-700 text-xs font-medium text-center" numberOfLines={2}>
+          {JAM_LEAD_ROLE_LABEL[leadRole]}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -541,7 +545,7 @@ export default function JamDetailScreen() {
     const detail = myLeader?.has_leader_ticket
       ? "Your ticket will be released and we'll let the host know."
       : "We'll let the host know. The ticket you bought still stands.";
-    Alert.alert('Step down as a leader?', detail, [
+    Alert.alert(myLeader?.role === 'weaver' ? 'Step down as a Community Weaver?' : 'Step down as a leader?', detail, [
       {
         text: 'Step down',
         style: 'destructive',
@@ -661,7 +665,8 @@ export default function JamDetailScreen() {
   const memberHeadcount = going.reduce((n, a) => n + (memberExtras[a.user_id] ?? 0), 0);
   // Same order as web's Who's going: host, co-hosts, leaders, then everyone by
   // name with guests mixed in. Only the first 20 show, so this decides who does.
-  const isLeaderId = (userId: string) => leaders.some(l => l.user_id === userId) || (!!myLeader && userId === myUserId);
+  const leadRoleOf = (userId: string): JamLeadRole | null =>
+    myLeader && userId === myUserId ? myLeader.role : leaders.find(l => l.user_id === userId)?.role ?? null;
   const shownHostId = jam.host_id && jam.visibility !== 'official' ? jam.host_id : null;
   const goingEntries = sortAttendees<{ kind: 'member'; a: Attendee } | { kind: 'guest'; g: GuestAttendee; key: string }>(
     [
@@ -671,7 +676,7 @@ export default function JamDetailScreen() {
     e => e.kind === 'guest'
       ? { role: 'going', name: e.g.name }
       : {
-          role: attendeeRole({ host: e.a.user_id === shownHostId, cohost: cohostIds.has(e.a.user_id), leader: isLeaderId(e.a.user_id) }),
+          role: attendeeRole({ host: e.a.user_id === shownHostId, cohost: cohostIds.has(e.a.user_id), leader: leadRoleOf(e.a.user_id) === 'leader', weaver: leadRoleOf(e.a.user_id) === 'weaver' }),
           name: [e.a.display_name, e.a.last_name].filter(Boolean).join(' ') || e.a.username || '',
         }
   );
@@ -852,7 +857,7 @@ export default function JamDetailScreen() {
                 </TouchableOpacity>
               </View>
             ) : myLeader ? (
-              // A leader steps down rather than cancelling an RSVP, as on web.
+              // A leader or Community Weaver steps down rather than cancelling an RSVP, as on web.
               <TouchableOpacity
                 onPress={handleLeaderWithdraw}
                 className="border border-zinc-200 rounded-xl py-3 items-center"
@@ -911,7 +916,7 @@ export default function JamDetailScreen() {
                   attendee={e.a}
                   isMe={e.a.user_id === myUserId}
                   extra={memberExtras[e.a.user_id] ?? 0}
-                  isLeader={isLeaderId(e.a.user_id)}
+                  leadRole={leadRoleOf(e.a.user_id)}
                 />
               ))}
               {going.length + guestAttendees.length > 20 ? (

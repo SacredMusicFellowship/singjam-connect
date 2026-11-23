@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { jamPath, setPath } from "@singjam/core";
+import { JAM_LEAD_ROLE_LABEL, jamPath, setPath, type JamLeadRole } from "@singjam/core";
 import { markAttending } from "@/lib/jamAttendance";
 import { createNotification } from "@/lib/notifications";
 import { findEventSet } from "@/lib/eventSet";
@@ -13,11 +13,13 @@ import { fetchAllAuthUsers } from "@/lib/authUsers";
 // has already agreed to lead, and that is the confirmation: they are emailed a
 // comp ticket and seated straight away, with a link to step down if plans
 // change. There is no invited/accepted state — a row exists while they lead.
+// Community Weavers (migration 253) are the same row with role 'weaver'.
 
 export type JamLeaderRow = {
   id: string;
   jam_id: string;
   user_id: string | null;
+  role: JamLeadRole;
   name: string | null;
   email: string | null;
   show_publicly: boolean;
@@ -31,6 +33,7 @@ export type JamLeaderRow = {
 export type PublicJamLeader = {
   id: string;
   user_id: string | null;
+  role: JamLeadRole;
   name: string;
   username: string | null;
   avatar_url: string | null;
@@ -44,7 +47,7 @@ export type ManagedJamLeader = PublicJamLeader & {
   own_ticket_cents: number | null;
 };
 
-const LEADER_COLUMNS = "id, jam_id, user_id, name, email, show_publicly, token, order_id, added_by, created_at";
+const LEADER_COLUMNS = "id, jam_id, user_id, role, name, email, show_publicly, token, order_id, added_by, created_at";
 
 // Dots only separate the domain's parts, so no two parts of the pattern can
 // match the same characters and it runs in linear time on any input.
@@ -112,7 +115,8 @@ export async function describeLeaders(admin: SupabaseClient, rows: JamLeaderRow[
     return {
       id: r.id,
       user_id: r.user_id,
-      name: fullName(p) ?? r.name ?? "Leader",
+      role: r.role,
+      name: fullName(p) ?? r.name ?? JAM_LEAD_ROLE_LABEL[r.role],
       username: p?.username ?? null,
       avatar_url: p?.avatar_url ?? null,
       email: r.email,
@@ -164,13 +168,28 @@ async function issueLeaderTicket(
 export function publicLeaders(leaders: ManagedJamLeader[]): PublicJamLeader[] {
   return leaders
     .filter((l) => l.show_publicly)
-    .map(({ id, user_id, name, username, avatar_url }) => ({ id, user_id, name, username, avatar_url }));
+    .map(({ id, user_id, role, name, username, avatar_url }) => ({ id, user_id, role, name, username, avatar_url }));
 }
 
-type AddInput = { jamId: string; addedBy: string; userId?: string | null; name?: string | null; email?: string | null };
+type AddInput = {
+  jamId: string;
+  addedBy: string;
+  role?: JamLeadRole;
+  userId?: string | null;
+  name?: string | null;
+  email?: string | null;
+};
+
+const alreadyIn = (role: JamLeadRole) =>
+  role === "weaver" ? "Already a Community Weaver at this event" : "Already leading this event";
+
+/** "You're leading at X" / "You're a Community Weaver at X". */
+export const youreRoleAt = (role: JamLeadRole, jamName: string) =>
+  role === "weaver" ? `You're a Community Weaver at ${jamName}` : `You're leading at ${jamName}`;
 type AddResult = { ok: true; leader: ManagedJamLeader; emailed: boolean } | { ok: false; status: number; error: string };
 
 export async function addJamLeader(admin: SupabaseClient, input: AddInput): Promise<AddResult> {
+  const role: JamLeadRole = input.role ?? "leader";
   const userId = input.userId || null;
   let name = input.name?.trim() || null;
   let email = input.email?.trim().toLowerCase() || null;
@@ -187,7 +206,7 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
     .maybeSingle();
   if (!jam) return { ok: false, status: 404, error: "Event not found" };
   if (jam.visibility !== "official") {
-    return { ok: false, status: 400, error: "Leaders can only be added to official events" };
+    return { ok: false, status: 400, error: `${role === "weaver" ? "Community Weavers" : "Leaders"} can only be added to official events` };
   }
 
   // Someone with an account is always added as a member, even when the host
@@ -211,13 +230,15 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
   // they had an account, under the same email — that row was never linked to
   // them, and adding them again would issue a second free ticket.
   const byUser = userId
-    ? await admin.from("jam_leaders").select("id").eq("jam_id", jam.id).eq("user_id", userId).maybeSingle()
+    ? await admin.from("jam_leaders").select("id, role").eq("jam_id", jam.id).eq("user_id", userId).maybeSingle()
     : { data: null };
   const byEmail =
     !byUser.data && email
-      ? await admin.from("jam_leaders").select("id").eq("jam_id", jam.id).is("user_id", null).eq("email", email).maybeSingle()
+      ? await admin.from("jam_leaders").select("id, role").eq("jam_id", jam.id).is("user_id", null).eq("email", email).maybeSingle()
       : { data: null };
-  if (byUser.data || byEmail.data) return { ok: false, status: 409, error: "Already leading this event" };
+  // One role per person per event.
+  const existing = (byUser.data ?? byEmail.data) as { role: JamLeadRole } | null;
+  if (existing) return { ok: false, status: 409, error: alreadyIn(existing.role) };
 
   // Someone who already got a ticket comes in on that one. A second, free one
   // would count them twice in Who's going; whether to refund what they paid is
@@ -235,6 +256,7 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
     .insert({
       jam_id: jam.id,
       user_id: userId,
+      role,
       name: userId ? null : name,
       email: userId ? null : email,
       order_id: comp?.orderId ?? null,
@@ -246,8 +268,8 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
     // A concurrent add of the same person lost the race to the unique index.
     if (comp) await admin.from("ticket_orders").update({ status: "cancelled", updated_at: now }).eq("id", comp.orderId);
     return leaderError?.code === "23505"
-      ? { ok: false, status: 409, error: "Already leading this event" }
-      : { ok: false, status: 500, error: leaderError?.message ?? "Could not add leader" };
+      ? { ok: false, status: 409, error: alreadyIn(role) }
+      : { ok: false, status: 500, error: leaderError?.message ?? "Could not add" };
   }
 
   if (userId) await markAttending(admin, jam.id, userId);
@@ -260,8 +282,9 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
       const { error } = await resend.emails.send({
         from: EVENTS_FROM_ADDRESS,
         to: email,
-        subject: `You're leading at ${jam.name ?? "a SingJam event"}`,
+        subject: youreRoleAt(role, jam.name ?? "a SingJam event"),
         html: jamLeaderAddedHtml({
+          role,
           jamId: jam.id,
           jamName: jam.name ?? "the event",
           jamUrl: eventUrl,
@@ -289,7 +312,7 @@ export async function addJamLeader(admin: SupabaseClient, input: AddInput): Prom
     await createNotification({
       userId,
       type: "jam_leader_added",
-      title: `You're leading at ${jam.name ?? "an event"}`,
+      title: youreRoleAt(role, jam.name ?? "an event"),
       body: comp
         ? "Your ticket is on us. Can't make it? You can step down from the event page."
         : "Thank you! Can't make it? You can step down from the event page.",
@@ -345,7 +368,10 @@ export async function removeJamLeader(
     await createNotification({
       userId,
       type: "jam_leader_withdrew",
-      title: `${described.name} can't lead at ${jam.name ?? "your event"}`,
+      title:
+        leader.role === "weaver"
+          ? `${described.name} can't make it as a Community Weaver at ${jam.name ?? "your event"}`
+          : `${described.name} can't lead at ${jam.name ?? "your event"}`,
       body: "Their ticket has been released.",
       link: jamPath(jam),
     });

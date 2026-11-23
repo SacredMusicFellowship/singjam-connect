@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import type { JamLeadRole } from "@singjam/core";
 
-// A leader stepping down, beside their "You're going" on the event page.
+// A leader or Community Weaver stepping down, beside their "You're going" on
+// the event page.
 export default function LeaderSpotControls({
   token,
+  role,
   hasLeaderTicket,
   onWithdrawn,
 }: {
   token: string;
+  role: JamLeadRole;
   /** False when they came in on a ticket they bought, which stepping down leaves alone. */
   hasLeaderTicket: boolean;
   onWithdrawn: () => void;
@@ -37,9 +41,10 @@ export default function LeaderSpotControls({
     return (
       <div className="w-full space-y-2">
         <p className="text-sm text-zinc-700">
+          {`Step down as ${role === "weaver" ? "a Community Weaver" : "a leader"}? `}
           {hasLeaderTicket
-            ? "Step down as a leader? Your ticket will be released and we'll let the host know."
-            : "Step down as a leader? We'll let the host know. The ticket you bought still stands."}
+            ? "Your ticket will be released and we'll let the host know."
+            : "We'll let the host know. The ticket you bought still stands."}
         </p>
         <div className="flex gap-2">
           <button

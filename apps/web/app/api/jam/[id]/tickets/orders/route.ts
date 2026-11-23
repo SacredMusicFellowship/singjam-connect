@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchAllRows } from "@singjam/core";
+import { JAM_LEAD_ROLE_LABEL, fetchAllRows } from "@singjam/core";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -105,6 +105,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     orderPosition.set(t.id, n);
   }
 
+  // Comp tickets belong to a leader or a Community Weaver; jam_leaders says which.
+  const weaverOrders = new Set<string>();
+  if (tickets.some((t) => t.ticket_orders?.source === "leader")) {
+    const { data: weaverRows } = await admin
+      .from("jam_leaders")
+      .select("order_id")
+      .eq("jam_id", jamId)
+      .eq("role", "weaver");
+    for (const r of weaverRows ?? []) if (r.order_id) weaverOrders.add(r.order_id);
+  }
+
   const guests = tickets.map((t) => {
     const o = t.ticket_orders!;
     const name =
@@ -116,7 +127,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       code: t.qr_token.replace(/-/g, "").slice(0, 6).toUpperCase(),
       name: name || "Guest",
       email: t.holder_email ?? o.buyer_email ?? null,
-      tier: o.source === "leader" ? "Leader" : t.ticket_types?.name ?? "Ticket",
+      tier:
+        o.source === "leader"
+          ? JAM_LEAD_ROLE_LABEL[weaverOrders.has(o.id) ? "weaver" : "leader"]
+          : t.ticket_types?.name ?? "Ticket",
       is_member: !!o.buyer_user_id,
       is_leader: o.source === "leader",
       checked_in_at: t.checked_in_at,
