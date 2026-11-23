@@ -15,7 +15,7 @@ import TicketPurchasePanel from "@/components/TicketPurchasePanel";
 import JamLeaderManager from "@/components/JamLeaderManager";
 import LeaderSpotControls from "@/components/LeaderSpotControls";
 import type { ManagedJamLeader, PublicJamLeader } from "@/lib/jamLeaders";
-import { jamPath } from "@singjam/core";
+import { jamPath, type JamLeadRole } from "@singjam/core";
 
 export type InviteEntry = {
   id: string;
@@ -63,8 +63,8 @@ export type JamViewData = {
   alreadyInvitedIds: string[];
   /** Music leaders listed publicly, marked in Who's going (official events only). */
   leaders: PublicJamLeader[];
-  /** Set when the viewer is one of this event's leaders. */
-  myLeader: { userId: string; token: string; hasLeaderTicket: boolean } | null;
+  /** Set when the viewer is one of this event's leaders or Community Weavers. */
+  myLeader: { userId: string; role: JamLeadRole; token: string; hasLeaderTicket: boolean } | null;
   /** The full leader list with emails, for whoever can manage the event. */
   managedLeaders: ManagedJamLeader[] | null;
 };
@@ -192,6 +192,7 @@ export default function JamView({
           {myLeader && (
             <LeaderSpotControls
               token={myLeader.token}
+              role={myLeader.role}
               hasLeaderTicket={myLeader.hasLeaderTicket}
               onWithdrawn={() => router.refresh()}
             />
@@ -221,7 +222,8 @@ export default function JamView({
       jamId={jamId}
       hostId={isOfficial ? null : jam.host_user_id}
       canAppointCohosts={isHost && !isOfficial}
-      leaderIds={leaders.map((l) => l.user_id).filter((id): id is string => !!id)}
+      leaderIds={leaders.filter((l) => l.role === "leader").map((l) => l.user_id).filter((id): id is string => !!id)}
+      weaverIds={leaders.filter((l) => l.role === "weaver").map((l) => l.user_id).filter((id): id is string => !!id)}
       myLeader={myLeader}
       version={attendeesVersion}
     />
@@ -239,16 +241,19 @@ export default function JamView({
         />
       )}
       {canManage && <JamInviteList jamId={jamId} invites={inviteList} />}
-      {managedLeaders && (
-        <JamLeaderManager
-          jamId={jamId}
-          initialLeaders={managedLeaders}
-          onChange={() => {
-            setAttendeesVersion((v) => v + 1);
-            router.refresh();
-          }}
-        />
-      )}
+      {managedLeaders &&
+        (["leader", "weaver"] as const).map((role) => (
+          <JamLeaderManager
+            key={role}
+            jamId={jamId}
+            role={role}
+            initialLeaders={managedLeaders}
+            onChange={() => {
+              setAttendeesVersion((v) => v + 1);
+              router.refresh();
+            }}
+          />
+        ))}
       {canManage && <JamHostActions jamId={jamId} canEdit={canEdit} isOfficial={isOfficial} attendingCount={messageRecipientCount} pendingInviteCount={inviteList.filter((inv) => inv.status === "pending").length} />}
     </>
   );

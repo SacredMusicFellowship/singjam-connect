@@ -1,11 +1,13 @@
-import { dropUsCountry, dropVenueRepeatedInTitle } from "@singjam/core";
+import { JAM_LEAD_ROLE_LABEL, dropUsCountry, dropVenueRepeatedInTitle, type JamLeadRole } from "@singjam/core";
 import { formatJamTime } from "../lib/formatJamTime";
 import { calendarBlockHtml, ticketCode } from "./ticket-confirmation";
 
 // Sent when a host adds someone as a music leader. The leader already said yes
 // to the host, so this confirms rather than asks: it carries their ticket, and
-// the way out is the event page's RSVP, not a required step.
+// the way out is the event page's RSVP, not a required step. A Community
+// Weaver gets the same email with their own wording.
 export function jamLeaderAddedHtml({
+  role = "leader",
   jamId,
   jamName,
   jamUrl,
@@ -31,23 +33,27 @@ export function jamLeaderAddedHtml({
   signUpUrl?: string | null;
   /** They already got a ticket themselves, so no leader ticket was issued. */
   hasOwnTicket?: boolean;
+  role?: JamLeadRole;
 }) {
   const dateStr = formatJamTime(startsAt, timezone);
+  const weaver = role === "weaver";
+  const heading = weaver ? `You're a Community Weaver at ${jamName} 🎶` : `You're leading at ${jamName} 🎶`;
+  const thanks = weaver ? "Thank you for helping weave our community together" : "Thank you for bringing the music";
 
   return `<!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#18181b;padding:32px 16px">
-  <h1 style="font-size:22px;font-weight:700;margin-bottom:8px">You're leading at ${jamName} 🎶</h1>
+  <h1 style="font-size:22px;font-weight:700;margin-bottom:8px">${heading}</h1>
   <p style="font-size:15px;line-height:1.6;color:#52525b">
     ${hasOwnTicket
-      ? "Thank you for bringing the music! You already have a ticket, so bring that one to the door, or just give your name."
-      : "Thank you for bringing the music — your ticket is on us. Show this email at the door, or just give your name."}
+      ? `${thanks}! You already have a ticket, so bring that one to the door, or just give your name.`
+      : `${thanks} — your ticket is on us. Show this email at the door, or just give your name.`}
   </p>
 
   ${qrToken ? `
   <div style="margin-top:20px;padding:16px;background:#f4f4f5;border-radius:10px">
     <p style="font-size:13px;font-weight:600;color:#71717a;margin:0 0 4px">Your ticket</p>
-    <span style="font-size:15px;font-weight:500;color:#18181b">Leader</span>
+    <span style="font-size:15px;font-weight:500;color:#18181b">${JAM_LEAD_ROLE_LABEL[role]}</span>
     <div style="font-size:12px;font-family:monospace;letter-spacing:1px;color:#a1a1aa;margin-top:2px">${ticketCode(qrToken)}</div>
   </div>` : ""}
 
@@ -68,10 +74,11 @@ export function jamLeaderAddedHtml({
 
   ${signUpUrl ? `
   <div style="margin-top:24px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px">
-    <p style="font-size:14px;font-weight:600;color:#18181b;margin:0 0 6px">Add the songs you'll lead 🎶</p>
+    <p style="font-size:14px;font-weight:600;color:#18181b;margin:0 0 6px">${weaver ? "Join us on SingJam 🎶" : "Add the songs you'll lead 🎶"}</p>
     <p style="font-size:13px;color:#52525b;margin:0 0 12px">
-      Create a SingJam account with this email address to add songs to the set list and
-      show people what you love to sing.
+      ${weaver
+        ? "Create a SingJam account with this email address to see the set list and show people what you love to sing."
+        : "Create a SingJam account with this email address to add songs to the set list and show people what you love to sing."}
     </p>
     <a href="${signUpUrl}"
        style="display:inline-block;background-color:#f59e0b;color:#fff;font-weight:600;font-size:13px;padding:8px 16px;border-radius:8px;text-decoration:none">
@@ -83,7 +90,7 @@ export function jamLeaderAddedHtml({
     ${setUrl && !signUpUrl ? `
     <a href="${setUrl}"
        style="display:inline-block;margin-right:8px;background-color:#f59e0b;color:#fff;font-weight:600;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none">
-      Add your songs
+      ${weaver ? "See the set list" : "Add your songs"}
     </a>` : ""}
     <a href="${jamUrl}"
        style="display:inline-block;${setUrl && !signUpUrl

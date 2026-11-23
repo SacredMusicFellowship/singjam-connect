@@ -782,7 +782,7 @@ export default function TicketTierManager({
                       <p className="truncate text-sm font-medium text-zinc-900">{g.name}</p>
                       {g.is_leader && (
                         <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
-                          leader
+                          {g.tier.toLowerCase()}
                         </span>
                       )}
                       {!g.is_member && (
@@ -834,7 +834,7 @@ export default function TicketTierManager({
                         <span className="text-zinc-900">{g.name}</span>
                         {g.is_leader && (
                           <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
-                            leader
+                            {g.tier.toLowerCase()}
                           </span>
                         )}
                         {!g.is_member && (

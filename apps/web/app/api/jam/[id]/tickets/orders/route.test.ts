@@ -17,7 +17,10 @@ vi.mock("@/lib/supabase/bearer", () => ({
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: vi.fn(() => ({ from: mockAdminFrom })),
 }));
-vi.mock("@singjam/core", () => ({ fetchAllRows: mockFetchAllRows }));
+vi.mock("@singjam/core", () => ({
+  fetchAllRows: mockFetchAllRows,
+  JAM_LEAD_ROLE_LABEL: { leader: "Leader", weaver: "Community Weaver" },
+}));
 
 vi.mock("@/lib/jamAuthz", () => ({ canManageJam: mockCanManage }));
 vi.mock("@/lib/stripeFees", () => ({ resolveStripeFees: mockResolveFees }));
@@ -118,19 +121,24 @@ describe("GET /api/jam/[id]/tickets/orders", () => {
     expect(json.summary.gross_cents).toBe(3000);
   });
 
-  it("lists a leader's comp on the door list without counting it as a sale", async () => {
+  it("lists leader and Community Weaver comps on the door list without counting them as sales", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: HOST } } });
-    mockAdminFrom.mockReturnValueOnce(chain({ data: { host_user_id: HOST } }));
+    mockAdminFrom
+      .mockReturnValueOnce(chain({ data: { host_user_id: HOST } })) // jam
+      .mockReturnValueOnce(chain({ data: [{ order_id: "o3" }] })); // weaver orders
     mockFetchAllRows.mockResolvedValueOnce([
       ticket({ id: "t1", order_id: "o1", order: { source: "purchase" } }),
       { ...ticket({ id: "t2", order_id: "o2", order: { source: "leader", amount_cents: 0, buyer_name: "Sam Leader" } }), ticket_types: null },
+      { ...ticket({ id: "t3", order_id: "o3", order: { source: "leader", amount_cents: 0, buyer_name: "Wen Weaver" } }), ticket_types: null },
     ]);
 
     const json = await (await GET(req(), params)).json();
     const leader = json.guests.find((g: any) => g.name === "Sam Leader");
     expect(leader).toMatchObject({ is_leader: true, tier: "Leader" });
+    const weaver = json.guests.find((g: any) => g.name === "Wen Weaver");
+    expect(weaver).toMatchObject({ is_leader: true, tier: "Community Weaver" });
     expect(json.summary.tickets_sold).toBe(1);
-    expect(json.summary.leaders).toBe(1);
+    expect(json.summary.leaders).toBe(2);
     expect(json.summary.gross_cents).toBe(3000);
   });
 

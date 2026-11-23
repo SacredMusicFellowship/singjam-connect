@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { attendeeRole, sortAttendees } from "./attendeeOrder";
 
-type P = { name: string; host?: boolean; cohost?: boolean; leader?: boolean };
+type P = { name: string; host?: boolean; cohost?: boolean; leader?: boolean; weaver?: boolean };
 const order = (people: P[]) =>
   sortAttendees(people, (p) => ({ role: attendeeRole(p), name: p.name })).map((p) => p.name);
 
@@ -9,6 +9,8 @@ describe("attendeeRole", () => {
   it("puts a co-host who also leads with the co-hosts", () => {
     expect(attendeeRole({ cohost: true, leader: true })).toBe("cohost");
     expect(attendeeRole({ leader: true })).toBe("leader");
+    expect(attendeeRole({ weaver: true })).toBe("weaver");
+    expect(attendeeRole({ cohost: true, weaver: true })).toBe("cohost");
     expect(attendeeRole({})).toBe("going");
   });
 });
@@ -26,6 +28,12 @@ describe("sortAttendees", () => {
         { name: "Cy", cohost: true },
       ])
     ).toEqual(["Hal", "Cy", "Mo", "Bea", "yara", "amy", "Zed"]);
+  });
+
+  it("lists Community Weavers after leaders and before everyone else", () => {
+    expect(
+      order([{ name: "Al" }, { name: "Wen", weaver: true }, { name: "Lu", leader: true }, { name: "Hal", host: true }])
+    ).toEqual(["Hal", "Lu", "Wen", "Al"]);
   });
 
   it("ignores case and accents and keeps equal names in their original order", () => {

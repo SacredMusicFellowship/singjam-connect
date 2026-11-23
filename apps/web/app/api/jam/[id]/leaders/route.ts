@@ -5,7 +5,7 @@ import { canManageJam } from "@/lib/jamAuthz";
 import { ticketingBlocked } from "@/lib/devSafety";
 import { addJamLeader, describeLeaders, jamLeaderRows, publicLeaders, removeJamLeader } from "@/lib/jamLeaders";
 
-// Music leaders on an official event. Anyone may see who is leading; the host
+// Music leaders and Community Weavers on an official event. Anyone may see who is leading; the host
 // (or anyone who can manage the event) adds and removes them. A leader steps
 // down through /api/lead/[token], with the token this route gives only them.
 
@@ -22,7 +22,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   return NextResponse.json({
     leaders: publicLeaders(leaders),
     // Only the leader themselves gets their token: it is what steps them down.
-    me: mine ? { token: mine.token, has_leader_ticket: !!mine.order_id } : null,
+    me: mine ? { token: mine.token, role: mine.role, has_leader_ticket: !!mine.order_id } : null,
     ...(canManage ? { managed: leaders } : {}),
   });
 }
@@ -53,6 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const result = await addJamLeader(admin, {
     jamId,
     addedBy: user.id,
+    role: body?.role === "weaver" ? "weaver" : "leader",
     userId: typeof body?.userId === "string" ? body.userId : null,
     name: typeof body?.name === "string" ? body.name : null,
     email: typeof body?.email === "string" ? body.email : null,

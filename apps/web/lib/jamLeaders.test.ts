@@ -62,6 +62,7 @@ const LEADER_ROW = {
   id: "leader-1",
   jam_id: "jam-1",
   user_id: "member-1",
+  role: "leader",
   name: null,
   email: null,
   show_publicly: true,
@@ -228,6 +229,41 @@ describe("addJamLeader", () => {
     expect(calls.ticket_orders[2].update).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled" }));
   });
 
+  it("adds a Community Weaver with the same free ticket and their own wording", async () => {
+    const { admin, calls } = adminWith({
+      jams: [{ data: OFFICIAL }],
+      profiles: [{ data: { display_name: "Maria", last_name: "Lopez", username: "maria" } }, { data: [] }],
+      jam_leaders: [{ data: null }, { data: null }, { data: { ...LEADER_ROW, role: "weaver" } }],
+      ticket_orders: [{ data: [] }, { data: { id: "order-1" } }, { error: null }],
+      tickets: [{ data: { qr_token: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } }],
+    });
+
+    const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", role: "weaver", userId: "member-1" });
+
+    expect(res).toMatchObject({ ok: true, emailed: true, leader: { role: "weaver" } });
+    expect(calls.jam_leaders[2].insert).toHaveBeenCalledWith(expect.objectContaining({ role: "weaver" }));
+    expect(calls.ticket_orders[1].insert).toHaveBeenCalledWith(
+      expect.objectContaining({ source: "leader", status: "paid", amount_cents: 0 })
+    );
+    expect(mockMarkAttending).toHaveBeenCalledWith(admin, "jam-1", "member-1");
+    const mail = mockSend.mock.calls[0][0];
+    expect(mail.subject).toBe("You're a Community Weaver at Fall Sing");
+    expect(mail.html).toContain("Community Weaver");
+    expect(mail.html).not.toContain("leading");
+    expect(mockNotify.mock.calls[0][0].title).toBe("You're a Community Weaver at Fall Sing");
+  });
+
+  it("won't make someone a leader who is already a Community Weaver", async () => {
+    const { admin, calls } = adminWith({
+      jams: [{ data: OFFICIAL }],
+      profiles: [{ data: { display_name: "Maria" } }],
+      jam_leaders: [{ data: { id: "leader-1", role: "weaver" } }],
+    });
+    const res = await addJamLeader(admin, { jamId: "jam-1", addedBy: "host-1", userId: "member-1" });
+    expect(res).toEqual({ ok: false, status: 409, error: "Already a Community Weaver at this event" });
+    expect(calls.ticket_orders).toBeUndefined();
+  });
+
   it("still adds the leader when the email fails, and says so", async () => {
     mockSend.mockResolvedValue({ error: { message: "rate limited" } });
     const { admin } = adminWith({
@@ -259,6 +295,16 @@ describe("removeJamLeader", () => {
     expect(mockNotify.mock.calls[0][0].title).toBe("Maria can't lead at Fall Sing");
   });
 
+  it("tells the host when a Community Weaver steps down", async () => {
+    const { admin } = adminWith({
+      ticket_orders: [{ error: null }, { count: 0 }],
+      jams: [{ data: OFFICIAL }],
+      profiles: [{ data: [{ id: "member-1", display_name: "Maria" }] }],
+    });
+    await removeJamLeader(admin, { ...LEADER_ROW, role: "weaver" } as JamLeaderRow, { notifyHost: true });
+    expect(mockNotify.mock.calls[0][0].title).toBe("Maria can't make it as a Community Weaver at Fall Sing");
+  });
+
   it("keeps the seat of a leader who also bought a ticket", async () => {
     const { admin, calls } = adminWith({ ticket_orders: [{ error: null }, { count: 1 }] });
     await removeJamLeader(admin, LEADER_ROW as JamLeaderRow, { notifyHost: false });
@@ -270,10 +316,10 @@ describe("removeJamLeader", () => {
 describe("publicLeaders", () => {
   it("leaves out hidden leaders and never exposes an email", () => {
     const out = publicLeaders([
-      { id: "a", user_id: null, name: "Sam", username: null, avatar_url: null, email: "sam@example.com", show_publicly: true, own_ticket_cents: null },
-      { id: "b", user_id: "u", name: "Shy", username: "shy", avatar_url: null, email: null, show_publicly: false, own_ticket_cents: null },
+      { id: "a", user_id: null, role: "weaver", name: "Sam", username: null, avatar_url: null, email: "sam@example.com", show_publicly: true, own_ticket_cents: null },
+      { id: "b", user_id: "u", role: "leader", name: "Shy", username: "shy", avatar_url: null, email: null, show_publicly: false, own_ticket_cents: null },
     ]);
-    expect(out).toEqual([{ id: "a", user_id: null, name: "Sam", username: null, avatar_url: null }]);
+    expect(out).toEqual([{ id: "a", user_id: null, role: "weaver", name: "Sam", username: null, avatar_url: null }]);
   });
 });
 
