@@ -30,7 +30,11 @@ test.describe("Community Weavers", () => {
     await (await hydrated(panel.getByPlaceholder("Name", { exact: true }))).fill("Wren Weaver");
     await panel.getByPlaceholder("Email", { exact: true }).fill(email);
     await panel.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(panel.getByText("Wren Weaver is a Community Weaver — we've emailed their ticket.")).toBeVisible();
+    // Adding refreshes the page, which can clear the confirmation, so check the database.
+    await expect.poll(async () => {
+      const { count } = await admin.from("jam_leaders").select("id", { count: "exact", head: true }).eq("jam_id", event.id);
+      return count;
+    }).toBe(1);
 
     const { data: row } = await admin.from("jam_leaders").select("role, order_id").eq("jam_id", event.id).eq("email", email).single();
     expect(row?.role).toBe("weaver");
@@ -48,7 +52,11 @@ test.describe("Community Weavers", () => {
     const panel = weaverPanel(page);
     await (await hydrated(panel.getByPlaceholder("Search by name or username"))).fill(freshMember.username);
     await panel.getByRole("listitem").filter({ hasText: `@${freshMember.username}` }).getByRole("button", { name: "Add" }).click();
-    await expect(panel.getByText(/is a Community Weaver/)).toBeVisible();
+    await expect.poll(async () => {
+      const { data } = await admin.from("jam_leaders").select("role").eq("jam_id", event.id).eq("user_id", freshMember.id).maybeSingle();
+      return data?.role;
+    }).toBe("weaver");
+    await openPage(page, `/jam/${event.id}`);
 
     const whosGoing = page.locator("#whos-going");
     await expect(whosGoing.getByText("Community Weaver", { exact: true })).toBeVisible();

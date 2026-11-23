@@ -37,7 +37,7 @@ export function jamLeaderAddedHtml({
 }) {
   const dateStr = formatJamTime(startsAt, timezone);
   const weaver = role === "weaver";
-  const heading = weaver ? `You're a Community Weaver at ${jamName} 🧶` : `You're leading at ${jamName} 🎶`;
+  const heading = weaver ? `You're a Community Weaver at ${jamName} 🎶` : `You're leading at ${jamName} 🎶`;
   const thanks = weaver ? "Thank you for helping weave our community together" : "Thank you for bringing the music";
 
   return `<!DOCTYPE html>
