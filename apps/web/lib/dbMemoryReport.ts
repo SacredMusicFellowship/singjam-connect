@@ -7,7 +7,7 @@ export type DbMemorySample = {
   swap_out_pages: number;
 };
 
-export type DbMemoryVerdict = "ok" | "consider_pro" | "no_verdict";
+export type DbMemoryVerdict = "ok" | "consider_resize" | "no_verdict";
 
 export type DbMemoryReport = {
   verdict: DbMemoryVerdict;
@@ -127,7 +127,7 @@ export function buildDbMemoryReport(samples: DbMemorySample[], now: Date): DbMem
     ],
   ];
 
-  if (reasons.length) return { verdict: "consider_pro", reasons, facts };
+  if (reasons.length) return { verdict: "consider_resize", reasons, facts };
   return {
     verdict: "ok",
     reasons: ["Swap is steady and there's still some free RAM. No action needed this week."],
@@ -136,8 +136,8 @@ export function buildDbMemoryReport(samples: DbMemorySample[], now: Date): DbMem
 }
 
 const VERDICT_TEXT: Record<DbMemoryVerdict, { label: string; color: string }> = {
-  ok: { label: "OK on Free", color: "#15803d" },
-  consider_pro: { label: "Consider upgrading to Pro", color: "#b91c1c" },
+  ok: { label: "OK as is", color: "#15803d" },
+  consider_resize: { label: "Consider a bigger compute size", color: "#b91c1c" },
   no_verdict: { label: "No verdict", color: "#71717a" },
 };
 
@@ -153,7 +153,7 @@ export function renderDbMemoryEmail(report: DbMemoryReport): { subject: string; 
 <p style="font-size:20px;font-weight:600;color:${color};margin:0 0 12px">${label}</p>
 <ul>${reasons}</ul>
 <table style="font-size:14px;margin:12px 0">${facts}</table>
-<p style="color:#71717a;font-size:13px">Pro is $25/month. Its compute credit covers Micro (1 GB RAM), which should end the swapping. The resize means about 2 minutes of downtime. Also upgrade before a big ticketed event, or if another Supabase Disk IO email arrives.<br>
+<p style="color:#71717a;font-size:13px">We're on Pro with Micro compute (1 GB RAM), which Pro's $10 compute credit covers. The next size up is Small (2 GB RAM, $15/month, so about $5/month more after the credit), set in Project Settings → Compute and Disk. Resizing means about 2 minutes of downtime. Also check this before a big ticketed event, or if a Supabase Disk IO email arrives.<br>
 Sent every Monday by the db-memory-report Netlify function. Remove INFRA_REPORT_TO in Netlify to stop it.</p></div>`;
   return { subject: `Supabase weekly: ${label}`, html };
 }
