@@ -7,7 +7,7 @@ export const GENERIC_FAITH_THEMES = ["Faith", "Spirituality"];
 const RELIGIOUS_FORMS = new Set(["Worship song", "Hymn", "Lined hymn", "Psalm setting", "Liturgical setting", "Nigun", "Zemer", "Piyyut", "Chant", "Carol", "Mantra"]);
 const RELIGIOUS_GENRES = new Set([
   "Contemporary Christian", "Contemporary Gospel", "Gospel", "Southern Gospel", "Country Gospel", "Traditional Gospel",
-  "Spiritual", "Sacred", "Jewish Music", "Contemporary Jewish", "Cantorial", "Kirtan", "Qawwali",
+  "Spiritual", "Sacred", "Contemporary Jewish", "Cantorial", "Kirtan", "Qawwali",
 ]);
 
 export function isReligiousSong(tags: { communities?: string[]; forms?: string[]; genres?: string[] }): boolean {
