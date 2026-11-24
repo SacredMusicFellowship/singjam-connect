@@ -16,7 +16,7 @@ export const SONG_GENRES = [
   "Country", "Country Gospel", "Cowboy & Western", "Disco", "Disney & Animation", "Doo-Wop", "Emo", "Film",
   "Flamenco", "Folk", "Folk Rock", "Funk", "Gospel", "Grunge",
   "Hard Rock", "Heartland Rock", "Hip-Hop & Rap", "Indie Rock", "Israeli Folk", "Jam Band",
-  "Jazz", "Jewish Music", "Kirtan", "Klezmer", "Latin", "Metal",
+  "Jazz", "Kirtan", "Klezmer", "Latin", "Metal",
   "Motown", "New Wave", "Opera & Operetta", "Pop", "Progressive Rock", "Psychedelic Rock",
   "Punk", "Qawwali", "R&B", "Reggae", "Rock", "Rockabilly",
   "Roots Rock", "Sacred", "Salsa", "Ska", "Soft Rock", "Soul",
