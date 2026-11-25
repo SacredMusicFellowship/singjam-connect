@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { BrowseSongRow } from "@/lib/browse";
 import { useSongFilters } from "@/hooks/useSongFilters";
 import { useTagHierarchy } from "@/hooks/useTagHierarchy";
@@ -10,6 +10,7 @@ import SongCard from "@/components/SongCard";
 import { useSongCardActions } from "@/hooks/useSongCardActions";
 import FiltersButton from "@/components/FiltersButton";
 import HideMySongsToggle from "@/components/HideMySongsToggle";
+import { useUrlParam } from "@/hooks/useUrlParam";
 
 
 // A browse page's songs with the Song Library's filters, scoped to this page
@@ -21,11 +22,13 @@ export default function BrowseSongList({ songs, roles }: {
   const hierarchy = useTagHierarchy();
   const filters = useSongFilters(songs, "popularity", hierarchy);
   const { matchesFilters, activeFilterCount, sortBy, setSortBy } = filters;
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [panel, setPanel] = useUrlParam("filters");
+  const filtersOpen = panel === "open";
   const actions = useSongCardActions();
   const { currentUser, repertoire } = actions;
   // Hides every song you know, including one you add while it's ticked.
-  const [hideMine, setHideMine] = useState(false);
+  const [mine, setMine] = useUrlParam("mine");
+  const hideMine = mine === "hide";
 
   const shown = useMemo(() => {
     const list = activeFilterCount === 0 && !hideMine ? songs : songs.filter((s) => !(hideMine && repertoire.has(s.song_id)) && matchesFilters(s));
@@ -39,10 +42,10 @@ export default function BrowseSongList({ songs, roles }: {
       <div className="flex flex-wrap items-center gap-2 px-1">
         <SortDropdown value={sortBy} onChange={setSortBy} align="left" />
         {songs.length > 1 && (
-          <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
+          <FiltersButton count={activeFilterCount} onClick={() => setPanel(filtersOpen ? null : "open")} />
         )}
         {currentUser && repertoire.size > 0 && (
-          <HideMySongsToggle checked={hideMine} onChange={setHideMine} />
+          <HideMySongsToggle checked={hideMine} onChange={(on) => setMine(on ? "hide" : null)} />
         )}
         {(activeFilterCount > 0 || hideMine) && <span className="text-xs text-zinc-500">{shown.length} of {songs.length}</span>}
       </div>
