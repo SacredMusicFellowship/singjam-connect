@@ -1,11 +1,12 @@
 import { memo } from 'react';
-import { View, Text, TouchableOpacity, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatJammers, songRowText, type CardIdentity, type RecordingArtistCredit } from '@singjam/core';
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RolePill from '@/components/RolePill';
 import MyKeyChip from '@/components/MyKeyChip';
+import ChordsChip from '@/components/ChordsChip';
 import { SongRowLine } from '@/components/SongRowTitle';
 
 export type RepertoireCardSong = {
@@ -13,6 +14,7 @@ export type RepertoireCardSong = {
   title: string;
   confidence: string;
   key_note: string | null;
+  tonality?: string | null;
   display_artist: string | null;
   byline?: string | null;
   card_identity?: CardIdentity;
@@ -104,25 +106,17 @@ function RepertoireCard({
       </View>
 
       <View className="flex-row flex-wrap items-center gap-2 mt-3 ml-8">
-        <RolePill level={song.confidence} onPress={handleConfidenceTap} size="md" />
-        <MyKeyChip value={song.key_note} onPress={() => onKeyTap(song)} size="md" />
+        <RolePill level={song.confidence} onPress={handleConfidenceTap} size="md" fill />
+        <MyKeyChip value={song.key_note} tonality={song.tonality} onPress={() => onKeyTap(song)} size="md" />
         <TouchableOpacity
           onPress={() => onAddToSet(song)}
-          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5"
+          className="items-center rounded-full border border-zinc-200 bg-white px-3 py-1.5"
+          style={{ flexGrow: 1 }}
+          accessibilityLabel="Add to set"
         >
-          <Text className="text-sm text-zinc-600">Add to set</Text>
+          <Text className="text-sm text-zinc-600">+ Set</Text>
         </TouchableOpacity>
-        {song.chord_chart_url ? (
-          // Same Chords link as the set list.
-          <TouchableOpacity
-            onPress={() => Linking.openURL(song.chord_chart_url!).catch(() => Alert.alert('Could not open link'))}
-            className="flex-row items-center gap-1 px-3 py-1.5 rounded-full border border-zinc-200 bg-white"
-            accessibilityLabel="Chord chart"
-          >
-            <Text className="text-sm font-medium text-zinc-600">Chords</Text>
-            <Ionicons name="open-outline" size={11} color="#a1a1aa" />
-          </TouchableOpacity>
-        ) : null}
+        {song.chord_chart_url ? <ChordsChip url={song.chord_chart_url} /> : null}
 
 
 

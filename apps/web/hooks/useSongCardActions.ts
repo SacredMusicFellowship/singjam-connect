@@ -6,7 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 // A song card's tools for a song already in My songs, as on the song page and
 // My songs: your key, your sets, and its chord chart.
 export type MySongTools = {
-  details: Map<string, { key: string | null; chart: string | null }>;
+  details: Map<string, { key: string | null; chart: string | null; tonality: string | null }>;
   // Null until an Add to set panel first opens (it loads them then).
   sets: { id: string; name: string }[] | null;
   inSets: Record<string, Set<string>>;
@@ -44,12 +44,12 @@ export function useSongCardActions({ onAdded }: { onAdded?: (songId: string, lev
       Promise.all([
         supabase.from("profiles").select("singing_voice").eq("id", session.user.id).single(),
         fetchAllRows<{ song_id: string; confidence: string | null; key_note: string | null; songs: any }>((f, t) =>
-          supabase.from("user_songs").select("song_id, confidence, key_note, songs(chord_chart_url)").eq("user_id", session.user.id).order("song_id").range(f, t) as any
+          supabase.from("user_songs").select("song_id, confidence, key_note, songs(chord_chart_url, tonality)").eq("user_id", session.user.id).order("song_id").range(f, t) as any
         ),
       ]).then(([profileRes, rows]) => {
         setSingingVoice((profileRes.data as any)?.singing_voice ?? null);
         setRepertoire(new Map(rows.map((r) => [r.song_id, r.confidence ?? ""])));
-        setDetails(new Map(rows.map((r) => [r.song_id, { key: r.key_note, chart: r.songs?.chord_chart_url ?? null }])));
+        setDetails(new Map(rows.map((r) => [r.song_id, { key: r.key_note, chart: r.songs?.chord_chart_url ?? null, tonality: r.songs?.tonality ?? null }])));
       }, () => {});
     });
   }, [supabase]);
@@ -79,8 +79,8 @@ export function useSongCardActions({ onAdded }: { onAdded?: (songId: string, lev
       onAdded?.(songId, level);
       // The card now shows the song's tools, so it needs the chart it already has.
       if (!latest.current.details.has(songId)) {
-        const { data: song } = await supabase.from("songs").select("chord_chart_url").eq("id", songId).maybeSingle();
-        setDetails((prev) => new Map(prev).set(songId, { key: null, chart: (song as any)?.chord_chart_url ?? null }));
+        const { data: song } = await supabase.from("songs").select("chord_chart_url, tonality").eq("id", songId).maybeSingle();
+        setDetails((prev) => new Map(prev).set(songId, { key: null, chart: (song as any)?.chord_chart_url ?? null, tonality: (song as any)?.tonality ?? null }));
       }
     }
   }, [supabase, router, onAdded]);
@@ -102,10 +102,10 @@ export function useSongCardActions({ onAdded }: { onAdded?: (songId: string, lev
   const updateKey = useCallback(async (songId: string, key: string | null) => {
     if (!currentUser) return;
     const before = latest.current.details.get(songId);
-    setDetails((prev) => new Map(prev).set(songId, { key, chart: prev.get(songId)?.chart ?? null }));
+    setDetails((prev) => new Map(prev).set(songId, { chart: null, tonality: null, ...prev.get(songId), key }));
     const { error } = await supabase.from("user_songs").update({ key_note: key }).eq("user_id", currentUser.id).eq("song_id", songId);
     if (error) {
-      setDetails((prev) => new Map(prev).set(songId, before ?? { key: null, chart: null }));
+      setDetails((prev) => new Map(prev).set(songId, before ?? { key: null, chart: null, tonality: null }));
       setStatus(error.message);
     }
   }, [supabase, currentUser]);
@@ -118,7 +118,7 @@ export function useSongCardActions({ onAdded }: { onAdded?: (songId: string, lev
     addedToSet: (songId, setId) => setInSets((prev) => ({ ...prev, [songId]: new Set([...(prev[songId] ?? []), setId]) })),
     setCreated: (set) => setSets((prev) => [set, ...(prev ?? [])]),
     updateKey,
-    chartAdded: (songId, url) => setDetails((prev) => new Map(prev).set(songId, { key: prev.get(songId)?.key ?? null, chart: url })),
+    chartAdded: (songId, url) => setDetails((prev) => new Map(prev).set(songId, { key: null, tonality: null, ...prev.get(songId), chart: url })),
   }), [details, sets, inSets, loadSetMemberships, updateKey]);
 
   const cardProps = useMemo(

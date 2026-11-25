@@ -6,7 +6,8 @@ import { popoverSideFor } from "@/lib/popoverSide";
 type SetInfo = { id: string; name: string };
 
 // The button keeps one size open or closed (smaller on phones), so it doesn't jump when tapped.
-const BUTTON_SIZE = "rounded-full border px-3 py-1 text-xs sm:py-1.5 sm:text-sm transition-colors";
+// On phones it shares the row's spare width with Role and My key.
+const BUTTON_SIZE = "rounded-full border px-2.5 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm transition-colors max-sm:grow";
 
 export default function AddToSetPanel({
   songId,
@@ -92,8 +93,11 @@ export default function AddToSetPanel({
           onOpen?.();
         }}
         className={`${BUTTON_SIZE} border-zinc-200 text-zinc-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700`}
+        aria-label="Add to set"
       >
-        Add to set
+        {/* Short on phones so the row of song actions stays on one line. */}
+        <span className="sm:hidden">+ Set</span>
+        <span className="hidden sm:inline">Add to set</span>
       </button>
     );
   }
@@ -131,12 +135,14 @@ export default function AddToSetPanel({
   }
 
   return (
-    <div ref={panelRef} data-popover-open>
+    <div ref={panelRef} data-popover-open className="max-sm:flex max-sm:grow">
       <button
         onClick={() => setOpen(false)}
         className={`${BUTTON_SIZE} border-amber-300 bg-amber-50 text-amber-700`}
+        aria-label="Add to set"
       >
-        Add to set
+        <span className="sm:hidden">+ Set</span>
+        <span className="hidden sm:inline">Add to set</span>
       </button>
       <div className={`absolute left-0 z-20 w-72 rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden ${side === "up" ? "bottom-full mb-1" : "top-full mt-1"}`}>
         <ul className="divide-y divide-zinc-100 max-h-56 overflow-y-auto">

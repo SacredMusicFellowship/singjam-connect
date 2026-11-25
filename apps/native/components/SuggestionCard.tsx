@@ -7,6 +7,7 @@ import { browsePath, productionCredits, songCardCredits, songCardPills, type Car
 import { showOptionsSheet, anchorFrom } from '@/lib/actionSheet';
 import RolePill from '@/components/RolePill';
 import MyKeyChip from '@/components/MyKeyChip';
+import ChordsChip from '@/components/ChordsChip';
 import type { MySongTools } from '@/lib/useMySongTools';
 
 export type Suggestion = {
@@ -173,25 +174,17 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
       <View className="mt-3 flex-row flex-wrap items-center" style={{ gap: 6 }}>
         {confidence && tools ? (
           <>
-            <RolePill level={confidence} onPress={handleAddTap} size="md" />
-            <MyKeyChip value={mine?.key ?? null} onPress={() => tools.openKey(song.song_id)} size="md" />
+            <RolePill level={confidence} onPress={handleAddTap} size="md" fill />
+            <MyKeyChip value={mine?.key ?? null} tonality={mine?.tonality} onPress={() => tools.openKey(song.song_id)} size="md" />
             <TouchableOpacity
               onPress={() => tools.openAddToSet(song)}
-              className="flex-row items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5"
+              className="flex-row items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1.5"
+              style={{ flexGrow: 1 }}
+              accessibilityLabel="Add to set"
             >
-              <Ionicons name="list-outline" size={14} color="#64748b" />
-              <Text className="text-slate-600 text-sm">Add to set</Text>
+              <Text className="text-slate-600 text-sm">+ Set</Text>
             </TouchableOpacity>
-            {mine?.chart ? (
-              <TouchableOpacity
-                onPress={() => Linking.openURL(mine.chart!).catch(() => Alert.alert('Could not open link'))}
-                className="flex-row items-center gap-1 px-3 py-1.5 rounded-full border border-zinc-200 bg-white"
-                accessibilityLabel="Chord chart"
-              >
-                <Text className="text-sm font-medium text-zinc-600">Chords</Text>
-                <Ionicons name="open-outline" size={11} color="#a1a1aa" />
-              </TouchableOpacity>
-            ) : null}
+            {mine?.chart ? <ChordsChip url={mine.chart} /> : null}
           </>
         ) : confidence ? (
           <>

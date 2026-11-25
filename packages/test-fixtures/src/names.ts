@@ -109,3 +109,5 @@ export const SONGS = [
 ] as const;
 
 export const METERS = ["4/4", "3/4", "6/8"] as const;
+
+export const TONALITIES = ["Major", "Minor", "Dorian", "Mixolydian"] as const;

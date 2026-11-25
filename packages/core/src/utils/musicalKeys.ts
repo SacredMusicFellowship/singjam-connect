@@ -5,6 +5,40 @@ export function isMusicalKey(value: unknown): value is (typeof MUSICAL_KEYS)[num
   return typeof value === "string" && (MUSICAL_KEYS as readonly string[]).includes(value);
 }
 
+// The mode a member's key is shown with, from the song's tonality: three letters
+// on a phone ("A min", "G maj", "C Dor"), the full word with more room ("A minor").
+// Only a song with one major, minor or modal tonality gets one; scales like
+// Pentatonic or Blues, or a mix, show the key alone.
+// Harmonic and melodic minor are still a minor key to the singer.
+const KEY_MODES: Record<string, { short: string; full: string }> = {
+  major: { short: "maj", full: "major" },
+  ionian: { short: "maj", full: "major" },
+  minor: { short: "min", full: "minor" },
+  aeolian: { short: "min", full: "minor" },
+  "harmonic minor": { short: "min", full: "minor" },
+  "melodic minor": { short: "min", full: "minor" },
+  dorian: { short: "Dor", full: "Dorian" },
+  phrygian: { short: "Phr", full: "Phrygian" },
+  lydian: { short: "Lyd", full: "Lydian" },
+  mixolydian: { short: "Mix", full: "Mixolydian" },
+  locrian: { short: "Loc", full: "Locrian" },
+};
+
+export type KeyMode = { short: string; full: string };
+
+// Every mode a key can show with, for sizing a key pill to the widest of them.
+export const KEY_MODE_OPTIONS: KeyMode[] = [...new Map(Object.values(KEY_MODES).map((m) => [m.full, m])).values()];
+
+export function keyMode(tonality: string | null | undefined): KeyMode | null {
+  const values = (tonality ?? "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+  return values.length === 1 ? KEY_MODES[values[0]] ?? null : null;
+}
+
+export function keyWithMode(key: string, mode: KeyMode | null, length: "short" | "full"): string {
+  if (!mode) return key;
+  return `${key} ${length === "short" ? mode.short : mode.full}`;
+}
+
 // A chosen key (the set's key, or your own) looks the same everywhere: violet,
 // which no confidence level, Played (green) or "add this song" (indigo) uses.
 // An unset key stays a neutral outline pill. Tailwind classes, read by both apps.

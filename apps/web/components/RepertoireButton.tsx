@@ -89,11 +89,12 @@ export default function RepertoireButton({
 
   if (confidence !== null) {
     return (
-      <div className="relative flex flex-wrap items-center gap-2">
+      <div className="relative flex flex-wrap items-center gap-2 max-sm:grow">
         <RoleSelect
           value={confidence}
           disabled={saving}
           size="md"
+          fill
           onChange={(level) => {
             if (level === "lead" && !hasLeadVoice(singingVoice)) {
               setVoiceCheckPending(true);

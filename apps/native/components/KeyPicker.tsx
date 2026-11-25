@@ -1,16 +1,19 @@
 import { Modal, View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MUSICAL_KEYS } from '@singjam/core';
+import { MUSICAL_KEYS, keyMode, keyWithMode } from '@singjam/core';
 
 export default function KeyPicker({
   visible,
   current,
+  tonality,
   title = 'Select Key',
   onClose,
   onSelect,
 }: {
   visible: boolean;
   current: string | null;
+  // The song's tonality, so the rows read "A minor" like web's key menu.
+  tonality?: string | null;
   title?: string;
   onClose: () => void;
   onSelect: (key: string | null) => void;
@@ -34,7 +37,7 @@ export default function KeyPicker({
               onPress={() => { onSelect(k); onClose(); }}
               className={`px-6 py-4 border-b border-zinc-100 flex-row items-center justify-between ${current === k ? 'bg-amber-50' : ''}`}
             >
-              <Text className={`text-base ${current === k ? 'text-amber-700 font-semibold' : 'text-zinc-900'}`}>{k}</Text>
+              <Text className={`text-base ${current === k ? 'text-amber-700 font-semibold' : 'text-zinc-900'}`}>{keyWithMode(k, keyMode(tonality), 'full')}</Text>
               {current === k ? <Ionicons name="checkmark" size={18} color="#d97706" /> : null}
             </TouchableOpacity>
           ))}

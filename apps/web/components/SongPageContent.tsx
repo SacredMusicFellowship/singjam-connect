@@ -416,7 +416,7 @@ export default function SongPageContent() {
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange} knownTune={knownTuneHint(melodies, confidence)}>
-              {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
+              {confidence && <MyKeySelect value={myKey} tonality={song.tonality} onChange={handleKeyChange} size="md" />}
               {confidence && (
                 <AddToSetPanel
                   songId={song.id}
@@ -643,7 +643,7 @@ export default function SongPageContent() {
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <RepertoireButton songId={song.id} initialConfidence={confidence} singingVoice={singingVoice} onConfidenceChange={handleConfidenceChange} knownTune={knownTuneHint(melodies, confidence)}>
-            {confidence && <MyKeySelect value={myKey} onChange={handleKeyChange} size="md" />}
+            {confidence && <MyKeySelect value={myKey} tonality={song.tonality} onChange={handleKeyChange} size="md" />}
             {confidence && (
               <AddToSetPanel
                 songId={song.id}

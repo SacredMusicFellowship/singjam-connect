@@ -1,6 +1,5 @@
-import { MUSICAL_KEYS } from "@singjam/core";
 import type { FixtureContext } from "../context";
-import { ARTISTS, METERS, SONGS, SONGWRITERS, TAGS } from "../names";
+import { ARTISTS, METERS, SONGS, SONGWRITERS, TAGS, TONALITIES } from "../names";
 import type { ArtistRow, PersonRow, SongComposerRow, SongTagRow, SongRecordingArtistRow, SongRow } from "../types";
 
 export type SongCatalog = {
@@ -51,7 +50,7 @@ export function buildSongCatalog(ctx: FixtureContext): SongCatalog {
       display_artist: artist.name,
       first_line: spec.firstLine,
       year,
-      tonality: rng.pick(MUSICAL_KEYS),
+      tonality: rng.pick(TONALITIES),
       meter: rng.pick(METERS),
       vibe: spec.vibe,
       // No links to real recordings or charts.

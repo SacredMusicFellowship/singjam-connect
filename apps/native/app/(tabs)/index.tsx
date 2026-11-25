@@ -718,6 +718,7 @@ export default function RepertoireScreen() {
         visible={!!keyPickerSongId}
         title="My key"
         current={songs.find(s => s.song_id === keyPickerSongId)?.key_note ?? null}
+        tonality={songs.find(s => s.song_id === keyPickerSongId)?.tonality}
         onClose={() => setKeyPickerSongId(null)}
         onSelect={(key) => { if (keyPickerSongId) handleKeyChange(keyPickerSongId, key); }}
       />

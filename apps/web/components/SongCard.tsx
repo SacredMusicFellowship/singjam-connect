@@ -204,12 +204,13 @@ function SongCard({
           )}
         </div>
       )}
-      <div className="relative z-10 mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="relative z-10 mt-3 flex flex-wrap items-center gap-1 sm:gap-1.5">
         {inRepertoire && !askingLeadVoice ? (
           <>
             <RoleSelect
               value={confidence ?? "learn"}
               size="md"
+              fill
               label={`Role for ${title}`}
               onChange={(level) => {
                 if (level === "lead" && !hasLeadVoice(singingVoice)) {
@@ -221,7 +222,7 @@ function SongCard({
             />
             {tools && (
               <>
-                <MyKeySelect value={tools.details.get(songId)?.key ?? null} onChange={(k) => tools.updateKey(songId, k)} size="md" label={`My key for ${title}`} />
+                <MyKeySelect value={tools.details.get(songId)?.key ?? null} tonality={tools.details.get(songId)?.tonality} onChange={(k) => tools.updateKey(songId, k)} size="md" label={`My key for ${title}`} />
                 <AddToSetPanel
                   songId={songId}
                   sets={tools.sets}
