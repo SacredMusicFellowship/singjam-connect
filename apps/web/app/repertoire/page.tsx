@@ -263,7 +263,7 @@ const RepertoireRow = memo(function RepertoireRow({
       </div>
     </div>
 
-    <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
+    <div className="relative flex flex-wrap items-center gap-1 sm:gap-2 sm:shrink-0">
       <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => actions.updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} fill />
 
       <MyKeySelect value={it.key_note} tonality={it.tonality} onChange={(k) => actions.updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />

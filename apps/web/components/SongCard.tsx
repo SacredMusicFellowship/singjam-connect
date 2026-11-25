@@ -204,7 +204,7 @@ function SongCard({
           )}
         </div>
       )}
-      <div className="relative z-10 mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="relative z-10 mt-3 flex flex-wrap items-center gap-1 sm:gap-1.5">
         {inRepertoire && !askingLeadVoice ? (
           <>
             <RoleSelect

@@ -7,7 +7,7 @@ type SetInfo = { id: string; name: string };
 
 // The button keeps one size open or closed (smaller on phones), so it doesn't jump when tapped.
 // On phones it shares the row's spare width with Role and My key.
-const BUTTON_SIZE = "rounded-full border px-3 py-1 text-xs sm:py-1.5 sm:text-sm transition-colors max-sm:grow";
+const BUTTON_SIZE = "rounded-full border px-2.5 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm transition-colors max-sm:grow";
 
 export default function AddToSetPanel({
   songId,
