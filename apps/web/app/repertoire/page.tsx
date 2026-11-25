@@ -237,7 +237,7 @@ const RepertoireRow = memo(function RepertoireRow({
   });
   return (
   <div
-    className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
+    className={`flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between transition-colors ${
       !selectable ? "rounded-md border" : selected ? "bg-amber-50/60" : ""
     }`}
   >
@@ -264,9 +264,9 @@ const RepertoireRow = memo(function RepertoireRow({
     </div>
 
     <div className="relative flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
-      <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => actions.updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} />
+      <RoleSelect value={it.confidence ?? "learn"} onChange={(level) => actions.updateConfidence(it.song_id, level)} size="md" label={`Role for ${it.title}`} fill />
 
-      <MyKeySelect value={it.key_note} onChange={(k) => actions.updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
+      <MyKeySelect value={it.key_note} tonality={it.tonality} onChange={(k) => actions.updateKey(it.song_id, k)} size="md" label={`My key for ${it.title}`} />
 
       {userSets.length > 0 && (
         <AddToSetPanel

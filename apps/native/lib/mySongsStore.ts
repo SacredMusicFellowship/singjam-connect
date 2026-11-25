@@ -5,13 +5,13 @@ import { supabase } from '@/lib/supabase';
 import { readCache, writeCache } from '@/lib/cache';
 import { ensureLeadVoice } from '@/lib/leadVoice';
 
-// The viewer's songs (role, key, chord chart), loaded once per signed-in
+// The viewer's songs (role, key, chord chart, the song's tonality), loaded once per signed-in
 // session and shared by every screen that shows song cards — like
 // useTagHierarchy. Screens that change user_songs themselves (My songs, the
 // song screen, a set) report the change with `noteMySong` so cards elsewhere
 // never offer "I know this song!" for a song you already have.
 
-export type MySong = { confidence: string; key: string | null; chart: string | null };
+export type MySong = { confidence: string; key: string | null; chart: string | null; tonality: string | null };
 
 type State = {
   userId: string | null;
@@ -53,12 +53,12 @@ async function load(): Promise<void> {
   set({ userId: uid, ...(cached ? { loaded: true, songs: new Map(cached) } : {}) });
   const [{ data: profile }, rows] = await Promise.all([
     supabase.from('profiles').select('singing_voice').eq('id', uid).maybeSingle(),
-    fetchAllRows<{ song_id: string; confidence: string | null; key_note: string | null; songs: { chord_chart_url: string | null } | null }>((f, t) =>
-      supabase.from('user_songs').select('song_id, confidence, key_note, songs(chord_chart_url)').eq('user_id', uid).order('song_id').range(f, t) as any
+    fetchAllRows<{ song_id: string; confidence: string | null; key_note: string | null; songs: { chord_chart_url: string | null; tonality: string | null } | null }>((f, t) =>
+      supabase.from('user_songs').select('song_id, confidence, key_note, songs(chord_chart_url, tonality)').eq('user_id', uid).order('song_id').range(f, t) as any
     ),
   ]);
   if (gen !== generation) return;
-  const songs = new Map(rows.map((r) => [r.song_id, { confidence: r.confidence ?? 'learn', key: r.key_note, chart: r.songs?.chord_chart_url ?? null }]));
+  const songs = new Map(rows.map((r) => [r.song_id, { confidence: r.confidence ?? 'learn', key: r.key_note, chart: r.songs?.chord_chart_url ?? null, tonality: r.songs?.tonality ?? null }]));
   set({ loaded: true, singingVoice: (profile as any)?.singing_voice ?? null, songs });
   writeCache(CACHE_KEY, uid, [...songs]);
 }
@@ -93,16 +93,16 @@ export function useMySongsState(): State {
 export function noteMySong(songId: string, change: Partial<MySong> | null) {
   if (!change) { if (state.songs.has(songId)) patchSong(songId, null); return; }
   const before = state.songs.get(songId);
-  patchSong(songId, { confidence: change.confidence ?? before?.confidence ?? 'learn', key: change.key !== undefined ? change.key : before?.key ?? null, chart: change.chart !== undefined ? change.chart : before?.chart ?? null });
-  if (!before && change.chart === undefined) loadChart(songId);
+  patchSong(songId, { confidence: change.confidence ?? before?.confidence ?? 'learn', key: change.key !== undefined ? change.key : before?.key ?? null, chart: change.chart !== undefined ? change.chart : before?.chart ?? null, tonality: before?.tonality ?? null });
+  if (!before) loadChart(songId);
 }
 
-// A newly added song's chord chart, for its card's chart button.
+// A newly added song's chord chart and tonality, for its card's chart button and key.
 async function loadChart(songId: string) {
   const uid = state.userId;
-  const { data } = await supabase.from('songs').select('chord_chart_url').eq('id', songId).maybeSingle();
+  const { data } = await supabase.from('songs').select('chord_chart_url, tonality').eq('id', songId).maybeSingle();
   const now = state.songs.get(songId);
-  if (now && state.userId === uid) patchSong(songId, { ...now, chart: (data as any)?.chord_chart_url ?? null });
+  if (now && state.userId === uid) patchSong(songId, { ...now, chart: (data as any)?.chord_chart_url ?? null, tonality: (data as any)?.tonality ?? null });
 }
 
 export function noteSingingVoice(voice: string) {
@@ -116,7 +116,7 @@ export async function setMySongRole(songId: string, confidence: string): Promise
   if (!uid) return false;
   if (!(await ensureLeadVoice(confidence, state.singingVoice, uid, noteSingingVoice))) return false;
   const before = state.songs.get(songId) ?? null;
-  patchSong(songId, { confidence, key: before?.key ?? null, chart: before?.chart ?? null });
+  patchSong(songId, { confidence, key: before?.key ?? null, chart: before?.chart ?? null, tonality: before?.tonality ?? null });
   const { error } = await supabase.from('user_songs').upsert(
     { user_id: uid, song_id: songId, confidence, updated_at: new Date().toISOString() },
     { onConflict: 'user_id,song_id' }

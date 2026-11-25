@@ -27,6 +27,7 @@ export function useMySongTools() {
         visible={keyFor !== null}
         title="My key"
         current={keyFor ? songs.get(keyFor)?.key ?? null : null}
+        tonality={keyFor ? songs.get(keyFor)?.tonality : null}
         onClose={() => setKeyFor(null)}
         onSelect={(key) => { if (keyFor) setMySongKey(keyFor, key); setKeyFor(null); }}
       />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isMusicalKey, keyForNewLeaders, normalizeSetSongNote, SET_SONG_NOTE_MAX } from "./musicalKeys";
+import { isMusicalKey, keyForNewLeaders, keyMode, keyWithMode, normalizeSetSongNote, SET_SONG_NOTE_MAX } from "./musicalKeys";
 
 describe("isMusicalKey", () => {
   it("accepts listed keys", () => {
@@ -56,5 +56,25 @@ describe("keyForNewLeaders", () => {
 
   it("skips a new leader without a key in favour of one who has a key", () => {
     expect(keyForNewLeaders([], ["cal", "ben"], keys)).toBe("D");
+  });
+});
+
+describe("keyMode", () => {
+  it("reads a single major, minor or modal tonality", () => {
+    expect(keyWithMode("A", keyMode("Minor"), "short")).toBe("A min");
+    expect(keyWithMode("A", keyMode("Minor"), "full")).toBe("A minor");
+    expect(keyWithMode("A", keyMode("Major"), "short")).toBe("A maj");
+    expect(keyWithMode("A", keyMode("Major"), "full")).toBe("A major");
+    expect(keyWithMode("D", keyMode(" dorian "), "short")).toBe("D Dor");
+    expect(keyWithMode("D", keyMode("Dorian"), "full")).toBe("D Dorian");
+    expect(keyWithMode("E", keyMode("Harmonic Minor"), "short")).toBe("E min");
+    expect(keyWithMode("E", keyMode("Melodic Minor"), "full")).toBe("E minor");
+  });
+
+  it("shows the key alone for no tonality, a scale, or more than one", () => {
+    for (const t of [null, undefined, "", "Pentatonic", "Blues", "Modal", "Major, Mixolydian"]) {
+      expect(keyMode(t)).toBeNull();
+      expect(keyWithMode("G", keyMode(t), "full")).toBe("G");
+    }
   });
 });

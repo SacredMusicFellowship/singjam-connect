@@ -592,14 +592,15 @@ export default function SongDetailScreen() {
       <View className="flex-row flex-wrap items-center gap-2 mt-4">
         {myConfidence ? (
           <>
-            <RolePill level={myConfidence} onPress={handleChangeConfidence} size="md" />
-            <MyKeyChip value={myKey} onPress={() => setKeyPickerVisible(true)} size="md" />
+            <RolePill level={myConfidence} onPress={handleChangeConfidence} size="md" fill />
+            <MyKeyChip value={myKey} tonality={song?.tonality} onPress={() => setKeyPickerVisible(true)} size="md" />
             <TouchableOpacity
               onPress={() => setAddToSetVisible(true)}
-              className="flex-row items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5"
+              className="flex-row items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1.5"
+              style={{ flexGrow: 1 }}
+              accessibilityLabel="Add to set"
             >
-              <Ionicons name="list-outline" size={14} color="#64748b" />
-              <Text className="text-slate-600 text-sm">Add to set</Text>
+              <Text className="text-slate-600 text-sm">+ Set</Text>
             </TouchableOpacity>
           </>
         ) : (
@@ -793,6 +794,7 @@ export default function SongDetailScreen() {
           visible={keyPickerVisible}
           title="My key"
           current={myKey}
+          tonality={song.tonality}
           onClose={() => setKeyPickerVisible(false)}
           onSelect={handleKeyChange}
         />

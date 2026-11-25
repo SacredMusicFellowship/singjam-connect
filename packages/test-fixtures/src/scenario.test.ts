@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MUSICAL_KEYS } from "@singjam/core";
+import { MUSICAL_KEYS, keyMode } from "@singjam/core";
 import { EMAIL_DOMAIN, FIXED_NOW } from "./constants";
 import { TAGS } from "./names";
 import { buildScenario } from "./scenario";
@@ -93,7 +93,7 @@ describe("database constraints", () => {
 
   it("uses tags and keys the app knows", () => {
     for (const t of [...scenario.songTags, ...scenario.jamTags]) expect(TAGS[t.tag_name as keyof typeof TAGS]).toBe(t.tag_type);
-    for (const s of scenario.songs) expect(MUSICAL_KEYS).toContain(s.tonality);
+    for (const s of scenario.songs) expect(keyMode(s.tonality)).not.toBeNull();
     for (const r of scenario.setSongs) if (r.key_note) expect(MUSICAL_KEYS).toContain(r.key_note);
   });
 });
