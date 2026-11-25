@@ -19,6 +19,7 @@ import SongCardSkeleton from "@/components/SongCardSkeleton";
 import SearchInput from "@/components/SearchInput";
 import FiltersButton from "@/components/FiltersButton";
 import HideMySongsToggle from "@/components/HideMySongsToggle";
+import { useUrlParam } from "@/hooks/useUrlParam";
 
 type FilterMeta = {
   song_id: string;
@@ -49,7 +50,8 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
 
   const [q, setQ] = useState(() => searchParams.get("q") ?? initialQuery);
   const [status, setStatus] = useState<string | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [panel, setPanel] = useUrlParam("filters");
+  const filtersOpen = panel === "open";
   const [hideMySongs, setHideMySongs] = useState(() => searchParams.get("mine") === "hide");
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -60,8 +62,8 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
   });
 
   // "Show all" loads every match for the current query; a new query starts at 50 again.
-  const [showAllFor, setShowAllFor] = useState<string | null>(null);
-  const { results, total: searchTotal, entityRows, loading, error: searchError } = useSongSearch(q, { limit: showAllFor === q ? 2000 : 50, debounceMs: 200, entities: true });
+  const [showAll, setShowAll] = useUrlParam("all");
+  const { results, total: searchTotal, entityRows, loading, error: searchError } = useSongSearch(q, { limit: showAll ? 2000 : 50, debounceMs: 200, entities: true });
 
   const hierarchy = useTagHierarchy();
   const filters = useSongFilters(filterMeta, "popularity", hierarchy);
@@ -171,8 +173,8 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
     >
       <SearchInput
         value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onClear={() => setQ("")}
+        onChange={(e) => { setQ(e.target.value); setShowAll(null); }}
+        onClear={() => { setQ(""); setShowAll(null); }}
         placeholder="Search by title, first line, recording artist, or composer"
       />
       {(loading || q.trim()) && (
@@ -190,7 +192,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
         <div className="flex flex-col gap-2 px-1">
           <div className="flex items-center gap-2">
             <SortDropdown value={sortBy} onChange={setSortBy} align="left" />
-            <FiltersButton count={activeFilterCount} onClick={() => setFiltersOpen((o) => !o)} />
+            <FiltersButton count={activeFilterCount} onClick={() => setPanel(filtersOpen ? null : "open")} />
             {currentUser && repertoire.size > 0 && (
               <HideMySongsToggle checked={hideMySongs} onChange={setHideMySongs} />
             )}
@@ -243,7 +245,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
             {results.length < searchTotal && (
               <button
                 type="button"
-                onClick={() => setShowAllFor(q)}
+                onClick={() => setShowAll("1")}
                 disabled={loading}
                 className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-300 disabled:opacity-60"
               >

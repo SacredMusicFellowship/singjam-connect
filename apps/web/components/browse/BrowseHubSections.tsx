@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import { sortBrowseHub, type BrowseHub, type BrowseHubOrder } from "@singjam/core";
 import ChipSection from "@/components/browse/ChipSection";
 import OrderToggle, { COUNT_OR_AZ } from "@/components/OrderToggle";
+import { useUrlParam } from "@/hooks/useUrlParam";
 
 export default function BrowseHubSections({ hub: loaded }: { hub: BrowseHub }) {
-  const [order, setOrder] = useState<BrowseHubOrder>("count");
+  const [param, setParam] = useUrlParam("order");
+  const order: BrowseHubOrder = param === "az" ? "az" : "count";
   const hub = sortBrowseHub(loaded, order);
   return (
     <>
-      <OrderToggle value={order} onChange={setOrder} options={COUNT_OR_AZ} />
+      <OrderToggle value={order} onChange={(o) => setParam(o === "az" ? "az" : null)} options={COUNT_OR_AZ} />
       {hub.sections.slice(0, 1).map((s) => <ChipSection key={s.type} title={s.title} chips={s.chips} all={s.all} />)}
       {hub.traditional.length > 0 && (
         <ChipSection title="Traditional songs" chips={hub.traditional} more={{ href: "/people/traditional", label: "All traditional songs" }} />

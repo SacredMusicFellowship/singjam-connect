@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import type { BrowseChip } from "@singjam/core";
+import { useUrlParam } from "@/hooks/useUrlParam";
 
 const TOP_N = 24;
 
@@ -24,7 +24,14 @@ export default function ChipSection({ title, chips, all, more, sub = false }: {
   all?: BrowseChip[];
   more?: { href: string; label: string };
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const [param, setParam] = useUrlParam("show");
+  const open = param ? param.split(",") : [];
+  const expanded = open.includes(id);
+  const setExpanded = (on: boolean) => {
+    const next = on ? [...open, id] : open.filter((x) => x !== id);
+    setParam(next.length ? next.join(",") : null);
+  };
   const full = all ?? chips;
   const shown = expanded ? full : chips.slice(0, TOP_N);
   const canExpand = !expanded && full.length > shown.length;
