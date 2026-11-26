@@ -4,6 +4,7 @@ import { songSlug } from "./songs";
 describe("songSlug", () => {
   it("follows the database formula: title, then up to three writers A–Z", () => {
     expect(songSlug("Paper Boats", ["Iris Pemberley", "Ada Brightwater"])).toBe("paper-boats-ada-brightwater-iris-pemberley");
+    expect(songSlug("Uyanmaz Mısın", ["Niyazi Mısri"])).toBe("uyanmaz-misin-niyazi-misri");
     expect(songSlug("Song", ["Dee", "cy", "Bea", "Al"])).toBe("song-al-bea-cy");
   });
 
