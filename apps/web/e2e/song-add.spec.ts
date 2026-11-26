@@ -75,3 +75,41 @@ test("an artist nobody knows gets a spelling warning before it's added", async (
 
   await expect(page.getByText("We couldn't find “Zephyrine Quillfeather” on Spotify or in our library. Check the spelling before adding.")).toBeVisible();
 });
+
+test("a member adds another tune of words we already have, with a recording of it", async ({ page, freshMember }) => {
+  const s = freshMember.id.slice(0, 8);
+  const title = `Harbour Hymn ${s}`;
+  const { data: text } = await admin.from("texts").insert({ title, slug: "x", kind: "hymn" }).select("id").single();
+  const { data: tune } = await admin.from("tunes").insert({ name: `Beacon ${s}`, slug: "x" }).select("id").single();
+  try {
+    await admin.from("songs").insert({ title, text_id: text!.id, tune_id: tune!.id });
+    await openAddForm(page);
+    await page.getByPlaceholder("e.g. Proud Mary").fill(title);
+    const lookUp = page.getByRole("button", { name: "Look up" });
+    const question = page.getByText("is already in the library. Which tune do you sing it to?");
+    await expect(async () => {
+      if (await lookUp.isVisible()) await lookUp.click();
+      await expect(question).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 30_000 });
+    await expect(page.getByText(`Beacon ${s}`)).toBeVisible();
+    await page.getByRole("button", { name: "I sing it to a different tune" }).click();
+    const add = page.getByRole("button", { name: "Add this tune" });
+    await page.getByLabel("Link to a recording of your tune").fill("not a link");
+    await expect(add).toBeDisabled();
+    await page.getByLabel("Link to a recording of your tune").fill("https://youtu.be/dQw4w9WgXcQ");
+    await page.getByLabel("Tune name").fill(`Westerly ${s}`);
+    await add.click();
+
+    await expect(page).toHaveURL(/\/songs\//);
+    const { data } = await admin.from("songs").select("tune_id, youtube_url, add_hints").eq("text_id", text!.id).is("tune_id", null).single();
+    expect(data).toEqual({
+      tune_id: null,
+      youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      add_hints: { other_tune: true, tune: `Westerly ${s}` },
+    });
+  } finally {
+    await admin.from("songs").delete().eq("text_id", text!.id);
+    await admin.from("tunes").delete().eq("id", tune!.id);
+    await admin.from("texts").delete().eq("id", text!.id);
+  }
+});

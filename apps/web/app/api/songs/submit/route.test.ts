@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetUser, mockBearerGetUser, mockFrom, mockFindOnSpotify, mockTrigger, mockFindExisting, mockFindKnownArtist } = vi.hoisted(() => ({
+const { mockGetUser, mockBearerGetUser, mockFrom, mockFindOnSpotify, mockTrigger, mockFindExisting, mockFindKnownArtist, mockFindTextTunes, mockSpotifyTrack } = vi.hoisted(() => ({
   mockFindExisting: vi.fn(),
+  mockFindTextTunes: vi.fn(),
+  mockSpotifyTrack: vi.fn(),
   mockFindKnownArtist: vi.fn(),
   mockGetUser: vi.fn(),
   mockBearerGetUser: vi.fn(),
@@ -10,7 +12,10 @@ const { mockGetUser, mockBearerGetUser, mockFrom, mockFindOnSpotify, mockTrigger
   mockTrigger: vi.fn(),
 }));
 
-vi.mock("@/lib/songLookup", () => ({ findOnSpotify: mockFindOnSpotify, findExistingSong: mockFindExisting, findKnownArtist: mockFindKnownArtist }));
+vi.mock("@/lib/songLookup", () => ({
+  findOnSpotify: mockFindOnSpotify, findExistingSong: mockFindExisting, findKnownArtist: mockFindKnownArtist,
+  findTextTunes: mockFindTextTunes, spotifyTrack: mockSpotifyTrack,
+}));
 vi.mock("@/lib/triggerSongEnrichment", () => ({ triggerSongEnrichment: mockTrigger }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -48,6 +53,8 @@ beforeEach(() => {
   mockFindOnSpotify.mockResolvedValue(null);
   mockFindExisting.mockResolvedValue(null);
   mockFindKnownArtist.mockResolvedValue(null);
+  mockFindTextTunes.mockResolvedValue(null);
+  mockSpotifyTrack.mockResolvedValue(null);
 });
 
 
@@ -228,5 +235,102 @@ describe("POST /api/songs/submit", () => {
 
     expect(blocked.status).toBe(409);
     expect(added.status).toBe(200);
+  });
+
+  describe("another tune of a text we hold", () => {
+    const hymn = { id: "s-beacon", slug: "harbour-hymn", title: "Harbour Hymn", display_artist: null, match: "possible" };
+    const family = {
+      text_id: "x1",
+      tunes: [{ id: "s-beacon", slug: "harbour-hymn", title: "Harbour Hymn", display_artist: null, tune_id: "t-beacon", tune: "Beacon" }],
+    };
+    function db(tuneFound: { id: string } | null = null) {
+      const inserts: Record<string, any> = {};
+      mockFrom.mockImplementation((table: string) => {
+        const c: any = {};
+        for (const m of ["select", "ilike", "is", "limit", "eq"]) c[m] = vi.fn().mockReturnValue(c);
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: table === "tunes" ? tuneFound : null, error: null });
+        c.insert = vi.fn((row: any) => {
+          inserts[table] = row;
+          return { select: () => ({ single: async () => ({ data: table === "songs" ? { id: "s-new", slug: "harbour-hymn-2" } : { id: "a1" } }) }) };
+        });
+        return c;
+      });
+      return inserts;
+    }
+    beforeEach(() => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+      mockFindExisting.mockResolvedValue(hymn);
+      mockFindTextTunes.mockResolvedValue(family);
+    });
+
+    it("needs a link to a recording of the tune", async () => {
+      db();
+      const res = await POST(req({ title: "Harbour Hymn", confirmed: true, add_anyway: true, new_tune: { recording_url: "not a link" } }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/link to a recording/);
+    });
+
+    it("adds it to the text with the video as its own, and tells enrichment it's another tune", async () => {
+      const inserts = db();
+      const res = await POST(req({
+        title: "harbour hymn", artist: "Mara Quill", confirmed: true, add_anyway: true, youtube_id: "abcdefghijk",
+        new_tune: { recording_url: "https://youtu.be/dQw4w9WgXcQ", name: " Westerly " },
+      }));
+      expect(res.status).toBe(200);
+      expect(inserts.songs).toMatchObject({
+        title: "Harbour Hymn", display_artist: null, text_id: "x1", tune_id: null,
+        youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        add_hints: { other_tune: true, tune: "Westerly" },
+      });
+      expect(inserts.song_recording_artists).toBeUndefined();
+    });
+
+    it("links a tune we have by its name, and opens the song already sung to it", async () => {
+      let inserts = db({ id: "t-westerly" });
+      await POST(req({ title: "Harbour Hymn", confirmed: true, add_anyway: true, new_tune: { recording_url: "https://youtu.be/dQw4w9WgXcQ", name: "Westerly" } }));
+      expect(inserts.songs).toMatchObject({ tune_id: "t-westerly", add_hints: { other_tune: true } });
+      expect(inserts.songs.add_hints).not.toHaveProperty("tune");
+
+      inserts = db({ id: "t-beacon" });
+      const res = await POST(req({ title: "Harbour Hymn", confirmed: true, add_anyway: true, new_tune: { recording_url: "https://youtu.be/dQw4w9WgXcQ", name: "Beacon" } }));
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ id: "s-beacon" });
+      expect(inserts.songs).toBeUndefined();
+    });
+
+    it("adds a same-titled song by a recording artist the usual way, off the text", async () => {
+      const inserts = db();
+      const res = await POST(req({ title: "Harbour Hymn", artist: "Mara Quill", confirmed: true, add_anyway: true }));
+      expect(res.status).toBe(200);
+      expect(mockFindTextTunes).not.toHaveBeenCalled();
+      expect(inserts.songs).toMatchObject({ display_artist: "Mara Quill", text_id: null });
+    });
+
+    it("needs the link when there's no artist, even without a tune sent", async () => {
+      db();
+      const res = await POST(req({ title: "Harbour Hymn", confirmed: true, add_anyway: true }));
+      expect(res.status).toBe(400);
+    });
+
+    it("takes the performer of a Spotify link as the recording", async () => {
+      mockSpotifyTrack.mockResolvedValue({ title: "Harbour Hymn", artist: "Mara Quill", spotify_url: "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", release_year: 2019 });
+      const inserts = db();
+      await POST(req({ title: "Harbour Hymn", confirmed: true, add_anyway: true, new_tune: { recording_url: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" } }));
+      expect(inserts.songs).toMatchObject({ display_artist: "Mara Quill", youtube_url: null, text_id: "x1" });
+      expect(inserts.song_recording_artists).toMatchObject({ spotify_url: "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC" });
+    });
+  });
+
+  it("answers 409, not 500, when the title is already taken by a song with no artist or tune", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockFrom.mockImplementation(() => {
+      const c: any = {};
+      for (const m of ["select", "ilike", "is", "limit", "eq"]) c[m] = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: null });
+      c.insert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: null, error: { code: "23505", message: "duplicate key" } }) }) }));
+      return c;
+    });
+    const res = await POST(req({ title: "Harbour Hymn", confirmed: true }));
+    expect(res.status).toBe(409);
   });
 });

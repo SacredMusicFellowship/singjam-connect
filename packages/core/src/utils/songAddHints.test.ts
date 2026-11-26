@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addHintLines, addSongSpellingNote, confirmedFirstLine, isPlaceholderArtist, parseAddHints } from "./songAddHints";
+import { addHintLines, addSongSpellingNote, cleanTuneName, confirmedFirstLine, isPlaceholderArtist, parseAddHints } from "./songAddHints";
 import { decideEnrichment, reviewEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const base = (over: Partial<EnrichmentSources> = {}): EnrichmentSources => ({
@@ -30,6 +30,20 @@ describe("addHintLines", () => {
       "The person adding it says it's a traditional or folk song; Mara Quill's recording is one version of it, so describe the song itself.",
       "It was added for an event tagged: Christmas.",
     ]);
+  });
+  it("tells the models a song added as another tune is about the words", () => {
+    expect(addHintLines({ other_tune: true, tune: "Harbour Lights" }, null)).toEqual([
+      'These words are sung here to a different tune from the usual one (they call it "Harbour Lights"); describe the words, not any one melody.',
+    ]);
+  });
+});
+
+describe("cleanTuneName", () => {
+  it("keeps a tune name tidied, and refuses one too short or long", () => {
+    expect(cleanTuneName("  Harbour   Lights ")).toBe("Harbour Lights");
+    expect(cleanTuneName("x")).toBeNull();
+    expect(cleanTuneName("a".repeat(81))).toBeNull();
+    expect(cleanTuneName(42)).toBeNull();
   });
 });
 

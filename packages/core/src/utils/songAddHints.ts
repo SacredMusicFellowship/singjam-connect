@@ -18,7 +18,18 @@ export type SongAddHints = {
   first_line?: string;
   // Tag names of the jam the song was added for ("Christmas", "Christian").
   context?: string[];
+  // Set by the server, never the client: added as another tune of a text we
+  // hold, identified by the recording link given with it. The tune name is what
+  // the person called it when it matched no tune we have.
+  other_tune?: true;
+  tune?: string;
 };
+
+// A tune name someone typed, or null when it's too short or long to be one.
+export function cleanTuneName(input: unknown): string | null {
+  const name = typeof input === "string" ? input.trim().replace(/\s+/g, " ") : "";
+  return name.length >= 2 && name.length <= 80 ? name : null;
+}
 
 const KNOWN = new Set<string>(KNOWN_AS.map((k) => k.value));
 
@@ -50,6 +61,8 @@ export function addHintLines(hints: SongAddHints | null | undefined, artist: str
   if (hints.known_as === "recording" && artist) lines.push(`The person adding it knows it from ${artist}'s recording.`);
   if (hints.first_line) lines.push(`They say it starts: "${hints.first_line}" (from memory, may be inexact).`);
   if (hints.context?.length) lines.push(`It was added for an event tagged: ${hints.context.join(", ")}.`);
+  if (hints.other_tune)
+    lines.push(`These words are sung here to a different tune from the usual one${hints.tune ? ` (they call it "${hints.tune}")` : ""}; describe the words, not any one melody.`);
   return lines;
 }
 

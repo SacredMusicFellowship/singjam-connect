@@ -248,13 +248,17 @@ export async function enrichSong(
   const writers = [...(s.song_composers ?? []), ...(s.song_lyricists ?? [])]
     .map((r: any) => r.people?.name as string | undefined)
     .filter((n, i, all): n is string => !!n && all.indexOf(n) === i);
+  // Added as another tune of a text we hold: the models only know the usual
+  // tune, so nothing about the melody (who wrote it, its key, meter or feel,
+  // other recordings of it) is asked; the text's own page carries the words' facts.
+  const otherTune = s.add_hints?.other_tune === true;
   const wanted: Field[] = [];
-  if (!s.year_written) wanted.push("year_written");
+  if (!s.year_written && !otherTune) wanted.push("year_written");
   if (primary && !primary.year) wanted.push("recording_year");
-  if (!writers.length) wanted.push("composers", "lyricists");
-  if (!s.tonality) wanted.push("tonality");
-  if (!s.meter) wanted.push("meter");
-  if (!s.vibe) wanted.push("vibe");
+  if (!writers.length && !otherTune) wanted.push("composers", "lyricists");
+  if (!s.tonality && !otherTune) wanted.push("tonality");
+  if (!s.meter && !otherTune) wanted.push("meter");
+  if (!s.vibe && !otherTune) wanted.push("vibe");
   const hasTag = (type: TagType) => (s.song_tags ?? []).some((t: any) => t.tags?.type === type && t.context === "general");
   if (!hasTag("genre")) wanted.push("genres");
   if (!hasTag("theme")) wanted.push("themes");
@@ -265,7 +269,7 @@ export async function enrichSong(
   if (!hasTag("community")) wanted.push("communities");
   if (!s.first_line) wanted.push("first_line");
   if (!s.hook) wanted.push("hook");
-  if (!s.notes) wanted.push("notes");
+  if (!s.notes && !otherTune) wanted.push("notes");
   if (!(s.song_productions ?? []).length) wanted.push("productions");
   if (!(s.song_alternate_titles ?? []).length) wanted.push("alternate_titles");
   if (!wanted.length) return { songId, decision: {} as EnrichmentDecision, usage: [] as ModelUsage[] };
@@ -275,7 +279,9 @@ export async function enrichSong(
     const filled = await fillSong(admin, songId, s, primary, artist, writers, wanted, opts);
     // A song with a recording gets its iconic others; one without gets the
     // recordings people know it from.
-    const [landmarks, first] = primary
+    const [landmarks, first] = otherTune
+      ? [{ added: [] as LandmarkResult[], usage: [] as ModelUsage[] }, { added: [] as FirstRecordingResult[], usage: [] as ModelUsage[] }]
+      : primary
       ? [await addLandmarkRecordings(admin, songId, opts).catch((e) => {
           console.error("[song-enrichment] landmark recordings failed:", e instanceof Error ? e.message : e);
           return { added: [] as LandmarkResult[], usage: [] as ModelUsage[] };

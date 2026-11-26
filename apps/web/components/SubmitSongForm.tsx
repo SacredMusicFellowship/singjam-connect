@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addSongSpellingNote, KNOWN_AS, type KnownAs } from "@singjam/core";
+import { addSongSpellingNote, KNOWN_AS, parseRecordingLink, type KnownAs } from "@singjam/core";
 
 type Match = {
   title: string;
@@ -14,7 +14,12 @@ type Match = {
   youtube_id: string | null;
   youtube_official: boolean;
   existing: { id: string; slug: string | null; title: string; display_artist: string | null; match: "same" | "possible" } | null;
+  // The found song's text, when we hold it, with one song per tune.
+  text?: { text_id: string; tunes: TextTune[] } | null;
 };
+
+type TextTune = { id: string; slug: string | null; title: string; display_artist: string | null; tune: string | null };
+type NewTune = { recording_url: string; name: string };
 
 type Step =
   | { type: "input" }
@@ -46,11 +51,15 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, s
   const [knownAs, setKnownAs] = useState<KnownAs | null>(null);
   const [firstLine, setFirstLine] = useState("");
   const [step, setStep] = useState<Step>({ type: "input" });
+  const [addingTune, setAddingTune] = useState(false);
+  const [newTune, setNewTune] = useState<NewTune>({ recording_url: "", name: "" });
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
     setStep({ type: "input" });
     setError(null);
+    setAddingTune(false);
+    setNewTune({ recording_url: "", name: "" });
   }
 
   const typed = (): Match => ({
@@ -71,14 +80,14 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, s
     }
   }
 
-  async function submit(match: Match, addAnyway = false) {
+  async function submit(match: Match, addAnyway = false, newTune?: NewTune) {
     setError(null);
     setStep({ type: "submitting" });
     const res = await fetch("/api/songs/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...match, confirmed: true, add_anyway: addAnyway,
+        ...match, confirmed: true, add_anyway: addAnyway, new_tune: newTune ?? null,
         known_as: knownAs, first_line_hint: firstLine.trim() || null, set_id: setId ?? null,
       }),
     });
@@ -121,6 +130,7 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, s
   const isPreview = step.type === "preview";
   const isSubmitting = step.type === "submitting";
   const busy = isLookingUp || isSubmitting;
+  const tunes = step.type === "preview" && step.match.text?.tunes.length ? step.match.text.tunes : null;
 
   return (
     // In a set's Add songs it sits inside that panel, so it draws no box of its own.
@@ -163,9 +173,21 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, s
 
       {isSubmitting && <p className="text-xs text-zinc-400">Adding it to the library…</p>}
 
-      {step.type === "preview" && <MatchPreview match={step.match} typedArtist={artist} />}
+      {step.type === "preview" && (tunes ? (
+        <TuneChoice
+          tunes={tunes}
+          onPick={onAdded ? (t) => onAdded({ id: t.id, title: t.title, display_artist: t.display_artist }) : undefined}
+          adding={addingTune}
+          onAdding={setAddingTune}
+          newTune={newTune}
+          onNewTune={setNewTune}
+          onAddTune={() => submit(step.match, true, newTune)}
+        />
+      ) : (
+        <MatchPreview match={step.match} typedArtist={artist} />
+      ))}
 
-      {step.type === "preview" && step.match.existing?.match !== "same" && (
+      {step.type === "preview" && !tunes && step.match.existing?.match !== "same" && (
         <AddHints knownAs={knownAs} onKnownAs={setKnownAs} firstLine={firstLine} onFirstLine={setFirstLine} />
       )}
 
@@ -184,7 +206,7 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, s
               </button>
             )}
 
-            {step.type === "preview" && step.match.existing && onAdded && (
+            {step.type === "preview" && step.match.existing && onAdded && !tunes && (
               <button
                 onClick={() => { const e = step.match.existing!; onAdded({ id: e.id, title: e.title, display_artist: e.display_artist }); }}
                 className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
@@ -193,7 +215,7 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, s
               </button>
             )}
 
-            {step.type === "preview" && step.match.existing?.match === "possible" && (
+            {step.type === "preview" && step.match.existing?.match === "possible" && (!tunes || !!artist.trim()) && (
               <button
                 onClick={() => submit(step.match, true)}
                 className="rounded-full border border-zinc-200 px-5 py-2 text-sm text-zinc-500 hover:bg-zinc-50 transition-colors"
@@ -278,6 +300,100 @@ function AddHints({ knownAs, onKnownAs, firstLine, onFirstLine }: {
         />
       </div>
       <p className="text-xs text-zinc-500">Helps us fill in the right writers, words and details.</p>
+    </div>
+  );
+}
+
+// The words are already here, one song per tune. Pick the tune you sing, or add
+// yours with a recording of it, which is how we know which melody it is.
+function TuneChoice({ tunes, onPick, adding, onAdding, newTune, onNewTune, onAddTune }: {
+  tunes: TextTune[];
+  onPick?: (t: TextTune) => void;
+  adding: boolean;
+  onAdding: (v: boolean) => void;
+  newTune: NewTune;
+  onNewTune: (t: NewTune) => void;
+  onAddTune: () => void;
+}) {
+  const linkOk = !!parseRecordingLink(newTune.recording_url);
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-zinc-700">
+        <span className="font-medium">{tunes[0].title}</span> is already in the library. Which tune do you sing it to?
+      </p>
+      <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200">
+        {tunes.map((t) => (
+          <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2">
+            <span className="min-w-0 text-sm text-zinc-800">
+              {t.tune ?? <span className="text-zinc-500">Tune not named</span>}
+              {t.display_artist && <span className="text-zinc-500"> · {t.display_artist}</span>}
+            </span>
+            <span className="flex shrink-0 items-center gap-3">
+              <Link href={`/songs/${t.slug ?? t.id}`} className="text-sm font-medium text-amber-600 hover:text-amber-500">
+                Open
+              </Link>
+              {onPick && (
+                <button
+                  type="button"
+                  onClick={() => onPick(t)}
+                  className="rounded-full bg-amber-500 px-3 py-1 text-sm font-semibold text-white hover:bg-amber-400 transition-colors"
+                >
+                  Add this one
+                </button>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {adding ? (
+        <div className="space-y-3 rounded-xl bg-zinc-50 p-3">
+          <div>
+            <label htmlFor="add-tune-link" className="block text-sm font-medium text-zinc-700">
+              Link to a recording of your tune <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="add-tune-link"
+              value={newTune.recording_url}
+              onChange={(e) => onNewTune({ ...newTune, recording_url: e.target.value })}
+              placeholder="A YouTube or Spotify link"
+              inputMode="url"
+              className="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+            />
+            {newTune.recording_url.trim() && !linkOk && (
+              <p className="mt-1 text-xs text-amber-700">Paste a link to one YouTube video or Spotify track.</p>
+            )}
+          </div>
+          <div>
+            <label htmlFor="add-tune-name" className="block text-sm font-medium text-zinc-700">
+              Tune name <span className="font-normal text-zinc-400">Optional</span>
+            </label>
+            <input
+              id="add-tune-name"
+              value={newTune.name}
+              onChange={(e) => onNewTune({ ...newTune, name: e.target.value })}
+              maxLength={80}
+              placeholder="Its name or composer, if you know it"
+              className="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onAddTune}
+            disabled={!linkOk}
+            className="rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-400 disabled:opacity-50 transition-colors"
+          >
+            Add this tune
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onAdding(true)}
+          className="rounded-full border border-zinc-200 px-5 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
+        >
+          I sing it to a different tune
+        </button>
+      )}
     </div>
   );
 }
