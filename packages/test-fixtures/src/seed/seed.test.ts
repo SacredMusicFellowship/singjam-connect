@@ -64,6 +64,11 @@ describe("seed against the migrated schema", () => {
     for (const song of scenario.songs) expect(stored.get(song.id)).toBe(song.slug);
   });
 
+  it("spells the Turkish dotless ı as i in slugs (migration 258)", async () => {
+    const { rows } = await db.query<{ slug: string }>(`select public.tag_slug('Niyazi Mısri') as slug`);
+    expect(rows[0].slug).toBe("niyazi-misri");
+  });
+
   it("tags every song and jam with tags from the vocabulary", async () => {
     const songs = await db.query<{ n: number }>("select count(distinct song_id)::int n from public.song_tags");
     expect(songs.rows[0].n).toBe(scenario.songs.length);

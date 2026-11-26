@@ -12,7 +12,7 @@ export type SongCatalog = {
 };
 
 // The slug the database gives a song (song_slug_base, migrations 196 and 202): the title, then up to
-// three writers A–Z, accents dropped, hyphens and slashes as spaces, only letters, digits and
+// three writers A–Z, Turkish ı as i (migration 258), accents dropped, hyphens and slashes as spaces, only letters, digits and
 // spaces kept, spaces as hyphens. The fixtures have no lyricists or music-culture tags, so writers
 // are the composers. The database sets it on insert; this predicts it so tests can link to songs.
 export function songSlug(title: string, writers: string[]): string {
@@ -21,6 +21,7 @@ export function songSlug(title: string, writers: string[]): string {
     .slice(0, 3);
   return [title, ...unique]
     .join(" ")
+    .replace(/ı/g, "i")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[-/\u2010-\u2015]/g, " ")
