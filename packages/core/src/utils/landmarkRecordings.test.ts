@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agreedLandmarks, creditedArtist, firstRecordingCandidates, firstRecordingYear, landmarkYear, leadArtist, sameArtist, type LandmarkCandidate } from "./landmarkRecordings";
+import { agreedLandmarks, artistCredit, firstRecordingCandidates, firstRecordingYear, landmarkYear, leadArtist, sameArtist, type LandmarkCandidate } from "./landmarkRecordings";
 import { MAX_RECORDINGS } from "./formatRecordingArtists";
 
 const rec = (artist: string, year: number, why: LandmarkCandidate["why"] = "iconic"): LandmarkCandidate => ({ artist, year, why });
@@ -20,14 +20,15 @@ describe("sameArtist", () => {
   });
 });
 
-describe("creditedArtist", () => {
-  const trio = [{ name: "Mara Quill", joinphrase: ", " }, { name: "Tobin Ashe", joinphrase: ", & " }, { name: "Lene Varga" }];
-  it("keeps the one act the models named from a record credited to several", () => {
-    expect(creditedArtist(trio, "Mara Quill, Tobin Ashe, & Lene Varga")).toBe("Mara Quill");
-    expect(creditedArtist(trio, "Tobin Ashe")).toBe("Tobin Ashe");
+describe("artistCredit", () => {
+  it("makes a record credited to several acts one credit naming each of them", () => {
+    const duo = [{ name: "Tobin Ashe", joinphrase: " & " }, { name: "Lene Varga" }];
+    expect(artistCredit(duo, "Lene Varga")).toEqual({ name: "Tobin Ashe & Lene Varga", members: ["Tobin Ashe", "Lene Varga"] });
+    expect(artistCredit([{ name: "Mara Quill" }, { name: "Tobin Ashe" }], "Mara Quill").name).toBe("Mara Quill, Tobin Ashe");
   });
   it("keeps a single credit as it is", () => {
-    expect(creditedArtist([{ name: "Harbour Lights & the Tide" }], "Harbour Lights")).toBe("Harbour Lights & the Tide");
+    expect(artistCredit([{ name: "Harbour Lights & the Tide" }], "Harbour Lights")).toEqual({ name: "Harbour Lights & the Tide", members: [] });
+    expect(artistCredit([], "Harbour Lights")).toEqual({ name: "Harbour Lights", members: [] });
   });
 });
 

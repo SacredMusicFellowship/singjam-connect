@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadBrowseHub, sortBrowseHub } from "./browseHub";
+import { loadBrowseHub, loadBrowseIndex, sortBrowseHub } from "./browseHub";
 
 // A minimal stand-in for the Supabase client: each table returns fixed rows.
 function fakeDb(tables: Record<string, unknown[]>, rpc: Record<string, unknown>) {
@@ -111,5 +111,21 @@ describe("sortBrowseHub", () => {
     expect(az.writers.map((c) => c.label)).toEqual(["Ann", "Zed"]);
     expect(az.shows[0].chips.map((c) => c.label)).toEqual(["Alpha", "Beta"]);
     expect(az.traditional.map((c) => c.label)).toEqual(["Irish", "Scottish"]);
+  });
+});
+
+describe("loadBrowseIndex artists", () => {
+  it("counts the songs of the duos an artist is in, and leaves out artists with none", async () => {
+    const db = fakeDb({
+      artists: [
+        { name: "Lene Varga", slug: "lene-varga", song_recording_artists: [{ count: 2 }], member_of: [{ group: { song_recording_artists: [{ count: 1 }] } }] },
+        { name: "Tobin Ashe", slug: "tobin-ashe", song_recording_artists: [{ count: 0 }], member_of: [{ group: { song_recording_artists: [{ count: 1 }] } }] },
+        { name: "Nobody Yet", slug: "nobody-yet", song_recording_artists: [{ count: 0 }], member_of: [] },
+      ],
+    }, {});
+    expect(await loadBrowseIndex(db, "artist")).toEqual([
+      { href: "/artists/lene-varga", label: "Lene Varga", count: 3 },
+      { href: "/artists/tobin-ashe", label: "Tobin Ashe", count: 1 },
+    ]);
   });
 });

@@ -1,9 +1,9 @@
 import { Text, TouchableOpacity } from 'react-native';
 import { KEY_STYLE, keyMode, keyWithMode } from '@singjam/core';
 
-// The key you play a song in, as on web's MyKeySelect at phone width ("Key A min",
-// "Key C Dor"): an outlined pill in the key colour shared with the set list's key
-// (violet once chosen, neutral while empty), wide enough for "Key C# Mix" so it's
+// The key you play a song in, as on web's MyKeySelect at phone width ("Key Am",
+// "Key G"): an outlined pill in the key colour shared with the set list's key
+// (violet once chosen, neutral while empty), wide enough for "+ My key" or "Key C#m" so it's
 // one width on every song and the row's buttons line up. It shares the row's spare
 // width with Role and + Set, as on mobile web. The caller opens KeyPicker on press.
 export default function MyKeyChip({
@@ -22,7 +22,7 @@ export default function MyKeyChip({
     <TouchableOpacity
       onPress={onPress}
       className={`flex-row items-center justify-center rounded-full ${value ? KEY_STYLE.chip : KEY_STYLE.emptyChip} ${size === 'md' ? 'px-3 py-1.5' : 'px-2.5 py-1'}`}
-      style={{ minWidth: size === 'md' ? 104 : 90, flexGrow: 1 }}
+      style={{ minWidth: size === 'md' ? 84 : 74, flexGrow: 1 }}
       accessibilityLabel="My key"
     >
       {value ? (

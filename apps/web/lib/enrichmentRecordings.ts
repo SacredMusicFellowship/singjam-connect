@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   agreedLandmarks,
-  creditedArtist,
+  artistCredit,
   firstRecordingCandidates,
   firstRecordingYear,
   landmarkYear,
@@ -14,7 +14,7 @@ import {
 import { findOnSpotify } from "@/lib/songLookup";
 import { askClaudeJson, askGptJson, type ModelUsage } from "@/lib/enrichmentModels";
 import { musicbrainz, norm } from "@/lib/enrichmentSources";
-import { idsFor } from "@/lib/enrichmentDb";
+import { idsFor, linkMembers } from "@/lib/enrichmentDb";
 
 // ---- Other recordings worth listing (landmarkRecordings in core decides) ----
 
@@ -58,21 +58,21 @@ async function musicBrainzRecording(title: string, artist: string) {
   const q = `recording:"${title.replace(/"/g, "")}" AND artist:"${lead.replace(/"/g, "")}"`;
   const json = await musicbrainz(`recording?fmt=json&limit=100&query=${encodeURIComponent(q)}`);
   let found = false;
-  let credit: string | null = null;
+  let credit: { name: string; members: string[] } | null = null;
   const years: number[] = [];
   for (const r of (json?.recordings ?? []) as any[]) {
     const name = (r["artist-credit"] ?? []).map((c: any) => c.name + (c.joinphrase ?? "")).join("");
     if (norm(r.title) !== norm(title) || !norm(name).includes(norm(lead))) continue;
     if (/\b(live|demo|remix|instrumental|karaoke)\b/i.test(`${r.disambiguation ?? ""} ${r.title}`)) continue;
     found = true;
-    if (!credit && sameArtist(name, artist)) credit = creditedArtist(r["artist-credit"] ?? [], artist);
+    if (!credit && sameArtist(name, artist)) credit = artistCredit(r["artist-credit"] ?? [], artist);
     for (const rel of r.releases ?? []) {
       const rg = rel["release-group"] ?? {};
       const y = parseInt((rel.date ?? "").slice(0, 4));
       if (["Album", "Single", "EP"].includes(rg["primary-type"]) && !(rg["secondary-types"] ?? []).length && y >= 1890) years.push(y);
     }
   }
-  return found ? { credit: credit ?? artist, year: years.length ? Math.min(...years) : null } : null;
+  return found ? { credit: credit?.name ?? artist, members: credit?.members ?? [], year: years.length ? Math.min(...years) : null } : null;
 }
 
 export type LandmarkResult = { artist: string; year: number | null; spotify_url: string | null };
@@ -101,6 +101,7 @@ export async function addLandmarkRecordings(admin: SupabaseClient, songId: strin
     if (opts.dryRun) continue;
     const [artistId] = await idsFor(admin, "artists", [found.credit]);
     if (!artistId) continue;
+    await linkMembers(admin, artistId, found.members);
     await admin.from("song_recording_artists").insert({ song_id: songId, artist_id: artistId, year, spotify_url, position: position++ });
   }
   return { added, usage };
@@ -179,7 +180,7 @@ export async function addFirstRecordings(admin: SupabaseClient, songId: string, 
   for (const pick of firstRecordingCandidates(gpt, claude)) {
     if (added.length >= 2) break;
     const titles = [s.title as string, ...pick.titles].filter((t, i, all) => all.findIndex((u) => norm(u) === norm(t)) === i);
-    let found: { credit: string; year: number | null } | null = null;
+    let found: Awaited<ReturnType<typeof musicBrainzRecording>> = null;
     let asTitle = s.title as string;
     for (const t of titles) {
       found = await musicBrainzRecording(t, pick.artist);
@@ -191,6 +192,7 @@ export async function addFirstRecordings(admin: SupabaseClient, songId: string, 
     if (opts.dryRun) continue;
     const [artistId] = await idsFor(admin, "artists", [found.credit]);
     if (!artistId) continue;
+    await linkMembers(admin, artistId, found.members);
     const recordedTitle = norm(asTitle) === norm(s.title) ? null : asTitle;
     await admin.from("song_recording_artists").insert({
       song_id: songId, artist_id: artistId, year, position: added.length, recorded_title: recordedTitle,

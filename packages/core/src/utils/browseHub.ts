@@ -42,7 +42,7 @@ export async function loadBrowseHub(db: any): Promise<BrowseHub> {
       db.from("people").select("name, slug, song_composers(count), song_lyricists(count)").order("id").range(f, t)
     ),
     fetchAllRows<{ name: string; slug: string; song_recording_artists: { count: number }[] }>((f, t) =>
-      db.from("artists").select("name, slug, song_recording_artists(count)").order("id").range(f, t)
+      db.from("artists").select(ARTIST_COLUMNS).order("id").range(f, t)
     ),
     db.from("productions").select("name, slug, year, medium, song_productions(count)").order("name").order("id"),
     db.rpc("traditional_culture_counts"),
@@ -112,7 +112,12 @@ async function scriptureChips(db: any): Promise<BrowseChip[]> {
 }
 
 type PersonRow = { name: string; slug: string; song_composers: { count: number }[]; song_lyricists: { count: number }[] };
-type ArtistRow = { name: string; slug: string; song_recording_artists: { count: number }[] };
+type ArtistRow = {
+  name: string; slug: string; song_recording_artists: { count: number }[];
+  // The duo and group credits the artist is in (migration 259); their songs count as the artist's.
+  member_of?: { group: { song_recording_artists: { count: number }[] } | null }[];
+};
+const ARTIST_COLUMNS = "name, slug, song_recording_artists(count), member_of:artist_members!artist_members_member_id_fkey(group:artists!artist_members_group_id_fkey(song_recording_artists(count)))";
 
 // A writer counts each song once even when credited for both music and words.
 function writerChips(people: PersonRow[]): BrowseChip[] {
@@ -124,7 +129,10 @@ function writerChips(people: PersonRow[]): BrowseChip[] {
 
 function artistChips(artists: ArtistRow[]): BrowseChip[] {
   return artists
-    .map((a) => ({ href: browsePath("artist", a.slug), label: a.name, count: a.song_recording_artists[0]?.count ?? 0 }))
+    .map((a) => ({
+      href: browsePath("artist", a.slug), label: a.name,
+      count: (a.song_recording_artists[0]?.count ?? 0) + (a.member_of ?? []).reduce((n, m) => n + (m.group?.song_recording_artists[0]?.count ?? 0), 0),
+    }))
     .filter((c) => c.count > 0);
 }
 
@@ -132,7 +140,7 @@ function artistChips(artists: ArtistRow[]): BrowseChip[] {
 export async function loadBrowseIndex(db: any, kind: "person" | "artist"): Promise<BrowseChip[]> {
   const chips = kind === "person"
     ? writerChips(await fetchAllRows<PersonRow>((f, t) => db.from("people").select("name, slug, song_composers(count), song_lyricists(count)").order("id").range(f, t)))
-    : artistChips(await fetchAllRows<ArtistRow>((f, t) => db.from("artists").select("name, slug, song_recording_artists(count)").order("id").range(f, t)));
+    : artistChips(await fetchAllRows<ArtistRow>((f, t) => db.from("artists").select(ARTIST_COLUMNS).order("id").range(f, t)));
   return chips.sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
 }
 

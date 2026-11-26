@@ -89,6 +89,14 @@ The native app (`apps/native`) is the mobile companion to the web app (`apps/web
 
 `.github/workflows/checks.yml` runs on every PR and push to `main`: `scripts/check-repo-rules.mjs` (no test files or helpers in `apps/web/netlify/functions`, explicit grants for every new table from migration 201 on, unique migration numbers, no `select('*')` from `jams`, no secret other than `GITHUB_TOKEN` in any `.github/workflows` file) and the web + core unit tests. When a rule bites us, add it to that script.
 
+`.github/workflows/ci.yml` type-checks both apps and runs the Playwright suite split across four parallel jobs.
+
+## Merging
+
+`main` has no required checks, and Netlify deploys on merge whether CI has finished or not, so how long to wait is a judgement call:
+- **Trivial** (as defined under Testing): merge once "Type check and unit tests" and "Unit tests (web + core)" pass, a couple of minutes in. Don't wait for Playwright; if it later fails on main, fix forward
+- **Everything else**: wait for every check, Playwright included
+
 ## Pull Requests
 
 Every PR must include:

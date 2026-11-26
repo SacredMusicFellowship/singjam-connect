@@ -31,6 +31,14 @@ describe("sameSong", () => {
   it("treats one title by unrelated artists as different songs", () => {
     expect(sameSong({ title: "Dreams", artists: ["Fleetwood Mac"] }, { title: "Dreams", artists: ["The Cranberries"] })).toBe(false);
   });
+  it("is the same song when the typed artist is one of a duo's credit", () => {
+    expect(sameSong({ title: "Islands in the Stream", artists: ["Dolly Parton"] }, { title: "Islands in the Stream", artists: ["Kenny Rogers & Dolly Parton", "Bee Gees"] })).toBe("same");
+    expect(sameSong({ title: "Valerie", artists: ["Mark Ronson feat. Amy Winehouse"] }, { title: "Valerie", artists: ["Amy Winehouse"] })).toBe("same");
+  });
+  it("needs a duo's artist spelled exactly, and doesn't match a different duo", () => {
+    expect(sameSong({ title: "Islands in the Stream", artists: ["Dolly Partin"] }, { title: "Islands in the Stream", artists: ["Kenny Rogers & Dolly Parton"] })).toBe(false);
+    expect(sameSong({ title: "Dreams", artists: ["Stevie Nicks & Lindsey Buckingham"] }, { title: "Dreams", artists: ["The Cranberries"] })).toBe(false);
+  });
   it("is only a possible match when one side has no artist", () => {
     expect(sameSong({ title: "Summertime", artists: [] }, { title: "Summertime", artists: ["Ella Fitzgerald"] })).toBe("possible");
   });

@@ -37,6 +37,21 @@ export async function findOnSpotify(title: string, artist: string): Promise<Spot
   };
 }
 
+// The track a pasted Spotify link points at.
+export async function spotifyTrack(trackId: string): Promise<SpotifyMatch | null> {
+  const token = await getSpotifyToken();
+  if (!token) return null;
+  const res = await fetch(`https://api.spotify.com/v1/tracks/${encodeURIComponent(trackId)}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  const track = await res.json();
+  return {
+    title: String(track.name ?? "").replace(REISSUE_SUFFIX, "").trim(),
+    artist: track.artists?.[0]?.name ?? "",
+    spotify_url: track.external_urls?.spotify ?? `https://open.spotify.com/track/${trackId}`,
+    release_year: parseInt(track.album?.release_date?.slice(0, 4)) || null,
+  };
+}
+
 // One search (100 of the 10,000 free daily units). The preview can be any music
 // video; only an official upload is kept as the recording's link.
 export async function findOnYouTube(title: string, artist: string) {
@@ -63,6 +78,27 @@ export async function findKnownArtist(db: SupabaseClient, name: string | null): 
   const rows = (data ?? []) as KnownArtist[];
   const pick = closestArtist(name, rows.map((r) => r.name));
   return rows.find((r) => r.name === pick) ?? null;
+}
+
+export type TextTune = { id: string; slug: string | null; title: string; display_artist: string | null; tune_id: string | null; tune: string | null };
+export type TextTunes = { text_id: string; tunes: TextTune[] };
+
+// When the song we found is a text we hold, every song of that text, one per
+// tune, so the person can pick theirs or add the tune they sing it to.
+export async function findTextTunes(db: SupabaseClient, songId: string): Promise<TextTunes | null> {
+  const { data: song, error } = await db.from("songs").select("text_id").eq("id", songId).maybeSingle();
+  if (error) throw error;
+  if (!song?.text_id) return null;
+  const { data, error: tunesError } = await db
+    .from("songs")
+    .select("id, slug, title, display_artist, tune_id, tunes(name)")
+    .eq("text_id", song.text_id)
+    .order("id");
+  if (tunesError) throw tunesError;
+  const tunes = ((data ?? []) as any[])
+    .map((s) => ({ id: s.id, slug: s.slug, title: s.title, display_artist: s.display_artist, tune_id: s.tune_id, tune: s.tunes?.name ?? null }))
+    .sort((a, b) => (a.tune === null ? 1 : 0) - (b.tune === null ? 1 : 0) || (a.tune ?? "").localeCompare(b.tune ?? ""));
+  return { text_id: song.text_id, tunes };
 }
 
 export type ExistingSong = { id: string; slug: string | null; title: string; display_artist: string | null; match: "same" | "possible" };

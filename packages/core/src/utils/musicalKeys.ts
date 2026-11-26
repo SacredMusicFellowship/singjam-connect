@@ -5,23 +5,23 @@ export function isMusicalKey(value: unknown): value is (typeof MUSICAL_KEYS)[num
   return typeof value === "string" && (MUSICAL_KEYS as readonly string[]).includes(value);
 }
 
-// The mode a member's key is shown with, from the song's tonality: three letters
-// on a phone ("A min", "G maj", "C Dor"), the full word with more room ("A minor").
-// Only a song with one major, minor or modal tonality gets one; scales like
-// Pentatonic or Blues, or a mix, show the key alone.
-// Harmonic and melodic minor are still a minor key to the singer.
+// The mode a member's key is shown with, from the song's tonality. On the key pill
+// it reads like a chord chart: "D" for a major-type key, "Dm" for a minor-type one
+// (Dorian is a minor key with a raised 6th to the singer). The key list spells the
+// mode out ("D Dorian"). Only a song with one major, minor or modal tonality gets
+// one; scales like Pentatonic or Blues, or a mix, show the key alone.
 const KEY_MODES: Record<string, { short: string; full: string }> = {
-  major: { short: "maj", full: "major" },
-  ionian: { short: "maj", full: "major" },
-  minor: { short: "min", full: "minor" },
-  aeolian: { short: "min", full: "minor" },
-  "harmonic minor": { short: "min", full: "minor" },
-  "melodic minor": { short: "min", full: "minor" },
-  dorian: { short: "Dor", full: "Dorian" },
-  phrygian: { short: "Phr", full: "Phrygian" },
-  lydian: { short: "Lyd", full: "Lydian" },
-  mixolydian: { short: "Mix", full: "Mixolydian" },
-  locrian: { short: "Loc", full: "Locrian" },
+  major: { short: "", full: "major" },
+  ionian: { short: "", full: "major" },
+  minor: { short: "m", full: "minor" },
+  aeolian: { short: "m", full: "minor" },
+  "harmonic minor": { short: "m", full: "minor" },
+  "melodic minor": { short: "m", full: "minor" },
+  dorian: { short: "m", full: "Dorian" },
+  phrygian: { short: "m", full: "Phrygian" },
+  lydian: { short: "", full: "Lydian" },
+  mixolydian: { short: "", full: "Mixolydian" },
+  locrian: { short: "m", full: "Locrian" },
 };
 
 export type KeyMode = { short: string; full: string };
@@ -36,7 +36,7 @@ export function keyMode(tonality: string | null | undefined): KeyMode | null {
 
 export function keyWithMode(key: string, mode: KeyMode | null, length: "short" | "full"): string {
   if (!mode) return key;
-  return `${key} ${length === "short" ? mode.short : mode.full}`;
+  return length === "short" ? `${key}${mode.short}` : `${key} ${mode.full}`;
 }
 
 // A chosen key (the set's key, or your own) looks the same everywhere: violet,
