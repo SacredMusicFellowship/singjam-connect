@@ -87,6 +87,13 @@ export function isNearTitle(a: string, b: string): boolean {
   return ka.some((x) => kb.some((y) => Math.min(x.length, y.length) >= 5 && editDistance(x, y) <= 1));
 }
 
+// The artists a duo or group credit names: "Kenny Rogers & Dolly Parton" → both.
+// Spaces collapsed first (and the length bounded) so the split can't backtrack.
+function creditParts(name: string): string[] {
+  const parts = name.slice(0, 300).replace(/\s+/g, " ").split(/ (?:&|and|with|featuring|feat\.?|ft\.?) |, ?/i);
+  return parts.length > 1 ? parts.map(artistKey).filter(Boolean) : [];
+}
+
 // Same title plus a shared artist is the same song. Two different artists under
 // one title are different songs ("Dreams" — Fleetwood Mac / The Cranberries)
 // unless one is a cover listed on the other; with no artist on one side it's
@@ -98,5 +105,8 @@ export function sameSong(
   if (!isSameTitle(a.title, b.title)) return false;
   const aa = a.artists.map(artistKey).filter(Boolean), bb = b.artists.map(artistKey).filter(Boolean);
   if (!aa.length || !bb.length) return "possible";
-  return aa.some((x) => bb.some((y) => nearKeys(x, y))) ? "same" : false;
+  if (aa.some((x) => bb.some((y) => nearKeys(x, y)))) return "same";
+  // One artist of a duo's credit ("Dolly Parton" / "Kenny Rogers & Dolly Parton"), spelled exactly.
+  const ap = a.artists.flatMap(creditParts), bp = b.artists.flatMap(creditParts);
+  return aa.some((x) => bp.includes(x)) || bb.some((y) => ap.includes(y)) ? "same" : false;
 }

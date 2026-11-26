@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const spotify = vi.hoisted(() => ({ hit: null as null | { title: string; artist: string; spotify_url: string } }));
+const mb = vi.hoisted(() => ({ credit: [{ name: "Harbour Lights" }] as { name: string; joinphrase?: string }[], linked: [] as unknown[][] }));
 
 vi.mock("@/lib/enrichmentModels", () => ({
   askGptJson: async () => [{ artist: "Harbour Lights", year: 1964, why: "iconic" }],
@@ -11,13 +12,16 @@ vi.mock("@/lib/enrichmentSources", () => ({
   musicbrainz: async () => ({
     recordings: [{
       title: "Tide Song",
-      "artist-credit": [{ name: "Harbour Lights" }],
+      "artist-credit": mb.credit,
       releases: [{ date: "1964-05-01", "release-group": { "primary-type": "Single", "secondary-types": [] } }],
     }],
   }),
 }));
 vi.mock("@/lib/songLookup", async (actual) => ({ ...(await actual<object>()), findOnSpotify: async () => spotify.hit }));
-vi.mock("@/lib/enrichmentDb", () => ({ idsFor: async () => ["artist-2"] }));
+vi.mock("@/lib/enrichmentDb", () => ({
+  idsFor: async () => ["artist-2"],
+  linkMembers: async (...args: unknown[]) => { mb.linked.push(args.slice(1)); },
+}));
 
 import { addLandmarkRecordings } from "./enrichmentRecordings";
 
@@ -51,5 +55,21 @@ describe("addLandmarkRecordings", () => {
 
     expect(added[0].spotify_url).toBeNull();
     expect(inserts).toEqual([]);
+  });
+});
+
+describe("addLandmarkRecordings — a duo's record", () => {
+  it("adds one recording under the duo's credit and links its two artists", async () => {
+    mb.credit = [{ name: "Harbour Lights", joinphrase: " & " }, { name: "Mara Quill" }];
+    mb.linked = [];
+    spotify.hit = null;
+    const { db, inserts } = fakeDb();
+
+    const { added } = await addLandmarkRecordings(db, "song-1");
+
+    expect(added.map((a) => a.artist)).toEqual(["Harbour Lights & Mara Quill"]);
+    expect(inserts).toHaveLength(1);
+    expect(mb.linked).toEqual([["artist-2", ["Harbour Lights", "Mara Quill"]]]);
+    mb.credit = [{ name: "Harbour Lights" }];
   });
 });
