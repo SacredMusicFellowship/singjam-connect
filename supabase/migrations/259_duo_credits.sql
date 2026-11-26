@@ -2,6 +2,8 @@
 -- one recording artist (one recording of Islands in the Stream) whose artists
 -- are Kenny Rogers and Dolly Parton; each one's page lists the songs of the
 -- credits they're in, and the search card counts them (search_browse_entities).
+-- search_browse_entities also stops leaving out a songwriter, artist or show
+-- with exactly one song.
 --
 -- Data: the comma-joined credits that stood for a duet or a cast are renamed to
 -- the credit as released and linked to their artists, and "Peter, Paul & Mary"
@@ -129,7 +131,9 @@ begin
   cross join lateral (
     select coalesce(c.rank, case when c.n = nq then 0 when c.n like nq || '%' or c.n like '% ' || nq || '%' then 1 else 2 end) as rank
   ) r
-  where not (c.song_count = 1 and c.only_title = c.n)
+  -- Only tunes and texts have only_title; "= c.n" on a null left out every
+  -- songwriter, artist and show with exactly one song.
+  where not (c.song_count = 1 and c.only_title is not distinct from c.n)
   order by r.rank, c.song_count desc, c.name, c.kind, c.key
   limit least(greatest(limit_n, 0), 20);
 end;
