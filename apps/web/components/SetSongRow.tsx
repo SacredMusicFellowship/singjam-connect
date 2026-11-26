@@ -93,7 +93,7 @@ export default function SetSongRow({
   const videoId = getPrimaryYoutubeId(song.songs);
   const spotify_url = getPrimarySpotifyUrl(song.songs);
   const spotifyTrackId = getSpotifyTrackId(spotify_url);
-  const { chord_chart_url } = song.songs;
+  const { chord_chart_url, score_url } = song.songs;
   const productions = (song.songs.song_productions ?? [])
     .map((sp) => sp.productions?.name)
     .filter(Boolean) as string[];
@@ -383,9 +383,11 @@ export default function SetSongRow({
         </div>
 
         <div className="shrink-0 flex items-center gap-0.5">
-          {/* Ultimate Guitar chord chart */}
+          {/* Ultimate Guitar chord chart, else the score */}
           {chord_chart_url ? (
             <ChordsLink href={chord_chart_url} />
+          ) : score_url ? (
+            <ChordsLink href={score_url} kind="score" />
           ) : (
             <>
               <button

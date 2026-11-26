@@ -30,6 +30,7 @@ type RichUserSong = UserSong & {
   card_identity?: CardIdentity;
   recording_artists?: RecordingArtistCredit[] | null;
   chord_chart_url?: string | null;
+  score_url?: string | null;
   genres: string[];
   languages: string[];
   themes: string[];
@@ -113,6 +114,7 @@ async function fetchRichUserSongs(): Promise<RichUserSong[]> {
     year: row.year ?? null,
     popularity: Number(row.popularity ?? 0),
     chord_chart_url: row.chord_chart_url ?? null,
+    score_url: row.score_url ?? null,
   }));
 }
 

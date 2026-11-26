@@ -25,6 +25,7 @@ export type RepertoireCardSong = {
   productions: string[];
   popularity: number;
   chord_chart_url?: string | null;
+  score_url?: string | null;
 };
 
 // Every callback takes the song back rather than being bound to it, so a list
@@ -116,7 +117,7 @@ function RepertoireCard({
         >
           <Text className="text-sm text-zinc-600">+ Set</Text>
         </TouchableOpacity>
-        {song.chord_chart_url ? <ChordsChip url={song.chord_chart_url} /> : null}
+        {song.chord_chart_url ? <ChordsChip url={song.chord_chart_url} /> : song.score_url ? <ChordsChip url={song.score_url} kind="score" /> : null}
 
 
 

@@ -67,6 +67,7 @@ type Item = {
   year: number | null;
   popularity?: number;
   chord_chart_url?: string | null;
+  score_url?: string | null;
 };
 
 const CACHE_KEY = "cache:/repertoire";
@@ -282,6 +283,7 @@ const RepertoireRow = memo(function RepertoireRow({
       <ChordChartSlot
         songId={it.song_id}
         url={it.chord_chart_url}
+        score={it.score_url}
         canAdd={canAddCharts}
         size="md"
         onAdded={(url) => actions.chartAdded(it.song_id, url)}
@@ -445,6 +447,7 @@ export default function RepertoirePage() {
           communities: r.communities ?? [],
           popularity: r.popularity ?? 0,
           chord_chart_url: r.chord_chart_url ?? null,
+          score_url: r.score_url ?? null,
         }));
 
         if (!itemsMutatedRef.current) {

@@ -13,6 +13,8 @@ export type SongForm = {
   notesSource?: "wikipedia" | "ai";
   geniusUrl: string;
   chordChartUrl: string;
+  scoreUrl: string;
+  translationUrl: string;
   year: string;
   yearWritten: string;
   tonalities: string[];
@@ -75,6 +77,8 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       notes: form.notes,
       genius_url: form.geniusUrl,
       chord_chart_url: form.chordChartUrl,
+      score_url: form.scoreUrl,
+      translation_url: form.translationUrl,
       year: parseYear(form.year),
       year_written: parseYear(form.yearWritten),
       tonality: form.tonalities.join(", "),

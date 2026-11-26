@@ -244,6 +244,7 @@ export default function SetSongPanel({
         display_artist: hint.display_artist ?? null,
         slug: hint.slug ?? null,
         chord_chart_url: null,
+        score_url: null,
         youtube_url: null,
         tonality: null,
         year: hint.year ?? null,

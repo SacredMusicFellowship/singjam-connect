@@ -4,7 +4,7 @@ import { songSavePayload, type SongForm } from "./songSavePayload";
 const people = [{ id: "trad", name: "Traditional" }, { id: "p1", name: "John Lennon" }];
 const artists = [{ id: "a1", name: "The Beatles" }];
 const form = (over: Partial<SongForm> = {}): SongForm => ({
-  title: "  Twist and Shout ", displayArtist: "", firstLine: "", hook: "", notes: "", geniusUrl: "", chordChartUrl: "",
+  title: "  Twist and Shout ", displayArtist: "", firstLine: "", hook: "", notes: "", geniusUrl: "", chordChartUrl: "", scoreUrl: "", translationUrl: "",
   year: "", yearWritten: "1961", tonalities: ["Major"], meters: [], vibe: null,
   knownByRecording: null, genres: [], themes: [], languages: [], cultures: [], forms: [], occasions: [], communities: [], composers: [], lyricists: [],
   pendingComposerNames: [], pendingLyricistNames: [], composerTraditionalCulture: "Irish", lyricistTraditionalCulture: "Scottish",

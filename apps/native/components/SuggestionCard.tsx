@@ -184,7 +184,7 @@ function SuggestionCard({ song, onAdd, onView, confidence, context, onOpenBrowse
             >
               <Text className="text-slate-600 text-sm">+ Set</Text>
             </TouchableOpacity>
-            {mine?.chart ? <ChordsChip url={mine.chart} /> : null}
+            {mine?.chart ? <ChordsChip url={mine.chart} /> : mine?.score ? <ChordsChip url={mine.score} kind="score" /> : null}
           </>
         ) : confidence ? (
           <>

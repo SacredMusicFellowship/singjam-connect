@@ -22,6 +22,7 @@ export type Song = {
     card?: SongRowCard | null;
     slug: string | null;
     chord_chart_url: string | null;
+    score_url?: string | null;
     youtube_url: string | null;
     tonality: string | null;
     year: number | null;
@@ -121,6 +122,18 @@ export function UltimateGuitarIcon() {
       <path d="M892 88H308C186.498 88 88 186.498 88 308V892C88 1013.5 186.498 1112 308 1112H892C1013.5 1112 1112 1013.5 1112 892V308C1112 186.498 1013.5 88 892 88Z" fill="#111111"/>
       <path d="M291.02 280.202L356.294 463.987C375.375 409.765 425.595 348.494 507.938 348.494C594.301 348.494 647.532 411.755 657.573 481.057H794.152L858.425 232L706.782 310.342C670.621 280.221 623.411 263.132 572.209 263.132C502.907 263.132 451.715 291.252 417.554 329.413L291.02 280.202Z" fill="#FFD609"/>
       <path d="M562.169 646.76L913.66 481.057V780.327L840.349 752.208C799.167 877.732 704.783 967.12 560.159 967.12C399.474 967.12 287 841.576 287 687.931C287 642.73 296.046 605.588 312.107 569.428H314.115C305.075 598.549 301.06 624.658 301.06 655.799C301.06 777.322 393.455 868.702 512.959 868.702C619.422 868.702 687.693 794.375 719.834 707.012L562.169 646.76Z" fill="#FFD609"/>
+    </svg>
+  );
+}
+
+// Sheet music: a page of staff lines with a note, the size of UltimateGuitarIcon.
+export function ScoreIcon() {
+  return (
+    <svg className="h-5 w-5 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3.5" y="2.5" width="17" height="19" rx="2.5" />
+      <path d="M7 7.5h10M7 10.5h10M7 13.5h4" />
+      <path d="M15 17.5V11l3-1" />
+      <circle cx="13.5" cy="17.5" r="1.5" fill="currentColor" stroke="none" />
     </svg>
   );
 }

@@ -68,6 +68,7 @@ type SetSong = {
     // The same card data as every other song list (songs.card, migration 234); absent on a row just added.
     card?: SongRowCard | null;
     chord_chart_url: string | null;
+    score_url?: string | null;
     tonality?: string | null;
     song_productions?: { productions: { name: string } | null }[];
   };
@@ -492,6 +493,15 @@ function SongRow({
                 accessibilityLabel="Chord chart"
               >
                 <Text className="text-xs font-medium text-zinc-600">Chords</Text>
+                <Ionicons name="open-outline" size={11} color="#a1a1aa" />
+              </TouchableOpacity>
+            ) : song.songs.score_url ? (
+              <TouchableOpacity
+                onPress={() => Linking.openURL(song.songs.score_url!).catch(() => Alert.alert('Could not open link'))}
+                className="ml-2 flex-row items-center gap-1 px-2.5 py-1 rounded-full border border-zinc-200 bg-white"
+                accessibilityLabel="Score"
+              >
+                <Text className="text-xs font-medium text-zinc-600">Score</Text>
                 <Ionicons name="open-outline" size={11} color="#a1a1aa" />
               </TouchableOpacity>
             ) : null}
@@ -974,7 +984,7 @@ export default function SetDetailScreen() {
   // on the local `id` instead of trusting payload.old.
   useEffect(() => {
     if (!id) return;
-    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, card, song_productions(productions(name)), chord_chart_url, tonality)';
+    const bySong = 'id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, card, song_productions(productions(name)), chord_chart_url, score_url, tonality)';
     const sortByPosition = (rows: SetSong[]) => [...rows].sort((a, b) => a.position - b.position);
 
     const channel = supabase
@@ -1096,7 +1106,7 @@ export default function SetDetailScreen() {
         .single(),
       supabase
         .from('set_songs')
-        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, tonality)')
+        .select('id, song_id, position, key_note, notes, played, leader_user_ids, added_by_user_id, songs(title, display_artist, byline, song_productions(productions(name)), chord_chart_url, score_url, tonality)')
         .eq('set_id', id)
         .order('position', { ascending: true }),
       user

@@ -12,6 +12,52 @@ export function isUltimateGuitarChartUrl(raw: string): boolean {
   return url.pathname.length > 1;
 }
 
+// Scores (sheet music) come from a short list of sites, or a PDF anywhere.
+// Song editors set them; members can't, so the list keeps out spam.
+const SCORE_SITES: { host: string; name: string }[] = [
+  { host: "dilbeyti.com", name: "Dil Beyti" },
+  { host: "hymnary.org", name: "Hymnary" },
+  { host: "imslp.org", name: "IMSLP" },
+  { host: "cpdl.org", name: "CPDL" },
+  { host: "musescore.com", name: "MuseScore" },
+];
+
+function httpUrl(raw: string): URL | null {
+  try {
+    const url = new URL(raw.trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+const onHost = (host: string, site: string) => host === site || host.endsWith(`.${site}`);
+
+// Where a score link goes, as a reader would name it: "Dil Beyti", "PDF", or
+// null when it isn't a score link we accept.
+export function scoreSiteName(raw: string): string | null {
+  const url = httpUrl(raw);
+  if (!url || url.pathname.length <= 1) return null;
+  const host = url.hostname.toLowerCase();
+  const site = SCORE_SITES.find((s) => onHost(host, s.host));
+  if (site) return site.name;
+  return url.pathname.toLowerCase().endsWith(".pdf") ? "PDF" : null;
+}
+
+export function isScoreUrl(raw: string): boolean {
+  return scoreSiteName(raw) !== null;
+}
+
+// The one chart a row of song actions shows: chords when the song has them,
+// otherwise its score. A song with both shows its score with its other links.
+export type ChartLink = { kind: "chords" | "score"; url: string };
+
+export function chartLink(chords: string | null | undefined, score: string | null | undefined): ChartLink | null {
+  if (chords) return { kind: "chords", url: chords };
+  if (score) return { kind: "score", url: score };
+  return null;
+}
+
 export type ChartReviewer = { id: string; role: string | null };
 
 // Admins review any chart, including their own; song editors review everyone else's.

@@ -1,6 +1,6 @@
 "use client";
 
-import { browsePath, bylineCredits, songOrigin, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
+import { browsePath, bylineCredits, scoreSiteName, songOrigin, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
 import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
@@ -114,7 +114,7 @@ function usePinToTopOnLoad(loaded: boolean) {
 }
 
 const SONG_SELECT = `
-          id, title, slug, display_artist, byline, byline_origin, first_line, hook, notes, genius_url, chord_chart_url, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          id, title, slug, display_artist, byline, byline_origin, first_line, hook, notes, genius_url, chord_chart_url, score_url, translation_url, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_composers(people(name, slug)),
           song_lyricists(people(name, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
@@ -325,6 +325,7 @@ export default function SongPageContent() {
   const composers = sortByLastName((song.song_composers as any[]).map((x: any) => x.people?.name).filter(Boolean));
   const lyricists = sortByLastName((song.song_lyricists as any[]).map((x: any) => x.people?.name).filter(Boolean));
   const tagRows = song.song_tags as SongTagRow[];
+  const scoreSite = song.score_url ? scoreSiteName(song.score_url) : null;
   const personSlugs = new Map<string, string>(
     [...(song.song_composers as any[]), ...(song.song_lyricists as any[])].filter((x: any) => x.people?.slug).map((x: any) => [x.people.name, x.people.slug])
   );
@@ -431,6 +432,7 @@ export default function SongPageContent() {
                 <ChordChartSlot
                   songId={song.id}
                   url={song.chord_chart_url}
+                  score={song.score_url}
                   canAdd={isLoggedIn}
                   size="md"
                   onAdded={handleChartAdded}
@@ -441,6 +443,7 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
+                score={song.score_url}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -556,7 +559,7 @@ export default function SongPageContent() {
         );
       })()}
 
-      {(song.first_line || song.hook || song.genius_url) && (
+      {(song.first_line || song.hook || song.genius_url || song.translation_url) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lyrics</h2>
           {song.first_line && (
@@ -577,15 +580,29 @@ export default function SongPageContent() {
               Full lyrics
             </a>
           )}
+          {song.translation_url && (
+            <a href={song.translation_url} target="_blank" rel="noopener noreferrer"
+              className="ml-2 inline-block rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600">
+              Translation
+            </a>
+          )}
         </section>
       )}
 
-      {(tonalityPills.length > 0 || meterPills.length > 0 || song.vibe) && (
+      {(tonalityPills.length > 0 || meterPills.length > 0 || song.vibe || scoreSite) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Musical properties</h2>
           {tonalityPills.length > 0 && <TagRow label="Tonality" tags={tonalityPills} />}
           {meterPills.length > 0 && <TagRow label="Meter" tags={meterPills} />}
           {song.vibe && <TagRow label="Vibe" tags={[song.vibe]} />}
+          {scoreSite && (
+            <p className="text-sm text-slate-700">
+              <span className="font-medium text-slate-500">Score: </span>
+              <a href={song.score_url} target="_blank" rel="noopener noreferrer" className="text-amber-700 hover:underline">
+                {scoreSite} ↗
+              </a>
+            </p>
+          )}
         </section>
       )}
 
@@ -658,6 +675,7 @@ export default function SongPageContent() {
               <ChordChartSlot
                 songId={song.id}
                 url={song.chord_chart_url}
+                score={song.score_url}
                 canAdd={isLoggedIn}
                 size="md"
                 onAdded={handleChartAdded}
@@ -668,6 +686,7 @@ export default function SongPageContent() {
             <ChordChartSlot
               songId={song.id}
               url={song.chord_chart_url}
+              score={song.score_url}
               canAdd={isLoggedIn}
               size="md"
               onAdded={handleChartAdded}
