@@ -39,7 +39,8 @@ function fakeDb(tables: Record<string, any[]>) {
     from(table: string) {
       let rows = tables[table] ?? [];
       const q: any = {
-        select: () => q, order: () => q, eq: () => q, not: () => q,
+        select: () => q, order: () => q, not: () => q,
+        eq: (col: string, v: unknown) => { rows = rows.filter((r) => !(col in r) || r[col] === v); return q; },
         in: (col: string, vals: unknown[]) => { rows = rows.filter((r) => vals.includes(r[col])); return q; },
         range: async () => ({ data: rows, error: null }),
         maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
@@ -88,6 +89,36 @@ describe("loadBrowseEntity facts", () => {
       "Origin: Jewish", "Date: 16th c.", "Sources: Proverbs 3:17 · Proverbs 3:18 · Lamentations 5:21", "Language: Hebrew",
     ]);
     expect(e?.facts?.[2].groups[0][0].link).toEqual({ kind: "scripture", key: "proverbs/3" });
+  });
+});
+
+describe("loadBrowseEntity artists", () => {
+  const db = fakeDb({
+    artists: [
+      { id: "duo", name: "Tobin Ashe & Lene Varga", slug: "tobin-ashe-lene-varga", member_of: [],
+        members: [{ position: 1, member: { name: "Lene Varga", slug: "lene-varga" } }, { position: 0, member: { name: "Tobin Ashe", slug: "tobin-ashe" } }] },
+      { id: "lene", name: "Lene Varga", slug: "lene-varga", members: [], member_of: [{ group: { id: "duo", name: "Tobin Ashe & Lene Varga", slug: "tobin-ashe-lene-varga" } }] },
+    ],
+    song_recording_artists: [
+      { song_id: "solo", artist_id: "lene", year: 1975 },
+      { song_id: "duet", artist_id: "duo", year: 1983 },
+    ],
+  });
+
+  it("lists a duo's artists and its songs", async () => {
+    const e = await loadBrowseEntity(db, "artist", "tobin-ashe-lene-varga");
+    expect(e?.facts).toEqual([{ label: "Artists", groups: [[
+      { text: "Tobin Ashe", link: { kind: "artist", key: "tobin-ashe" } }, { text: "Lene Varga", link: { kind: "artist", key: "lene-varga" } },
+    ]] }]);
+    expect(e?.songIds).toEqual(["duet"]);
+  });
+
+  it("lists an artist's own songs and the songs of the duos they're in", async () => {
+    const e = await loadBrowseEntity(db, "artist", "lene-varga");
+    expect(e?.songIds).toEqual(["solo", "duet"]);
+    expect(e?.roles.get("solo")).toBe("Recorded 1975");
+    expect(e?.roles.get("duet")).toBe("Tobin Ashe & Lene Varga · 1983");
+    expect(e?.facts).toEqual([{ label: "Also in", groups: [[{ text: "Tobin Ashe & Lene Varga", link: { kind: "artist", key: "tobin-ashe-lene-varga" } }]] }]);
   });
 });
 

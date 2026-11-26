@@ -18,6 +18,14 @@ export async function idsFor(admin: SupabaseClient, table: "people" | "languages
   return ids;
 }
 
+// A duo or group credit's artists (migration 259), each found or added, in credit order.
+export async function linkMembers(admin: SupabaseClient, groupId: string, names: string[]) {
+  if (!names.length) return;
+  const ids = await idsFor(admin, "artists", names);
+  const rows = ids.filter((id) => id !== groupId).map((member_id, position) => ({ group_id: groupId, member_id, position }));
+  if (rows.length) await admin.from("artist_members").upsert(rows, { onConflict: "group_id,member_id", ignoreDuplicates: true });
+}
+
 // Tags of one type by exact name. Only languages may be created; every other
 // vocabulary is fixed (the decision already kept to the approved lists).
 export async function tagIds(admin: SupabaseClient, type: TagType, names: string[]) {

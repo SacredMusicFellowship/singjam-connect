@@ -114,13 +114,28 @@ async function loadEntity(db: any, kind: BrowseKind, slug: string): Promise<Brow
     return { kind, slug: person.slug, name: person.name, subtitle: null, notes: person.notes ?? null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
   }
   if (kind === "artist") {
-    const artist = await bySlugOrName(db, "artists", "id, name, slug", slug);
+    // A duo or group credit ("Kenny Rogers & Dolly Parton", migration 259) names
+    // its artists; each artist's page also lists the songs of the credits it's in.
+    const artist = await bySlugOrName(db, "artists",
+      "id, name, slug, members:artist_members!artist_members_group_id_fkey(position, member:artists!artist_members_member_id_fkey(name, slug)), " +
+      "member_of:artist_members!artist_members_member_id_fkey(group:artists!artist_members_group_id_fkey(id, name, slug))", slug);
     if (!artist) return null;
-    const rows = await fetchAllRows<{ song_id: string; year: number | null }>((f: number, t: number) =>
-      db.from("song_recording_artists").select("song_id, year").eq("artist_id", artist.id).order("song_id").range(f, t)
+    const groups = ((artist.member_of ?? []) as any[]).map((m) => m.group).filter(Boolean) as { id: string; name: string; slug: string }[];
+    const recordings = (ids: string[]) => fetchAllRows<{ song_id: string; artist_id: string; year: number | null }>((f: number, t: number) =>
+      db.from("song_recording_artists").select("song_id, artist_id, year").in("artist_id", ids).order("song_id").order("artist_id").range(f, t)
     );
-    const roles = new Map(rows.map((r) => [r.song_id, r.year ? `Recorded ${r.year}` : "Recording"]));
-    return { kind, slug: artist.slug, name: artist.name, subtitle: null, notes: null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles };
+    const [own, theirs] = await Promise.all([recordings([artist.id]), groups.length ? recordings(groups.map((g) => g.id)) : []]);
+    const roles = new Map(own.map((r) => [r.song_id, r.year ? `Recorded ${r.year}` : "Recording"]));
+    for (const r of theirs) {
+      if (!roles.has(r.song_id)) roles.set(r.song_id, [groups.find((g) => g.id === r.artist_id)?.name, r.year].filter(Boolean).join(" · "));
+    }
+    const members = [...((artist.members ?? []) as any[])].sort((a, b) => a.position - b.position).map((m) => m.member).filter(Boolean);
+    const linked = (a: { name: string; slug: string }): CardCredit => ({ text: a.name, link: { kind: "artist", key: a.slug } });
+    return {
+      kind, slug: artist.slug, name: artist.name, subtitle: null,
+      facts: labelled([["Artists", [members.map(linked)]], ["Also in", [groups.map(linked)]]]),
+      notes: null, parents: [], children: [], related: [], songIds: [...roles.keys()], roles,
+    };
   }
   if (kind === "show") {
     const { data: show } = await db.from("productions").select("id, name, year, medium").eq("slug", slug).maybeSingle();

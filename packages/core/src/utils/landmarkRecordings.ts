@@ -38,13 +38,14 @@ export function leadArtist(name: string): string {
   return flat.split(/ (?:&|and|with|featuring|feat\.?|ft\.?) |, ?/i)[0].trim();
 }
 
-// MusicBrainz credits a record to every act on it ("Rory Cooney, Gary Daigle,
-// & Theresa Donohoo"); the catalogue lists one artist per recording: the act
-// the models named, else the first credited.
-export function creditedArtist(credits: { name: string }[], named: string): string {
-  if (credits.length <= 1) return credits[0]?.name ?? named;
-  const lead = leadArtist(named);
-  return credits.find((c) => sameArtist(c.name, named) || sameArtist(c.name, lead))?.name ?? credits[0].name;
+// MusicBrainz credits a record to every act on it, joined as printed. Several
+// acts make one duo or group credit ("Kenny Rogers & Dolly Parton") that names
+// each of them as a member (migration 259), so it's one recording, listed on
+// every member's page.
+export function artistCredit(credits: { name: string; joinphrase?: string }[], named: string): { name: string; members: string[] } {
+  if (credits.length <= 1) return { name: credits[0]?.name ?? named, members: [] };
+  const name = credits.map((c, i) => c.name + (i < credits.length - 1 ? c.joinphrase || ", " : "")).join("");
+  return { name, members: credits.map((c) => c.name) };
 }
 
 // Recordings both models listed (matched by artist), minus artists the song
