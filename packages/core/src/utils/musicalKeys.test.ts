@@ -61,14 +61,16 @@ describe("keyForNewLeaders", () => {
 
 describe("keyMode", () => {
   it("reads a single major, minor or modal tonality", () => {
-    expect(keyWithMode("A", keyMode("Minor"), "short")).toBe("A min");
+    expect(keyWithMode("A", keyMode("Minor"), "short")).toBe("Am");
     expect(keyWithMode("A", keyMode("Minor"), "full")).toBe("A minor");
-    expect(keyWithMode("A", keyMode("Major"), "short")).toBe("A maj");
+    expect(keyWithMode("A", keyMode("Major"), "short")).toBe("A");
     expect(keyWithMode("A", keyMode("Major"), "full")).toBe("A major");
-    expect(keyWithMode("D", keyMode(" dorian "), "short")).toBe("D Dor");
+    expect(keyWithMode("D", keyMode(" dorian "), "short")).toBe("Dm");
     expect(keyWithMode("D", keyMode("Dorian"), "full")).toBe("D Dorian");
-    expect(keyWithMode("E", keyMode("Harmonic Minor"), "short")).toBe("E min");
+    expect(keyWithMode("E", keyMode("Harmonic Minor"), "short")).toBe("Em");
     expect(keyWithMode("E", keyMode("Melodic Minor"), "full")).toBe("E minor");
+    expect(keyWithMode("G", keyMode("Mixolydian"), "short")).toBe("G");
+    expect(keyWithMode("E", keyMode("Phrygian"), "short")).toBe("Em");
   });
 
   it("shows the key alone for no tonality, a scale, or more than one", () => {

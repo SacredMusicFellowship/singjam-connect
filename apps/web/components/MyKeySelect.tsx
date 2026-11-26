@@ -3,8 +3,8 @@ import PillSelect, { StackedLabels } from "@/components/PillSelect";
 
 // The key the member plays the song in, shown to their set-mates next to their
 // name, in the key colour shared with the set list's key (violet once chosen,
-// neutral while empty). With the song's mode: "Key A min" on a phone, so the row of
-// song actions stays on one line, and "My key A minor" from sm up. Sized for the
+// neutral while empty). With the song's mode as a chord chart writes it: "Key Am" on a
+// phone, so the row of song actions stays on one line, and "My key Am" from sm up. Sized for the
 // widest key in the widest mode, so the pill is one width on every song and the
 // row's buttons line up from song to song. On phones it shares the row's spare
 // width with Role and Add to set.
@@ -26,16 +26,7 @@ export default function MyKeySelect({
       <>
         <span className="sm:hidden">Key</span>
         <span className="hidden sm:inline">My key</span>{" "}
-        <span className="font-semibold">
-          {mode ? (
-            <>
-              <span className="sm:hidden">{keyWithMode(key, mode, "short")}</span>
-              <span className="hidden sm:inline">{keyWithMode(key, mode, "full")}</span>
-            </>
-          ) : (
-            key
-          )}
-        </span>
+        <span className="font-semibold">{keyWithMode(key, mode, "short")}</span>
       </>
     ) : (
       "+ My key"
