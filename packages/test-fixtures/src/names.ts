@@ -50,6 +50,9 @@ export const TAGS = {
 
 export type TagName = keyof typeof TAGS;
 
+// The ilahi's tags (buildIlahi), kept apart from TAGS so member favourites don't change.
+export const ILAHI_TAGS = { Sacred: "genre", Ilahi: "form", Sufi: "community", Hicaz: "mode", Sofyan: "rhythm" } as const;
+
 // Genres a member can list as favourites.
 export const GENRES = (Object.keys(TAGS) as TagName[]).filter((name) => TAGS[name] === "genre");
 

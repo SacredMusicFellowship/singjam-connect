@@ -87,10 +87,11 @@ export function scenarioToSql(scenario: Scenario, anchor: Date = FIXED_NOW): See
       scenario.songs.map((s) => ({
         id: s.id, title: s.title, slug: s.slug, display_artist: s.display_artist, first_line: s.first_line,
         year: s.year, tonality: s.tonality, meter: s.meter, vibe: s.vibe, youtube_url: s.youtube_url,
-        chord_chart_url: s.chord_chart_url,
+        chord_chart_url: s.chord_chart_url, score_url: s.score_url,
       })),
     ),
     insert("public.song_composers", scenario.songComposers.map((r) => ({ song_id: r.song_id, person_id: r.person_id }))),
+    insert("public.song_lyricists", scenario.songLyricists.map((r) => ({ song_id: r.song_id, person_id: r.person_id }))),
     insert(
       "public.song_recording_artists",
       scenario.songRecordingArtists.map((r) => ({ song_id: r.song_id, artist_id: r.artist_id, year: r.year, position: r.position })),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MUSICAL_KEYS, keyMode } from "@singjam/core";
 import { EMAIL_DOMAIN, FIXED_NOW } from "./constants";
-import { TAGS } from "./names";
+import { ILAHI_TAGS, TAGS } from "./names";
 import { buildScenario } from "./scenario";
 
 const { scenario, refs } = buildScenario();
@@ -79,7 +79,7 @@ describe("database constraints", () => {
   it("satisfies the unique indexes", () => {
     expect(uniqueBy(scenario.profiles.filter((p) => p.username), (p) => p.username!.toLowerCase())).toBe(true);
     expect(uniqueBy(scenario.songs, (s) => s.slug)).toBe(true);
-    expect(uniqueBy(scenario.songs, (s) => `${s.title.toLowerCase()}|${s.display_artist.toLowerCase()}`)).toBe(true);
+    expect(uniqueBy(scenario.songs, (s) => `${s.title.toLowerCase()}|${(s.display_artist ?? "").toLowerCase()}`)).toBe(true);
     expect(uniqueBy(scenario.jams, (j) => j.short_code)).toBe(true);
     expect(uniqueBy(scenario.sets, (s) => s.short_code)).toBe(true);
     expect(uniqueBy(scenario.sets.filter((s) => s.jam_id), (s) => s.jam_id!)).toBe(true);
@@ -92,8 +92,9 @@ describe("database constraints", () => {
   });
 
   it("uses tags and keys the app knows", () => {
-    for (const t of [...scenario.songTags, ...scenario.jamTags]) expect(TAGS[t.tag_name as keyof typeof TAGS]).toBe(t.tag_type);
-    for (const s of scenario.songs) expect(keyMode(s.tonality)).not.toBeNull();
+    const known: Record<string, string> = { ...TAGS, ...ILAHI_TAGS };
+    for (const t of [...scenario.songTags, ...scenario.jamTags]) expect(known[t.tag_name]).toBe(t.tag_type);
+    for (const s of scenario.songs) if (s.tonality) expect(keyMode(s.tonality)).not.toBeNull();
     for (const r of scenario.setSongs) if (r.key_note) expect(MUSICAL_KEYS).toContain(r.key_note);
   });
 });

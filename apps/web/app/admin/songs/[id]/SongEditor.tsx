@@ -118,6 +118,8 @@ type Props = {
   allForms: Lookup[];
   allOccasions: Lookup[];
   allCommunities: Lookup[];
+  allModes: Lookup[];
+  allRhythms: Lookup[];
   allTexts: { id: string; title: string; slug: string }[];
   allTunes: { id: string; slug: string; tune_label: string }[];
   allPeople: Lookup[];
@@ -140,6 +142,8 @@ export default function SongEditor({
   allForms,
   allOccasions,
   allCommunities,
+  allModes,
+  allRhythms,
   allTexts: initialTexts,
   allTunes: initialTunes,
   allPeople,
@@ -236,6 +240,8 @@ export default function SongEditor({
   const [forms, setForms] = useState<string[]>(() => songTagNames(song?.song_tags, "form", "general"));
   const [occasions, setOccasions] = useState<string[]>(() => songTagNames(song?.song_tags, "occasion", "general"));
   const [communities, setCommunities] = useState<string[]>(() => songTagNames(song?.song_tags, "community", "general"));
+  const [maqams, setMaqams] = useState<string[]>(() => songTagNames(song?.song_tags, "mode", "general").slice(0, 1));
+  const [usuls, setUsuls] = useState<string[]>(() => songTagNames(song?.song_tags, "rhythm", "general").slice(0, 1));
 
   // Alternate titles
   const [altTitles, setAltTitles] = useState<AltTitle[]>(song?.song_alternate_titles ?? []);
@@ -341,7 +347,7 @@ export default function SongEditor({
     title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, scoreUrl, translationUrl, year, yearWritten, tonalities, meters, vibe,
     [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
     isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
-    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, cardLine, textId, tuneId,
+    forms, occasions, communities, maqams, usuls, composerTraditionalCulture, lyricistTraditionalCulture, cardLine, textId, tuneId,
   ]);
   const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
 
@@ -622,7 +628,7 @@ export default function SongEditor({
           {
             title, displayArtist, firstLine, hook, notes, notesSource: appliedNotes && notes === appliedNotes.text ? appliedNotes.source : undefined,
             geniusUrl, chordChartUrl, scoreUrl, translationUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, cardLine, textId, tuneId,
-            genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
+            genres, themes, languages, cultures, forms, occasions, communities, modes: maqams, rhythms: usuls, composers, lyricists, pendingComposerNames, pendingLyricistNames,
             composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
             productions, pendingProductionNames, productionYears,
             hadRecordingArtists: (song?.song_recording_artists.length ?? 0) > 0,
@@ -938,6 +944,9 @@ export default function SongEditor({
         <div className="grid gap-4 sm:grid-cols-2">
           <TagPillsField label="Tonality" value={tonalities} onChange={setTonalities} suggestions={TONALITY_OPTIONS} allowNew placeholder="Search tonality…" />
           <TagPillsField label="Meter" value={meters} onChange={setMeters} suggestions={METER_OPTIONS} placeholder="Search meter…" />
+          {/* One of each per song (Asana 1220646543286091): picking another replaces it. */}
+          <TagPillsField label="Maqam" value={maqams} onChange={(v) => setMaqams(v.slice(-1))} suggestions={allModes.map((m) => m.name)} placeholder="Search maqams, ragas, modes…" />
+          <TagPillsField label="Usul" value={usuls} onChange={(v) => setUsuls(v.slice(-1))} suggestions={allRhythms.map((r) => r.name)} placeholder="Search usuls and rhythms…" />
         </div>
 
         <div>

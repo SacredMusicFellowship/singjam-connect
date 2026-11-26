@@ -107,3 +107,27 @@ test("a song editor links a score from an allowed site, and the song shows it in
     await admin.from("songs").delete().eq("id", song.id);
   }
 });
+
+test("a song editor sets a song's maqam and usul, one of each", async ({ page }) => {
+  const { data: song, error } = await admin.from("songs").insert({ title: `Maqam Check ${randomUUID().slice(0, 8)}` }).select("id").single();
+  if (error || !song) throw error;
+  try {
+    await openPage(page, `/song-editor/songs/${song.id}`);
+    const maqam = await hydrated(page.getByPlaceholder("Search maqams, ragas, modes…"));
+    await maqam.fill("Hica");
+    await page.getByRole("button", { name: "Hicaz", exact: true }).click();
+    await maqam.fill("Ras");
+    await page.getByRole("button", { name: "Rast", exact: true }).click();
+    const usul = page.getByPlaceholder("Search usuls and rhythms…");
+    await usul.fill("Düy");
+    await page.getByRole("button", { name: "Düyek", exact: true }).click();
+
+    await page.getByRole("button", { name: "Save", exact: true }).first().click();
+    await expect.poll(async () => {
+      const { data } = await admin.from("song_tags").select("tags(name, type)").eq("song_id", song.id);
+      return (data ?? []).map((r: any) => `${r.tags.type}:${r.tags.name}`).sort();
+    }).toEqual(["mode:Rast", "rhythm:Düyek"]);
+  } finally {
+    await admin.from("songs").delete().eq("id", song.id);
+  }
+});

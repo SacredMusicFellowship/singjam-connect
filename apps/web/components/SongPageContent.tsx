@@ -1,6 +1,6 @@
 "use client";
 
-import { browsePath, bylineCredits, scoreSiteName, songOrigin, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
+import { browsePath, bylineCredits, scoreSiteName, songModeCredits, songOrigin, CONFIDENCE_STYLES, formatJammers, isUuid, songTagNames, songTagRefs, TAG_TYPE_LABELS, type ConfidenceLevel, type SongTagRow, type TagContext } from "@singjam/core";
 import { SpotifyEmbed, YouTubeEmbed } from "@/components/MediaEmbeds";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
@@ -114,7 +114,7 @@ function usePinToTopOnLoad(loaded: boolean) {
 }
 
 const SONG_SELECT = `
-          id, title, slug, display_artist, byline, byline_origin, first_line, hook, notes, genius_url, chord_chart_url, score_url, translation_url, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
+          id, title, slug, display_artist, byline, byline_origin, first_line, hook, notes, genius_url, chord_chart_url, score_url, translation_url, card, youtube_url, year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_composers(people(name, slug)),
           song_lyricists(people(name, slug)),
           song_recording_artists(year, position, youtube_url, spotify_url, artists(name, slug)),
@@ -326,6 +326,11 @@ export default function SongPageContent() {
   const lyricists = sortByLastName((song.song_lyricists as any[]).map((x: any) => x.people?.name).filter(Boolean));
   const tagRows = song.song_tags as SongTagRow[];
   const scoreSite = song.score_url ? scoreSiteName(song.score_url) : null;
+  // "Maqam: Hicaz", "Usul: Sofyan" (migration 256), named by the tag's family.
+  const modeRows = songModeCredits(song.card?.card_identity).map((c) => ({
+    label: c.lead ? c.lead.replace(/: $/, "") : c.link?.kind === "rhythm" ? "Rhythm" : "Mode",
+    tags: [{ name: c.text, href: c.link ? browsePath(c.link.kind, c.link.key) : null }],
+  }));
   const personSlugs = new Map<string, string>(
     [...(song.song_composers as any[]), ...(song.song_lyricists as any[])].filter((x: any) => x.people?.slug).map((x: any) => [x.people.name, x.people.slug])
   );
@@ -589,12 +594,13 @@ export default function SongPageContent() {
         </section>
       )}
 
-      {(tonalityPills.length > 0 || meterPills.length > 0 || song.vibe || scoreSite) && (
+      {(tonalityPills.length > 0 || meterPills.length > 0 || song.vibe || scoreSite || modeRows.length > 0) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Musical properties</h2>
           {tonalityPills.length > 0 && <TagRow label="Tonality" tags={tonalityPills} />}
           {meterPills.length > 0 && <TagRow label="Meter" tags={meterPills} />}
           {song.vibe && <TagRow label="Vibe" tags={[song.vibe]} />}
+          {modeRows.map((m) => <TagRow key={m.label} label={m.label} tags={m.tags} />)}
           {scoreSite && (
             <p className="text-sm text-slate-700">
               <span className="font-medium text-slate-500">Score: </span>

@@ -39,6 +39,7 @@ describe("seed against the migrated schema", () => {
       ["public.profiles", scenario.profiles.length],
       ["public.songs", scenario.songs.length],
       ["public.song_composers", scenario.songComposers.length],
+      ["public.song_lyricists", scenario.songLyricists.length],
       ["public.song_tags", scenario.songTags.length],
       ["public.user_songs", scenario.userSongs.length],
       ["public.jams", scenario.jams.length],

@@ -20,6 +20,8 @@ export const SCREENS: Screen[] = [
   { name: "songs", url: "/songs", as: "member" },
   { name: "search", url: `/search?q=${encodeURIComponent(writer.name.split(" ").pop()!)}`, as: "member" },
   { name: "song", url: `/songs/${refs.songs[0].slug}`, as: "member" },
+  { name: "song-ilahi", url: `/songs/${refs.ilahi.slug}`, as: "member" },
+  { name: "search-ilahi", url: `/search?q=${encodeURIComponent("Gönül Bahçesinde")}`, as: "member" },
   { name: "friends", url: "/friends", as: "member" },
   { name: "repertoire", url: "/repertoire", as: "member" },
   { name: "repertoire-empty", url: "/repertoire", as: "newcomer" },

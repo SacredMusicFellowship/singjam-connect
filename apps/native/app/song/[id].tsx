@@ -37,6 +37,7 @@ import {
   type SongTagRow,
   type TagContext,
   scoreSiteName,
+  songModeCredits,
 } from '@singjam/core';
 import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
@@ -104,6 +105,7 @@ type SongDetail = {
   lyricsCultures: string[];
   recordingArtists: RecordingArtist[];
   tagLists: { label: string; tags: { name: string; href: string | null }[] }[];
+  modeRows: { label: string; tags: { name: string; href: string | null }[] }[];
   personSlugs: Record<string, string>;
   productionSlugs: Record<string, string>;
   productions: string[];
@@ -304,7 +306,7 @@ export default function SongDetailScreen() {
         .from('songs')
         .select(`
           id, slug, title, display_artist, byline, byline_origin, first_line, hook, notes,
-          genius_url, chord_chart_url, score_url, translation_url, youtube_url,
+          genius_url, chord_chart_url, score_url, translation_url, card, youtube_url,
           year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_alternate_titles(title),
           song_composers(people(name, slug)),
@@ -382,6 +384,11 @@ export default function SongDetailScreen() {
           .map((x: any) => ({ name: x.artists?.name, slug: x.artists?.slug ?? null, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
           .filter((x: any) => x.name)
       ),
+      // "Maqam: Hicaz", "Usul: Sofyan" (migration 256), as on web.
+      modeRows: songModeCredits(s.card?.card_identity).map((c) => ({
+        label: c.lead ? c.lead.replace(/: $/, '') : c.link?.kind === 'rhythm' ? 'Rhythm' : 'Mode',
+        tags: [{ name: c.text, href: c.link ? nativeBrowseHref(browsePath(c.link.kind, c.link.key)) : null }],
+      })),
       tagLists: (['genre', 'form', 'occasion', 'community', 'theme', 'language', 'culture'] as const)
         .map((type) => ({
           label: TAG_TYPE_LABELS[type],
@@ -584,7 +591,7 @@ export default function SongDetailScreen() {
     musicCultures: song.musicCultures, lyricsCultures: song.lyricsCultures, origin: song.origin,
     text: song.textRef, tune: song.tuneRef,
   });
-  const hasMusicalProps = tonalityPills.length > 0 || meterPills.length > 0 || !!song.vibe;
+  const hasMusicalProps = tonalityPills.length > 0 || meterPills.length > 0 || !!song.vibe || song.modeRows.length > 0;
   const hasTags = song.tagLists.length > 0;
   const hasJammers = jammers && (jammers.lead.length > 0 || jammers.support.length > 0 || jammers.learn.length > 0);
 
@@ -912,6 +919,7 @@ export default function SongDetailScreen() {
             <TagRow label="Tonality" tags={tonalityPills} />
             <TagRow label="Meter" tags={meterPills} />
             {song.vibe ? <TagRow label="Vibe" tags={[song.vibe]} /> : null}
+            {song.modeRows.map((m) => <TagRow key={m.label} label={m.label} tags={m.tags} onOpen={openBrowse} />)}
           </View>
         ) : null}
 
