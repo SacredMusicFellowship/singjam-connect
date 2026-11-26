@@ -1,7 +1,12 @@
 const SMALL = new Set(["a", "an", "the", "and", "but", "or", "nor", "for", "so", "yet", "of", "on", "in", "at", "to", "by", "up", "as", "o'er", "from", "with", "into"]);
 
 const key = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[’'‘`]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-const bare = (s: string) => s.replace(/\s*\([^()]*\)\s*$/, "").trim();
+// "Jolene (song)" → "Jolene".
+const bare = (s: string) => {
+  const t = s.trim();
+  const open = t.endsWith(")") ? t.lastIndexOf("(") : -1;
+  return (open > 0 ? t.slice(0, open) : t).trim();
+};
 
 // "canticle of the turning" → "Canticle of the Turning".
 export function titleCase(s: string): string {

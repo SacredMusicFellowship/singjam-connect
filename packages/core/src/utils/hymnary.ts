@@ -89,7 +89,9 @@ const COUNTRY_CULTURES = [["USA", "American"], ["U.S.", "American"], ["England",
 // The culture is the one the source names.
 export function hymnTuneCredits(tune: Pick<HymnaryTune, "composers" | "sources">): { composers: string[]; arrangers: string[]; cultures: string[] } {
   const sources = tune.sources ?? "";
-  const says = (word: string) => new RegExp(`(^|[^a-z])${word.replace(/\./g, "\\.")}([^a-z]|$)`, "i").test(sources);
+  const spaced = (t: string) => ` ${t.toLowerCase().replace(/\./g, "").replace(/[^a-z]+/g, " ").trim()} `;
+  const words = spaced(sources);
+  const says = (word: string) => words.includes(spaced(word));
   const cultures = SONG_CULTURES.filter((c) => says(c) || COUNTRY_CULTURES.some(([country, culture]) => culture === c && says(country)));
   const folk = /\b(melody|traditional|trad\.|folk|carol|air)\b/i.test(sources);
   const people = tune.composers.filter((c) => !TRADITIONAL.has(norm(c)));

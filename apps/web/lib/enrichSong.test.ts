@@ -189,6 +189,13 @@ describe("enrichSong — notes", () => {
 
 describe("enrichSong — a hymn added in lower case", () => {
   const csv = (rows: string) => ({ ok: true, text: async () => rows });
+  const hymnary = async (url: string) => {
+    const u = new URL(url);
+    const q = u.searchParams.get("qu") ?? "";
+    if (u.hostname === "hymnary.org" && q.endsWith("in:texts")) return csv(TEXTS);
+    if (u.hostname === "hymnary.org" && q.endsWith("in:tunes")) return csv(TUNES);
+    throw new Error("offline");
+  };
   const TEXTS = `displayTitle,firstLine,textTitle,refrainFirstLine,textAuthNumber,languages,authors,meter,textSources,totalInstances
 "Harbour Canticle","Lights along the harbour, shining through the night","Harbour Canticle",,lights_along_the_harbour,English,"Ada Quillfeather",,,12
 `;
@@ -197,11 +204,7 @@ describe("enrichSong — a hymn added in lower case", () => {
 `;
 
   it("takes the hymnal's title casing, links its text and tune, and gives the tune its origin", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      if (url.includes("hymnary.org") && url.includes("in%3Atexts")) return csv(TEXTS);
-      if (url.includes("hymnary.org") && url.includes("in%3Atunes")) return csv(TUNES);
-      throw new Error("offline");
-    }));
+    vi.stubGlobal("fetch", vi.fn(hymnary));
     answers.gpt = { lyricists: hi(["Ada Quillfeather"]) };
     answers.claude = { lyricists: hi(["Ada Quillfeather"]) };
     const { db, writes } = fakeDb(allTags.filter((t) => (t.tags as Row).type !== "culture"), {
@@ -225,11 +228,7 @@ describe("enrichSong — a hymn added in lower case", () => {
   });
 
   it("leaves a song that already has a tune as it is", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      if (url.includes("in%3Atexts")) return csv(TEXTS);
-      if (url.includes("in%3Atunes")) return csv(TUNES);
-      throw new Error("offline");
-    }));
+    vi.stubGlobal("fetch", vi.fn(hymnary));
     answers.gpt = { lyricists: hi(["Ada Quillfeather"]) };
     answers.claude = { lyricists: hi(["Ada Quillfeather"]) };
     const { db, writes } = fakeDb(allTags, { title: "Harbour Canticle", first_line: null, song_composers: [], song_lyricists: [], text_id: "t1", tune_id: "u1" });

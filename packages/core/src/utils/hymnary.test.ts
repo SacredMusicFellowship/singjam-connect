@@ -47,6 +47,8 @@ describe("hymnTuneCredits", () => {
     expect(hymnTuneCredits({ composers: ["Rory Cooney"], sources: "Irish melody" })).toEqual({ composers: ["Traditional"], arrangers: ["Rory Cooney"], cultures: ["Irish"] });
     expect(hymnTuneCredits({ composers: ["Edwin O. Excell"], sources: "19th cent. USA melody" })).toEqual({ composers: ["Traditional"], arrangers: ["Edwin O. Excell"], cultures: ["American"] });
     expect(hymnTuneCredits({ composers: [], sources: "French carol" })).toEqual({ composers: ["Traditional"], arrangers: [], cultures: ["French"] });
+    expect(hymnTuneCredits({ composers: [], sources: "Traditional melody, Ireland." }).cultures).toEqual(["Irish"]);
+    expect(hymnTuneCredits({ composers: [], sources: "U.S. folk melody" }).cultures).toEqual(["American"]);
   });
   it("keeps a written tune's composer", () => {
     expect(hymnTuneCredits({ composers: ["Rowland H. Prichard"], sources: undefined })).toEqual({ composers: ["Rowland H. Prichard"], arrangers: [], cultures: [] });
