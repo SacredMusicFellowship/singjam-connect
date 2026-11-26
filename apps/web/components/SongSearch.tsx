@@ -303,7 +303,7 @@ export default function SongSearch({ initialQuery = "" }: { initialQuery?: strin
         )}
       </div>
 
-      {currentUser && <SubmitSongForm />}
+      {currentUser && <SubmitSongForm defaultTitle={q.trim()} />}
     </div>
   );
 }

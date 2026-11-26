@@ -945,7 +945,7 @@ export default function RepertoirePage() {
               })
             )}
           </div>
-          <SubmitSongForm />
+          <SubmitSongForm defaultTitle={query.trim()} />
         </>
       ) : items.length === 0 ? (
         <>

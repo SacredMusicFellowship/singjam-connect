@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agreedLandmarks, firstRecordingCandidates, firstRecordingYear, landmarkYear, leadArtist, sameArtist, type LandmarkCandidate } from "./landmarkRecordings";
+import { agreedLandmarks, creditedArtist, firstRecordingCandidates, firstRecordingYear, landmarkYear, leadArtist, sameArtist, type LandmarkCandidate } from "./landmarkRecordings";
 import { MAX_RECORDINGS } from "./formatRecordingArtists";
 
 const rec = (artist: string, year: number, why: LandmarkCandidate["why"] = "iconic"): LandmarkCandidate => ({ artist, year, why });
@@ -17,6 +17,17 @@ describe("sameArtist", () => {
     expect(sameArtist("Bing Crosby", "Bing Crosby & Connee Boswell")).toBe(true);
     expect(sameArtist("Duke Ellington", "Mercer Ellington")).toBe(false);
     expect(sameArtist("", "Anyone")).toBe(false);
+  });
+});
+
+describe("creditedArtist", () => {
+  const trio = [{ name: "Mara Quill", joinphrase: ", " }, { name: "Tobin Ashe", joinphrase: ", & " }, { name: "Lene Varga" }];
+  it("keeps the one act the models named from a record credited to several", () => {
+    expect(creditedArtist(trio, "Mara Quill, Tobin Ashe, & Lene Varga")).toBe("Mara Quill");
+    expect(creditedArtist(trio, "Tobin Ashe")).toBe("Tobin Ashe");
+  });
+  it("keeps a single credit as it is", () => {
+    expect(creditedArtist([{ name: "Harbour Lights & the Tide" }], "Harbour Lights")).toBe("Harbour Lights & the Tide");
   });
 });
 

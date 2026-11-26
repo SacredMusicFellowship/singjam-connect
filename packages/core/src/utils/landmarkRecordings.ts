@@ -38,6 +38,15 @@ export function leadArtist(name: string): string {
   return flat.split(/ (?:&|and|with|featuring|feat\.?|ft\.?) |, ?/i)[0].trim();
 }
 
+// MusicBrainz credits a record to every act on it ("Rory Cooney, Gary Daigle,
+// & Theresa Donohoo"); the catalogue lists one artist per recording: the act
+// the models named, else the first credited.
+export function creditedArtist(credits: { name: string }[], named: string): string {
+  if (credits.length <= 1) return credits[0]?.name ?? named;
+  const lead = leadArtist(named);
+  return credits.find((c) => sameArtist(c.name, named) || sameArtist(c.name, lead))?.name ?? credits[0].name;
+}
+
 // Recordings both models listed (matched by artist), minus artists the song
 // already has, capped so the song stays within MAX_RECORDINGS.
 export function agreedLandmarks(

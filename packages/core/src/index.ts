@@ -24,6 +24,7 @@ export * from './utils/songEnrichmentRules';
 export * from './utils/songAddHints';
 export * from './utils/enrichmentHealth';
 export * from './utils/hymnary';
+export * from './utils/songTitleCase';
 export * from './utils/songMelodies';
 export * from './utils/sameSong';
 export * from './utils/songMissingFields';

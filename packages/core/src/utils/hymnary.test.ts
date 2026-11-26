@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hymnaryTextsFor, hymnaryTunes, parseCsvRecords, pickHymnaryText, trimTrailing, type HymnaryText } from "./hymnary";
+import { hymnaryTextsFor, hymnaryTunes, hymnTuneCredits, parseCsvRecords, pickHymnaryText, tonalityFromKey, trimTrailing, type HymnaryText } from "./hymnary";
 import { decideEnrichment, type EnrichmentSources } from "./songEnrichmentRules";
 
 const STAND_BY_ME = `displayTitle,firstLine,textTitle,refrainFirstLine,textAuthNumber,languages,authors,meter,textSources,totalInstances
@@ -36,7 +36,30 @@ describe("hymnaryTextsFor / hymnaryTunes", () => {
 ARLINGTON,arlington_arne,"Thomas A. Arne","G Major",1,8.6.8.6,,1403
 "AMAZING GRACE",new_britain,"Edwin O. Excell",,5,8.6.8.6,"19th cent. USA melody",946
 `));
-    expect(tunes[0]).toEqual({ name: "ARLINGTON", composers: ["Thomas A. Arne"], instances: 1403 });
+    expect(tunes[0]).toMatchObject({ name: "ARLINGTON", composers: ["Thomas A. Arne"], instances: 1403 });
+    expect(tunes[1]).toMatchObject({ key: undefined, meter: "8.6.8.6", sources: "19th cent. USA melody" });
+    expect(tunes[0].key).toBe("G Major");
+  });
+});
+
+describe("hymnTuneCredits", () => {
+  it("credits a folk melody to Traditional, with the hymnal's composer as arranger and the culture its source names", () => {
+    expect(hymnTuneCredits({ composers: ["Rory Cooney"], sources: "Irish melody" })).toEqual({ composers: ["Traditional"], arrangers: ["Rory Cooney"], cultures: ["Irish"] });
+    expect(hymnTuneCredits({ composers: ["Edwin O. Excell"], sources: "19th cent. USA melody" })).toEqual({ composers: ["Traditional"], arrangers: ["Edwin O. Excell"], cultures: ["American"] });
+    expect(hymnTuneCredits({ composers: [], sources: "French carol" })).toEqual({ composers: ["Traditional"], arrangers: [], cultures: ["French"] });
+  });
+  it("keeps a written tune's composer", () => {
+    expect(hymnTuneCredits({ composers: ["Rowland H. Prichard"], sources: undefined })).toEqual({ composers: ["Rowland H. Prichard"], arrangers: [], cultures: [] });
+    expect(hymnTuneCredits({ composers: ["William Croft"], sources: "Supplement to the New Version, 1708" })).toEqual({ composers: ["William Croft"], arrangers: [], cultures: [] });
+  });
+});
+
+describe("tonalityFromKey", () => {
+  it("reads major or minor from the hymnal's key", () => {
+    expect(tonalityFromKey("e minor")).toBe("Minor");
+    expect(tonalityFromKey("G Major")).toBe("Major");
+    expect(tonalityFromKey("D")).toBeNull();
+    expect(tonalityFromKey(undefined)).toBeNull();
   });
 });
 
@@ -78,6 +101,13 @@ describe("decideEnrichment with Hymnary", () => {
     expect(d).toMatchObject({ lyricists: ["John Newton"], composers: ["Edwin O. Excell"] });
     expect(decideEnrichment(base({ hymnary: hymn, gpt: { composers: sure(["William Walker"]) } })).lyricists).toBeUndefined();
   });
+  it("credits a folk melody's song to Traditional when a model names the hymnal's arranger as composer", () => {
+    const hymn = [text({ authors: ["Rory Cooney"], tunes: [{ name: "STAR OF COUNTY DOWN", composers: ["Rory Cooney"], instances: 27, sources: "Irish melody" }] })];
+    const d = decideEnrichment({ title: "x", hymnary: hymn, gpt: { lyricists: { v: ["Rory Cooney"], c: "high" }, composers: { v: ["Rory Cooney"], c: "high" } }, claude: null } as EnrichmentSources);
+    expect(d.lyricists).toEqual(["Rory Cooney"]);
+    expect(d.composers).toEqual(["Traditional"]);
+  });
+
   it("takes the composer of whichever of the text's tunes a model names, not the most printed tune", () => {
     const hymn = [text({ authors: ["John Newton"], tunes: [
       { name: "ARLINGTON", composers: ["Thomas A. Arne"], instances: 1403 },

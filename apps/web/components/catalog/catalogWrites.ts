@@ -40,13 +40,17 @@ export async function createText(text: { title: string; firstLine?: string; kind
   return data as { id: string; title: string; slug: string };
 }
 
-// A new tune, with its composers and community; returns it with its display label.
-export async function createTune(tune: { name: string | null; composers?: string[]; communityId?: string }, people: Lookup[]) {
+// A new tune, with its composers, arrangers and community; returns it with its display label.
+export async function createTune(tune: { name: string | null; composers?: string[]; arrangers?: string[]; communityId?: string }, people: Lookup[]) {
   const db = supabaseBrowser();
   const { data: row, error } = await db.from("tunes").insert({ name: tune.name, slug: "x" }).select("id").single();
   if (error || !row) throw error ?? new Error("Couldn't create the tune.");
   for (const name of tune.composers ?? []) {
     const { error: e } = await db.from("tune_credits").insert({ tune_id: row.id, person_id: await personIdFor(name, people), role: "composer" });
+    if (e) throw e;
+  }
+  for (const name of tune.arrangers ?? []) {
+    const { error: e } = await db.from("tune_credits").insert({ tune_id: row.id, person_id: await personIdFor(name, people), role: "arranger" });
     if (e) throw e;
   }
   if (tune.communityId) {

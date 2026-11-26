@@ -538,7 +538,7 @@ export default function SongEditor({
       const tune = aiSuggestions.tune;
       if (accept("tune") && tune) {
         const found = allTunes.find((t) => same(t.tune_label, tune.name))
-          ?? await createTune({ name: tune.name, composers: tune.composers }, allPeople);
+          ?? await createTune({ name: tune.name, composers: tune.composers, arrangers: tune.arrangers }, allPeople);
         if (!allTunes.some((t) => t.id === found.id)) setAllTunes((prev) => [...prev, found]);
         setTuneId(found.id);
       }

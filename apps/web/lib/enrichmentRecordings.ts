@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   agreedLandmarks,
+  creditedArtist,
   firstRecordingCandidates,
   firstRecordingYear,
   landmarkYear,
@@ -64,7 +65,7 @@ async function musicBrainzRecording(title: string, artist: string) {
     if (norm(r.title) !== norm(title) || !norm(name).includes(norm(lead))) continue;
     if (/\b(live|demo|remix|instrumental|karaoke)\b/i.test(`${r.disambiguation ?? ""} ${r.title}`)) continue;
     found = true;
-    if (!credit && sameArtist(name, artist)) credit = name;
+    if (!credit && sameArtist(name, artist)) credit = creditedArtist(r["artist-credit"] ?? [], artist);
     for (const rel of r.releases ?? []) {
       const rg = rel["release-group"] ?? {};
       const y = parseInt((rel.date ?? "").slice(0, 4));

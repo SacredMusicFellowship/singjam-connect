@@ -1,4 +1,5 @@
 import { sameArtist } from "./landmarkRecordings";
+import { SONG_CULTURES } from "./songVocabulary";
 
 // Hymnary.org's search export (`&export=csv`): quoted fields, "" for a quote.
 export function parseCsvRecords(text: string): Record<string, string>[] {
@@ -25,7 +26,8 @@ export function parseCsvRecords(text: string): Record<string, string>[] {
   return head ? body.map((r) => Object.fromEntries(head.map((h, i) => [h.trim(), (r[i] ?? "").trim()]))) : [];
 }
 
-export type HymnaryTune = { name: string; composers: string[]; instances: number };
+// key ("e minor"), meter and sources ("Irish melody") as the hymnals print them.
+export type HymnaryTune = { name: string; composers: string[]; instances: number; key?: string; meter?: string; sources?: string };
 export type HymnaryText = {
   title: string;
   firstLine: string;
@@ -70,9 +72,37 @@ export function hymnaryTextsFor(title: string, records: Record<string, string>[]
 
 export function hymnaryTunes(records: Record<string, string>[]): HymnaryTune[] {
   return records
-    .map((r) => ({ name: r.tuneTitle, composers: names(r.composers), instances: Number(r.totalInstances) || 0 }))
+    .map((r) => ({
+      name: r.tuneTitle, composers: names(r.composers), instances: Number(r.totalInstances) || 0,
+      key: r.tuneKey || undefined, meter: r.meter || undefined, sources: r.tuneSources || undefined,
+    }))
     .filter((t) => t.name)
     .sort((a, b) => b.instances - a.instances);
+}
+
+const COUNTRY_CULTURES = [["USA", "American"], ["U.S.", "American"], ["England", "English"], ["Ireland", "Irish"], ["Wales", "Welsh"],
+  ["Scotland", "Scottish"], ["France", "French"], ["Germany", "German"], ["Russia", "Russian"], ["Netherlands", "Dutch"]] as const;
+
+// Hymnary lists whoever set a folk tune as its composer ("STAR OF COUNTY DOWN",
+// Rory Cooney, source "Irish melody"). When the source says the melody is
+// traditional, the tune is Traditional and the named people are its arrangers.
+// The culture is the one the source names.
+export function hymnTuneCredits(tune: Pick<HymnaryTune, "composers" | "sources">): { composers: string[]; arrangers: string[]; cultures: string[] } {
+  const sources = tune.sources ?? "";
+  const says = (word: string) => new RegExp(`(^|[^a-z])${word.replace(/\./g, "\\.")}([^a-z]|$)`, "i").test(sources);
+  const cultures = SONG_CULTURES.filter((c) => says(c) || COUNTRY_CULTURES.some(([country, culture]) => culture === c && says(country)));
+  const folk = /\b(melody|traditional|trad\.|folk|carol|air)\b/i.test(sources);
+  const people = tune.composers.filter((c) => !TRADITIONAL.has(norm(c)));
+  return folk
+    ? { composers: ["Traditional"], arrangers: people, cultures }
+    : { composers: people, arrangers: [], cultures };
+}
+
+// "e minor" → Minor, "G Major" → Major; anything else says nothing.
+export function tonalityFromKey(key: string | null | undefined): "Major" | "Minor" | null {
+  if (/\bmajor\b/i.test(key ?? "")) return "Major";
+  if (/\bminor\b/i.test(key ?? "")) return "Minor";
+  return null;
 }
 
 const TRADITIONAL = new Set(["traditional", "anonymous", "unknown"]);
