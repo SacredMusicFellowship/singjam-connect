@@ -186,3 +186,35 @@ describe("cardRowText", () => {
     expect(cardRowText({ title: "x", displayArtist: "Someone", card: {} })).toMatchObject({ writers: "", line: "Someone" });
   });
 });
+
+describe("a song's maqam and usul (migration 256)", () => {
+  const base = {
+    title: "Ey Garip Bülbül Diyarın Kandedir",
+    displayArtist: null,
+    composers: ["Ali Şirüganî Dede", "Niyazi Mısri"],
+    cultures: ["Turkish"],
+    recordingArtists: [{ name: "Kani Karaca", year: 1985 }],
+  };
+  const identity = { maqam: "Hicaz", maqam_family: "Maqam", usul: "Düyek", usul_family: "Usul", poets: ["Niyazi Mısri"] };
+
+  it("shows the maqam and usul under the title instead of recordings, and credits the poet alone, in full", () => {
+    const c = songCardCredits({ ...base, knownByRecording: true, identity });
+    expect(c.writers).toEqual([{ text: "Niyazi Mısri", link: { kind: "person", key: "Niyazi Mısri" } }]);
+    expect(c.line).toEqual([
+      { lead: "Maqam: ", text: "Hicaz", link: { kind: "mode", key: "Hicaz" } },
+      { lead: "Usul: ", text: "Düyek", sep: " · ", link: { kind: "rhythm", key: "Düyek" } },
+    ]);
+    expect(songRowText({ ...base, knownByRecording: true, identity })).toMatchObject({ writers: "Niyazi Mısri", line: "Maqam: Hicaz · Usul: Düyek" });
+  });
+
+  it("keeps the usual writers when no poet is recorded, and an editor's chosen line", () => {
+    const c = songCardCredits({ ...base, cardLine: "recordings", identity: { maqam: "Rast", maqam_family: "Maqam", poets: [] } });
+    expect(c.writers.map((w) => w.text)).toEqual(["A. Şirüganî Dede", "N. Mısri"]);
+    expect(c.line.map((l) => l.text)).toEqual(["Kani Karaca"]);
+  });
+
+  it("names a family only when it's singular", () => {
+    expect(songCardCredits({ ...base, identity: { maqam: "Yaman", maqam_family: "Raga" } }).line[0].lead).toBe("Raga: ");
+    expect(songCardCredits({ ...base, identity: { maqam: "Tone 8", maqam_family: "Orthodox tones" } }).line[0].lead).toBeUndefined();
+  });
+});

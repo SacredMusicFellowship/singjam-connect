@@ -1,6 +1,6 @@
 import type { FixtureContext } from "../context";
-import { ARTISTS, METERS, SONGS, SONGWRITERS, TAGS, TONALITIES } from "../names";
-import type { ArtistRow, PersonRow, SongComposerRow, SongTagRow, SongRecordingArtistRow, SongRow } from "../types";
+import { ARTISTS, ILAHI_TAGS, METERS, SONGS, SONGWRITERS, TAGS, TONALITIES } from "../names";
+import type { ArtistRow, PersonRow, SongComposerRow, SongLyricistRow, SongTagRow, SongRecordingArtistRow, SongRow } from "../types";
 
 export type SongCatalog = {
   people: PersonRow[];
@@ -56,6 +56,7 @@ export function buildSongCatalog(ctx: FixtureContext): SongCatalog {
       // No links to real recordings or charts.
       youtube_url: null,
       chord_chart_url: null,
+      score_url: null,
     });
     for (const person of composers) catalog.songComposers.push({ song_id: id, person_id: person.id });
     catalog.songRecordingArtists.push({ song_id: id, artist_id: artist.id, year, position: 0 });
@@ -63,4 +64,27 @@ export function buildSongCatalog(ctx: FixtureContext): SongCatalog {
   });
 
   return catalog;
+}
+
+// One ilahi in a maqam (migration 256): a poet credited as lyricist, a maqam
+// and usul, and a score link. Built without the
+// random source and kept out of the catalog the repertoires sample, so adding
+// it leaves every other fixture as it was. Title and poet are invented.
+export type IlahiFixture = { people: PersonRow[]; song: SongRow; songComposers: SongComposerRow[]; songLyricists: SongLyricistRow[]; songTags: SongTagRow[] };
+
+export function buildIlahi(ctx: FixtureContext): IlahiFixture {
+  const title = "Gönül Bahçesinde Açan Gül";
+  const poet = { id: ctx.id("person", "Derviş Hasan Nuri"), name: "Derviş Hasan Nuri" };
+  const id = ctx.id("song", title);
+  return {
+    people: [poet],
+    song: {
+      id, title, slug: songSlug(title, [poet.name]), display_artist: null,
+      first_line: null, year: null, tonality: null, meter: null, vibe: null,
+      youtube_url: null, chord_chart_url: null, score_url: "https://dilbeyti.com/en/besteler/99999",
+    },
+    songComposers: [],
+    songLyricists: [{ song_id: id, person_id: poet.id }],
+    songTags: Object.entries(ILAHI_TAGS).map(([tag_name, tag_type]) => ({ song_id: id, tag_type, tag_name })),
+  };
 }

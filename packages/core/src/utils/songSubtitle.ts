@@ -31,7 +31,8 @@ export function knownByRecording(byline: string | null | undefined, displayArtis
 // and `link` the page it opens. People, artists and tags are linked by name
 // (each is unique; see loadBrowseEntity), tunes and texts by slug.
 // `suffix` is plain text after the link, such as a recording's year.
-export type CardCredit = { lead?: string; text: string; suffix?: string; link: { kind: BrowseKind; key: string; traditional?: boolean } | null };
+// `sep` replaces the list's separator before it (" · " between a maqam and its usul).
+export type CardCredit = { lead?: string; text: string; suffix?: string; sep?: string; link: { kind: BrowseKind; key: string; traditional?: boolean } | null };
 
 // What tells a song apart when it isn't known by a recording (migrations 211-212).
 export type CardIdentity = {
@@ -45,7 +46,22 @@ export type CardIdentity = {
   origin?: string | null;
   origin_kind?: string | null;
   origin_key?: string | null;
+  maqam?: string | null;
+  maqam_family?: string | null;
+  usul?: string | null;
+  usul_family?: string | null;
+  poets?: string[] | null;
 } | null | undefined;
+
+// "Maqam: Hicaz · Usul: Sofyan" (migration 256). A family named in the singular
+// leads its value ("Raga: Yaman"); one named in the plural doesn't ("Tone 8").
+export function songModeCredits(identity: CardIdentity): CardCredit[] {
+  const lead = (family: string | null | undefined) => (family && !family.endsWith("s") ? `${family}: ` : undefined);
+  const out: CardCredit[] = [];
+  if (identity?.maqam) out.push({ lead: lead(identity.maqam_family), text: identity.maqam, link: { kind: "mode", key: identity.maqam } });
+  if (identity?.usul) out.push({ lead: lead(identity.usul_family), text: identity.usul, sep: " · ", link: { kind: "rhythm", key: identity.usul } });
+  return out;
+}
 
 // Where a traditional song comes from (song_origins, migration 233): the text
 // after "Traditional · " and the community or culture page it opens.
@@ -126,13 +142,17 @@ export function songCardCredits(o: {
   const named = o.composers.filter((c) => c.toLowerCase() !== "traditional");
   const traditional = named.length < o.composers.length && !o.identity?.tune;
   const origin = songOrigin({ text: o.identity?.origin, kind: o.identity?.origin_kind, key: o.identity?.origin_key }) ?? cultureOrigin(o.cultures[0]);
-  const writers: CardCredit[] = [
-    ...(traditional ? [traditionalCredit("Trad.", origin)] : []),
-    ...named.map((name): CardCredit => {
-      const w = name.trim().split(" ");
-      return { text: w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(" ")}` : name, link: { kind: "person", key: name } };
-    }),
-  ];
+  // A song in a maqam credits its poet alone, by the full name they're known by.
+  const poets = o.identity?.maqam ? (o.identity.poets ?? []) : [];
+  const writers: CardCredit[] = poets.length
+    ? poets.map((name): CardCredit => ({ text: name, link: { kind: "person", key: name } }))
+    : [
+        ...(traditional ? [traditionalCredit("Trad.", origin)] : []),
+        ...named.map((name): CardCredit => {
+          const w = name.trim().split(" ");
+          return { text: w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(" ")}` : name, link: { kind: "person", key: name } };
+        }),
+      ];
   const recordings = (): CardCredit[] => o.recordingArtists?.length
     ? sortRecordingsByYear(o.recordingArtists).map((a): CardCredit => ({ text: a.name, ...(a.year ? { suffix: ` (${a.year})` } : {}), link: { kind: "artist", key: a.name } }))
     : o.displayArtist?.trim() ? [{ text: o.displayArtist.trim(), link: null }] : [];
@@ -153,6 +173,7 @@ export function songCardCredits(o: {
     case "hook": return { writers, line: one(hookCredit(o.identity)) };
     case "none": return { writers, line: [] };
   }
+  if (o.identity?.maqam || o.identity?.usul) return { writers, line: songModeCredits(o.identity) };
   if (!(o.knownByRecording ?? knownByRecording(o.byline, o.displayArtist))) {
     return { writers, line: one(songCardIdentity(o.identity, o.title)) };
   }
@@ -165,7 +186,7 @@ export function songCardCredits(o: {
 // italicise the show titles ("from *Hamilton* · Lin-Manuel Miranda").
 export function songRowText(o: Parameters<typeof songCardCredits>[0] & { productions?: string[] | null }): { writers: string; line: string; shows: string[]; credits: string } {
   const card = songCardCredits(o);
-  const text = (list: CardCredit[]) => list.map((c) => `${c.lead ?? ""}${c.text}`).join(", ");
+  const text = (list: CardCredit[]) => list.map((c, i) => `${i > 0 ? c.sep ?? ", " : ""}${c.lead ?? ""}${c.text}`).join("");
   const shows = (o.productions ?? []).filter(Boolean);
   const credits = text(card.line);
   return { writers: text(card.writers), line: shows.length ? `from ${shows.join(", ")}${credits ? ` · ${credits}` : ""}` : credits, shows, credits };

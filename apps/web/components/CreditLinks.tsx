@@ -8,7 +8,7 @@ import { browsePath, type CardCredit } from "@singjam/core";
 export default function CreditLinks({ credits, separator = ", ", linkClassName = "" }: { credits: CardCredit[]; separator?: string; linkClassName?: string }) {
   return credits.map((c, i) => (
     <Fragment key={`${i}-${c.text}`}>
-      {i > 0 && separator}
+      {i > 0 && (c.sep ?? separator)}
       {c.lead}
       {c.link ? (
         <Link href={browsePath(c.link.kind, c.link.key, { traditional: c.link.traditional })} className={`hover:text-amber-700 hover:underline ${linkClassName}`}>{c.text}</Link>

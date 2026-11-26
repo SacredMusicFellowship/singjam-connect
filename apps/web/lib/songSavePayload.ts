@@ -31,6 +31,8 @@ export type SongForm = {
   forms: string[];
   occasions: string[];
   communities: string[];
+  modes?: string[];
+  rhythms?: string[];
   composers: Iterable<string>;
   lyricists: Iterable<string>;
   pendingComposerNames: string[];
@@ -98,6 +100,8 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       form: form.forms,
       occasion: form.occasions,
       community: form.communities,
+      ...(form.modes ? { mode: form.modes } : {}),
+      ...(form.rhythms ? { rhythm: form.rhythms } : {}),
     },
     composer_ids: composerIds,
     composer_names: form.pendingComposerNames.map(personName),
