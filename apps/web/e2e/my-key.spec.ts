@@ -39,7 +39,7 @@ async function expectOneLine(pill: Locator, phone: boolean) {
   }
 }
 
-test("my key shows the song's mode, short on a phone, and the action buttons stay on one line and line up", async ({ page, freshMember }) => {
+test("my key reads as a chord chart writes it, and the action buttons stay on one line and line up", async ({ page, freshMember }) => {
   await admin
     .from("user_songs")
     .insert([
@@ -48,7 +48,8 @@ test("my key shows the song's mode, short on a phone, and the action buttons sta
     ])
     .throwOnError();
   const phone = await narrowest(page);
-  const shown = phone ? "A Mix" : "A Mixolydian";
+  // A Mixolydian reads "A" and G major "G", as on a chord chart (#492).
+  const shown = "A";
 
   // A set of their own, so every row shows Add to set.
   await admin.from("sets").insert({ owner_user_id: freshMember.id, name: "Spring practice" }).throwOnError();
@@ -64,7 +65,7 @@ test("my key shows the song's mode, short on a phone, and the action buttons sta
   await expect(label(rowPill, shown)).toBeVisible();
   await expectOneLine(rowPill, phone);
   const majorPill = page.getByRole("combobox", { name: `My key for ${majorSong.title}` }).locator("..");
-  await expect(label(majorPill, phone ? "G maj" : "G major")).toBeVisible();
+  await expect(label(majorPill, "G")).toBeVisible();
   expect(await buttonWidths(majorPill)).toEqual(await buttonWidths(rowPill));
 
   await openPage(page, `/search?q=${encodeURIComponent(song.title)}`);
@@ -74,7 +75,7 @@ test("my key shows the song's mode, short on a phone, and the action buttons sta
 
   await expect(cardSelect.locator("option", { hasText: "D Mixolydian" })).toHaveCount(1);
   await cardSelect.selectOption("D");
-  await expect(label(cardSelect.locator(".."), phone ? "D Mix" : "D Mixolydian")).toBeVisible();
+  await expect(label(cardSelect.locator(".."), "D")).toBeVisible();
   await expect
     .poll(async () => (await admin.from("user_songs").select("key_note").eq("user_id", freshMember.id).eq("song_id", song.id).single()).data?.key_note)
     .toBe("D");
