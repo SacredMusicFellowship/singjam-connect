@@ -80,7 +80,10 @@ The native app (`apps/native`) is the mobile companion to the web app (`apps/web
 - A new outside service needs an MSW handler in `packages/test-fixtures/src/msw`. Unmocked outside requests fail the tests
 - A new main page goes in `apps/web/e2e/support/screens.ts` so it gets page, accessibility and screenshot coverage. Don't add entries to `KNOWN_A11Y`
 - After changing a fixture factory or the scenario, run `npm run seed:write -w @singjam/test-fixtures` and commit the regenerated seed
-- Before opening a PR, run the unit tests for what you touched, plus `npm run e2e` for any UI or flow change
+- Before opening a PR, run the unit tests for what you touched. CI runs the full Playwright suite on every PR, so run locally only as much e2e as the change needs:
+  - **Trivial** (copy, Tailwind classes, moving existing JSX, a one-line prop pass-through): no local e2e
+  - **Contained** (a change inside one flow or page): only the matching spec(s) plus smoke, e.g. `npx playwright test rsvp.spec.ts smoke.spec.ts` from `apps/web`
+  - **Broad or risky** (shared components used across pages, auth, permissions, migrations or RPCs, data mutations that cross flows, routing, shared web + native flows): full `npm run e2e`
 
 ## Automated checks
 
