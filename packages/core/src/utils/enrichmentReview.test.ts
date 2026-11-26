@@ -140,12 +140,19 @@ describe("reviewEnrichment for a hymn or carol", () => {
   it("suggests the hymnals' text and the tune both models name, pre-ticked", () => {
     const r = reviewEnrichment(carol(), []);
     expect(r.suggestions.text).toEqual({ title: "Angels We Have Heard on High", first_line: "Angels we have heard on high", authors: [], url: angels.url });
-    expect(r.suggestions.tune).toEqual({ name: "Gloria", composers: [] });
+    expect(r.suggestions.tune).toEqual({ name: "Gloria", composers: [], arrangers: [], cultures: [] });
     expect(r.agreed).toEqual(expect.arrayContaining(["text", "tune"]));
   });
 
-  it("offers a tune only one model names, unticked", () => {
-    const r = reviewEnrichment(carol({ claude: { composers: hi(["Traditional"]) } }), []);
+  it("pre-ticks the text's only printed tune even when no model names it", () => {
+    const r = reviewEnrichment(carol({ gpt: { composers: hi(["Traditional"]) }, claude: { composers: hi(["Traditional"]) } }), []);
+    expect(r.suggestions.tune?.name).toBe("Gloria");
+    expect(r.agreed).toEqual(expect.arrayContaining(["text", "tune"]));
+  });
+
+  it("offers a tune only one model names, unticked, when the text has several", () => {
+    const twoTunes = { ...angels, tunes: [...angels.tunes, { name: "WESTMINSTER CAROL", composers: [], instances: 40 }] };
+    const r = reviewEnrichment(carol({ hymnary: [twoTunes], claude: { composers: hi(["Traditional"]) } }), []);
     expect(r.suggestions.tune?.name).toBe("Gloria");
     expect(r.agreed).not.toContain("tune");
     expect(r.agreed).not.toContain("text");
@@ -155,6 +162,19 @@ describe("reviewEnrichment for a hymn or carol", () => {
     const r = reviewEnrichment(carol({ gpt: { composers: hi(["Traditional"]), tune: hi("IRIS") }, claude: { composers: hi(["Traditional"]), tune: hi("IRIS") } }), []);
     expect(r.suggestions.tune).toBeNull();
     expect(r.suggestions.text?.title).toBe("Angels We Have Heard on High");
+  });
+
+  it("credits a folk melody to Traditional, with Hymnary's composer as its arranger", () => {
+    const canticle = {
+      title: "Canticle of the Turning", firstLine: "My soul cries out with a joyful shout", authors: ["Rory Cooney"], sources: "",
+      instances: 19, url: "https://hymnary.org/text/my_soul_cries_out_with_a_joyful_shout",
+      tunes: [{ name: "STAR OF COUNTY DOWN", composers: ["Rory Cooney"], instances: 27, key: "e minor", meter: "Irregular", sources: "Irish melody" }],
+    };
+    const r = reviewEnrichment(base({ title: "canticle of the turning", hymnary: [canticle], gpt: { lyricists: hi(["Rory Cooney"]) }, claude: { lyricists: hi(["Rory Cooney"]) } }), []);
+    expect(r.suggestions.tune).toEqual({ name: "Star of County Down", composers: ["Traditional"], arrangers: ["Rory Cooney"], cultures: ["Irish"] });
+    expect(r.suggestions.music_culture).toBe("Irish");
+    expect(r.suggestions.tonality).toBe("Minor");
+    expect(r.agreed).toEqual(expect.arrayContaining(["text", "tune", "music_culture", "tonality"]));
   });
 
   it("keeps the tune's name out of the alternate titles", () => {

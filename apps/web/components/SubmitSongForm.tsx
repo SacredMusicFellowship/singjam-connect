@@ -27,6 +27,7 @@ function spotifyTrackId(url: string | null): string | null {
   return url.match(/\/track\/([a-zA-Z0-9]+)/)?.[1] ?? null;
 }
 
+// `defaultTitle` is what the visitor searched for, taken when the form opens.
 // With `onAdded` (a set's Add songs), the form starts open and hands back the
 // song it added, or the one already in the library, instead of opening it.
 // `setId` lets enrichment use that set's jam tags as context.
@@ -106,7 +107,7 @@ export default function SubmitSongForm({ defaultTitle = "", onAdded, onCancel, s
       <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-4 text-center">
         <p className="text-sm text-zinc-500">Can't find your song?</p>
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => { setOpen(true); if (!title.trim()) setTitle(defaultTitle); }}
           className="mt-2 rounded-full bg-zinc-800 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors"
         >
           Add a missing song

@@ -6,6 +6,13 @@ import {
   decideListedFacts,
   decideNotes,
   matchedHymn,
+  chosenHymnTune,
+  hymnTuneCredits,
+  hymnTuneName,
+  properSongTitle,
+  samePerson,
+  tonalityFromKey,
+  trimTrailing,
   addHintLines,
   SONG_COMMUNITIES,
   SONG_CULTURES,
@@ -18,6 +25,8 @@ import {
   type TagType,
   type EnrichmentDecision,
   type EnrichmentSources,
+  type HymnaryText,
+  type HymnaryTune,
   reviewEnrichment,
   type ModelAnswer,
   type ModelField,
@@ -227,7 +236,7 @@ export async function enrichSong(
   const { data: song, error } = await admin
     .from("songs")
     .select(
-      "id, title, display_artist, year_written, tonality, meter, vibe, first_line, hook, notes, genius_url, add_hints, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(title), song_recording_artists(artist_id, year, position, artists(name))"
+      "id, title, text_id, tune_id, display_artist, year_written, tonality, meter, vibe, first_line, hook, notes, genius_url, add_hints, song_composers(people(name)), song_lyricists(people(name)), song_tags(context, tags(type, name)), song_productions(productions(name)), song_alternate_titles(title), song_recording_artists(artist_id, year, position, artists(name))"
     )
     .eq("id", songId)
     .single();
@@ -309,7 +318,13 @@ async function fillSong(
     traditional: writers.some((w) => /^traditional$/i.test(w)),
   };
   const { sources, wikipedia, geniusUrl, checks, usage } = await gatherSources(context, { spotifyReleaseYear: opts.spotifyReleaseYear, links: !s.genius_url });
+  const linksTune = !s.text_id && !s.tune_id;
+  if (linksTune) await askTune(sources, usage);
   const decision = { ...decideEnrichment(sources), ...decideListedFacts(sources, wikipedia) };
+  const hymn = linksTune ? matchedHymn(sources) : null;
+  const tune = hymn ? chosenHymnTune(sources) : null;
+  if (wanted.includes("tonality") && !decision.tonality && tonalityFromKey(tune?.key)) decision.tonality = tonalityFromKey(tune?.key)!;
+  const title = properSongTitle(s.title, [matchedHymn(sources)?.title, wikipedia?.title]);
   const notes = wanted.includes("notes") ? decideNotes(sources, wikipedia) : null;
   let firstLineSource: string | null = null;
   if (opts.searchFirstLine && wanted.includes("first_line") && !decision.first_line) {
@@ -331,6 +346,7 @@ async function fillSong(
     if (decision[f] !== undefined && wanted.includes(f)) scalar[f] = decision[f];
   if (notes) Object.assign(scalar, { notes: notes.notes, notes_source: notes.source });
   if (geniusUrl && !s.genius_url) scalar.genius_url = geniusUrl;
+  if (title !== s.title) scalar.title = title;
   if (Object.keys(scalar).length) await admin.from("songs").update({ ...scalar, updated_at: new Date().toISOString() }).eq("id", songId);
 
   if (decision.recording_year && primary && !primary.year)
@@ -369,15 +385,61 @@ async function fillSong(
     const titles = decision.alternate_titles.filter((t, i, all) => norm(t) !== norm(s.title) && all.findIndex((x) => norm(x) === norm(t)) === i);
     if (titles.length) await admin.from("song_alternate_titles").insert(titles.map((title) => ({ song_id: songId, title })));
   }
+  if (hymn && tune) await linkTextAndTune(admin, songId, hymn, tune).catch((e) => console.error("[song-enrichment] couldn't link the text and tune:", e instanceof Error ? e.message : e));
   return { songId, decision, notes, geniusUrl, usage, checks, firstLineSource };
+}
+
+// The hymnals' text and the tune it is sung to, found in the catalogue or
+// added to it. The tune's culture is where the music comes from.
+async function linkTextAndTune(admin: SupabaseClient, songId: string, hymn: HymnaryText, tune: HymnaryTune) {
+  const credits = hymnTuneCredits(tune);
+  const textId = await textIdFor(admin, hymn);
+  const tuneId = await tuneIdFor(admin, hymnTuneName(tune.name), tune.meter ?? null, credits);
+  const { data: taken } = await admin.from("songs").select("id").eq("text_id", textId).eq("tune_id", tuneId).neq("id", songId).limit(1).maybeSingle();
+  if (taken) return console.warn(`[song-enrichment] ${songId}: song ${taken.id} already pairs that text and tune`);
+  const { error } = await admin.from("songs").update({ text_id: textId, tune_id: tuneId }).eq("id", songId);
+  if (error) throw error;
+  for (const tag_id of await tagIds(admin, "culture", credits.cultures)) {
+    await admin.from("song_tags").delete().eq("song_id", songId).eq("tag_id", tag_id).eq("context", "general");
+    await admin.from("song_tags").upsert({ song_id: songId, tag_id, context: "music" }, { ignoreDuplicates: true });
+  }
+}
+
+async function textIdFor(admin: SupabaseClient, hymn: HymnaryText): Promise<string> {
+  const { data: same } = await admin.from("texts").select("id, text_credits(people(name))").ilike("title", hymn.title);
+  const found = (same ?? []).find((t: any) =>
+    !hymn.authors.length || (t.text_credits ?? []).some((c: any) => hymn.authors.some((a) => samePerson(a, c.people?.name ?? ""))));
+  if (found) return found.id;
+  const { data, error } = await admin.from("texts")
+    .insert({ title: hymn.title, slug: "x", kind: "hymn", first_line: trimTrailing(hymn.firstLine.trim()) }).select("id").single();
+  if (error || !data) throw error ?? new Error("couldn't add the text");
+  const authors = await idsFor(admin, "people", hymn.authors);
+  if (authors.length) await admin.from("text_credits").insert(authors.map((person_id) => ({ text_id: data.id, person_id, role: "author" })));
+  return data.id;
+}
+
+async function tuneIdFor(admin: SupabaseClient, name: string, meter: string | null, credits: ReturnType<typeof hymnTuneCredits>): Promise<string> {
+  const { data: found } = await admin.from("tunes").select("id").ilike("name", name).limit(1).maybeSingle();
+  if (found) return found.id;
+  const { data, error } = await admin.from("tunes").insert({ name, slug: "x", meter }).select("id").single();
+  if (error || !data) throw error ?? new Error("couldn't add the tune");
+  const rows = [
+    ...(await idsFor(admin, "people", credits.composers)).map((person_id) => ({ tune_id: data.id, person_id, role: "composer" })),
+    ...(await idsFor(admin, "people", credits.arrangers)).map((person_id) => ({ tune_id: data.id, person_id, role: "arranger" })),
+  ];
+  if (rows.length) await admin.from("tune_credits").insert(rows);
+  const cultures = await tagIds(admin, "culture", credits.cultures);
+  if (cultures.length) await admin.from("tune_tags").insert(cultures.map((tag_id) => ({ tune_id: data.id, tag_id })));
+  return data.id;
 }
 
 // Once Hymnary has matched the song's text, each model says which of the
 // text's printed tunes it's usually sung to. Two models naming the same one
-// pre-tick it in the review (reviewEnrichment).
+// link it in the fill and pre-tick it in the review (chosenHymnTune).
 async function askTune(sources: EnrichmentSources, usage: ModelUsage[]) {
   const tunes = (matchedHymn(sources)?.tunes ?? []).map((t) => t.name).filter((n) => !n.startsWith("[")).slice(0, 12);
-  if (!tunes.length) return;
+  // A text printed to one tune needs no choosing (chosenHymnTune).
+  if (tunes.length < 2) return;
   const p = {
     system: "You are a careful hymnologist. Accuracy matters more than coverage: answer \"\" when you don't know.",
     user: `Hymnals print the words of "${sources.title}" to these tunes: ${tunes.join(", ")}.

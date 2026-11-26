@@ -5,14 +5,20 @@ import { admin } from "./support/supabase";
 
 // WebKit on CI can lose the first click while /search is still settling, so
 // click until the form opens.
-async function openAddForm(page: Page) {
-  await openPage(page, "/search");
+async function openAddForm(page: Page, path = "/search") {
+  await openPage(page, path);
   const title = page.getByPlaceholder("e.g. Proud Mary");
   await expect(async () => {
     if (!(await title.isVisible())) await page.getByRole("button", { name: "Add a missing song" }).click();
     await expect(title).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
 }
+
+test("what a member searched for fills in the missing song's title", async ({ page, freshMember }) => {
+  const searched = `harbour lullaby ${freshMember.id.slice(0, 8)}`;
+  await openAddForm(page, `/search?q=${encodeURIComponent(searched)}`);
+  await expect(page.getByPlaceholder("e.g. Proud Mary")).toHaveValue(searched);
+});
 
 test("a member adds a missing song and says how they know it and how it starts", async ({ page, freshMember }) => {
   const title = `Harbour Carol ${freshMember.id.slice(0, 8)}`;

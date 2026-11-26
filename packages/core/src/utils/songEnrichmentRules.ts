@@ -9,7 +9,8 @@ import {
   SONG_TONALITIES,
 } from "./songVocabulary";
 import { sameArtist } from "./landmarkRecordings";
-import { pickHymnaryText, samePerson, trimTrailing, type HymnaryText } from "./hymnary";
+import { titleCase } from "./songTitleCase";
+import { hymnTuneCredits, pickHymnaryText, tonalityFromKey, samePerson, trimTrailing, type HymnaryText, type HymnaryTune } from "./hymnary";
 import { withoutGenericFaithThemes } from "./genericThemes";
 import { confirmedFirstLine } from "./songAddHints";
 
@@ -224,7 +225,10 @@ export function decideEnrichment(src: EnrichmentSources): EnrichmentDecision {
       // Hymnary's tune counts are across all texts, not this one, so no tune is
       // "the" tune: a composer counts when a model names one of the text's tunes'.
       const tune = hymn.tunes.find((t) => named(t.composers, modelComposers));
-      if (tune) out.composers = tune.composers.filter((c) => modelComposers.some((m) => samePerson(c, m)));
+      // A folk melody's named "composer" only set it, so the song is Traditional.
+      if (tune) out.composers = hymnTuneCredits(tune).arrangers.length
+        ? ["Traditional"]
+        : tune.composers.filter((c) => modelComposers.some((m) => samePerson(c, m)));
     }
   }
 
@@ -252,9 +256,20 @@ export function matchedHymn(src: EnrichmentSources): HymnaryText | null {
   return pickHymnaryText(src.hymnary ?? [], src.writers?.length ? src.writers : named, src.title ?? "");
 }
 
+// The tune the song is sung to, once Hymnary has matched its text: the text's
+// only printed tune unless a model names another, or the one both models name
+// (askTune) when it has several.
+export function chosenHymnTune(src: EnrichmentSources): HymnaryTune | null {
+  const tunes = (matchedHymn(src)?.tunes ?? []).filter((t) => !t.name.startsWith("["));
+  const named = [value(src.gpt?.tune, HIGH_OR_MEDIUM), value(src.claude?.tune, HIGH_OR_MEDIUM)];
+  if (tunes.length === 1) return named.every((n) => !n || norm(n) === norm(tunes[0].name)) ? tunes[0] : null;
+  const [g, c] = named;
+  return g && c && norm(g) === norm(c) ? tunes.find((t) => norm(t.name) === norm(g)) ?? null : null;
+}
+
 // Hymnals print tune names in capitals ("ST. ANNE"); the catalogue uses title case.
 export function hymnTuneName(name: string): string {
-  return name.toLowerCase().replace(/(^|[\s.-])([a-z])/g, (_, sep: string, ch: string) => sep + ch.toUpperCase());
+  return titleCase(name).replace(/\.(\p{Ll})/gu, (_, ch: string) => "." + ch.toUpperCase());
 }
 
 // A hymn tune's name ("Gloria", "New Britain") is not another title for the
@@ -334,7 +349,7 @@ export type EnrichmentReview = {
     genius_url: string | null;
     // The hymnals' text of this song and the tune a model names from its tunes.
     text?: { title: string; first_line: string; authors: string[]; url: string } | null;
-    tune?: { name: string; composers: string[] } | null;
+    tune?: { name: string; composers: string[]; arrangers: string[]; cultures: string[] } | null;
   };
   agreed: string[];
   fromWikipedia: string[];
@@ -434,15 +449,21 @@ export function reviewEnrichment(
   suggestions.alternate_titles = withoutTuneNames(suggestions.alternate_titles, src);
 
   // A tune counts when Hymnary prints this text to it and a model names it;
-  // both models naming it pre-ticks the text and the tune.
+  // the tune the fill would link (chosenHymnTune) pre-ticks the text and the tune.
   const hymn = matchedHymn(src);
   const named = [value(g.tune, SURE), value(c.tune, SURE)].filter((t): t is string => !!t);
-  const tune = hymn?.tunes.find((t) => !t.name.startsWith("[") && named.some((n) => norm(n) === norm(t.name)));
+  const chosen = chosenHymnTune(src);
+  const tune = chosen ?? hymn?.tunes.find((t) => !t.name.startsWith("[") && named.some((n) => norm(n) === norm(t.name)));
   suggestions.text = hymn
     ? { title: hymn.title, first_line: trimTrailing(hymn.firstLine.trim()), authors: hymn.authors, url: hymn.url }
     : null;
-  suggestions.tune = tune ? { name: hymnTuneName(tune.name), composers: tune.composers } : null;
-  if (tune && named.length === 2 && norm(named[0]) === norm(named[1])) agreed.add("text").add("tune");
+  suggestions.tune = tune ? { name: hymnTuneName(tune.name), ...hymnTuneCredits(tune) } : null;
+  if (chosen) agreed.add("text").add("tune");
+  // The hymnal's printed key and the melody's origin, as the fill uses them.
+  const tuneCulture = chosen ? hymnTuneCredits(chosen).cultures[0] : undefined;
+  if (tuneCulture && !agreed.has("music_culture")) { suggestions.music_culture = tuneCulture; agreed.add("music_culture"); }
+  const tuneTonality = tonalityFromKey(chosen?.key);
+  if (tuneTonality && !agreed.has("tonality")) { suggestions.tonality = tuneTonality; agreed.add("tonality"); }
 
   if (landmarks.length) agreed.add("additional_recordings");
   if (extra.geniusUrl) agreed.add("genius_url");

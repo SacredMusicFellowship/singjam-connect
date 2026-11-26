@@ -47,6 +47,8 @@ function fakeDb(songTags: Row[] = allTags, over: Row = {}) {
         in: (_col: string, values: string[]) => { names = values; return q; },
         upsert: (row: Row | Row[]) => { writes.push({ table, row }); return Promise.resolve({ error: null }); },
         eq: () => q,
+        neq: () => q,
+        delete: () => { writes.push({ table, row: { deleted: true } }); return q; },
         ilike: () => q,
         order: () => q,
         limit: () => q,
@@ -58,7 +60,8 @@ function fakeDb(songTags: Row[] = allTags, over: Row = {}) {
         insert: (row: Row | Row[]) => {
           writes.push({ table, row });
           if (table === "productions") return { select: () => ({ single: async () => ({ data: { id: "p1" } }) }) };
-          return Promise.resolve({ error: null });
+          const id = Array.isArray(row) ? null : `${table}:${(row as Row).name ?? (row as Row).title ?? "new"}`;
+          return Object.assign(Promise.resolve({ error: null }), { select: () => ({ single: async () => ({ data: { id }, error: null }) }) });
         },
       };
       return q;
@@ -181,5 +184,57 @@ describe("enrichSong — notes", () => {
     await enrichSong(db, "song-1");
 
     expect(notesWrite(writes)).toBeUndefined();
+  });
+});
+
+describe("enrichSong — a hymn added in lower case", () => {
+  const csv = (rows: string) => ({ ok: true, text: async () => rows });
+  const hymnary = async (url: string) => {
+    const u = new URL(url);
+    const q = u.searchParams.get("qu") ?? "";
+    if (u.hostname === "hymnary.org" && q.endsWith("in:texts")) return csv(TEXTS);
+    if (u.hostname === "hymnary.org" && q.endsWith("in:tunes")) return csv(TUNES);
+    throw new Error("offline");
+  };
+  const TEXTS = `displayTitle,firstLine,textTitle,refrainFirstLine,textAuthNumber,languages,authors,meter,textSources,totalInstances
+"Harbour Canticle","Lights along the harbour, shining through the night","Harbour Canticle",,lights_along_the_harbour,English,"Ada Quillfeather",,,12
+`;
+  const TUNES = `tuneTitle,tuneAuthNumber,composers,tuneKey,incipit,meter,tuneSources,totalInstances
+"STAR OF THE QUAY",star_of_the_quay,"Ada Quillfeather","e minor",1,Irregular,"Welsh melody",20
+`;
+
+  it("takes the hymnal's title casing, links its text and tune, and gives the tune its origin", async () => {
+    vi.stubGlobal("fetch", vi.fn(hymnary));
+    answers.gpt = { lyricists: hi(["Ada Quillfeather"]) };
+    answers.claude = { lyricists: hi(["Ada Quillfeather"]) };
+    const { db, writes } = fakeDb(allTags.filter((t) => (t.tags as Row).type !== "culture"), {
+      title: "harbour canticle", display_artist: null, song_recording_artists: [], first_line: null, tonality: null,
+      song_composers: [], song_lyricists: [], text_id: null, tune_id: null,
+    });
+
+    await enrichSong(db, "song-1");
+
+    const songWrites = writes.filter((w) => w.table === "songs").map((w) => w.row as Row);
+    expect(songWrites).toContainEqual(expect.objectContaining({ title: "Harbour Canticle", tonality: "Minor" }));
+    expect(writes).toContainEqual({ table: "texts", row: { title: "Harbour Canticle", slug: "x", kind: "hymn", first_line: "Lights along the harbour, shining through the night" } });
+    expect(writes).toContainEqual({ table: "tunes", row: { name: "Star of the Quay", slug: "x", meter: "Irregular" } });
+    expect(writes).toContainEqual({ table: "tune_credits", row: [
+      { tune_id: "tunes:Star of the Quay", person_id: "people:Traditional", role: "composer" },
+      { tune_id: "tunes:Star of the Quay", person_id: "people:Ada Quillfeather", role: "arranger" },
+    ] });
+    expect(writes).toContainEqual({ table: "tune_tags", row: [{ tune_id: "tunes:Star of the Quay", tag_id: "tag:Welsh" }] });
+    expect(songWrites).toContainEqual({ text_id: "texts:Harbour Canticle", tune_id: "tunes:Star of the Quay" });
+    expect(writes).toContainEqual({ table: "song_tags", row: { song_id: "song-1", tag_id: "tag:Welsh", context: "music" } });
+  });
+
+  it("leaves a song that already has a tune as it is", async () => {
+    vi.stubGlobal("fetch", vi.fn(hymnary));
+    answers.gpt = { lyricists: hi(["Ada Quillfeather"]) };
+    answers.claude = { lyricists: hi(["Ada Quillfeather"]) };
+    const { db, writes } = fakeDb(allTags, { title: "Harbour Canticle", first_line: null, song_composers: [], song_lyricists: [], text_id: "t1", tune_id: "u1" });
+
+    await enrichSong(db, "song-1");
+
+    expect(writes.filter((w) => ["texts", "tunes", "tune_credits"].includes(w.table))).toEqual([]);
   });
 });
