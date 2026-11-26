@@ -13,7 +13,7 @@ export default function CreditText({ credits, onOpen, separator = ', ', linkClas
     <>
       {credits.map((c, i) => (
         <Text key={`${i}-${c.text}`}>
-          {i > 0 ? separator : null}
+          {i > 0 ? c.sep ?? separator : null}
           {c.lead ?? null}
           {c.link && onOpen ? (
             <Text className={linkClassName} onPress={() => onOpen(browsePath(c.link!.kind, c.link!.key, { traditional: c.link!.traditional }))}>{c.text}</Text>

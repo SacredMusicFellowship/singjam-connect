@@ -1,5 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { canReviewChart, isUltimateGuitarChartUrl, newChartGoesLive, sortChartQueue, type ChartQueueRow } from "./chordCharts";
+import { canReviewChart, chartLink, isScoreUrl, isUltimateGuitarChartUrl, newChartGoesLive, scoreSiteName, sortChartQueue, type ChartQueueRow } from "./chordCharts";
+
+describe("scoreSiteName", () => {
+  it("names the score sites we accept", () => {
+    expect(scoreSiteName("https://dilbeyti.com/en/besteler/690")).toBe("Dil Beyti");
+    expect(scoreSiteName("https://hymnary.org/tune/gloria_french")).toBe("Hymnary");
+    expect(scoreSiteName("https://imslp.org/wiki/Messiah,_HWV_56_(Handel,_George_Frideric)")).toBe("IMSLP");
+    expect(scoreSiteName("https://www.cpdl.org/wiki/index.php/Ave_verum_corpus")).toBe("CPDL");
+    expect(scoreSiteName("https://musescore.com/user/1/scores/2")).toBe("MuseScore");
+    expect(scoreSiteName("https://example.org/files/Amazing-Grace.PDF")).toBe("PDF");
+  });
+  it("rejects other sites, look-alikes, bare homepages and non-web links", () => {
+    expect(scoreSiteName("https://tabs.ultimate-guitar.com/tab/x")).toBeNull();
+    expect(scoreSiteName("https://dilbeyti.com.evil.example/en/besteler/1")).toBeNull();
+    expect(scoreSiteName("https://dilbeyti.com/")).toBeNull();
+    expect(scoreSiteName("javascript:alert(1)//x.pdf")).toBeNull();
+    expect(scoreSiteName("not a url")).toBeNull();
+    expect(isScoreUrl("https://drive.google.com/file/d/abc/view")).toBe(false);
+  });
+});
+
+describe("chartLink", () => {
+  it("prefers chords, falls back to the score, else nothing", () => {
+    expect(chartLink("https://tabs.ultimate-guitar.com/tab/x", "https://hymnary.org/tune/y")).toEqual({ kind: "chords", url: "https://tabs.ultimate-guitar.com/tab/x" });
+    expect(chartLink(null, "https://dilbeyti.com/en/besteler/690")).toEqual({ kind: "score", url: "https://dilbeyti.com/en/besteler/690" });
+    expect(chartLink(undefined, "")).toBeNull();
+  });
+});
 
 describe("isUltimateGuitarChartUrl", () => {
   it("accepts Ultimate Guitar tab pages", () => {

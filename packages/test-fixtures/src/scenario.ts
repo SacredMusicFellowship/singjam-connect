@@ -5,7 +5,7 @@ import { buildCrowd, buildMember, PERSONAS, type Member, type PersonaKey } from 
 import { buildNotification, jamLink, setLink } from "./factories/notifications";
 import { buildRepertoire } from "./factories/repertoire";
 import { buildCollaborator, buildSet } from "./factories/sets";
-import { buildSongCatalog } from "./factories/songs";
+import { buildIlahi, buildSongCatalog } from "./factories/songs";
 import { buildCheckIns, buildOrder, buildTicketTypes, guestBuyer, type Buyer } from "./factories/tickets";
 import { HOUSE_ADDRESSES, VENUES } from "./names";
 import type { JamRow, Scenario, SetRow, SongRow } from "./types";
@@ -25,6 +25,7 @@ export type ScenarioRefs = {
   };
   sets: { officialNext: SetRow; memberPrivate: SetRow; memberShared: SetRow };
   songs: SongRow[];
+  ilahi: SongRow;
 };
 
 // The whole fake world used by the seed, e2e tests and screenshots. Same seed, same world.
@@ -41,6 +42,7 @@ export function buildScenario(options: ScenarioOptions = {}): { scenario: Scenar
   const crowdIds = crowd.map((m) => m.profile.id);
 
   const catalog = buildSongCatalog(ctx);
+  const ilahi = buildIlahi(ctx);
   const { songs } = catalog;
 
   // Repertoire. The member, host and first few of the crowd share a core of songs so the friends
@@ -169,12 +171,13 @@ export function buildScenario(options: ScenarioOptions = {}): { scenario: Scenar
   const scenario: Scenario = {
     authUsers: members.map((m) => m.auth),
     profiles: members.map((m) => m.profile),
-    people: catalog.people,
+    people: [...catalog.people, ...ilahi.people],
     artists: catalog.artists,
-    songs,
-    songComposers: catalog.songComposers,
+    songs: [...songs, ilahi.song],
+    songComposers: [...catalog.songComposers, ...ilahi.songComposers],
+    songLyricists: ilahi.songLyricists,
     songRecordingArtists: catalog.songRecordingArtists,
-    songTags: catalog.songTags,
+    songTags: [...catalog.songTags, ...ilahi.songTags],
     userSongs,
     jams: builtJams.map((b) => b.jam),
     jamTags: builtJams.flatMap((b) => b.tags),
@@ -202,6 +205,7 @@ export function buildScenario(options: ScenarioOptions = {}): { scenario: Scenar
       },
       sets: { officialNext: officialNextSet.set, memberPrivate: memberPrivate.set, memberShared: memberShared.set },
       songs,
+      ilahi: ilahi.song,
     },
   };
 }

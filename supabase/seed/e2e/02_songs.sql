@@ -11,7 +11,8 @@ insert into public.people (id, name) values
   ('4009a7e8-9ac7-450c-bfc6-0937a508dbd3', 'Greta Hollis'),
   ('a55458db-5e7f-43cc-b9ce-f8e242e553f5', 'Hugo Marchbank'),
   ('8720f211-64a8-4e56-abfe-8c2a4876806d', 'Iris Pemberley'),
-  ('4b4825cc-e692-47ea-8d31-d18160eba3a7', 'Jasper Quaid');
+  ('4b4825cc-e692-47ea-8d31-d18160eba3a7', 'Jasper Quaid'),
+  ('44250ba2-22da-4cfe-9e97-592df868fe71', 'Derviş Hasan Nuri');
 
 insert into public.artists (id, name) values
   ('3fae6589-67ea-4042-934f-e3e3cb0b8628', 'The Paper Moons'),
@@ -27,47 +28,48 @@ insert into public.artists (id, name) values
   ('0eed864b-0af5-4d4a-aa72-e61b6e6a9d1a', 'Delphine Arrowood'),
   ('873e045f-16a4-4e9d-9976-371a48ec7dd8', 'The Night Owls of Fox Glen');
 
-insert into public.songs (id, title, slug, display_artist, first_line, year, tonality, meter, vibe, youtube_url, chord_chart_url) values
-  ('0ab7734e-4e55-4678-8c51-33b8c8b3468e', 'Lanterns Over the Harbor', 'lanterns-over-the-harbor-iris-pemberley', 'The Paper Moons', 'We lit the lamps along the water', 1996, 'Major', '4/4', 'Ballad', null, null),
-  ('90c73ef0-ca64-4ba1-8062-97371ac1a266', 'Paper Boats', 'paper-boats-eloise-fairweather', 'Juniper & the Jackdaws', 'Fold it twice and let it go', 1959, 'Minor', '6/8', 'Ballad', null, null),
-  ('d261deb7-13fa-424b-894c-1ccc08d7a030', 'Copper Ridge Rambler', 'copper-ridge-rambler-ada-brightwater', 'Marigold Station', 'Up the switchback, boots and banjo', 1975, 'Mixolydian', '4/4', 'Banger', null, null),
-  ('4bfb8118-3988-40b3-bcab-52468ed8c3ed', 'Saturday at the Grange', 'saturday-at-the-grange-basil-thornecroft', 'The Lowland Lanterns', 'Push the chairs against the wall', 2003, 'Dorian', '4/4', 'Banger', null, null),
-  ('eda46840-eb65-46ae-a78c-f572214dcb9c', 'Moonlight on the Mill Pond', 'moonlight-on-the-mill-pond-eloise-fairweather', 'Ola Featherstone', 'Still water, silver sky', 1971, 'Mixolydian', '6/8', 'Ballad', null, null),
-  ('a3b26bb9-8f18-496a-a1b3-eb14cd1919c7', 'Raise the Rafters', 'raise-the-rafters-felix-ambersmith-jasper-quaid', 'The Brass Orchard', 'Everybody sing it louder now', 1993, 'Minor', '6/8', 'Banger', null, null),
-  ('3dfcf097-7ce0-455d-b34f-a251f253179b', 'Blue Kettle Blues', 'blue-kettle-blues-eloise-fairweather-hugo-marchbank', 'Cass Underhill', 'The kettle''s cold and so am I', 2018, 'Minor', '6/8', 'Ballad', null, null),
-  ('27eaa184-755e-4c43-adbf-e10c7f0baccb', 'Dancing in the Orchard', 'dancing-in-the-orchard-basil-thornecroft-felix-ambersmith', 'Velvet Ferryman', 'Apples falling, fiddles calling', 2023, 'Major', '6/8', 'Banger', null, null),
-  ('47f7cdb2-544e-4977-a5eb-a05c76525499', 'Keep the Light On', 'keep-the-light-on-greta-hollis-iris-pemberley', 'The Harbor Choir', 'If you''re out there on the road tonight', 1973, 'Minor', '3/4', 'Ballad', null, null),
-  ('f7297824-b32e-4ff5-bb2e-e4e87f295339', 'Ferryman''s Shanty', 'ferrymans-shanty-ada-brightwater', 'Moss & Mica', 'Haul away, the tide is turning', 1966, 'Minor', '3/4', 'Banger', null, null),
-  ('e27cc6da-b0bb-4ff3-9026-a65002e16f79', 'Velvet Avenue', 'velvet-avenue-greta-hollis', 'Delphine Arrowood', 'Neon hums on Velvet Avenue', 1961, 'Minor', '4/4', 'Banger', null, null),
-  ('81229137-a00a-4efa-a95c-f70c487468c1', 'Slow Train to Riverbend', 'slow-train-to-riverbend-jasper-quaid', 'The Night Owls of Fox Glen', 'Count the fence posts one by one', 1987, 'Mixolydian', '6/8', 'Ballad', null, null),
-  ('8da24611-8f9a-4603-8018-13ce8220d3dc', 'Golden Hour Groove', 'golden-hour-groove-ada-brightwater-jasper-quaid', 'The Paper Moons', 'Sun''s low, let it roll', 1970, 'Dorian', '4/4', 'Banger', null, null),
-  ('e5db12a6-f09f-404a-b602-b04de34672a1', 'Under the Willow', 'under-the-willow-basil-thornecroft-jasper-quaid', 'Juniper & the Jackdaws', 'Meet me where the branches bend', 1962, 'Dorian', '3/4', 'Ballad', null, null),
-  ('050ecf12-46aa-4396-b1be-18ff321a447b', 'Rooftop Reggae', 'rooftop-reggae-greta-hollis', 'Marigold Station', 'Sweet breeze on the rooftop', 2019, 'Mixolydian', '6/8', 'Banger', null, null),
-  ('44090254-cfe4-4f11-a453-2359afbe1e1c', 'Heartstrings and Harmonies', 'heartstrings-and-harmonies-greta-hollis', 'The Lowland Lanterns', 'Three voices and a tune', 1967, 'Dorian', '3/4', 'Ballad', null, null),
-  ('01dcd825-c682-4a86-bbec-9ba3fcb2f900', 'Thunder on the Ridge', 'thunder-on-the-ridge-eloise-fairweather-jasper-quaid', 'Ola Featherstone', 'Hear it rolling down the valley', 2017, 'Dorian', '6/8', 'Banger', null, null),
-  ('a3d1cfb5-60cc-480c-ae66-9d652d7bfadc', 'Smoke Rings', 'smoke-rings-jasper-quaid', 'The Brass Orchard', 'Late set, low lights', 1975, 'Mixolydian', '4/4', 'Ballad', null, null),
-  ('e47e37eb-3acd-4299-bb6e-098025dd7cf2', 'Home by the Harbor Light', 'home-by-the-harbor-light-hugo-marchbank', 'Cass Underhill', 'Leave the porch light burning', 1995, 'Major', '4/4', 'Ballad', null, null),
-  ('3adf954a-833f-4822-bec7-c8c4872735ac', 'Wildflower Waltz', 'wildflower-waltz-ada-brightwater-jasper-quaid', 'Velvet Ferryman', 'One two three across the meadow', 1976, 'Dorian', '6/8', 'Ballad', null, null),
-  ('278d6ba6-6b1e-47be-81ae-cdf04d3d41e8', 'Fox Glen Fiddle Tune', 'fox-glen-fiddle-tune-ada-brightwater-basil-thornecroft', 'The Harbor Choir', 'Bow the strings and stamp your feet', 1982, 'Dorian', '4/4', 'Banger', null, null),
-  ('dbd44aa3-3003-42b8-9385-f56b78527d70', 'Echoes in the Canyon', 'echoes-in-the-canyon-greta-hollis', 'Moss & Mica', 'Call my name and hear it back', 1960, 'Minor', '3/4', 'Ballad', null, null),
-  ('9c280167-07dc-4575-97a0-fffb4c54bbe9', 'Sweet Morning Glory', 'sweet-morning-glory-jasper-quaid', 'Delphine Arrowood', 'Wake up, wake up, the day is new', 1960, 'Mixolydian', '3/4', 'Ballad', null, null),
-  ('d9e655db-aac5-4e4b-bcfc-8d1dcfdf868d', 'Midnight Ferry', 'midnight-ferry-ada-brightwater-jasper-quaid', 'The Night Owls of Fox Glen', 'Last boat leaves at twelve', 2024, 'Mixolydian', '4/4', 'Ballad', null, null),
-  ('5c6cb83d-85e6-4016-84b7-ed6edd3d0545', 'Kitchen Table Chorus', 'kitchen-table-chorus-celeste-windham-hugo-marchbank', 'The Paper Moons', 'Pass the bread and pass the tune', 1978, 'Dorian', '3/4', 'Banger', null, null),
-  ('4ffbe9b8-c92d-487a-827b-a62c84adf7ee', 'Starlight Serenade', 'starlight-serenade-desmond-larkby', 'Juniper & the Jackdaws', 'Every star''s a note tonight', 1987, 'Dorian', '6/8', 'Ballad', null, null),
-  ('c85ff8ca-0bea-49e1-b8aa-0359bb1f4272', 'Down by the Copper Creek', 'down-by-the-copper-creek-felix-ambersmith-greta-hollis', 'Marigold Station', 'Water''s high and moving fast', 1986, 'Mixolydian', '3/4', 'Banger', null, null),
-  ('269664fe-9f73-422c-9c2a-1b89e5cf9d5b', 'Brighter Days Ahead', 'brighter-days-ahead-celeste-windham', 'The Lowland Lanterns', 'Hold on, the clouds are breaking', 1986, 'Minor', '6/8', 'Banger', null, null),
-  ('7f22e271-864d-4de2-a253-a3a05b3c7c33', 'The Lighthouse Keeper', 'the-lighthouse-keeper-felix-ambersmith-iris-pemberley', 'Ola Featherstone', 'Forty years of watching waves', 1963, 'Dorian', '6/8', 'Ballad', null, null),
-  ('be55aee4-3577-4281-9c9c-524a97be0e2f', 'Sunday Best', 'sunday-best-ada-brightwater', 'The Brass Orchard', 'Shine your shoes and comb your hair', 1990, 'Major', '3/4', 'Banger', null, null),
-  ('52d5ba6f-3f05-4ea1-ab5f-58b4c68f4c7a', 'Rain on the Tin Roof', 'rain-on-the-tin-roof-basil-thornecroft-felix-ambersmith', 'Cass Underhill', 'Pitter patter, let it come', 1959, 'Minor', '6/8', 'Ballad', null, null),
-  ('aed33b3d-abe7-4618-8554-383d80605518', 'Tidewater', 'tidewater-felix-ambersmith-jasper-quaid', 'Velvet Ferryman', 'In and out the tide goes', 1966, 'Major', '4/4', 'Ballad', null, null),
-  ('e66fe9cd-ee06-442a-a22d-d2b62a44ff51', 'Party at the Lantern Room', 'party-at-the-lantern-room-basil-thornecroft', 'The Harbor Choir', 'Doors open, come on in', 1959, 'Minor', '3/4', 'Banger', null, null),
-  ('471a4845-2f18-4ee7-bc65-c8aa94670e08', 'Old Bridge Road', 'old-bridge-road-felix-ambersmith-iris-pemberley', 'Moss & Mica', 'Gravel crunching under wheels', 1989, 'Dorian', '6/8', 'Ballad', null, null),
-  ('dba3a30a-4a0d-4820-b033-d612a19d6d38', 'Hearthside', 'hearthside-celeste-windham', 'Delphine Arrowood', 'Pull a chair up to the fire', 2023, 'Mixolydian', '3/4', 'Ballad', null, null),
-  ('0ed1e0b6-44e1-4b21-9e7a-7f0b944a449c', 'Juke Joint Jubilee', 'juke-joint-jubilee-basil-thornecroft-eloise-fairweather', 'The Night Owls of Fox Glen', 'Piano''s out of tune but who cares', 2012, 'Mixolydian', '3/4', 'Banger', null, null),
-  ('1ab8a518-2f1f-4c4a-bb04-5810cea3d142', 'Harvest Moon Hoedown', 'harvest-moon-hoedown-eloise-fairweather', 'The Paper Moons', 'Swing your partner round and round', 1981, 'Major', '3/4', 'Banger', null, null),
-  ('13c34905-c89b-40f2-8ff5-043794ad1dc0', 'Glass Half Full', 'glass-half-full-ada-brightwater-celeste-windham', 'Juniper & the Jackdaws', 'Pour another, it''s all good', 2009, 'Major', '3/4', 'Ballad', null, null),
-  ('07d0b5ae-b14a-4591-bd45-d9f74bdf69c8', 'Island Morning', 'island-morning-felix-ambersmith', 'Marigold Station', 'Coffee and the sound of waves', 1963, 'Dorian', '6/8', 'Ballad', null, null),
-  ('66c4b908-4e71-4607-a175-41c189c08ece', 'We Sing Together', 'we-sing-together-celeste-windham-felix-ambersmith', 'The Lowland Lanterns', 'No one''s voice is wrong in here', 1963, 'Mixolydian', '3/4', 'Banger', null, null);
+insert into public.songs (id, title, slug, display_artist, first_line, year, tonality, meter, vibe, youtube_url, chord_chart_url, score_url) values
+  ('0ab7734e-4e55-4678-8c51-33b8c8b3468e', 'Lanterns Over the Harbor', 'lanterns-over-the-harbor-iris-pemberley', 'The Paper Moons', 'We lit the lamps along the water', 1996, 'Major', '4/4', 'Ballad', null, null, null),
+  ('90c73ef0-ca64-4ba1-8062-97371ac1a266', 'Paper Boats', 'paper-boats-eloise-fairweather', 'Juniper & the Jackdaws', 'Fold it twice and let it go', 1959, 'Minor', '6/8', 'Ballad', null, null, null),
+  ('d261deb7-13fa-424b-894c-1ccc08d7a030', 'Copper Ridge Rambler', 'copper-ridge-rambler-ada-brightwater', 'Marigold Station', 'Up the switchback, boots and banjo', 1975, 'Mixolydian', '4/4', 'Banger', null, null, null),
+  ('4bfb8118-3988-40b3-bcab-52468ed8c3ed', 'Saturday at the Grange', 'saturday-at-the-grange-basil-thornecroft', 'The Lowland Lanterns', 'Push the chairs against the wall', 2003, 'Dorian', '4/4', 'Banger', null, null, null),
+  ('eda46840-eb65-46ae-a78c-f572214dcb9c', 'Moonlight on the Mill Pond', 'moonlight-on-the-mill-pond-eloise-fairweather', 'Ola Featherstone', 'Still water, silver sky', 1971, 'Mixolydian', '6/8', 'Ballad', null, null, null),
+  ('a3b26bb9-8f18-496a-a1b3-eb14cd1919c7', 'Raise the Rafters', 'raise-the-rafters-felix-ambersmith-jasper-quaid', 'The Brass Orchard', 'Everybody sing it louder now', 1993, 'Minor', '6/8', 'Banger', null, null, null),
+  ('3dfcf097-7ce0-455d-b34f-a251f253179b', 'Blue Kettle Blues', 'blue-kettle-blues-eloise-fairweather-hugo-marchbank', 'Cass Underhill', 'The kettle''s cold and so am I', 2018, 'Minor', '6/8', 'Ballad', null, null, null),
+  ('27eaa184-755e-4c43-adbf-e10c7f0baccb', 'Dancing in the Orchard', 'dancing-in-the-orchard-basil-thornecroft-felix-ambersmith', 'Velvet Ferryman', 'Apples falling, fiddles calling', 2023, 'Major', '6/8', 'Banger', null, null, null),
+  ('47f7cdb2-544e-4977-a5eb-a05c76525499', 'Keep the Light On', 'keep-the-light-on-greta-hollis-iris-pemberley', 'The Harbor Choir', 'If you''re out there on the road tonight', 1973, 'Minor', '3/4', 'Ballad', null, null, null),
+  ('f7297824-b32e-4ff5-bb2e-e4e87f295339', 'Ferryman''s Shanty', 'ferrymans-shanty-ada-brightwater', 'Moss & Mica', 'Haul away, the tide is turning', 1966, 'Minor', '3/4', 'Banger', null, null, null),
+  ('e27cc6da-b0bb-4ff3-9026-a65002e16f79', 'Velvet Avenue', 'velvet-avenue-greta-hollis', 'Delphine Arrowood', 'Neon hums on Velvet Avenue', 1961, 'Minor', '4/4', 'Banger', null, null, null),
+  ('81229137-a00a-4efa-a95c-f70c487468c1', 'Slow Train to Riverbend', 'slow-train-to-riverbend-jasper-quaid', 'The Night Owls of Fox Glen', 'Count the fence posts one by one', 1987, 'Mixolydian', '6/8', 'Ballad', null, null, null),
+  ('8da24611-8f9a-4603-8018-13ce8220d3dc', 'Golden Hour Groove', 'golden-hour-groove-ada-brightwater-jasper-quaid', 'The Paper Moons', 'Sun''s low, let it roll', 1970, 'Dorian', '4/4', 'Banger', null, null, null),
+  ('e5db12a6-f09f-404a-b602-b04de34672a1', 'Under the Willow', 'under-the-willow-basil-thornecroft-jasper-quaid', 'Juniper & the Jackdaws', 'Meet me where the branches bend', 1962, 'Dorian', '3/4', 'Ballad', null, null, null),
+  ('050ecf12-46aa-4396-b1be-18ff321a447b', 'Rooftop Reggae', 'rooftop-reggae-greta-hollis', 'Marigold Station', 'Sweet breeze on the rooftop', 2019, 'Mixolydian', '6/8', 'Banger', null, null, null),
+  ('44090254-cfe4-4f11-a453-2359afbe1e1c', 'Heartstrings and Harmonies', 'heartstrings-and-harmonies-greta-hollis', 'The Lowland Lanterns', 'Three voices and a tune', 1967, 'Dorian', '3/4', 'Ballad', null, null, null),
+  ('01dcd825-c682-4a86-bbec-9ba3fcb2f900', 'Thunder on the Ridge', 'thunder-on-the-ridge-eloise-fairweather-jasper-quaid', 'Ola Featherstone', 'Hear it rolling down the valley', 2017, 'Dorian', '6/8', 'Banger', null, null, null),
+  ('a3d1cfb5-60cc-480c-ae66-9d652d7bfadc', 'Smoke Rings', 'smoke-rings-jasper-quaid', 'The Brass Orchard', 'Late set, low lights', 1975, 'Mixolydian', '4/4', 'Ballad', null, null, null),
+  ('e47e37eb-3acd-4299-bb6e-098025dd7cf2', 'Home by the Harbor Light', 'home-by-the-harbor-light-hugo-marchbank', 'Cass Underhill', 'Leave the porch light burning', 1995, 'Major', '4/4', 'Ballad', null, null, null),
+  ('3adf954a-833f-4822-bec7-c8c4872735ac', 'Wildflower Waltz', 'wildflower-waltz-ada-brightwater-jasper-quaid', 'Velvet Ferryman', 'One two three across the meadow', 1976, 'Dorian', '6/8', 'Ballad', null, null, null),
+  ('278d6ba6-6b1e-47be-81ae-cdf04d3d41e8', 'Fox Glen Fiddle Tune', 'fox-glen-fiddle-tune-ada-brightwater-basil-thornecroft', 'The Harbor Choir', 'Bow the strings and stamp your feet', 1982, 'Dorian', '4/4', 'Banger', null, null, null),
+  ('dbd44aa3-3003-42b8-9385-f56b78527d70', 'Echoes in the Canyon', 'echoes-in-the-canyon-greta-hollis', 'Moss & Mica', 'Call my name and hear it back', 1960, 'Minor', '3/4', 'Ballad', null, null, null),
+  ('9c280167-07dc-4575-97a0-fffb4c54bbe9', 'Sweet Morning Glory', 'sweet-morning-glory-jasper-quaid', 'Delphine Arrowood', 'Wake up, wake up, the day is new', 1960, 'Mixolydian', '3/4', 'Ballad', null, null, null),
+  ('d9e655db-aac5-4e4b-bcfc-8d1dcfdf868d', 'Midnight Ferry', 'midnight-ferry-ada-brightwater-jasper-quaid', 'The Night Owls of Fox Glen', 'Last boat leaves at twelve', 2024, 'Mixolydian', '4/4', 'Ballad', null, null, null),
+  ('5c6cb83d-85e6-4016-84b7-ed6edd3d0545', 'Kitchen Table Chorus', 'kitchen-table-chorus-celeste-windham-hugo-marchbank', 'The Paper Moons', 'Pass the bread and pass the tune', 1978, 'Dorian', '3/4', 'Banger', null, null, null),
+  ('4ffbe9b8-c92d-487a-827b-a62c84adf7ee', 'Starlight Serenade', 'starlight-serenade-desmond-larkby', 'Juniper & the Jackdaws', 'Every star''s a note tonight', 1987, 'Dorian', '6/8', 'Ballad', null, null, null),
+  ('c85ff8ca-0bea-49e1-b8aa-0359bb1f4272', 'Down by the Copper Creek', 'down-by-the-copper-creek-felix-ambersmith-greta-hollis', 'Marigold Station', 'Water''s high and moving fast', 1986, 'Mixolydian', '3/4', 'Banger', null, null, null),
+  ('269664fe-9f73-422c-9c2a-1b89e5cf9d5b', 'Brighter Days Ahead', 'brighter-days-ahead-celeste-windham', 'The Lowland Lanterns', 'Hold on, the clouds are breaking', 1986, 'Minor', '6/8', 'Banger', null, null, null),
+  ('7f22e271-864d-4de2-a253-a3a05b3c7c33', 'The Lighthouse Keeper', 'the-lighthouse-keeper-felix-ambersmith-iris-pemberley', 'Ola Featherstone', 'Forty years of watching waves', 1963, 'Dorian', '6/8', 'Ballad', null, null, null),
+  ('be55aee4-3577-4281-9c9c-524a97be0e2f', 'Sunday Best', 'sunday-best-ada-brightwater', 'The Brass Orchard', 'Shine your shoes and comb your hair', 1990, 'Major', '3/4', 'Banger', null, null, null),
+  ('52d5ba6f-3f05-4ea1-ab5f-58b4c68f4c7a', 'Rain on the Tin Roof', 'rain-on-the-tin-roof-basil-thornecroft-felix-ambersmith', 'Cass Underhill', 'Pitter patter, let it come', 1959, 'Minor', '6/8', 'Ballad', null, null, null),
+  ('aed33b3d-abe7-4618-8554-383d80605518', 'Tidewater', 'tidewater-felix-ambersmith-jasper-quaid', 'Velvet Ferryman', 'In and out the tide goes', 1966, 'Major', '4/4', 'Ballad', null, null, null),
+  ('e66fe9cd-ee06-442a-a22d-d2b62a44ff51', 'Party at the Lantern Room', 'party-at-the-lantern-room-basil-thornecroft', 'The Harbor Choir', 'Doors open, come on in', 1959, 'Minor', '3/4', 'Banger', null, null, null),
+  ('471a4845-2f18-4ee7-bc65-c8aa94670e08', 'Old Bridge Road', 'old-bridge-road-felix-ambersmith-iris-pemberley', 'Moss & Mica', 'Gravel crunching under wheels', 1989, 'Dorian', '6/8', 'Ballad', null, null, null),
+  ('dba3a30a-4a0d-4820-b033-d612a19d6d38', 'Hearthside', 'hearthside-celeste-windham', 'Delphine Arrowood', 'Pull a chair up to the fire', 2023, 'Mixolydian', '3/4', 'Ballad', null, null, null),
+  ('0ed1e0b6-44e1-4b21-9e7a-7f0b944a449c', 'Juke Joint Jubilee', 'juke-joint-jubilee-basil-thornecroft-eloise-fairweather', 'The Night Owls of Fox Glen', 'Piano''s out of tune but who cares', 2012, 'Mixolydian', '3/4', 'Banger', null, null, null),
+  ('1ab8a518-2f1f-4c4a-bb04-5810cea3d142', 'Harvest Moon Hoedown', 'harvest-moon-hoedown-eloise-fairweather', 'The Paper Moons', 'Swing your partner round and round', 1981, 'Major', '3/4', 'Banger', null, null, null),
+  ('13c34905-c89b-40f2-8ff5-043794ad1dc0', 'Glass Half Full', 'glass-half-full-ada-brightwater-celeste-windham', 'Juniper & the Jackdaws', 'Pour another, it''s all good', 2009, 'Major', '3/4', 'Ballad', null, null, null),
+  ('07d0b5ae-b14a-4591-bd45-d9f74bdf69c8', 'Island Morning', 'island-morning-felix-ambersmith', 'Marigold Station', 'Coffee and the sound of waves', 1963, 'Dorian', '6/8', 'Ballad', null, null, null),
+  ('66c4b908-4e71-4607-a175-41c189c08ece', 'We Sing Together', 'we-sing-together-celeste-windham-felix-ambersmith', 'The Lowland Lanterns', 'No one''s voice is wrong in here', 1963, 'Mixolydian', '3/4', 'Banger', null, null, null),
+  ('0daf1f09-9e37-4ad9-be56-a1ceadce641e', 'Gönül Bahçesinde Açan Gül', 'gonul-bahcesinde-acan-gul-dervis-hasan-nuri', null, null, null, null, null, null, null, null, 'https://dilbeyti.com/en/besteler/99999');
 
 insert into public.song_composers (song_id, person_id) values
   ('0ab7734e-4e55-4678-8c51-33b8c8b3468e', '8720f211-64a8-4e56-abfe-8c2a4876806d'),
@@ -129,6 +131,9 @@ insert into public.song_composers (song_id, person_id) values
   ('07d0b5ae-b14a-4591-bd45-d9f74bdf69c8', 'a111fa58-8eff-4ab0-90ac-c10b3f4221e3'),
   ('66c4b908-4e71-4607-a175-41c189c08ece', 'a111fa58-8eff-4ab0-90ac-c10b3f4221e3'),
   ('66c4b908-4e71-4607-a175-41c189c08ece', 'e1ad2f8c-906d-4007-bf7e-a108cebe6e83');
+
+insert into public.song_lyricists (song_id, person_id) values
+  ('0daf1f09-9e37-4ad9-be56-a1ceadce641e', '44250ba2-22da-4cfe-9e97-592df868fe71');
 
 insert into public.song_recording_artists (song_id, artist_id, year, position) values
   ('0ab7734e-4e55-4678-8c51-33b8c8b3468e', '3fae6589-67ea-4042-934f-e3e3cb0b8628', 1996, 0),
@@ -212,4 +217,9 @@ insert into public.song_tags (song_id, tag_id) values
   ('1ab8a518-2f1f-4c4a-bb04-5810cea3d142', (select id from public.tags where type = 'genre' and name = 'Bluegrass')),
   ('13c34905-c89b-40f2-8ff5-043794ad1dc0', (select id from public.tags where type = 'genre' and name = 'R&B')),
   ('07d0b5ae-b14a-4591-bd45-d9f74bdf69c8', (select id from public.tags where type = 'genre' and name = 'Reggae')),
-  ('66c4b908-4e71-4607-a175-41c189c08ece', (select id from public.tags where type = 'genre' and name = 'Gospel'));
+  ('66c4b908-4e71-4607-a175-41c189c08ece', (select id from public.tags where type = 'genre' and name = 'Gospel')),
+  ('0daf1f09-9e37-4ad9-be56-a1ceadce641e', (select id from public.tags where type = 'genre' and name = 'Sacred')),
+  ('0daf1f09-9e37-4ad9-be56-a1ceadce641e', (select id from public.tags where type = 'form' and name = 'Ilahi')),
+  ('0daf1f09-9e37-4ad9-be56-a1ceadce641e', (select id from public.tags where type = 'community' and name = 'Sufi')),
+  ('0daf1f09-9e37-4ad9-be56-a1ceadce641e', (select id from public.tags where type = 'mode' and name = 'Hicaz')),
+  ('0daf1f09-9e37-4ad9-be56-a1ceadce641e', (select id from public.tags where type = 'rhythm' and name = 'Sofyan'));

@@ -13,6 +13,8 @@ export type SongForm = {
   notesSource?: "wikipedia" | "ai";
   geniusUrl: string;
   chordChartUrl: string;
+  scoreUrl: string;
+  translationUrl: string;
   year: string;
   yearWritten: string;
   tonalities: string[];
@@ -29,6 +31,8 @@ export type SongForm = {
   forms: string[];
   occasions: string[];
   communities: string[];
+  modes?: string[];
+  rhythms?: string[];
   composers: Iterable<string>;
   lyricists: Iterable<string>;
   pendingComposerNames: string[];
@@ -75,6 +79,8 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       notes: form.notes,
       genius_url: form.geniusUrl,
       chord_chart_url: form.chordChartUrl,
+      score_url: form.scoreUrl,
+      translation_url: form.translationUrl,
       year: parseYear(form.year),
       year_written: parseYear(form.yearWritten),
       tonality: form.tonalities.join(", "),
@@ -94,6 +100,8 @@ export function songSavePayload(form: SongForm, lookups: { people: Named[]; arti
       form: form.forms,
       occasion: form.occasions,
       community: form.communities,
+      ...(form.modes ? { mode: form.modes } : {}),
+      ...(form.rhythms ? { rhythm: form.rhythms } : {}),
     },
     composer_ids: composerIds,
     composer_names: form.pendingComposerNames.map(personName),

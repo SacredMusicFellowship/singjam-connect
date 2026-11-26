@@ -78,3 +78,56 @@ test("the recording artist picker offers the artist a misspelling means before c
     await admin.from("songs").delete().eq("id", song.id);
   }
 });
+
+test("a song editor links a score from an allowed site, and the song shows it in place of chords", async ({ page }) => {
+  const { data: song, error } = await admin.from("songs").insert({ title: `Score Check ${randomUUID().slice(0, 8)}` }).select("id, slug").single();
+  if (error || !song) throw error;
+  try {
+    await openPage(page, `/song-editor/songs/${song.id}`);
+    const score = await hydrated(page.getByPlaceholder(/dilbeyti\.com/));
+    const save = page.getByRole("button", { name: "Save", exact: true }).first();
+
+    await score.fill("https://drive.google.com/file/d/abc/view");
+    await save.click();
+    await expect(page.getByText("Score links need to be a Dil Beyti, Hymnary, IMSLP, CPDL or MuseScore page, or a PDF.")).toBeVisible();
+
+    await score.fill("https://dilbeyti.com/en/besteler/690");
+    await page.getByPlaceholder("A translation of the words elsewhere").fill("https://example.org/translations/bakip-cemal");
+    await save.click();
+    await expect.poll(async () => {
+      const { data } = await admin.from("songs").select("score_url, translation_url").eq("id", song.id).single();
+      return data;
+    }).toEqual({ score_url: "https://dilbeyti.com/en/besteler/690", translation_url: "https://example.org/translations/bakip-cemal" });
+
+    await openPage(page, `/songs/${song.slug}`);
+    await expect(page.getByRole("link", { name: "Score" }).first()).toHaveAttribute("href", "https://dilbeyti.com/en/besteler/690");
+    await expect(page.getByRole("link", { name: "Dil Beyti ↗" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Translation" })).toHaveAttribute("href", "https://example.org/translations/bakip-cemal");
+  } finally {
+    await admin.from("songs").delete().eq("id", song.id);
+  }
+});
+
+test("a song editor sets a song's maqam and usul, one of each", async ({ page }) => {
+  const { data: song, error } = await admin.from("songs").insert({ title: `Maqam Check ${randomUUID().slice(0, 8)}` }).select("id").single();
+  if (error || !song) throw error;
+  try {
+    await openPage(page, `/song-editor/songs/${song.id}`);
+    const maqam = await hydrated(page.getByPlaceholder("Search maqams, ragas, modes…"));
+    await maqam.fill("Hica");
+    await page.getByRole("button", { name: "Hicaz", exact: true }).click();
+    await maqam.fill("Ras");
+    await page.getByRole("button", { name: "Rast", exact: true }).click();
+    const usul = page.getByPlaceholder("Search usuls and rhythms…");
+    await usul.fill("Düy");
+    await page.getByRole("button", { name: "Düyek", exact: true }).click();
+
+    await page.getByRole("button", { name: "Save", exact: true }).first().click();
+    await expect.poll(async () => {
+      const { data } = await admin.from("song_tags").select("tags(name, type)").eq("song_id", song.id);
+      return (data ?? []).map((r: any) => `${r.tags.type}:${r.tags.name}`).sort();
+    }).toEqual(["mode:Rast", "rhythm:Düyek"]);
+  } finally {
+    await admin.from("songs").delete().eq("id", song.id);
+  }
+});

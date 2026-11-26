@@ -4,19 +4,21 @@ import { useState } from "react";
 import ChordsLink from "@/components/ChordsLink";
 import { UltimateGuitarIcon } from "@/components/setDetailShared";
 
-// A song's chord chart in a row of controls: the Chords link when there is one;
-// for anyone signed in, the dashed "add chart" button and URL field when
-// there isn't. Meant for the end of a flex-wrap row: the URL field takes a line
+// A song's chart in a row of controls: the Chords link when there is one, else
+// its Score; for anyone signed in, the dashed "add chart" button and URL field
+// when there's neither. Meant for the end of a flex-wrap row: the URL field takes a line
 // of its own beneath it.
 export default function ChordChartSlot({
   songId,
   url,
+  score,
   canAdd,
   onAdded,
   size = "sm",
 }: {
   songId: string;
   url: string | null | undefined;
+  score?: string | null;
   canAdd: boolean;
   onAdded: (url: string) => void;
   size?: "sm" | "md";
@@ -31,6 +33,7 @@ export default function ChordChartSlot({
   if (url) {
     return <ChordsLink href={url} size={size} pill />;
   }
+  if (score) return <ChordsLink href={score} kind="score" size={size} pill />;
 
   if (notice) return <span className="text-xs text-zinc-500">{notice}</span>;
 

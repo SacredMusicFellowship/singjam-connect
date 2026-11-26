@@ -59,7 +59,7 @@ export type SongRow = {
   id: Uuid;
   title: string;
   slug: string;
-  display_artist: string;
+  display_artist: string | null;
   first_line: string | null;
   year: number | null;
   tonality: string | null;
@@ -67,12 +67,14 @@ export type SongRow = {
   vibe: "Banger" | "Ballad" | null;
   youtube_url: null;
   chord_chart_url: null;
+  score_url: string | null;
 };
 
 export type SongComposerRow = { song_id: Uuid; person_id: Uuid };
+export type SongLyricistRow = { song_id: Uuid; person_id: Uuid };
 export type SongRecordingArtistRow = { song_id: Uuid; artist_id: Uuid; year: number | null; position: number };
 // Tags are reference data seeded by the migrations with random ids, so they're referenced by type and name.
-export type TagType = "genre" | "theme" | "culture" | "language" | "form" | "occasion" | "community";
+export type TagType = "genre" | "theme" | "culture" | "language" | "form" | "occasion" | "community" | "mode" | "rhythm";
 export type SongTagRow = { song_id: Uuid; tag_type: TagType; tag_name: string };
 
 export type UserSongRow = { user_id: Uuid; song_id: Uuid; confidence: Confidence; key_note: string | null };
@@ -198,6 +200,7 @@ export type Scenario = {
   artists: ArtistRow[];
   songs: SongRow[];
   songComposers: SongComposerRow[];
+  songLyricists: SongLyricistRow[];
   songRecordingArtists: SongRecordingArtistRow[];
   songTags: SongTagRow[];
   userSongs: UserSongRow[];

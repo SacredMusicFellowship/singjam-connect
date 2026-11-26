@@ -7,7 +7,7 @@ import { createText, createTune } from "@/components/catalog/catalogWrites";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { songSavePayload } from "@/lib/songSavePayload";
-import { closestArtist, MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type CardLine, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
+import { closestArtist, isScoreUrl, MAX_RECORDINGS, samePeople, songCardCredits, songTagNames, songTraditionTag, type CardCredit, type CardLine, type EnrichmentReview, type SongTagRow, type SourceRef } from "@singjam/core";
 import {
   DndContext,
   PointerSensor,
@@ -75,6 +75,8 @@ type Song = {
   notes_source: "wikipedia" | "ai" | null;
   genius_url: string | null;
   chord_chart_url: string | null;
+  score_url: string | null;
+  translation_url: string | null;
   youtube_url: string | null;
   year: number | null;
   year_written: number | null;
@@ -116,6 +118,8 @@ type Props = {
   allForms: Lookup[];
   allOccasions: Lookup[];
   allCommunities: Lookup[];
+  allModes: Lookup[];
+  allRhythms: Lookup[];
   allTexts: { id: string; title: string; slug: string }[];
   allTunes: { id: string; slug: string; tune_label: string }[];
   allPeople: Lookup[];
@@ -124,6 +128,15 @@ type Props = {
   basePath: string;
   isAdmin: boolean;
 };
+
+function webHref(raw: string): string | null {
+  try {
+    const url = new URL(raw.trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 function toSet(ids: string[]) {
   return new Set(ids);
@@ -138,6 +151,8 @@ export default function SongEditor({
   allForms,
   allOccasions,
   allCommunities,
+  allModes,
+  allRhythms,
   allTexts: initialTexts,
   allTunes: initialTunes,
   allPeople,
@@ -163,6 +178,11 @@ export default function SongEditor({
     : song?.notes_source && notes === (song.notes ?? "") ? song.notes_source : null;
   const [geniusUrl, setGeniusUrl] = useState(song?.genius_url ?? "");
   const [chordChartUrl, setChordChartUrl] = useState(song?.chord_chart_url ?? "");
+  const [scoreUrl, setScoreUrl] = useState(song?.score_url ?? "");
+  const [translationUrl, setTranslationUrl] = useState(song?.translation_url ?? "");
+  // Preview links only for web addresses, never a typed javascript: link.
+  const scoreHref = webHref(scoreUrl);
+  const translationHref = webHref(translationUrl);
   const [year, setYear] = useState(song?.year?.toString() ?? "");
   const [yearWritten, setYearWritten] = useState(song?.year_written?.toString() ?? "");
   const [tonalities, setTonalities] = useState<string[]>(() =>
@@ -232,6 +252,8 @@ export default function SongEditor({
   const [forms, setForms] = useState<string[]>(() => songTagNames(song?.song_tags, "form", "general"));
   const [occasions, setOccasions] = useState<string[]>(() => songTagNames(song?.song_tags, "occasion", "general"));
   const [communities, setCommunities] = useState<string[]>(() => songTagNames(song?.song_tags, "community", "general"));
+  const [maqams, setMaqams] = useState<string[]>(() => songTagNames(song?.song_tags, "mode", "general").slice(0, 1));
+  const [usuls, setUsuls] = useState<string[]>(() => songTagNames(song?.song_tags, "rhythm", "general").slice(0, 1));
 
   // Alternate titles
   const [altTitles, setAltTitles] = useState<AltTitle[]>(song?.song_alternate_titles ?? []);
@@ -334,10 +356,10 @@ export default function SongEditor({
   });
 
   const formSnapshot = JSON.stringify([
-    title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe,
+    title, displayArtist, firstLine, hook, notes, geniusUrl, chordChartUrl, scoreUrl, translationUrl, year, yearWritten, tonalities, meters, vibe,
     [...composers], [...lyricists], pendingComposerNames, pendingLyricistNames, recordingArtists, pendingRecordingArtists,
     isFromProduction, [...productions], pendingProductionNames, productionYears, genres, themes, cultures, languages,
-    forms, occasions, communities, composerTraditionalCulture, lyricistTraditionalCulture, cardLine, textId, tuneId,
+    forms, occasions, communities, maqams, usuls, composerTraditionalCulture, lyricistTraditionalCulture, cardLine, textId, tuneId,
   ]);
   const [savedSnapshot, setSavedSnapshot] = useState(formSnapshot);
 
@@ -588,6 +610,14 @@ export default function SongEditor({
       setError("Title is required.");
       return;
     }
+    if (scoreUrl.trim() && !isScoreUrl(scoreUrl)) {
+      setError("Score links need to be a Dil Beyti, Hymnary, IMSLP, CPDL or MuseScore page, or a PDF.");
+      return;
+    }
+    if (translationUrl.trim() && !/^https?:\/\/\S+$/i.test(translationUrl.trim())) {
+      setError("The translation link needs to be a web address starting with https://.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -609,8 +639,8 @@ export default function SongEditor({
         p: songSavePayload(
           {
             title, displayArtist, firstLine, hook, notes, notesSource: appliedNotes && notes === appliedNotes.text ? appliedNotes.source : undefined,
-            geniusUrl, chordChartUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, cardLine, textId, tuneId,
-            genres, themes, languages, cultures, forms, occasions, communities, composers, lyricists, pendingComposerNames, pendingLyricistNames,
+            geniusUrl, chordChartUrl, scoreUrl, translationUrl, year, yearWritten, tonalities, meters, vibe, knownByRecording, cardLine, textId, tuneId,
+            genres, themes, languages, cultures, forms, occasions, communities, modes: maqams, rhythms: usuls, composers, lyricists, pendingComposerNames, pendingLyricistNames,
             composerTraditionalCulture, lyricistTraditionalCulture, recordingArtists, pendingRecordingArtists,
             productions, pendingProductionNames, productionYears,
             hadRecordingArtists: (song?.song_recording_artists.length ?? 0) > 0,
@@ -926,6 +956,9 @@ export default function SongEditor({
         <div className="grid gap-4 sm:grid-cols-2">
           <TagPillsField label="Tonality" value={tonalities} onChange={setTonalities} suggestions={TONALITY_OPTIONS} allowNew placeholder="Search tonality…" />
           <TagPillsField label="Meter" value={meters} onChange={setMeters} suggestions={METER_OPTIONS} placeholder="Search meter…" />
+          {/* One of each per song (Asana 1220646543286091): picking another replaces it. */}
+          <TagPillsField label="Maqam" value={maqams} onChange={(v) => setMaqams(v.slice(-1))} suggestions={allModes.map((m) => m.name)} placeholder="Search maqams, ragas, modes…" />
+          <TagPillsField label="Usul" value={usuls} onChange={(v) => setUsuls(v.slice(-1))} suggestions={allRhythms.map((r) => r.name)} placeholder="Search usuls and rhythms…" />
         </div>
 
         <div>
@@ -980,6 +1013,30 @@ export default function SongEditor({
               className="input flex-1" placeholder="https://tabs.ultimate-guitar.com/…" />
             {chordChartUrl && (
               <a href={chordChartUrl} target="_blank" rel="noopener noreferrer"
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
+                ↗
+              </a>
+            )}
+          </div>
+        </Field>
+        <Field label="Score URL">
+          <div className="flex gap-2">
+            <input value={scoreUrl} onChange={(e) => setScoreUrl(e.target.value)}
+              className="input flex-1" placeholder="https://dilbeyti.com/… · hymnary.org · imslp.org · a PDF" />
+            {scoreHref && (
+              <a href={scoreHref} target="_blank" rel="noopener noreferrer"
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
+                ↗
+              </a>
+            )}
+          </div>
+        </Field>
+        <Field label="Translation URL">
+          <div className="flex gap-2">
+            <input value={translationUrl} onChange={(e) => setTranslationUrl(e.target.value)}
+              className="input flex-1" placeholder="A translation of the words elsewhere" />
+            {translationHref && (
+              <a href={translationHref} target="_blank" rel="noopener noreferrer"
                 className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>

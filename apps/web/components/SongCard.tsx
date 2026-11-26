@@ -231,7 +231,7 @@ function SongCard({
                   onAdded={(setId) => tools.addedToSet(songId, setId)}
                   onSetCreated={(set) => tools.setCreated(set)}
                 />
-                <ChordChartSlot songId={songId} url={tools.details.get(songId)?.chart} canAdd size="md" onAdded={(url) => tools.chartAdded(songId, url)} />
+                <ChordChartSlot songId={songId} url={tools.details.get(songId)?.chart} score={tools.details.get(songId)?.score} canAdd size="md" onAdded={(url) => tools.chartAdded(songId, url)} />
               </>
             )}
           </>

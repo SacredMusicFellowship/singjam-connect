@@ -36,6 +36,8 @@ import {
   TAG_TYPE_LABELS,
   type SongTagRow,
   type TagContext,
+  scoreSiteName,
+  songModeCredits,
 } from '@singjam/core';
 import { noteMySong } from '@/lib/mySongsStore';
 import { supabase } from '@/lib/supabase';
@@ -52,6 +54,12 @@ import KeyPicker from '@/components/KeyPicker';
 import UgBackTip from '@/components/UgBackTip';
 import RolePill from '@/components/RolePill';
 import MyKeyChip from '@/components/MyKeyChip';
+
+// "Score · Dil Beyti"; a bare PDF is just "Score".
+function scoreLabel(url: string): string {
+  const site = scoreSiteName(url);
+  return site && site !== 'PDF' ? `Score · ${site}` : 'Score';
+}
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://singjam.org';
 
@@ -77,6 +85,8 @@ type SongDetail = {
   notes: string | null;
   genius_url: string | null;
   chord_chart_url: string | null;
+  score_url: string | null;
+  translation_url: string | null;
   enrichment_started_at?: string | null;
   enrichment_finished_at?: string | null;
   youtube_url: string | null;
@@ -95,6 +105,7 @@ type SongDetail = {
   lyricsCultures: string[];
   recordingArtists: RecordingArtist[];
   tagLists: { label: string; tags: { name: string; href: string | null }[] }[];
+  modeRows: { label: string; tags: { name: string; href: string | null }[] }[];
   personSlugs: Record<string, string>;
   productionSlugs: Record<string, string>;
   productions: string[];
@@ -295,7 +306,7 @@ export default function SongDetailScreen() {
         .from('songs')
         .select(`
           id, slug, title, display_artist, byline, byline_origin, first_line, hook, notes,
-          genius_url, chord_chart_url, youtube_url,
+          genius_url, chord_chart_url, score_url, translation_url, card, youtube_url,
           year, year_written, tonality, meter, vibe, enrichment_started_at, enrichment_finished_at,
           song_alternate_titles(title),
           song_composers(people(name, slug)),
@@ -351,6 +362,8 @@ export default function SongDetailScreen() {
       notes: s.notes ?? null,
       genius_url: s.genius_url ?? null,
       chord_chart_url: s.chord_chart_url ?? null,
+      score_url: s.score_url ?? null,
+      translation_url: s.translation_url ?? null,
       enrichment_started_at: s.enrichment_started_at ?? null,
       enrichment_finished_at: s.enrichment_finished_at ?? null,
       youtube_url: s.youtube_url ?? null,
@@ -371,6 +384,11 @@ export default function SongDetailScreen() {
           .map((x: any) => ({ name: x.artists?.name, slug: x.artists?.slug ?? null, year: x.year, position: x.position, youtube_url: x.youtube_url, spotify_url: x.spotify_url }))
           .filter((x: any) => x.name)
       ),
+      // "Maqam: Hicaz", "Usul: Sofyan" (migration 256), as on web.
+      modeRows: songModeCredits(s.card?.card_identity).map((c) => ({
+        label: c.lead ? c.lead.replace(/: $/, '') : c.link?.kind === 'rhythm' ? 'Rhythm' : 'Mode',
+        tags: [{ name: c.text, href: c.link ? nativeBrowseHref(browsePath(c.link.kind, c.link.key)) : null }],
+      })),
       tagLists: (['genre', 'form', 'occasion', 'community', 'theme', 'language', 'culture'] as const)
         .map((type) => ({
           label: TAG_TYPE_LABELS[type],
@@ -573,7 +591,7 @@ export default function SongDetailScreen() {
     musicCultures: song.musicCultures, lyricsCultures: song.lyricsCultures, origin: song.origin,
     text: song.textRef, tune: song.tuneRef,
   });
-  const hasMusicalProps = tonalityPills.length > 0 || meterPills.length > 0 || !!song.vibe;
+  const hasMusicalProps = tonalityPills.length > 0 || meterPills.length > 0 || !!song.vibe || song.modeRows.length > 0;
   const hasTags = song.tagLists.length > 0;
   const hasJammers = jammers && (jammers.lead.length > 0 || jammers.support.length > 0 || jammers.learn.length > 0);
 
@@ -729,7 +747,7 @@ export default function SongDetailScreen() {
           ) : null}
           {renderRepertoireControls()}
 
-          {song.chord_chart_url || song.genius_url ? (
+          {song.chord_chart_url || song.score_url || song.genius_url || song.translation_url ? (
             <View className="flex-row flex-wrap gap-2 mt-3">
               {song.chord_chart_url ? (
                 <TouchableOpacity
@@ -740,12 +758,30 @@ export default function SongDetailScreen() {
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
                 </TouchableOpacity>
               ) : null}
+              {song.score_url ? (
+                <TouchableOpacity
+                  onPress={() => openUrl(song.score_url!)}
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-full px-4 py-2"
+                >
+                  <Text className="text-slate-600 text-sm font-medium">{scoreLabel(song.score_url!)}</Text>
+                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
+                </TouchableOpacity>
+              ) : null}
               {song.genius_url ? (
                 <TouchableOpacity
                   onPress={() => openUrl(song.genius_url!)}
                   className="flex-row items-center gap-1 border border-slate-200 rounded-full px-4 py-2"
                 >
                   <Text className="text-slate-600 text-sm font-medium">Lyrics</Text>
+                  <Ionicons name="open-outline" size={13} color="#94a3b8" />
+                </TouchableOpacity>
+              ) : null}
+              {song.translation_url ? (
+                <TouchableOpacity
+                  onPress={() => openUrl(song.translation_url!)}
+                  className="flex-row items-center gap-1 border border-slate-200 rounded-full px-4 py-2"
+                >
+                  <Text className="text-slate-600 text-sm font-medium">Translation</Text>
                   <Ionicons name="open-outline" size={13} color="#94a3b8" />
                 </TouchableOpacity>
               ) : null}
@@ -883,6 +919,7 @@ export default function SongDetailScreen() {
             <TagRow label="Tonality" tags={tonalityPills} />
             <TagRow label="Meter" tags={meterPills} />
             {song.vibe ? <TagRow label="Vibe" tags={[song.vibe]} /> : null}
+            {song.modeRows.map((m) => <TagRow key={m.label} label={m.label} tags={m.tags} onOpen={openBrowse} />)}
           </View>
         ) : null}
 
