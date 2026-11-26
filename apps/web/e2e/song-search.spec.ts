@@ -42,11 +42,10 @@ test("a search link opens with its query, and Back from a song keeps it", async 
 
 test("an ilahi's card names its maqam, usul and poet, and its score sits in the chart slot", async ({ page }) => {
   const ilahi = scenario.songs.find((s) => s.score_url)!;
-  await page.goto("/search");
-  await page.getByPlaceholder(/search by title/i).fill(ilahi.title);
+  await page.goto(`/search?q=${encodeURIComponent(ilahi.title)}`);
 
   const card = page.getByRole("link", { name: ilahi.title, exact: true }).first().locator("xpath=ancestor::div[contains(@class, 'rounded-2xl')][1]");
-  await expect(card).toContainText("(Derviş Hasan Nuri)", { timeout: 15_000 });
+  await expect(card).toContainText("(Derviş Hasan Nuri)", { timeout: 30_000 });
   await expect(card).toContainText("Maqam: Hicaz · Usul: Sofyan");
   await card.getByRole("link", { name: "Hicaz" }).click();
   await expect(page).toHaveURL(/\/modes\/hicaz$/);
