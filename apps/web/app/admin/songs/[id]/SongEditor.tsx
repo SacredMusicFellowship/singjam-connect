@@ -127,6 +127,15 @@ type Props = {
   isAdmin: boolean;
 };
 
+function webHref(raw: string): string | null {
+  try {
+    const url = new URL(raw.trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function toSet(ids: string[]) {
   return new Set(ids);
 }
@@ -167,6 +176,9 @@ export default function SongEditor({
   const [chordChartUrl, setChordChartUrl] = useState(song?.chord_chart_url ?? "");
   const [scoreUrl, setScoreUrl] = useState(song?.score_url ?? "");
   const [translationUrl, setTranslationUrl] = useState(song?.translation_url ?? "");
+  // Preview links only for web addresses, never a typed javascript: link.
+  const scoreHref = webHref(scoreUrl);
+  const translationHref = webHref(translationUrl);
   const [year, setYear] = useState(song?.year?.toString() ?? "");
   const [yearWritten, setYearWritten] = useState(song?.year_written?.toString() ?? "");
   const [tonalities, setTonalities] = useState<string[]>(() =>
@@ -1002,8 +1014,8 @@ export default function SongEditor({
           <div className="flex gap-2">
             <input value={scoreUrl} onChange={(e) => setScoreUrl(e.target.value)}
               className="input flex-1" placeholder="https://dilbeyti.com/… · hymnary.org · imslp.org · a PDF" />
-            {scoreUrl && (
-              <a href={scoreUrl} target="_blank" rel="noopener noreferrer"
+            {scoreHref && (
+              <a href={scoreHref} target="_blank" rel="noopener noreferrer"
                 className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>
@@ -1014,8 +1026,8 @@ export default function SongEditor({
           <div className="flex gap-2">
             <input value={translationUrl} onChange={(e) => setTranslationUrl(e.target.value)}
               className="input flex-1" placeholder="A translation of the words elsewhere" />
-            {translationUrl && (
-              <a href={translationUrl} target="_blank" rel="noopener noreferrer"
+            {translationHref && (
+              <a href={translationHref} target="_blank" rel="noopener noreferrer"
                 className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 shrink-0">
                 ↗
               </a>
