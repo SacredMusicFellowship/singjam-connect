@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
 import { supabaseAdmin as admin } from "@/lib/supabase/admin";
-import { findExistingSong, findKnownArtist, findOnSpotify, findOnYouTube } from "@/lib/songLookup";
+import { findExistingSong, findKnownArtist, findOnSpotify, findOnYouTube, findTextTunes } from "@/lib/songLookup";
 import { isPlaceholderArtist } from "@singjam/core";
 
 export async function GET(req: NextRequest) {
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
       findOnYouTube(canonical.title, canonical.artist),
       findExistingSong(admin(), [canonical.title, title], canonical.artist || null),
     ]);
+    const text = existing ? await findTextTunes(admin(), existing.id).catch(() => null) : null;
     return NextResponse.json({
       title: canonical.title,
       artist: canonical.artist || null,
@@ -40,8 +41,9 @@ export async function GET(req: NextRequest) {
       youtube_id: youtube?.youtube_id ?? null,
       youtube_official: youtube?.youtube_official ?? false,
       existing,
+      text,
     });
   } catch {
-    return NextResponse.json({ title, artist: artist || null, spotify_url: null, release_year: null, youtube_id: null, youtube_official: false, existing: null });
+    return NextResponse.json({ title, artist: artist || null, spotify_url: null, release_year: null, youtube_id: null, youtube_official: false, existing: null, text: null });
   }
 }

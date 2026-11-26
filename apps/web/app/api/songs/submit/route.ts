@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as admin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseFromBearer } from "@/lib/supabase/bearer";
-import { findExistingSong, findKnownArtist, findOnSpotify } from "@/lib/songLookup";
+import { findExistingSong, findKnownArtist, findOnSpotify, findTextTunes, spotifyTrack } from "@/lib/songLookup";
 import { triggerSongEnrichment } from "@/lib/triggerSongEnrichment";
 import { idsFor, tagIds } from "@/lib/songEnrichment";
 import { parseTagSpecs, parseWriters } from "@/lib/songAddDetails";
-import { isPlaceholderArtist, parseAddHints } from "@singjam/core";
+import { cleanTuneName, isPlaceholderArtist, parseAddHints, parseRecordingLink } from "@singjam/core";
 
 // The tag names of the jam a set belongs to, as context for enrichment.
 async function setContext(db: ReturnType<typeof admin>, setId: unknown): Promise<string[]> {
@@ -77,19 +77,62 @@ export async function POST(req: Request) {
     }
   }
   const existing = await findExistingSong(db, [title, body.title.trim()], artist);
-  if (existing && (existing.match === "same" || !body.add_anyway)) {
+  let songVideo = youtubeUrl && artist ? null : confirmedVideo;
+  let recordingVideo = youtubeUrl;
+  let hints = parseAddHints(body, await setContext(db, body.set_id));
+  let textId: string | null = null;
+  let tuneId: string | null = null;
+
+  // Another tune of a text we hold is a song of its own (one card per tune),
+  // added only with a recording of it, which is how we know which melody it is.
+  // A song with a recording artist and no tune sent is a different song that
+  // shares the title (a pop "Hallelujah" beside the hymn), added the usual way.
+  const family = existing && body.add_anyway && (body.new_tune || !artist) ? await findTextTunes(db, existing.id) : null;
+  if (existing && family) {
+    const link = parseRecordingLink(body.new_tune?.recording_url);
+    if (!link) return NextResponse.json({ error: "Add a link to a recording of this tune, so we know which melody it is." }, { status: 400 });
+    const tuneName = cleanTuneName(body.new_tune?.name);
+    let tuneHint: string | null = null;
+    if (tuneName) {
+      const { data: tune, error: tuneErr } = await db.from("tunes").select("id").ilike("name", tuneName.replace(/[\\%_]/g, "\\$&")).limit(1).maybeSingle();
+      if (tuneErr) return NextResponse.json({ error: tuneErr.message }, { status: 500 });
+      const taken = tune && family.tunes.find((t) => t.tune_id === tune.id);
+      if (taken) return NextResponse.json({ error: "This tune is already in our library.", id: taken.id, slug: taken.slug }, { status: 409 });
+      if (tune) tuneId = tune.id;
+      else tuneHint = tuneName;
+    }
+    textId = family.text_id;
+    title = existing.title;
+    artist = null;
+    spotifyUrl = null;
+    releaseYear = null;
+    recordingVideo = null;
+    songVideo = link.kind === "youtube" ? link.url : null;
+    if (link.kind === "spotify") {
+      const track = await spotifyTrack(link.trackId).catch(() => null);
+      if (!track?.artist || isPlaceholderArtist(track.artist))
+        return NextResponse.json({ error: "We couldn't read that Spotify link. Try a YouTube link instead." }, { status: 400 });
+      artist = (await findKnownArtist(db, track.artist))?.name ?? track.artist;
+      spotifyUrl = link.url;
+      releaseYear = track.release_year;
+    }
+    hints = { ...hints, other_tune: true, ...(tuneHint ? { tune: tuneHint } : {}) };
+  } else if (existing && (existing.match === "same" || !body.add_anyway)) {
     return NextResponse.json({ error: "This song is already in our library.", id: existing.id, slug: existing.slug }, { status: 409 });
   }
 
-  const hints = parseAddHints(body, await setContext(db, body.set_id));
   const { data: song, error: songErr } = await db
     .from("songs")
     .insert({
       title, display_artist: artist, first_line: firstLine, submitted_by: user.id, updated_at: new Date().toISOString(), enrichment_started_at: new Date().toISOString(),
-      add_hints: hints, youtube_url: youtubeUrl && artist ? null : confirmedVideo,
+      add_hints: hints, youtube_url: songVideo, text_id: textId, tune_id: tuneId,
     })
     .select("id, slug")
     .single();
+  // Two songs with one title and no artist or tune can't both be added (songs_title_artist_unique).
+  if (songErr?.code === "23505") {
+    return NextResponse.json({ error: "A song with this title is already in our library. Open it, or ask a song editor to name its tune." }, { status: 409 });
+  }
   if (songErr || !song) {
     return NextResponse.json({ error: songErr?.message ?? "Failed to create song" }, { status: 500 });
   }
@@ -102,8 +145,8 @@ export async function POST(req: Request) {
         artist_id: artistId,
         position: 0,
         spotify_url: spotifyUrl,
-        youtube_url: youtubeUrl,
-        ...(youtubeUrl ? { youtube_ok: true } : {}),
+        youtube_url: recordingVideo,
+        ...(recordingVideo ? { youtube_ok: true } : {}),
       });
     }
   }

@@ -125,6 +125,27 @@ describe("enrichSong — a traditional song's recording", () => {
   });
 });
 
+describe("enrichSong — another tune of a text we hold", () => {
+  it("asks nothing about the melody and looks for no other recordings", async () => {
+    answers.claudeSchemas = [];
+    answers.gptEfforts = [];
+    answers.gpt = {};
+    answers.claude = {};
+    const { db } = fakeDb([], {
+      title: "Harbour Hymn", year_written: null, tonality: null, meter: null, vibe: null, notes: null,
+      song_composers: [], song_lyricists: [], add_hints: { other_tune: true },
+    });
+
+    await enrichSong(db, "song-1");
+
+    const asked = answers.claudeSchemas.filter((s) => s?.properties?.fields).flatMap((s) => s.properties.fields.required as string[]);
+    expect(asked).toContain("genres");
+    for (const f of ["composers", "lyricists", "year_written", "tonality", "meter", "vibe", "notes"]) expect(asked).not.toContain(f);
+    // Only the song's fields went to GPT: no landmark-recordings question.
+    expect(answers.gptEfforts).toEqual(["none"]);
+  });
+});
+
 describe("enrichSong — productions and alternate titles", () => {
   it("adds what both models name, skipping the song's own title", async () => {
     answers.gpt = { productions: hi(["Pitch Perfect"]), alternate_titles: hi(["Cups"]) };

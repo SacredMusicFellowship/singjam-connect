@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/spotify", () => ({ getSpotifyToken: vi.fn().mockResolvedValue("token") }));
 
-import { findExistingSong, findKnownArtist, findOnSpotify } from "./songLookup";
+import { findExistingSong, findKnownArtist, findOnSpotify, findTextTunes } from "./songLookup";
 
 const track = (name: string, artist: string) => ({
   name,
@@ -102,5 +102,38 @@ describe("findExistingSong", () => {
   });
   it("leaves a different song by the artist alone", async () => {
     expect(await findExistingSong(db, ["Dreams"], "Fleetwood Mac")).toBeNull();
+  });
+});
+
+describe("findTextTunes", () => {
+  // s1, s2 and s4 share a text (two named tunes, one unnamed); s3 has no text.
+  const rows = [
+    { id: "s2", slug: "harbour-hymn-2", title: "Harbour Hymn", display_artist: null, tune_id: "t-w", tunes: { name: "Westerly" }, text_id: "x1" },
+    { id: "s1", slug: "harbour-hymn", title: "Harbour Hymn", display_artist: null, tune_id: "t-b", tunes: { name: "Beacon" }, text_id: "x1" },
+    { id: "s4", slug: "harbour-hymn-3", title: "Harbour Hymn", display_artist: null, tune_id: null, tunes: null, text_id: "x1" },
+    { id: "s3", slug: "lone-song", title: "Lone Song", display_artist: "Mara Quill", tune_id: null, tunes: null, text_id: null },
+  ];
+  const db = {
+    from: () => {
+      const filters: Record<string, unknown> = {};
+      const q: any = {
+        select: () => q,
+        eq: (col: string, v: unknown) => { filters[col] = v; return q; },
+        order: () => q,
+        maybeSingle: async () => ({ data: rows.find((r) => r.id === filters.id) ?? null, error: null }),
+        then: (resolve: (v: unknown) => void) => resolve({ data: rows.filter((r) => r.text_id === filters.text_id), error: null }),
+      };
+      return q;
+    },
+  } as any;
+
+  it("lists every song of the text, named tunes A–Z and an unnamed one last", async () => {
+    const found = await findTextTunes(db, "s1");
+    expect(found?.text_id).toBe("x1");
+    expect(found?.tunes.map((t) => t.tune)).toEqual(["Beacon", "Westerly", null]);
+  });
+
+  it("returns nothing for a song with no text", async () => {
+    expect(await findTextTunes(db, "s3")).toBeNull();
   });
 });
